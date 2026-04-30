@@ -44,4 +44,3 @@ class ThemeController extends ChangeNotifier {
     return controller;
   }
 }
-

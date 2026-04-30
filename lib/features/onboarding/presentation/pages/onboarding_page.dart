@@ -8,6 +8,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/tmz_button.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -31,7 +32,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final ColorScheme scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6FF),
+      backgroundColor: AppColors.pageBg,
       body: SafeArea(
         child: Stack(
           children: <Widget>[
@@ -42,9 +43,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     center: const Alignment(0, -0.45),
                     radius: 1.1,
                     colors: <Color>[
-                      const Color(0xFFEAF1FF),
-                      const Color(0xFFF3F6FF),
-                      const Color(0xFFFFFFFF),
+                      AppColors.blueTint,
+                      AppColors.pageBg,
+                      AppColors.cardSurface,
                     ],
                   ),
                 ),
@@ -82,105 +83,98 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
             Align(
               alignment: Alignment.bottomCenter,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x6,
-                  AppSpacing.x6,
-                  AppSpacing.x6,
-                  AppSpacing.x6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(32),
-                  ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withAlpha(10),
-                      blurRadius: 24,
-                      offset: const Offset(0, -6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      _pageIndex == 0
-                          ? 'Verify Anyone.\nAnything.'
-                          : _pageIndex == 1
-                              ? 'Scan & Verify\nin Seconds.'
-                              : 'Built for\nTeams.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.display2.copyWith(
-                        color: const Color(0xFF0B0F19),
-                        fontSize: 30,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    Text(
-                      _pageIndex == 0
-                          ? 'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.'
-                          : _pageIndex == 1
-                              ? 'Use QR scanning to validate credentials and\nsee proofs instantly.'
-                              : 'Run bulk verification workflows and keep\ncompliance at 99.99%.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.body2.copyWith(
-                        color: const Color(0xFF64748B),
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x4),
-                    _DotsIndicator(index: _pageIndex, count: 3),
-                    const SizedBox(height: AppSpacing.x4),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.brandBlue,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          textStyle: AppTypography.button,
+              child:
+                  Container(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.x6,
+                          AppSpacing.x6,
+                          AppSpacing.x6,
+                          AppSpacing.x6,
                         ),
-                        onPressed: () => context.go(AppRouter.loginPath),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: <Widget>[
-                            const Text('Get Started'),
-                            const SizedBox(width: 10),
-                            const Icon(Icons.arrow_forward_rounded, size: 18),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardSurface,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(32),
+                          ),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: Colors.black.withAlpha(10),
+                              blurRadius: 24,
+                              offset: const Offset(0, -6),
+                            ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Text(
-                          'Already have an account? ',
-                          style: AppTypography.body2.copyWith(
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => context.go(AppRouter.loginPath),
-                          child: Text(
-                            'Sign In',
-                            style: AppTypography.body2.copyWith(
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w700,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text(
+                              _pageIndex == 0
+                                  ? 'Verify Anyone.\nAnything.'
+                                  : _pageIndex == 1
+                                  ? 'Scan & Verify\nin Seconds.'
+                                  : 'Built for\nTeams.',
+                              textAlign: TextAlign.center,
+                              style: AppTypography.display2.copyWith(
+                                color: AppColors.textPrimary,
+                                fontSize: 30,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: AppSpacing.x3),
+                            Text(
+                              _pageIndex == 0
+                                  ? 'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.'
+                                  : _pageIndex == 1
+                                  ? 'Use QR scanning to validate credentials and\nsee proofs instantly.'
+                                  : 'Run bulk verification workflows and keep\ncompliance at 99.99%.',
+                              textAlign: TextAlign.center,
+                              style: AppTypography.body2.copyWith(
+                                color: AppColors.textSecondary,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.x4),
+                            _DotsIndicator(index: _pageIndex, count: 3),
+                            const SizedBox(height: AppSpacing.x4),
+                            SizedBox(
+                              width: double.infinity,
+                              child: TMZButton(
+                                onPressed: () =>
+                                    context.go(AppRouter.loginPath),
+                                label: 'Get Started',
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.x4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                Text(
+                                  'Already have an account? ',
+                                  style: AppTypography.body2.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () => context.go(AppRouter.loginPath),
+                                  child: Text(
+                                    'Sign In',
+                                    style: AppTypography.body2.copyWith(
+                                      color: scheme.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                      )
+                      .animate()
+                      .fadeIn(delay: 100.ms, duration: 220.ms)
+                      .slideY(
+                        begin: 0.04,
+                        duration: 220.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
             ),
           ],
         ),
@@ -221,10 +215,16 @@ class _OnboardingHero extends StatelessWidget {
                 ),
               ),
               SvgPicture.asset(
-                'assets/icons/trumarkz_shield.svg',
-                height: 86,
-                colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
-              ).animate().fadeIn(duration: 250.ms).scale(
+                    'assets/icons/trumarkz_shield.svg',
+                    height: 86,
+                    colorFilter: ColorFilter.mode(
+                      scheme.primary,
+                      BlendMode.srcIn,
+                    ),
+                  )
+                  .animate()
+                  .fadeIn(duration: 250.ms)
+                  .scale(
                     begin: const Offset(0.96, 0.96),
                     end: const Offset(1, 1),
                     duration: 250.ms,
@@ -246,10 +246,7 @@ class _OnboardingHero extends StatelessWidget {
               ),
               Positioned(
                 right: 28,
-                child: const _FloatIcon(
-                  icon: Icons.lock_rounded,
-                  phase: 3.2,
-                ),
+                child: const _FloatIcon(icon: Icons.lock_rounded, phase: 3.2),
               ),
             ],
           ),
@@ -277,10 +274,7 @@ class _OnboardingHero extends StatelessWidget {
 }
 
 class _FloatIcon extends StatefulWidget {
-  const _FloatIcon({
-    required this.icon,
-    required this.phase,
-  });
+  const _FloatIcon({required this.icon, required this.phase});
 
   final IconData icon;
   final double phase;
@@ -339,10 +333,7 @@ class _FloatIconState extends State<_FloatIcon>
         final double rot = math.sin(t * 0.35) * 0.04;
         return Transform.translate(
           offset: Offset(dx, dy),
-          child: Transform.rotate(
-            angle: rot,
-            child: tile,
-          ),
+          child: Transform.rotate(angle: rot, child: tile),
         );
       },
     );

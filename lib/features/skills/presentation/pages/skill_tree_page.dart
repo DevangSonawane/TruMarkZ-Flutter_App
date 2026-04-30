@@ -17,7 +17,10 @@ class SkillTreePage extends StatefulWidget {
 }
 
 class _SkillTreePageState extends State<SkillTreePage> {
-  final List<String> _items = <String>['Verified Identity', 'Public Verification'];
+  final List<String> _items = <String>[
+    'Verified Identity',
+    'Public Verification',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +109,7 @@ class _AddSkillItemSheetState extends State<_AddSkillItemSheet> {
           const SizedBox(height: AppSpacing.x3),
           TMZInput(
             label: 'Skill item',
-            hintText: 'e.g. Proof of Address',
+            hint: 'e.g. Proof of Address',
             controller: _controller,
           ),
           const SizedBox(height: AppSpacing.x4),

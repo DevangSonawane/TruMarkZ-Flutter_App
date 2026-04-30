@@ -26,4 +26,3 @@ class TMZAvatar extends StatelessWidget {
     );
   }
 }
-

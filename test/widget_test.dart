@@ -17,10 +17,10 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final ThemeController controller = await ThemeController.create();
     await tester.pumpWidget(
-      TickerMode(enabled: false, child: TruMarkZApp(themeController: controller)),
+      TruMarkZApp(themeController: controller),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump(const Duration(milliseconds: 2200));
     await tester.pump(const Duration(milliseconds: 1));
 
     expect(find.text('Get Started'), findsOneWidget);

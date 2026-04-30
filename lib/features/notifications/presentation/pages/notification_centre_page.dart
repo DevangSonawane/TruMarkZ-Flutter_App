@@ -32,13 +32,19 @@ class NotificationCentrePage extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Icon(Icons.verified_user_rounded, color: AppColors.brandBlue),
+                const Icon(
+                  Icons.verified_user_rounded,
+                  color: AppColors.brandBlue,
+                ),
                 const SizedBox(width: AppSpacing.x3),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Credential verified', style: AppTypography.heading2),
+                      Text(
+                        'Credential verified',
+                        style: AppTypography.heading2,
+                      ),
                       const SizedBox(height: AppSpacing.x1),
                       Text(
                         'Your National ID was successfully verified on-chain.',

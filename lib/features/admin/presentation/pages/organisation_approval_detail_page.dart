@@ -45,7 +45,7 @@ class OrganisationApprovalDetailPage extends StatelessWidget {
             const SizedBox(height: AppSpacing.x2),
             TMZButton(
               label: 'Reject',
-              variant: TMZButtonVariant.danger,
+              variant: TMZButtonVariant.dangerGhost,
               onPressed: () {},
             ),
           ],
@@ -54,4 +54,3 @@ class OrganisationApprovalDetailPage extends StatelessWidget {
     );
   }
 }
-

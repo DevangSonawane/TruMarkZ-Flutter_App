@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +7,8 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/tmz_button.dart';
+import '../../../../core/widgets/tmz_input.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,14 +18,12 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  bool _obscure = true;
-
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6FF),
+      backgroundColor: AppColors.pageBg,
       body: SafeArea(
         child: Stack(
           children: <Widget>[
@@ -33,9 +34,9 @@ class _LoginPageState extends State<LoginPage> {
                     center: const Alignment(0, -0.65),
                     radius: 1.2,
                     colors: <Color>[
-                      const Color(0xFFEAF1FF),
-                      const Color(0xFFF3F6FF),
-                      const Color(0xFFFFFFFF),
+                      AppColors.blueTint,
+                      AppColors.pageBg,
+                      AppColors.cardSurface,
                     ],
                   ),
                 ),
@@ -54,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.cardSurface,
                       shape: BoxShape.circle,
                       boxShadow: <BoxShadow>[
                         BoxShadow(
@@ -74,29 +75,29 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-                ),
+                ).animate().fadeIn(duration: 220.ms),
                 const SizedBox(height: AppSpacing.x3),
                 Text(
                   'TruMarkZ',
                   textAlign: TextAlign.center,
                   style: AppTypography.display2.copyWith(
                     fontSize: 30,
-                    color: const Color(0xFF0B0F19),
+                    color: AppColors.textPrimary,
                   ),
-                ),
+                ).animate().fadeIn(delay: 40.ms, duration: 220.ms),
                 const SizedBox(height: AppSpacing.x2),
                 Text(
                   'THE STANDARD IN DIGITAL VERIFICATION',
                   textAlign: TextAlign.center,
                   style: AppTypography.label.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: AppColors.textSecondary,
                     letterSpacing: 1.4,
                   ),
-                ),
+                ).animate().fadeIn(delay: 80.ms, duration: 220.ms),
                 const SizedBox(height: AppSpacing.x5),
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.cardSurface,
                     borderRadius: BorderRadius.circular(22),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
@@ -118,18 +119,15 @@ class _LoginPageState extends State<LoginPage> {
                       Text(
                         'Sign in to your account',
                         style: AppTypography.body2.copyWith(
-                          color: const Color(0xFF64748B),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.x5),
-                      Text('Email', style: AppTypography.label),
-                      const SizedBox(height: AppSpacing.x2),
-                      TextField(
+                      TMZInput(
+                        label: 'Email',
+                        hint: 'name@company.com',
                         keyboardType: TextInputType.emailAddress,
-                        decoration: _inputDecoration(
-                          hint: 'name@company.com',
-                          prefix: Icons.mail_outline_rounded,
-                        ),
+                        prefixIcon: Icons.mail_outline_rounded,
                       ),
                       const SizedBox(height: AppSpacing.x4),
                       Row(
@@ -147,67 +145,68 @@ class _LoginPageState extends State<LoginPage> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.x2),
-                      TextField(
-                        obscureText: _obscure,
-                        decoration: _inputDecoration(
-                          hint: '••••••••',
-                          prefix: Icons.lock_outline_rounded,
-                          suffix: IconButton(
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                            ),
-                          ),
-                        ),
+                      TMZInput(
+                        label: '',
+                        hint: '••••••••',
+                        prefixIcon: Icons.lock_outline_rounded,
+                        obscureText: true,
                       ),
                       const SizedBox(height: AppSpacing.x6),
-                      SizedBox(
-                        height: 52,
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.brandBlue,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            textStyle: AppTypography.button,
-                          ),
-                          onPressed: () => context.go(AppRouter.roleSelectionPath),
-                          child: const Text('Sign In'),
-                        ),
+                      TMZButton(
+                        onPressed: () =>
+                            context.go(AppRouter.roleSelectionPath),
+                        label: 'Sign In',
                       ),
                       const SizedBox(height: AppSpacing.x6),
                       Row(
                         children: <Widget>[
-                          Expanded(
-                            child: Divider(color: const Color(0xFFE2E8F0)),
-                          ),
+                          Expanded(child: Divider(color: AppColors.divider)),
                           const SizedBox(width: AppSpacing.x3),
                           Text(
                             'or continue with',
                             style: AppTypography.caption.copyWith(
-                              color: const Color(0xFF64748B),
+                              color: AppColors.textSecondary,
                             ),
                           ),
                           const SizedBox(width: AppSpacing.x3),
-                          Expanded(
-                            child: Divider(color: const Color(0xFFE2E8F0)),
-                          ),
+                          Expanded(child: Divider(color: AppColors.divider)),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.x4),
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(50),
-                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          side: const BorderSide(color: AppColors.divider),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
+                          foregroundColor: AppColors.textPrimary,
                         ),
                         onPressed: () {},
-                        child: const Text('Sign in with Google'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: AppColors.cardSurface,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: AppColors.divider),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'G',
+                                style: AppTypography.caption.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text('Sign in with Google'),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.x4),
                       Row(
@@ -216,7 +215,7 @@ class _LoginPageState extends State<LoginPage> {
                           Text(
                             "Don't have an account? ",
                             style: AppTypography.body2.copyWith(
-                              color: const Color(0xFF64748B),
+                              color: AppColors.textSecondary,
                             ),
                           ),
                           InkWell(
@@ -238,8 +237,17 @@ class _LoginPageState extends State<LoginPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    const Icon(Icons.shield_outlined,
-                        size: 14, color: Color(0xFF94A3B8)),
+                    Icon(
+                          Icons.shield_outlined,
+                          size: 14,
+                          color: AppColors.textTertiary,
+                        )
+                        .animate(
+                          onPlay: (AnimationController c) {
+                            c.repeat(reverse: true, period: 900.ms);
+                          },
+                        )
+                        .rotate(begin: -0.02, end: 0.02),
                     const SizedBox(width: AppSpacing.x2),
                     Flexible(
                       child: Text(
@@ -248,7 +256,7 @@ class _LoginPageState extends State<LoginPage> {
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.caption.copyWith(
                           letterSpacing: 1.3,
-                          color: const Color(0xFF94A3B8),
+                          color: AppColors.textTertiary,
                         ),
                       ),
                     ),
@@ -258,33 +266,6 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  static InputDecoration _inputDecoration({
-    required String hint,
-    required IconData prefix,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(prefix),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.brandBlue, width: 1.5),
       ),
     );
   }

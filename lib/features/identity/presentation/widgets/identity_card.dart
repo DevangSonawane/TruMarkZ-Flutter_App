@@ -30,21 +30,22 @@ class IdentityCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   factory IdentityCard.loading({Key? key}) => IdentityCard(
-        key: key,
-        fullName: '',
-        walletAddress: '',
-        verificationStatus: VerificationStatus.pending,
-        credentialType: '',
-        issuedAt: DateTime.fromMillisecondsSinceEpoch(0),
-        onTap: null,
-      );
+    key: key,
+    fullName: '',
+    walletAddress: '',
+    verificationStatus: VerificationStatus.pending,
+    credentialType: '',
+    issuedAt: DateTime.fromMillisecondsSinceEpoch(0),
+    onTap: null,
+  );
 
   @override
   Widget build(BuildContext context) {
     final bool isLoading = fullName.isEmpty && credentialType.isEmpty;
     final Color onSurface = Theme.of(context).colorScheme.onSurface;
-    final Color onSurfaceVariant =
-        Theme.of(context).colorScheme.onSurface.withAlpha(170);
+    final Color onSurfaceVariant = Theme.of(
+      context,
+    ).colorScheme.onSurface.withAlpha(170);
 
     final TMZBadge badge = switch (verificationStatus) {
       VerificationStatus.verified => TMZBadge.verified(),
@@ -82,15 +83,13 @@ class IdentityCard extends StatelessWidget {
             Expanded(
               child: Text(
                 _truncateWallet(walletAddress),
-                style:
-                    AppTypography.caption.copyWith(color: onSurfaceVariant),
+                style: AppTypography.caption.copyWith(color: onSurfaceVariant),
               ),
             ),
             const SizedBox(width: AppSpacing.x2),
             Text(
               _formatDate(issuedAt),
-              style:
-                  AppTypography.caption.copyWith(color: onSurfaceVariant),
+              style: AppTypography.caption.copyWith(color: onSurfaceVariant),
             ),
           ],
         ),
@@ -115,10 +114,7 @@ class IdentityCard extends StatelessWidget {
       ],
     );
 
-    Widget card = TMZCard(
-      onTap: onTap,
-      child: content,
-    );
+    Widget card = TMZCard(onTap: onTap, child: content);
 
     if (isLoading) {
       card = Shimmer.fromColors(
@@ -140,19 +136,21 @@ class IdentityCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.x2),
               Container(height: 12, width: 120, color: Colors.white),
               const SizedBox(height: AppSpacing.x4),
-              Container(height: 12, width: double.infinity, color: Colors.white),
+              Container(
+                height: 12,
+                width: double.infinity,
+                color: Colors.white,
+              ),
             ],
           ),
         ),
       );
     }
 
-    return card.animate().fadeIn(duration: 180.ms).slideY(
-          begin: 0.05,
-          end: 0,
-          duration: 220.ms,
-          curve: Curves.easeOut,
-        );
+    return card
+        .animate()
+        .fadeIn(duration: 180.ms)
+        .slideY(begin: 0.05, end: 0, duration: 220.ms, curve: Curves.easeOut);
   }
 
   static String _truncateWallet(String value) {

@@ -34,6 +34,7 @@ class _TruMarkZBootstrapAppState extends State<TruMarkZBootstrapApp> {
         if (controller == null) {
           return MaterialApp(
             title: 'TruMarkZ',
+            debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,
             home: const SizedBox.shrink(),
@@ -59,6 +60,7 @@ class TruMarkZApp extends StatelessWidget {
           controller: themeController,
           child: MaterialApp.router(
             title: 'TruMarkZ',
+            debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,
             themeMode: themeController.themeMode,
@@ -71,16 +73,13 @@ class TruMarkZApp extends StatelessWidget {
 }
 
 class _ThemeScope extends InheritedWidget {
-  const _ThemeScope({
-    required this.controller,
-    required super.child,
-  });
+  const _ThemeScope({required this.controller, required super.child});
 
   final ThemeController controller;
 
   static ThemeController of(BuildContext context) {
-    final _ThemeScope? scope =
-        context.dependOnInheritedWidgetOfExactType<_ThemeScope>();
+    final _ThemeScope? scope = context
+        .dependOnInheritedWidgetOfExactType<_ThemeScope>();
     assert(scope != null, 'ThemeController not found in widget tree.');
     return scope!.controller;
   }

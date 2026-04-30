@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_button.dart';
@@ -24,7 +25,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
     final ColorScheme scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6FF),
+      backgroundColor: AppColors.pageBg,
       appBar: AppBar(
         titleSpacing: 12,
         title: Row(
@@ -55,9 +56,9 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                     center: const Alignment(0, -0.8),
                     radius: 1.2,
                     colors: <Color>[
-                      const Color(0xFFEAF1FF),
-                      const Color(0xFFF3F6FF),
-                      const Color(0xFFFFFFFF),
+                      AppColors.blueTint,
+                      AppColors.pageBg,
+                      AppColors.cardSurface,
                     ],
                   ),
                 ),
@@ -75,7 +76,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                   'How will you use TruMarkZ?',
                   style: AppTypography.display2.copyWith(
                     fontSize: 28,
-                    color: const Color(0xFF0B0F19),
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.x2),
@@ -83,7 +84,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                   'Choose the account type that best fits your\nneeds to get started.',
                   style: AppTypography.body2.copyWith(
                     height: 1.35,
-                    color: const Color(0xFF64748B),
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.x6),
@@ -133,7 +134,9 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                       AppRouter.organisationRegistrationPath,
                                     );
                                   case _Role.individual:
-                                    context.go(AppRouter.skillTreePath);
+                                    context.go(
+                                      AppRouter.individualIdentityPath,
+                                    );
                                   case _Role.verifying:
                                     context.go(AppRouter.appRegistryPath);
                                 }
