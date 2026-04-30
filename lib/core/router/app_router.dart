@@ -10,6 +10,7 @@ import '../../features/onboarding/presentation/pages/splash_page.dart';
 import '../../features/onboarding/presentation/pages/onboarding_page.dart';
 import '../../features/progress/presentation/pages/batch_progress_page.dart';
 import '../../features/verification_flow/presentation/pages/batch_tracking_detail_page.dart';
+import '../../features/verification_flow/presentation/pages/batch_job_running_page.dart';
 import '../../features/verification_flow/presentation/pages/bulk_upload_page.dart';
 import '../../features/registry/presentation/pages/registry_search_page.dart';
 import '../../features/registry/presentation/pages/public_verification_result_page.dart';
@@ -42,11 +43,17 @@ class AppRouter {
   static const String dashboardPath = '/app/dashboard';
   static const String walletPath = '/app/wallet';
   static const String qrScannerPath = '/app/qr-scan';
+  static const String appBatchesPath = '/app/batches';
+  static const String appBatchTrackingDetailPath = '/app/batches/tracking';
+  static const String appIndividualRecordDetailPath = '/app/batches/record';
+  static const String appCredentialDetailPath = '/app/batches/credential';
+  static const String appRegistryPath = '/app/registry';
   static const String settingsPath = '/app/settings';
 
   static const String notificationsPath = '/notifications';
 
-  static const String verificationPlanBuilderPath = '/verification-plan-builder';
+  static const String verificationPlanBuilderPath =
+      '/verification-plan-builder';
   static const String registrySearchPath = '/registry-search';
   static const String skillTreePath = '/skill-tree';
   static const String batchProgressPath = '/batch-progress';
@@ -61,6 +68,7 @@ class AppRouter {
   static const String credentialTemplateSelectorPath =
       '/credential-template-selector';
   static const String mapCredentialFieldsPath = '/map-credential-fields';
+  static const String batchJobRunningPath = '/batch-job-running';
   static const String bulkUploadPath = '/bulk-upload';
   static const String credentialsGeneratedPath = '/credentials-generated';
   static const String batchTrackingDetailPath = '/batch-tracking-detail';
@@ -110,11 +118,7 @@ class AppRouter {
             const RegisterPage(),
       ),
       ShellRoute(
-        builder: (
-          BuildContext context,
-          GoRouterState state,
-          Widget child,
-        ) =>
+        builder: (BuildContext context, GoRouterState state, Widget child) =>
             OrgShellPage(child: child),
         routes: <RouteBase>[
           GoRoute(
@@ -122,6 +126,36 @@ class AppRouter {
             name: 'dashboard',
             builder: (BuildContext context, GoRouterState state) =>
                 const DashboardPage(),
+          ),
+          GoRoute(
+            path: appBatchesPath,
+            name: 'batches',
+            builder: (BuildContext context, GoRouterState state) =>
+                const BatchProgressPage(),
+          ),
+          GoRoute(
+            path: appBatchTrackingDetailPath,
+            name: 'app_batch_tracking_detail',
+            builder: (BuildContext context, GoRouterState state) =>
+                const BatchTrackingDetailPage(),
+          ),
+          GoRoute(
+            path: appIndividualRecordDetailPath,
+            name: 'app_record_detail',
+            builder: (BuildContext context, GoRouterState state) =>
+                const IndividualRecordDetailPage(),
+          ),
+          GoRoute(
+            path: appCredentialDetailPath,
+            name: 'app_credential_detail',
+            builder: (BuildContext context, GoRouterState state) =>
+                const CredentialDetailPage(),
+          ),
+          GoRoute(
+            path: appRegistryPath,
+            name: 'registry',
+            builder: (BuildContext context, GoRouterState state) =>
+                const RegistrySearchPage(),
           ),
           GoRoute(
             path: walletPath,
@@ -158,8 +192,10 @@ class AppRouter {
       GoRoute(
         path: registrySearchPath,
         name: 'registry_search',
-        builder: (BuildContext context, GoRouterState state) =>
-            const RegistrySearchPage(),
+        redirect: (BuildContext context, GoRouterState state) {
+          final String query = state.uri.hasQuery ? '?${state.uri.query}' : '';
+          return '$appRegistryPath$query';
+        },
       ),
       GoRoute(
         path: publicVerificationResultPath,
@@ -176,8 +212,10 @@ class AppRouter {
       GoRoute(
         path: batchProgressPath,
         name: 'batch_progress',
-        builder: (BuildContext context, GoRouterState state) =>
-            const BatchProgressPage(),
+        redirect: (BuildContext context, GoRouterState state) {
+          final String query = state.uri.hasQuery ? '?${state.uri.query}' : '';
+          return '$appBatchesPath$query';
+        },
       ),
 
       // Organisation auth flow
@@ -218,6 +256,12 @@ class AppRouter {
         name: 'map_credential_fields',
         builder: (BuildContext context, GoRouterState state) =>
             const MapCredentialFieldsPage(),
+      ),
+      GoRoute(
+        path: batchJobRunningPath,
+        name: 'batch_job_running',
+        builder: (BuildContext context, GoRouterState state) =>
+            const BatchJobRunningPage(),
       ),
       GoRoute(
         path: bulkUploadPath,

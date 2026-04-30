@@ -112,7 +112,7 @@ class DashboardPage extends StatelessWidget {
               _QuickActionCard(
                 label: 'New Batch',
                 icon: Icons.add_box_outlined,
-                onTap: () => context.go(AppRouter.verificationPlanSetupPath),
+                onTap: () => context.push(AppRouter.verificationPlanSetupPath),
               ),
               _QuickActionCard(
                 label: 'View Credentials',
@@ -127,7 +127,7 @@ class DashboardPage extends StatelessWidget {
               _QuickActionCard(
                 label: 'Registry Search',
                 icon: Icons.person_search_outlined,
-                onTap: () => context.go(AppRouter.registrySearchPath),
+                onTap: () => context.go(AppRouter.appRegistryPath),
               ),
             ],
           ),
@@ -191,7 +191,7 @@ class _HeroGreetingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 190,
+      constraints: const BoxConstraints(minHeight: 190),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -233,6 +233,7 @@ class _HeroGreetingCard extends StatelessWidget {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       Text(
                         'Good\nmorning,\n$name 👋',
@@ -250,11 +251,12 @@ class _HeroGreetingCard extends StatelessWidget {
                           height: 1.4,
                         ),
                       ),
-                      const Spacer(),
-                      Row(
-                        children: const <Widget>[
+                      const SizedBox(height: AppSpacing.x4),
+                      const Wrap(
+                        spacing: AppSpacing.x2,
+                        runSpacing: AppSpacing.x2,
+                        children: <Widget>[
                           _HeroPill(label: '1,240 Verified'),
-                          SizedBox(width: AppSpacing.x2),
                           _HeroPill(label: '3 Active'),
                         ],
                       ),
@@ -391,24 +393,32 @@ class _KpiMiniCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.x3,
-        vertical: AppSpacing.x3,
+        vertical: AppSpacing.x2,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: AppTypography.caption.copyWith(
               letterSpacing: 1,
               color: scheme.onSurface.withAlpha(140),
             ),
           ),
           const SizedBox(height: AppSpacing.x1),
-          Text(
-            value,
-            style: AppTypography.heading1.copyWith(
-              fontSize: 22,
-              color: AppColors.brandBlue,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.heading1.copyWith(
+                fontSize: 22,
+                color: AppColors.brandBlue,
+              ),
             ),
           ),
         ],
@@ -433,31 +443,31 @@ class _QuickActionCard extends StatelessWidget {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return TMZCard(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.x4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEAF1FF),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: AppColors.brandBlue),
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF1FF),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const Spacer(),
-            Text(
-              label,
-              style: AppTypography.body2.copyWith(
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurface.withAlpha(230),
-              ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: AppColors.brandBlue, size: 20),
+          ),
+          const Spacer(),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.body2.copyWith(
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface.withAlpha(230),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

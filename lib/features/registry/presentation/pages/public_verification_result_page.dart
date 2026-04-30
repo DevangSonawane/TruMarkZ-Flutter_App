@@ -40,7 +40,11 @@ class PublicVerificationResultPage extends StatelessWidget {
               leading: Icon(Icons.verified_rounded),
               title: Text('Credential Verified'),
               subtitle: Text('This credential is valid and anchored on-chain.'),
-              trailing: TMZBadge(label: 'Verified', backgroundColor: Colors.green, foregroundColor: Colors.white),
+              trailing: TMZBadge(
+                label: 'Verified',
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.x4),
@@ -68,11 +72,10 @@ class PublicVerificationResultPage extends StatelessWidget {
           TMZButton(
             label: 'Search Registry',
             variant: TMZButtonVariant.secondary,
-            onPressed: () => context.go(AppRouter.registrySearchPath),
+            onPressed: () => context.go(AppRouter.appRegistryPath),
           ),
         ],
       ),
     );
   }
 }
-

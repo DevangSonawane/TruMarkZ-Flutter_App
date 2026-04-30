@@ -129,11 +129,13 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                             : () {
                                 switch (_selected!) {
                                   case _Role.organisation:
-                                    context.go(AppRouter.organisationRegistrationPath);
+                                    context.go(
+                                      AppRouter.organisationRegistrationPath,
+                                    );
                                   case _Role.individual:
                                     context.go(AppRouter.skillTreePath);
                                   case _Role.verifying:
-                                    context.go(AppRouter.registrySearchPath);
+                                    context.go(AppRouter.appRegistryPath);
                                 }
                               },
                       ),

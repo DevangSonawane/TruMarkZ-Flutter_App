@@ -213,15 +213,19 @@ class _PendingApprovalPageState extends State<PendingApprovalPage>
                           color: scheme.primary,
                         ),
                         const SizedBox(width: AppSpacing.x2),
-                        Text(
-                          'SUBMISSION SUMMARY',
-                          style: AppTypography.caption.copyWith(
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.w800,
-                            color: scheme.primary,
+                        Expanded(
+                          child: Text(
+                            'SUBMISSION SUMMARY',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption.copyWith(
+                              letterSpacing: 1.2,
+                              fontWeight: FontWeight.w800,
+                              color: scheme.primary,
+                            ),
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: AppSpacing.x2),
                         if (isWaiting) TMZBadge.pending(label: 'PENDING'),
                         if (isApproved)
                           const TMZBadge(
