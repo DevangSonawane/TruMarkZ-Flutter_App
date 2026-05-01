@@ -75,14 +75,6 @@ class _TMZInputState extends State<TMZInput> {
         ? AppColors.brandBlue
         : AppColors.border;
 
-    final BoxShadow? focusRing = _focused && !hasError
-        ? BoxShadow(
-            color: AppColors.brandBlue.withAlpha(0x1A),
-            blurRadius: 0,
-            spreadRadius: 4,
-          )
-        : null;
-
     Widget? suffixWidget = widget.suffix;
     if (suffixWidget == null && widget.obscureText) {
       suffixWidget = IconButton(
@@ -126,7 +118,8 @@ class _TMZInputState extends State<TMZInput> {
             color: widget.enabled ? AppColors.cardSurface : AppColors.offWhite,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor, width: hasError ? 1 : 1.25),
-            boxShadow: focusRing == null ? null : <BoxShadow>[focusRing],
+            // Keep a single visible border (no outer focus ring).
+            boxShadow: null,
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 54),
@@ -159,7 +152,16 @@ class _TMZInputState extends State<TMZInput> {
                         fontSize: 14,
                         color: AppColors.textTertiary,
                       ),
+                      // AppTheme sets a global filled InputDecorationTheme; opt out here
+                      // because this widget already draws its own container/background.
+                      filled: false,
+                      fillColor: Colors.transparent,
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
                       isDense: true,
                       contentPadding: EdgeInsets.fromLTRB(
                         widget.prefixIcon == null ? 16 : 12,
