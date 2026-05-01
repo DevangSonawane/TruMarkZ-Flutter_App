@@ -24,8 +24,7 @@ class CredentialsGeneratedPage extends StatelessWidget {
     final Map<String, String> qp = GoRouterState.of(
       context,
     ).uri.queryParameters;
-    final String batchName =
-        (qp['batch'] ?? 'Driver Verification Q1').trim().isNotEmpty
+    final String batchName = (qp['batch']?.trim().isNotEmpty ?? false)
         ? qp['batch']!.trim()
         : 'Driver Verification Q1';
     final int createdCount = _tryParseInt(

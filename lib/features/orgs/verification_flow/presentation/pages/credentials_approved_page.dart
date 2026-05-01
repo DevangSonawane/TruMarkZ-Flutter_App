@@ -6,16 +6,14 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 
-class BatchJobRunningPage extends StatefulWidget {
-  const BatchJobRunningPage({super.key});
+class CredentialsApprovedPage extends StatefulWidget {
+  const CredentialsApprovedPage({super.key});
 
   @override
-  State<BatchJobRunningPage> createState() => _BatchJobRunningPageState();
+  State<CredentialsApprovedPage> createState() => _CredentialsApprovedPageState();
 }
 
-class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
-  static const String _heroImageUrl =
-      'https://lh3.googleusercontent.com/aida/ADBb0ugfgT1327qtmZBb5HCEWgfJ4VvfkZUxLItWYdnrVHewXjKqYhiYPXFxXtgZN0sYwzbJdhcN63zBAqEpwlIeEfTb3-1Ccv0U3IU7v6iVFB8wC1nr8dBCzLuUeTGH4VxwMSkH1HQUu4Fo6dJu3LhgK8L-rJuOmHBqZ4OTIY82JzuBFnrYv8Hqz8h9L65XZa7lULryoN9naurnlnCnNHf9tTY6-SqJW0sKuy6KrT55Q3IDQYF-rYBI3fRzxmOd584HnqfbRBrwvLtWLA';
+class _CredentialsApprovedPageState extends State<CredentialsApprovedPage> {
   static const String _secondaryImageUrl =
       'https://lh3.googleusercontent.com/aida/ADBb0uhJBdF3vTRwoK3NOiP7nL3OPGX7zx5l-funeCyySeTy4MoTcHlrG4qr9G_e4YgprZedpjQeEiT3N5EJJVEmvhhYmTweTTInBuwQsTfUv5q6j0-n5iA-kwvqjDDvdbcI0TxCUy4MtZk73p07nZOb71uEoOvHsS-BRSY-Q6bJksc2U_V3o19JXBHAjKXV3UIp2-jt1uRtYNX10ZZjudf0QvXRtKyj6xnABsBNwOUd7mQhxqaUIe0BszW_FoGDvw5T39SvwJ3BS2QO1w';
 
@@ -28,7 +26,6 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
   }
 
   Future<void> _run() async {
-    // Simulated background work for the PRD step. Replace with real job tracking later.
     const List<Duration> steps = <Duration>[
       Duration(milliseconds: 500),
       Duration(milliseconds: 650),
@@ -42,33 +39,9 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
       if (!mounted) return;
       setState(() => _progress = targets[i]);
     }
-
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    _goToSuccess(replace: true);
-  }
-
-  void _goToSuccess({required bool replace}) {
-    final Map<String, String> qp = Map<String, String>.from(
-      GoRouterState.of(context).uri.queryParameters,
-    );
-    qp.putIfAbsent('created', () => qp['records'] ?? '80');
-
-    final String qs = qp.entries
-        .map(
-          (MapEntry<String, String> e) =>
-              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
-        )
-        .join('&');
-    final String location = qs.isEmpty
-        ? AppRouter.credentialsGeneratedPath
-        : '${AppRouter.credentialsGeneratedPath}?$qs';
-
-    if (replace) {
-      context.replace(location);
-    } else {
-      context.push(location);
-    }
+    // NOTE: Do not auto-navigate on completion. This page is intended to stay
+    // visible while the background job runs, and auto-navigation can feel like
+    // a "relaunch" during scroll/rebuild.
   }
 
   @override
@@ -77,7 +50,6 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
     final String requestId = (qp['requestId']?.trim().isNotEmpty ?? false)
         ? qp['requestId']!.trim()
         : 'TRM-092-X12';
-
     final int pct = (_progress * 100).round().clamp(0, 100);
 
     return Scaffold(
@@ -87,23 +59,16 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: const Color(0xFF2563EB).withAlpha(16),
-        leadingWidth: 140,
-        leading: InkWell(
-          onTap: () => context.pop(),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const SizedBox(width: 16),
-              const Icon(Icons.arrow_back_rounded, color: AppColors.brandBlue),
-              const SizedBox(width: 8),
-              Text(
-                'Batch Progress',
-                style: AppTypography.heading2.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.brandBlue),
+        ),
+        title: Text(
+          'Approval',
+          style: AppTypography.heading2.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
           ),
         ),
         actions: <Widget>[
@@ -133,7 +98,7 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
                 children: <Widget>[
                   _SuccessCard(progress: _progress, percentLabel: '$pct%'),
                   const SizedBox(height: AppSpacing.x5),
-                  _SecondaryInfoCard(),
+                  const _SecondaryInfoCard(),
                 ],
               ),
             ),
@@ -261,18 +226,6 @@ class _SuccessCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.x4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 0.83,
-              child: Image.network(
-                _BatchJobRunningPageState._heroImageUrl,
-                fit: BoxFit.cover,
-                opacity: const AlwaysStoppedAnimation<double>(0.9),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
@@ -305,12 +258,12 @@ class _SuccessCard extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: <Color>[
-                        const Color(0xFF2563EB),
-                        const Color(0xFF1E3A8A),
+                        Color(0xFF2563EB),
+                        Color(0xFF1E3A8A),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(999),
@@ -422,6 +375,8 @@ class _StepRow extends StatelessWidget {
 }
 
 class _SecondaryInfoCard extends StatelessWidget {
+  const _SecondaryInfoCard();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -445,7 +400,7 @@ class _SecondaryInfoCard extends StatelessWidget {
               width: 64,
               height: 64,
               child: Image.network(
-                _BatchJobRunningPageState._secondaryImageUrl,
+                _CredentialsApprovedPageState._secondaryImageUrl,
                 fit: BoxFit.cover,
               ),
             ),
@@ -559,9 +514,9 @@ class _NavItem extends StatelessWidget {
     final Color color = active ? AppColors.brandBlue : const Color(0xFF94A3B8);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -572,25 +527,13 @@ class _NavItem extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              label.toUpperCase(),
+              label,
               style: AppTypography.caption.copyWith(
-                fontSize: 11,
-                letterSpacing: 0.8,
-                fontWeight: FontWeight.w600,
                 color: color,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
               ),
             ),
-            if (active) ...<Widget>[
-              const SizedBox(height: 2),
-              Container(
-                width: 4,
-                height: 4,
-                decoration: const BoxDecoration(
-                  color: AppColors.brandBlue,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
           ],
         ),
       ),

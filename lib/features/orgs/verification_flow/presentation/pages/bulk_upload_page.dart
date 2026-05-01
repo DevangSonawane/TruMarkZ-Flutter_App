@@ -250,6 +250,8 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
     qp['columns'] = columns.join(',');
     qp['batch'] = _batchNameController.text.trim();
     qp.putIfAbsent('records', () => '80');
+    qp.putIfAbsent('checks', () => _checks.join(','));
+    qp['startedOn'] = DateTime.now().toIso8601String();
     final String qs = qp.entries
         .map(
           (MapEntry<String, String> e) =>
@@ -258,8 +260,8 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
         .join('&');
     context.push(
       qs.isEmpty
-          ? AppRouter.credentialTemplateSelectorPath
-          : '${AppRouter.credentialTemplateSelectorPath}?$qs',
+          ? AppRouter.batchCreatedSuccessPath
+          : '${AppRouter.batchCreatedSuccessPath}?$qs',
     );
   }
 
@@ -414,7 +416,7 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
                   AppSpacing.x4,
                 ),
                 child: TMZButton(
-                  label: 'Choose Template',
+                  label: 'Confirm & Upload',
                   icon: Icons.arrow_forward_rounded,
                   onPressed:
                       (_excelUploaded &&

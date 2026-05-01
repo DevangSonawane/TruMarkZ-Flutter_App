@@ -75,8 +75,8 @@ class CredentialPreviewApprovalPage extends StatelessWidget {
                     .join('&');
                 context.push(
                   qs.isEmpty
-                      ? AppRouter.batchJobRunningPath
-                      : '${AppRouter.batchJobRunningPath}?$qs',
+                      ? AppRouter.credentialsApprovedPath
+                      : '${AppRouter.credentialsApprovedPath}?$qs',
                 );
               },
               style: FilledButton.styleFrom(

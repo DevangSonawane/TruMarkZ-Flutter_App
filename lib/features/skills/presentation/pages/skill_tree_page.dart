@@ -26,6 +26,18 @@ class _SkillTreePageState extends State<SkillTreePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () {
+            final GoRouter router = GoRouter.of(context);
+            if (router.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRouter.individualIdentityPath);
+            }
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
         title: Row(
           children: <Widget>[
             SvgPicture.asset('assets/icons/trumarkz_shield.svg', height: 24),
