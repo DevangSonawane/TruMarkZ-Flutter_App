@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
-import '../../../../../core/widgets/tmz_button.dart';
-import '../../../../../core/widgets/tmz_card.dart';
 
 class CredentialTemplateSelectorPage extends StatefulWidget {
   const CredentialTemplateSelectorPage({super.key});
@@ -22,45 +19,48 @@ class _CredentialTemplateSelectorPageState
   static const List<_CredentialTemplate> _templates = <_CredentialTemplate>[
     _CredentialTemplate(
       id: 't1',
-      title: 'T1 — Workforce / Driver ID',
-      subtitle: 'Name, photo, ID number, employer',
-      icon: Icons.local_shipping_outlined,
-      tag: 'WORKFORCE',
+      title: 'Workforce / Driver ID',
+      subtitle: 'Photo, Name, Designation, Licence No., Verified checks, QR',
+      icon: Icons.badge_rounded,
+      tag: 'T1',
     ),
     _CredentialTemplate(
       id: 't2',
-      title: 'T2 — Healthcare / Nurse',
-      subtitle: 'License ID, hospital, validity, role',
+      title: 'Healthcare / Nurse',
+      subtitle:
+          'Photo, Name, Qualification, Registration No., Issuing body, QR',
       icon: Icons.medical_services_outlined,
-      tag: 'HEALTH',
+      tag: 'T2',
     ),
     _CredentialTemplate(
       id: 't3',
-      title: 'T3 — Education / Student',
-      subtitle: 'Institute, enrollment, course, batch',
+      title: 'Education / Student',
+      subtitle: 'Photo, Name, Course, Institution, Year, Credential ID, QR',
       icon: Icons.school_outlined,
-      tag: 'EDU',
+      tag: 'T3',
     ),
     _CredentialTemplate(
       id: 't4',
-      title: 'T4 — Product / Compliance',
-      subtitle: 'Product ID, batch, standards, audit proof',
+      title: 'Product / Compliance',
+      subtitle:
+          'Product name, Batch No., Compliance type, Issuing org, Verified by, QR',
       icon: Icons.inventory_2_outlined,
-      tag: 'COMPLIANCE',
+      tag: 'T4',
     ),
     _CredentialTemplate(
       id: 't5',
-      title: 'T5 — Service / Professional',
-      subtitle: 'Service ID, credentials, validity, scope',
-      icon: Icons.work_outline_rounded,
-      tag: 'SERVICE',
+      title: 'Service / Professional',
+      subtitle:
+          'Photo, Name, Skill/Service, Years of experience, Verified by, QR',
+      icon: Icons.construction_rounded,
+      tag: 'T5',
     ),
     _CredentialTemplate(
       id: 't6',
-      title: 'T6 — Skill Tree Credential',
-      subtitle: 'Skill, level, issuer, endorsements',
+      title: 'Skill Tree Credential',
+      subtitle: 'Photo, Name, Skills with verification nodes, IDs, QR',
       icon: Icons.account_tree_outlined,
-      tag: 'SKILLS',
+      tag: 'T6',
     ),
   ];
 
@@ -86,98 +86,164 @@ class _CredentialTemplateSelectorPageState
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final _CredentialTemplate selected = _templates.firstWhere(
       (t) => t.id == _selectedId,
     );
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 22,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
-            ),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('Template Selector'),
-          ],
+        backgroundColor: Colors.white.withAlpha(230),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        titleSpacing: 8,
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
+        title: Text(
+          'Pick a Template',
+          style: AppTypography.heading1.copyWith(
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        actions: const <Widget>[SizedBox(width: AppSpacing.x2)],
       ),
-      body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
+      body: Stack(
+        children: <Widget>[
+          ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x4,
+              AppSpacing.x4,
+              AppSpacing.x4,
+              190,
+            ),
+            children: <Widget>[
+              Text(
+                'Select the template that matches your use case.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
                 ),
-                children: <Widget>[
-                  Text('Choose a template', style: AppTypography.display2),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Select a credential template that matches your batch industry.',
-                    style: AppTypography.body2.copyWith(
-                      color: scheme.onSurface.withAlpha(160),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final bool wide = constraints.maxWidth >= 720;
-                          final int columns = wide ? 2 : 1;
+              ),
+              const SizedBox(height: AppSpacing.x4),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _templates.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: AppSpacing.x3,
+                  crossAxisSpacing: AppSpacing.x3,
+                  childAspectRatio: 1.15,
+                ),
+                itemBuilder: (BuildContext context, int index) {
+                  final _CredentialTemplate template = _templates[index];
+                  final bool isSelected = template.id == _selectedId;
+                  return _TemplateGridCard(
+                    template: template,
+                    selected: isSelected,
+                    onTap: () => setState(() => _selectedId = template.id),
+                  );
+                },
+              ),
+              const SizedBox(height: AppSpacing.x5),
+              _FeaturedPreviewCard(template: selected),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Builder(
+              builder: (BuildContext context) {
+                final double bottomInset = MediaQuery.viewPaddingOf(
+                  context,
+                ).bottom;
 
-                          return GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _templates.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  mainAxisSpacing: AppSpacing.x3,
-                                  crossAxisSpacing: AppSpacing.x3,
-                                  childAspectRatio: wide ? 2.6 : 2.9,
-                                ),
-                            itemBuilder: (BuildContext context, int index) {
-                              final _CredentialTemplate template =
-                                  _templates[index];
-                              final bool selected = template.id == _selectedId;
-                              return _TemplateCard(
-                                template: template,
-                                selected: selected,
-                                onTap: () =>
-                                    setState(() => _selectedId = template.id),
-                              );
-                            },
-                          );
-                        },
+                return Container(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.x4,
+                    AppSpacing.x3,
+                    AppSpacing.x4,
+                    AppSpacing.x3 + bottomInset,
                   ),
-                ],
-              ),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      SizedBox(
+                        height: 54,
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {},
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: AppColors.brandBlue.withAlpha(26),
+                              width: 2,
+                            ),
+                            foregroundColor: AppColors.brandBlue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.visibility_rounded,
+                            color: AppColors.brandBlue,
+                          ),
+                          label: Text(
+                            'Preview Template',
+                            style: AppTypography.button.copyWith(
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.x3),
+                      SizedBox(
+                        height: 54,
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () => _continue(context),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.brandBlue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              Flexible(
+                                child: Text(
+                                  'Continue with ${selected.tag}: ${selected.title}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.button.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Icon(Icons.arrow_forward_rounded),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: TMZButton(
-                  label: 'Continue with ${selected.id.toUpperCase()}',
-                  icon: Icons.arrow_forward_rounded,
-                  onPressed: () => _continue(context),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -199,8 +265,8 @@ class _CredentialTemplate {
   final String tag;
 }
 
-class _TemplateCard extends StatelessWidget {
-  const _TemplateCard({
+class _TemplateGridCard extends StatelessWidget {
+  const _TemplateGridCard({
     required this.template,
     required this.selected,
     required this.onTap,
@@ -212,94 +278,203 @@ class _TemplateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final Color bg = selected ? const Color(0xFFEEF3FF) : Colors.white;
+    final Color borderColor = selected
+        ? AppColors.brandBlue.withAlpha(90)
+        : Colors.black.withAlpha(12);
+    final BoxShadow shadow = BoxShadow(
+      color: const Color(0xFF2563EB).withAlpha(20),
+      blurRadius: 12,
+      offset: const Offset(0, 2),
+    );
 
-    return TMZCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.brandBlue.withAlpha(16),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(template.icon, color: AppColors.brandBlue, size: 22),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: <BoxShadow>[shadow],
           ),
-          const SizedBox(width: AppSpacing.x3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppColors.brandBlue
+                              : AppColors.brandBlue.withAlpha(18),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          template.icon,
+                          size: 20,
+                          color: selected ? Colors.white : AppColors.brandBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
                         template.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.body1.copyWith(
-                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        template.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body2.copyWith(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 4,
+                      decoration: const BoxDecoration(
+                        color: AppColors.brandBlue,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          bottomLeft: Radius.circular(16),
                         ),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.x2),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeaturedPreviewCard extends StatelessWidget {
+  const _FeaturedPreviewCard({required this.template});
+
+  final _CredentialTemplate template;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withAlpha(18),
+                blurRadius: 24,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[
+                      AppColors.brandBlue.withAlpha(40),
+                      const Color(0xFF7C3AED).withAlpha(28),
+                      const Color(0xFF0B1220).withAlpha(18),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[
+                        Colors.transparent,
+                        Colors.black.withAlpha(178),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.x5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: <Widget>[
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
+                        horizontal: 12,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.brandBlue.withAlpha(22)
-                            : scheme.onSurface.withAlpha(10),
+                        color: AppColors.brandBlue.withAlpha(40),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: selected
-                              ? AppColors.brandBlue.withAlpha(60)
-                              : scheme.onSurface.withAlpha(18),
+                          color: Colors.white.withAlpha(26),
                         ),
                       ),
                       child: Text(
-                        template.tag,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        'Live Preview',
                         style: AppTypography.caption.copyWith(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.7,
-                          color: selected
-                              ? AppColors.brandBlue
-                              : AppColors.textSecondary,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x2),
+                    Text(
+                      '${template.title} Standard',
+                      style: AppTypography.display2.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Visualizing the secure verification layer.',
+                      style: AppTypography.body2.copyWith(
+                        color: Colors.white.withAlpha(204),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  template.subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.body2.copyWith(
-                    color: scheme.onSurface.withAlpha(160),
-                    height: 1.25,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: AppSpacing.x2),
-          Icon(
-            selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-            color: selected
-                ? AppColors.brandBlue
-                : scheme.onSurface.withAlpha(90),
-          ),
-        ],
+        ),
       ),
     );
   }

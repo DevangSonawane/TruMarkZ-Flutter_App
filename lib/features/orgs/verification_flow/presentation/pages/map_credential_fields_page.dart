@@ -163,8 +163,8 @@ class _MapCredentialFieldsPageState extends State<MapCredentialFieldsPage> {
         .join('&');
     context.push(
       qs.isEmpty
-          ? AppRouter.batchJobRunningPath
-          : '${AppRouter.batchJobRunningPath}?$qs',
+          ? AppRouter.credentialPreviewApprovalPath
+          : '${AppRouter.credentialPreviewApprovalPath}?$qs',
     );
   }
 

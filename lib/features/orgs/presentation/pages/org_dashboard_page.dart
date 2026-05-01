@@ -126,7 +126,7 @@ class OrgDashboardPage extends StatelessWidget {
                         context.push(AppRouter.verificationPlanSetupPath),
                   ),
                   _QuickActionCard(
-                    label: 'View Credentials',
+                    label: 'Create Credentials',
                     icon: Icons.badge_outlined,
                     onTap: () => context.go(AppRouter.walletPath),
                   ),
@@ -294,7 +294,7 @@ class _HeroPill extends StatelessWidget {
             style: AppTypography.caption.copyWith(
               fontSize: 11,
               color: Colors.white,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w300,
             ),
           ),
         ),
@@ -552,7 +552,7 @@ class _KpiStatCard extends StatelessWidget {
             style: AppTypography.display1.copyWith(
               fontSize: 28,
               color: AppColors.brandBlue,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w300,
             ),
           ),
         ],
@@ -591,13 +591,18 @@ class _QuickActionCard extends StatelessWidget {
             child: Icon(icon, color: AppColors.brandBlue, size: 20),
           ),
           const SizedBox(height: AppSpacing.x3),
-          Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.body2.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+          Expanded(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.body2.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ),
           ),
         ],

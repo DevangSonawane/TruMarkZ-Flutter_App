@@ -24,6 +24,7 @@ import '../../features/orgs/verification_flow/presentation/pages/batch_tracking_
 import '../../features/orgs/verification_flow/presentation/pages/bulk_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_detail_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_template_selector_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/credential_preview_approval_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credentials_generated_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/individual_record_detail_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/map_credential_fields_page.dart';
@@ -72,6 +73,8 @@ class AppRouter {
   static const String credentialTemplateSelectorPath =
       '/credential-template-selector';
   static const String mapCredentialFieldsPath = '/map-credential-fields';
+  static const String credentialPreviewApprovalPath =
+      '/credential-preview-approval';
   static const String batchJobRunningPath = '/batch-job-running';
   static const String bulkUploadPath = '/bulk-upload';
   static const String credentialsGeneratedPath = '/credentials-generated';
@@ -334,6 +337,15 @@ class AppRouter {
             _slideFadePage(
               state: state,
               child: const MapCredentialFieldsPage(),
+            ),
+      ),
+      GoRoute(
+        path: credentialPreviewApprovalPath,
+        name: 'credential_preview_approval',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const CredentialPreviewApprovalPage(),
             ),
       ),
       GoRoute(

@@ -265,6 +265,27 @@ class _EntitySegmented extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color bg = Color(0xFFF3F3FE);
     const Color border = Color(0xFFC3C6D7);
+    final Widget row = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        _SegButton(
+          label: 'All Entities',
+          active: value == _EntityFilter.all,
+          onTap: () => onChanged(_EntityFilter.all),
+        ),
+        _SegButton(
+          label: 'Individuals',
+          active: value == _EntityFilter.individuals,
+          onTap: () => onChanged(_EntityFilter.individuals),
+        ),
+        _SegButton(
+          label: 'Organisations',
+          active: value == _EntityFilter.organisations,
+          onTap: () => onChanged(_EntityFilter.organisations),
+        ),
+      ],
+    );
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -272,25 +293,10 @@ class _EntitySegmented extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          _SegButton(
-            label: 'All Entities',
-            active: value == _EntityFilter.all,
-            onTap: () => onChanged(_EntityFilter.all),
-          ),
-          _SegButton(
-            label: 'Individuals',
-            active: value == _EntityFilter.individuals,
-            onTap: () => onChanged(_EntityFilter.individuals),
-          ),
-          _SegButton(
-            label: 'Organisations',
-            active: value == _EntityFilter.organisations,
-            onTap: () => onChanged(_EntityFilter.organisations),
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: row,
       ),
     );
   }
@@ -1172,4 +1178,3 @@ class _HubStatCard extends StatelessWidget {
     );
   }
 }
-

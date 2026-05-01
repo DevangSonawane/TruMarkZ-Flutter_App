@@ -41,7 +41,16 @@ class OrgShellPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String location = GoRouterState.of(context).uri.toString();
+    final String path = Uri.parse(location).path;
     final int currentIndex = _indexForLocation(location);
+
+    // Hide the organisation shell nav/FAB on full-screen pages.
+    // Example: Create Credentials (wallet) should have its own header/back button.
+    final bool showShellChrome = !path.startsWith(AppRouter.walletPath);
+
+    if (!showShellChrome) {
+      return Scaffold(body: child);
+    }
 
     return Scaffold(
       body: child,

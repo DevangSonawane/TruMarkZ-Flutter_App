@@ -394,7 +394,7 @@ class _OtpInputRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         const double maxBox = 56;
-        const double minBox = 40;
+        const double absoluteMinBox = 28;
         const double maxSpacing = 8;
         const double minSpacing = 4;
 
@@ -402,106 +402,120 @@ class _OtpInputRow extends StatelessWidget {
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
 
-        // Compute a size/spacing that fits the current width on a single line.
-        final double idealBox =
-            (availableWidth - maxSpacing * (_OtpTokens.otpLength - 1)) /
-            _OtpTokens.otpLength;
-        final double boxSize = idealBox.clamp(minBox, maxBox);
-        final double remaining =
-            availableWidth - (boxSize * _OtpTokens.otpLength);
-        final double computedSpacing = _OtpTokens.otpLength > 1
-            ? (remaining / (_OtpTokens.otpLength - 1)).clamp(
-                minSpacing,
-                maxSpacing,
-              )
-            : maxSpacing;
+        // Compute a size/spacing that ALWAYS fits on a single line (no overflow).
+        final int count = _OtpTokens.otpLength;
+        final int gaps = count - 1;
 
-        final double requiredWidth =
-            (boxSize * _OtpTokens.otpLength) +
-            computedSpacing * (_OtpTokens.otpLength - 1);
-        final bool needsScroll = requiredWidth > availableWidth + 0.1;
+        double boxSize;
+        double spacing;
+
+        if (gaps <= 0) {
+          boxSize = availableWidth.clamp(absoluteMinBox, maxBox);
+          spacing = 0;
+        } else {
+          // Start with the largest spacing; shrink spacing/boxes as needed.
+          spacing = maxSpacing;
+          boxSize = (availableWidth - spacing * gaps) / count;
+
+          if (boxSize > maxBox) {
+            boxSize = maxBox;
+            spacing = ((availableWidth - boxSize * count) / gaps).clamp(
+              minSpacing,
+              maxSpacing,
+            );
+          } else if (boxSize < absoluteMinBox) {
+            // Try shrinking spacing down to zero before shrinking boxes further.
+            spacing = ((availableWidth - absoluteMinBox * count) / gaps).clamp(
+              0,
+              maxSpacing,
+            );
+            boxSize = (availableWidth - spacing * gaps) / count;
+
+            // If it's still too small, allow smaller boxes with zero spacing.
+            if (boxSize < absoluteMinBox) {
+              spacing = 0;
+              boxSize = availableWidth / count;
+            }
+          } else {
+            boxSize = boxSize.clamp(absoluteMinBox, maxBox);
+            spacing = spacing.clamp(minSpacing, maxSpacing);
+          }
+        }
 
         final Widget row = Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List<Widget>.generate(_OtpTokens.otpLength, (int i) {
-            return Padding(
-              padding: EdgeInsets.only(
-                right: i == _OtpTokens.otpLength - 1 ? 0 : computedSpacing,
-              ),
-              child: SizedBox(
-                width: boxSize,
-                height: boxSize,
-                child: AnimatedBuilder(
-                  animation: Listenable.merge(<Listenable>[
-                    controllers[i],
-                    nodes[i],
-                  ]),
-                  builder: (BuildContext context, Widget? child) {
-                    final bool focused = nodes[i].hasFocus;
-                    final bool filled = controllers[i].text.trim().isNotEmpty;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (i != 0) SizedBox(width: spacing),
+                SizedBox(
+                  width: boxSize,
+                  height: boxSize,
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge(<Listenable>[
+                      controllers[i],
+                      nodes[i],
+                    ]),
+                    builder: (BuildContext context, Widget? child) {
+                      final bool focused = nodes[i].hasFocus;
+                      final bool filled = controllers[i].text.trim().isNotEmpty;
 
-                    final Color borderColor = hasError
-                        ? AppColors.error
-                        : filled
-                        ? AppColors.brandBlue
-                        : AppColors.divider;
-                    final Color fillColor = filled
-                        ? AppColors.blueTint
-                        : AppColors.cardSurface;
+                      final Color borderColor = hasError
+                          ? AppColors.error
+                          : filled
+                          ? AppColors.brandBlue
+                          : AppColors.divider;
+                      final Color fillColor = filled
+                          ? AppColors.blueTint
+                          : AppColors.cardSurface;
 
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      curve: Curves.easeOut,
-                      decoration: BoxDecoration(
-                        color: fillColor,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: borderColor,
-                          width: focused ? 2 : 1,
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        curve: Curves.easeOut,
+                        decoration: BoxDecoration(
+                          color: fillColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: borderColor,
+                            width: focused ? 2 : 1,
+                          ),
+                          // Keep a single visible border (no outer focus ring).
+                          boxShadow: null,
                         ),
-                        // Keep a single visible border (no outer focus ring).
-                        boxShadow: null,
+                        child: Center(child: child),
+                      );
+                    },
+                    child: TextField(
+                      controller: controllers[i],
+                      focusNode: nodes[i],
+                      autofocus: i == 0,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      cursorColor: AppColors.brandBlue,
+                      cursorWidth: 2,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(1),
+                      ],
+                      style: AppTypography.heading2.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      child: Center(child: child),
-                    );
-                  },
-                  child: TextField(
-                    controller: controllers[i],
-                    focusNode: nodes[i],
-                    autofocus: i == 0,
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    cursorColor: AppColors.brandBlue,
-                    cursorWidth: 2,
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(1),
-                    ],
-                    style: AppTypography.heading2.copyWith(
-                      fontWeight: FontWeight.w700,
+                      decoration: const InputDecoration(
+                        counterText: '',
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onChanged: (String value) => onChanged(i, value),
                     ),
-                    decoration: const InputDecoration(
-                      counterText: '',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    onChanged: (String value) => onChanged(i, value),
                   ),
                 ),
-              ),
+              ],
             );
           }),
         );
 
-        return Center(
-          child: needsScroll
-              ? SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: row,
-                )
-              : row,
-        );
+        return Center(child: row);
       },
     );
   }

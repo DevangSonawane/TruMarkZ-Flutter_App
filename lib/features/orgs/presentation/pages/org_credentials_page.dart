@@ -12,6 +12,46 @@ class OrgCredentialsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final List<_CredentialCardModel> cards = <_CredentialCardModel>[
+      const _CredentialCardModel(
+        initials: 'GF',
+        avatarBg: Color(0xFFDBEAFE), // blue-100
+        avatarFg: Color(0xFF2563EB), // blue-600
+        title: 'Senior Security Architect',
+        org: 'Global Security Alliance',
+        dateLabel: 'Issued: Oct 12, 2023',
+        status: _CredentialStatus.valid,
+      ),
+      const _CredentialCardModel(
+        initials: 'TS',
+        avatarBg: Color(0xFFFEF3C7), // amber-100
+        avatarFg: Color(0xFFD97706), // amber-600
+        title: 'Technical Supervisor',
+        org: 'Industrial Standards Corp',
+        dateLabel: 'Expired: Jan 05, 2024',
+        status: _CredentialStatus.expired,
+      ),
+      const _CredentialCardModel(
+        initials: 'QA',
+        avatarBg: Color(0xFFFFE4E6), // rose-100
+        avatarFg: Color(0xFFE11D48), // rose-600
+        title: 'Quality Assurance Lead',
+        org: 'Precision Lab Group',
+        dateLabel: 'Revoked: Mar 18, 2024',
+        status: _CredentialStatus.revoked,
+        dimmed: true,
+      ),
+      const _CredentialCardModel(
+        initials: 'DS',
+        avatarBg: Color(0xFFEDE9FE), // purple-100
+        avatarFg: Color(0xFF7C3AED), // purple-600
+        title: 'Data Science Professional',
+        org: 'Tech Institute X',
+        dateLabel: 'Issued: Nov 30, 2023',
+        status: _CredentialStatus.valid,
+      ),
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       appBar: AppBar(
@@ -19,7 +59,18 @@ class OrgCredentialsPage extends StatelessWidget {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.textPrimary,
-        titleSpacing: 12,
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+              return;
+            }
+            context.go(AppRouter.dashboardPath);
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        titleSpacing: 8,
         title: Row(
           children: <Widget>[
             SvgPicture.asset(
@@ -31,11 +82,15 @@ class OrgCredentialsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.x2),
-            Text(
-              'TruMarkZ',
-              style: AppTypography.heading2.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w900,
+            Expanded(
+              child: Text(
+                'Create Credentials',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.heading2.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ],
@@ -57,262 +112,177 @@ class OrgCredentialsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.x4,
-          AppSpacing.x2,
+          AppSpacing.x3,
           AppSpacing.x4,
-          AppSpacing.x10,
+          140,
         ),
         children: <Widget>[
-          _OrgHeroCard(
-            orgName: 'Apex Logistics Pvt. Ltd.',
-            onNewBatch: () => context.push(AppRouter.verificationPlanSetupPath),
-          ),
-          const SizedBox(height: AppSpacing.x4),
-          const _MetricGrid(),
-          const SizedBox(height: AppSpacing.x6),
-          Row(
-            children: <Widget>[
-              Text(
-                'ACTIVE BATCHES',
-                style: AppTypography.caption.copyWith(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => context.go(AppRouter.appBatchesPath),
-                child: Text(
-                  'See all',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          _ActiveBatchCard(
-            status: _BatchCardStatus.inProgress,
-            title: 'Driver Verification Q1',
-            batchId: 'A1C3',
-            recordCount: 200,
-            doneChecks: const <String>['Identity', 'DL check'],
-            pendingChecks: const <String>['Police', 'Address'],
-            verifiedCount: 60,
-            totalCount: 200,
-            verifierName: 'SafeCheck Pvt.',
-            slaLabel: 'SLA: 3 days left',
-            onTap: () => context.push(AppRouter.batchTrackingDetailPath),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          _ActiveBatchCard(
-            status: _BatchCardStatus.slaAlert,
-            title: 'Warehouse Staff Feb',
-            batchId: 'B9K2',
-            recordCount: 85,
-            doneChecks: const <String>['Identity'],
-            pendingChecks: const <String>['Police', 'Address'],
-            verifiedCount: 45,
-            totalCount: 85,
-            verifierName: 'SafeCheck Pvt.',
-            slaLabel: 'SLA: 30% remaining',
-            onTap: () => context.push(AppRouter.batchTrackingDetailPath),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          _ActiveBatchCard(
-            status: _BatchCardStatus.completed,
-            title: 'Product Compliance — Silk',
-            batchId: 'P0S7',
-            recordCount: 50,
-            doneChecks: const <String>['Document', 'Audit', 'Lab'],
-            pendingChecks: const <String>[],
-            verifiedCount: 50,
-            totalCount: 50,
-            verifierName: 'SafeCheck Pvt.',
-            slaLabel: 'Completed',
-            onTap: () => context.push(AppRouter.batchTrackingDetailPath),
-          ),
+          for (final _CredentialCardModel model in cards) ...<Widget>[
+            _CredentialListCard(model: model, onTap: () {}),
+            const SizedBox(height: AppSpacing.x3),
+          ],
         ],
       ),
-    );
-  }
-}
-
-class _OrgHeroCard extends StatelessWidget {
-  const _OrgHeroCard({required this.orgName, required this.onNewBatch});
-
-  final String orgName;
-  final VoidCallback onNewBatch;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withAlpha(10),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: <Widget>[
-            Positioned(
-              top: -24,
-              right: -22,
-              child: Opacity(
-                opacity: 0.06,
-                child: SvgPicture.asset(
-                  'assets/icons/trumarkz_shield.svg',
-                  width: 140,
-                  height: 140,
-                  colorFilter: const ColorFilter.mode(
-                    AppColors.textPrimary,
-                    BlendMode.srcIn,
-                  ),
-                ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: SafeArea(
+        child: SizedBox(
+          height: 54,
+          child: FloatingActionButton.extended(
+            onPressed: () =>
+                context.push(AppRouter.credentialTemplateSelectorPath),
+            backgroundColor: AppColors.brandBlue,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            icon: const Icon(Icons.add_rounded),
+            label: Text(
+              'Issue New Credential',
+              style: AppTypography.button.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.x6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const _VerifiedOrganisationPill(),
-                  const SizedBox(height: AppSpacing.x5),
-                  Text(
-                    'WELCOME BACK',
-                    style: AppTypography.caption.copyWith(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.4,
-                      color: AppColors.textTertiary.withAlpha(170),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    orgName,
-                    style: AppTypography.display1.copyWith(
-                      fontSize: 30,
-                      height: 1.12,
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Your operations are running smoothly.',
-                    style: AppTypography.body2.copyWith(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x5),
-                  _NewBatchButton(onTap: onNewBatch),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _VerifiedOrganisationPill extends StatelessWidget {
-  const _VerifiedOrganisationPill();
+enum _CredentialStatus { valid, expired, revoked }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withAlpha(24),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF10B981).withAlpha(64)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Verified Organisation',
-            style: AppTypography.body2.copyWith(
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF10B981),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _CredentialCardModel {
+  const _CredentialCardModel({
+    required this.initials,
+    required this.avatarBg,
+    required this.avatarFg,
+    required this.title,
+    required this.org,
+    required this.dateLabel,
+    required this.status,
+    this.dimmed = false,
+  });
+
+  final String initials;
+  final Color avatarBg;
+  final Color avatarFg;
+  final String title;
+  final String org;
+  final String dateLabel;
+  final _CredentialStatus status;
+  final bool dimmed;
 }
 
-class _NewBatchButton extends StatelessWidget {
-  const _NewBatchButton({required this.onTap});
+class _CredentialListCard extends StatelessWidget {
+  const _CredentialListCard({required this.model, required this.onTap});
 
+  final _CredentialCardModel model;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.brandBlue,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(90),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
+    final (_CredentialStatusStyle statusStyle, Color qrColor) = switch (model
+        .status) {
+      _CredentialStatus.valid => (
+          const _CredentialStatusStyle(
+            label: 'VALID',
+            bg: Color(0xFFECFDF3),
+            fg: Color(0xFF16A34A),
+            border: Color(0xFFD1FAE5),
           ),
+          const Color(0xFF94A3B8),
+        ),
+      _CredentialStatus.expired => (
+          const _CredentialStatusStyle(
+            label: 'EXPIRED',
+            bg: Color(0xFFFFFBEB),
+            fg: Color(0xFFD97706),
+            border: Color(0xFFFDE68A),
+          ),
+          const Color(0xFF94A3B8),
+        ),
+      _CredentialStatus.revoked => (
+          const _CredentialStatusStyle(
+            label: 'REVOKED',
+            bg: Color(0xFFFFF1F2),
+            fg: Color(0xFFE11D48),
+            border: Color(0xFFFECACA),
+          ),
+          const Color(0xFFE2E8F0),
+        ),
+    };
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: const Color(0xFF2563EB).withAlpha(20),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Opacity(
+          opacity: model.dimmed ? 0.7 : 1,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(18),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withAlpha(170)),
-                ),
-                child: const Icon(
-                  Icons.add_rounded,
-                  size: 18,
-                  color: Colors.white,
+              _AvatarWithBadge(
+                initials: model.initials,
+                bg: model.avatarBg,
+                fg: model.avatarFg,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      model.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body1.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      model.org,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body2.copyWith(
+                        fontSize: 13,
+                        color: const Color(0xFF94A3B8),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      model.dateLabel,
+                      style: AppTypography.body2.copyWith(
+                        fontSize: 12,
+                        color: const Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                'New batch',
-                style: AppTypography.body1.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  _CredentialStatusPill(style: statusStyle),
+                  const SizedBox(height: 12),
+                  Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 20,
+                    color: qrColor,
+                  ),
+                ],
               ),
             ],
           ),
@@ -322,432 +292,103 @@ class _NewBatchButton extends StatelessWidget {
   }
 }
 
-class _MetricGrid extends StatelessWidget {
-  const _MetricGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: AppSpacing.x3,
-      crossAxisSpacing: AppSpacing.x3,
-      childAspectRatio: 1.65,
-      children: const <Widget>[
-        _MetricTile(
-          value: '12,842',
-          label: 'Total credentials',
-          valueColor: AppColors.textPrimary,
-        ),
-        _MetricTile(
-          value: '99.9%',
-          label: 'Compliance rate',
-          valueColor: Color(0xFF10B981),
-        ),
-        _MetricTile(
-          value: '3',
-          label: 'Active batches',
-          valueColor: AppColors.brandBlue,
-        ),
-        _MetricTile(
-          value: '1.2s',
-          label: 'Avg processing',
-          valueColor: AppColors.textPrimary,
-        ),
-      ],
-    );
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.value,
+class _CredentialStatusStyle {
+  const _CredentialStatusStyle({
     required this.label,
-    required this.valueColor,
+    required this.bg,
+    required this.fg,
+    required this.border,
   });
 
-  final String value;
   final String label;
-  final Color valueColor;
+  final Color bg;
+  final Color fg;
+  final Color border;
+}
+
+class _CredentialStatusPill extends StatelessWidget {
+  const _CredentialStatusPill({required this.style});
+
+  final _CredentialStatusStyle style;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: style.bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: style.border),
       ),
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            value,
-            style: AppTypography.heading1.copyWith(
-              fontSize: 20,
-              height: 1.15,
-              fontWeight: FontWeight.w800,
-              color: valueColor,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.body2.copyWith(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+      child: Text(
+        style.label,
+        style: AppTypography.caption.copyWith(
+          fontSize: 10,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w800,
+          color: style.fg,
+        ),
       ),
     );
   }
 }
 
-enum _BatchCardStatus { inProgress, slaAlert, completed }
-
-class _ActiveBatchCard extends StatelessWidget {
-  const _ActiveBatchCard({
-    required this.status,
-    required this.title,
-    required this.batchId,
-    required this.recordCount,
-    required this.doneChecks,
-    required this.pendingChecks,
-    required this.verifiedCount,
-    required this.totalCount,
-    required this.verifierName,
-    required this.slaLabel,
-    required this.onTap,
+class _AvatarWithBadge extends StatelessWidget {
+  const _AvatarWithBadge({
+    required this.initials,
+    required this.bg,
+    required this.fg,
   });
 
-  final _BatchCardStatus status;
-  final String title;
-  final String batchId;
-  final int recordCount;
-  final List<String> doneChecks;
-  final List<String> pendingChecks;
-  final int verifiedCount;
-  final int totalCount;
-  final String verifierName;
-  final String slaLabel;
-  final VoidCallback onTap;
+  final String initials;
+  final Color bg;
+  final Color fg;
 
   @override
   Widget build(BuildContext context) {
-    final (
-      Color borderColor,
-      Color accent,
-      _StatusPill statusPill,
-    ) = switch (status) {
-      _BatchCardStatus.inProgress => (
-        AppColors.border.withAlpha(140),
-        AppColors.brandBlue,
-        const _StatusPill.inProgress(),
-      ),
-      _BatchCardStatus.slaAlert => (
-        AppColors.danger.withAlpha(90),
-        AppColors.danger,
-        const _StatusPill.slaAlert(),
-      ),
-      _BatchCardStatus.completed => (
-        AppColors.success.withAlpha(90),
-        AppColors.success,
-        const _StatusPill.completed(),
-      ),
-    };
-
-    final double progress = totalCount == 0
-        ? 0
-        : (verifiedCount / totalCount).clamp(0, 1);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.x4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.clip,
-                          style: AppTypography.heading1.copyWith(
-                            color: AppColors.textPrimary,
-                            fontSize: 18,
-                            height: 1.15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.x2),
-                      statusPill,
-                    ],
+    return SizedBox(
+      width: 52,
+      height: 52,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+              child: Center(
+                child: Text(
+                  initials,
+                  style: AppTypography.heading2.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: fg,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Batch #$batchId · $recordCount records',
-                    maxLines: 2,
-                    overflow: TextOverflow.clip,
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      height: 1.25,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (status == _BatchCardStatus.slaAlert) ...<Widget>[
-                    const SizedBox(height: AppSpacing.x3),
-                    const _SlaWarningRow(
-                      label: '30% of SLA time remaining — verifier alerted',
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.x3),
-                  _CheckChipRow(done: doneChecks, pending: pendingChecks),
-                  const SizedBox(height: AppSpacing.x4),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 6,
-                            backgroundColor: AppColors.offWhite,
-                            valueColor: AlwaysStoppedAnimation<Color>(accent),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.x3),
-                      Text(
-                        '$verifiedCount/$totalCount',
-                        style: AppTypography.body2.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.x3),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          'Verifier: $verifierName',
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        slaLabel,
-                        style: AppTypography.body2.copyWith(
-                          color: status == _BatchCardStatus.slaAlert
-                              ? AppColors.danger
-                              : AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CheckChipRow extends StatelessWidget {
-  const _CheckChipRow({required this.done, required this.pending});
-
-  final List<String> done;
-  final List<String> pending;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.hardEdge,
-      child: Row(
-        children: <Widget>[
-          for (int i = 0; i < done.length; i++) ...<Widget>[
-            const _DotChip(dotColor: Color(0xFF10B981)).withLabel(done[i]),
-            if (i != done.length - 1 || pending.isNotEmpty)
-              const SizedBox(width: 8),
-          ],
-          for (int i = 0; i < pending.length; i++) ...<Widget>[
-            const _DotChip(dotColor: Color(0xFFF59E0B)).withLabel(pending[i]),
-            if (i != pending.length - 1) const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _DotChip extends StatelessWidget {
-  const _DotChip({required this.dotColor, this.label});
-
-  final Color dotColor;
-  final String? label;
-
-  _DotChip withLabel(String text) => _DotChip(dotColor: dotColor, label: text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: dotColor.withAlpha(22),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: dotColor.withAlpha(55)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label ?? '',
-            style: AppTypography.body2.copyWith(
-              color: dotColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({
-    required this.label,
-    required this.background,
-    required this.foreground,
-  });
-
-  const _StatusPill.inProgress()
-    : this(
-        label: 'In progress',
-        background: const Color(0xFF1E3A8A),
-        foreground: const Color(0xFF3B82F6),
-      );
-
-  const _StatusPill.slaAlert()
-    : this(
-        label: 'SLA alert',
-        background: const Color(0xFF7F1D1D),
-        foreground: const Color(0xFFFCA5A5),
-      );
-
-  const _StatusPill.completed()
-    : this(
-        label: 'Completed',
-        background: const Color(0xFF064E3B),
-        foreground: const Color(0xFF34D399),
-      );
-
-  final String label;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: background.withAlpha(26),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: foreground.withAlpha(64)),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.body2.copyWith(
-          fontSize: 13,
-          color: foreground,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _SlaWarningRow extends StatelessWidget {
-  const _SlaWarningRow({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.x3,
-        vertical: AppSpacing.x2,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.danger.withAlpha(14),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.danger.withAlpha(70)),
-      ),
-      child: Row(
-        children: <Widget>[
-          const Icon(
-            Icons.warning_amber_rounded,
-            size: 16,
-            color: AppColors.danger,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: AppTypography.caption.copyWith(
-                fontSize: 11,
-                color: AppColors.danger,
-                fontWeight: FontWeight.w800,
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFEFF6FF)),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withAlpha(20),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.verified_user_rounded,
+                size: 14,
+                color: AppColors.brandBlue,
               ),
             ),
           ),

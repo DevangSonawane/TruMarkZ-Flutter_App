@@ -387,7 +387,7 @@ class _StatMiniCard extends StatelessWidget {
             value,
             style: AppTypography.heading1.copyWith(
               color: valueColor,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w300,
             ),
           ),
           const SizedBox(height: 4),
