@@ -43,21 +43,13 @@ class IndividualDashboardPage extends StatelessWidget {
                 border: Border.all(color: AppColors.brandBlue, width: 2),
               ),
               child: ClipOval(
-                child: Image.network(
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuDo_TgqsGn200rV--hljDaZ-GnmyS49dk5nJnEpW26umiJLoSJL7e3Csa5pATurpLOiejzE1SurJ2XDZO63JyXGWGWk8WznMCXLFbkvXwdJXJytawQaxFc37DP5Z0t1U9_NLAlNT0zfuIl0W-n_ycLjcC2ybL5FBWZ6Jwt3mVsrgx7hxp9AhtR5KOdJQLcmjRDR0n08M_a6ElpMkySYrLkfvOol1xaywOVN6SxvkM3hB1MSOcJDqcE2-4wnCp8uctr5Kn7vTRO_qxQ',
-                  fit: BoxFit.cover,
-                  errorBuilder:
-                      (
-                        BuildContext context,
-                        Object error,
-                        StackTrace? stackTrace,
-                      ) => ColoredBox(
-                        color: AppColors.blueTint,
-                        child: Icon(
-                          Icons.person_rounded,
-                          color: AppColors.brandBlue.withAlpha(200),
-                        ),
-                      ),
+                child: Container(
+                  color: AppColors.blueTint,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.person_rounded,
+                    color: AppColors.brandBlue.withAlpha(200),
+                  ),
                 ),
               ),
             ),

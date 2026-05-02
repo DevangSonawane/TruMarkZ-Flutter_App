@@ -80,83 +80,79 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
             sliver: SliverList(
-              delegate: SliverChildListDelegate.fixed(
-                <Widget>[
-                  _HeroHubCard(
-                    filter: _filter,
-                    selectedCategory: _selectedCategory,
-                    onFilterChanged: (v) => setState(() => _filter = v),
-                    onCategoryChanged: (v) =>
-                        setState(() => _selectedCategory = v),
-                  ),
-                  const SizedBox(height: 24),
-                  _RecentlyVerifiedSection(items: recent),
-                  const SizedBox(height: 18),
-                  _ResultsHeader(
-                    onExport: () {},
-                  ),
-                  const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints c) {
-                      final int cols = c.maxWidth >= 720 ? 2 : 1;
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: results.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: cols,
-                          mainAxisSpacing: 24,
-                          crossAxisSpacing: 24,
-                          childAspectRatio: cols == 1 ? 1.65 : 1.75,
-                        ),
-                        itemBuilder: (BuildContext context, int index) {
-                          return _RegistryResultCard(result: results[index]);
-                        },
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  const _B2bCtaCard(),
-                  const SizedBox(height: 24),
-                  LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints c) {
-                      final int cols = c.maxWidth >= 860 ? 3 : 1;
-                      return GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
+              delegate: SliverChildListDelegate.fixed(<Widget>[
+                _HeroHubCard(
+                  filter: _filter,
+                  selectedCategory: _selectedCategory,
+                  onFilterChanged: (v) => setState(() => _filter = v),
+                  onCategoryChanged: (v) =>
+                      setState(() => _selectedCategory = v),
+                ),
+                const SizedBox(height: 24),
+                _RecentlyVerifiedSection(items: recent),
+                const SizedBox(height: 18),
+                _ResultsHeader(onExport: () {}),
+                const SizedBox(height: 16),
+                LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints c) {
+                    final int cols = c.maxWidth >= 720 ? 2 : 1;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: results.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: cols,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        childAspectRatio: cols == 1 ? 3.6 : 2.9,
-                        children: const <Widget>[
-                          _HubStatCard(
-                            icon: Icons.apartment_rounded,
-                            iconBg: Color(0x1A2563EB),
-                            iconFg: AppColors.brandBlue,
-                            label: 'Verified Companies',
-                            value: '42,000+',
-                          ),
-                          _HubStatCard(
-                            icon: Icons.badge_rounded,
-                            iconBg: Color(0xFFE7F7EE),
-                            iconFg: Color(0xFF16A34A),
-                            label: 'Verified Experts',
-                            value: '1.2M+',
-                          ),
-                          _HubStatCard(
-                            icon: Icons.security_rounded,
-                            iconBg: Color(0xFFFFF7ED),
-                            iconFg: Color(0xFFD97706),
-                            label: 'Compliance Uptime',
-                            value: '99.9%',
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 110),
-                ],
-              ),
+                        mainAxisSpacing: 24,
+                        crossAxisSpacing: 24,
+                        childAspectRatio: cols == 1 ? 1.65 : 1.75,
+                      ),
+                      itemBuilder: (BuildContext context, int index) {
+                        return _RegistryResultCard(result: results[index]);
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                const _B2bCtaCard(),
+                const SizedBox(height: 24),
+                LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints c) {
+                    final int cols = c.maxWidth >= 860 ? 3 : 1;
+                    return GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: cols,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: cols == 1 ? 3.6 : 2.9,
+                      children: const <Widget>[
+                        _HubStatCard(
+                          icon: Icons.apartment_rounded,
+                          iconBg: Color(0x1A2563EB),
+                          iconFg: AppColors.brandBlue,
+                          label: 'Verified Companies',
+                          value: '42,000+',
+                        ),
+                        _HubStatCard(
+                          icon: Icons.badge_rounded,
+                          iconBg: Color(0xFFE7F7EE),
+                          iconFg: Color(0xFF16A34A),
+                          label: 'Verified Experts',
+                          value: '1.2M+',
+                        ),
+                        _HubStatCard(
+                          icon: Icons.security_rounded,
+                          iconBg: Color(0xFFFFF7ED),
+                          iconFg: Color(0xFFD97706),
+                          label: 'Compliance Uptime',
+                          value: '99.9%',
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 110),
+              ]),
             ),
           ),
         ],
@@ -226,10 +222,7 @@ class _HeroHubCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          _EntitySegmented(
-            value: filter,
-            onChanged: onFilterChanged,
-          ),
+          _EntitySegmented(value: filter, onChanged: onFilterChanged),
           const SizedBox(height: 16),
           _BigSearchField(
             hintText: 'Search by name, GSTIN, Aadhaar, or company ID...',
@@ -380,7 +373,11 @@ class _BigSearchField extends StatelessWidget {
         ),
         const Positioned(
           left: 18,
-          child: Icon(Icons.search_rounded, color: AppColors.brandBlue, size: 26),
+          child: Icon(
+            Icons.search_rounded,
+            color: AppColors.brandBlue,
+            size: 26,
+          ),
         ),
       ],
     );
@@ -558,6 +555,8 @@ class _RecentVerifiedCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   item.timeLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.caption.copyWith(
                     fontSize: 11,
                     color: AppColors.textSecondary,
@@ -573,12 +572,7 @@ class _RecentVerifiedCard extends StatelessWidget {
 }
 
 class _AvatarSquare extends StatelessWidget {
-  const _AvatarSquare({
-    required this.badge,
-    this.imageUrl,
-    this.bg,
-    this.fg,
-  });
+  const _AvatarSquare({required this.badge, this.imageUrl, this.bg, this.fg});
 
   final String badge;
   final String? imageUrl;
@@ -587,17 +581,6 @@ class _AvatarSquare extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.network(
-          imageUrl!,
-          width: 40,
-          height: 40,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
     return Container(
       width: 40,
       height: 40,
@@ -714,7 +697,10 @@ class _RegistryResult {
       metaRight: '',
       imageUrl:
           'https://lh3.googleusercontent.com/aida-public/AB6AXuDHV6Ah7MV4AlpMeISFp-qOJfp9ArKAwNUzZR29uoXWQSDV3x4S6E65gwZGqzi8HvOy4RWCLqj8y387x8TR2nU3LJSIjXmnA4-Cdsz1iKrLKWjZgTTUTh44kdYBFkmij80E0FFJD6e6WFV4m6NiM73DGfDUTSWNgbQaQEmonm4cOb9YOIva1enNu4fzgIqOR-FWOr8ibUkxU_-Q2u8j8bjWUN3I99WPVimGTvk-eaLZyj8tUk7SIWQQCbXCZK97XxtlPpCb9V2VN6M',
-      actionsLeft: <IconData>[Icons.contact_page_outlined, Icons.share_outlined],
+      actionsLeft: <IconData>[
+        Icons.contact_page_outlined,
+        Icons.share_outlined,
+      ],
       ctaLabel: 'View Profile',
       ctaIcon: Icons.arrow_outward_rounded,
     ),
@@ -730,7 +716,10 @@ class _RegistryResult {
       initials: 'ZK',
       avatarBg: Color(0xFFACBFFF),
       avatarFg: Color(0xFF394C84),
-      actionsLeft: <IconData>[Icons.description_outlined, Icons.history_rounded],
+      actionsLeft: <IconData>[
+        Icons.description_outlined,
+        Icons.history_rounded,
+      ],
       ctaLabel: 'Compliance Hub',
       ctaIcon: Icons.open_in_new_rounded,
     ),
@@ -782,7 +771,7 @@ class _RegistryResultCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         onTap: () => context.go(AppRouter.publicVerificationResultPath),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             boxShadow: const <BoxShadow>[
@@ -795,98 +784,103 @@ class _RegistryResultCard extends StatelessWidget {
             border: Border.all(color: Colors.transparent),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               _ResultAvatar(result: result),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
+                    Text(
+                      result.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.heading2.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      result.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                result.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.heading2.copyWith(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                result.subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.body2.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
                         _VerifiedBadge(
                           icon: result.badgeIcon,
                           label: result.badgeLabel,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: <Widget>[
+                        const SizedBox(width: 6),
                         _StatusChip(label: result.statusLabel),
-                        const SizedBox(width: 10),
-                        Text(
-                          result.metaLeft,
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.textTertiary,
-                            fontWeight: FontWeight.w700,
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            result.metaLeft,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textTertiary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const Spacer(),
-                    Row(
-                      children: <Widget>[
-                        for (final IconData icon in result.actionsLeft) ...<Widget>[
-                          _IconActionButton(icon: icon, onTap: () {}),
-                          const SizedBox(width: 10),
-                        ],
-                        const Spacer(),
-                        InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => context.go(AppRouter.publicVerificationResultPath),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 6,
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: <Widget>[
+                          for (final IconData icon
+                              in result.actionsLeft) ...<Widget>[
+                            _IconActionButton(icon: icon, onTap: () {}),
+                            const SizedBox(width: 10),
+                          ],
+                          InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => context.go(
+                              AppRouter.publicVerificationResultPath,
                             ),
-                            child: Row(
-                              children: <Widget>[
-                                Text(
-                                  result.ctaLabel,
-                                  style: AppTypography.body2.copyWith(
-                                    color: AppColors.brandBlue,
-                                    fontWeight: FontWeight.w800,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 6,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text(
+                                    result.ctaLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.body2.copyWith(
+                                      color: AppColors.brandBlue,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Icon(
-                                  result.ctaIcon,
-                                  size: 16,
-                                  color: AppColors.brandBlue,
-                                ),
-                              ],
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    result.ctaIcon,
+                                    size: 16,
+                                    color: AppColors.brandBlue,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -906,23 +900,12 @@ class _ResultAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (result.imageUrl != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.network(
-          result.imageUrl!,
-          width: 96,
-          height: 96,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
     return Container(
-      width: 96,
-      height: 96,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         color: result.avatarBg ?? const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -930,7 +913,7 @@ class _ResultAvatar extends StatelessWidget {
         style: AppTypography.display2.copyWith(
           color: result.avatarFg ?? AppColors.brandBlue,
           fontWeight: FontWeight.w900,
-          fontSize: 28,
+          fontSize: 14,
         ),
       ),
     );
@@ -945,27 +928,34 @@ class _VerifiedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.blueTint,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 14, color: AppColors.brandBlue),
-          const SizedBox(width: 6),
-          Text(
-            label.toUpperCase(),
-            style: AppTypography.caption.copyWith(
-              fontSize: 10,
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.9,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 120),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.blueTint,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 12, color: AppColors.brandBlue),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(
+                  fontSize: 9,
+                  color: AppColors.brandBlue,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.7,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -982,31 +972,40 @@ class _StatusChip extends StatelessWidget {
     final Color fg = ok ? const Color(0xFF16A34A) : const Color(0xFFD97706);
     final Color bg = ok ? const Color(0xFFE7F7EE) : const Color(0xFFFFF7ED);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 92),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(
+                  fontSize: 10,
+                  color: fg,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: AppTypography.caption.copyWith(
-              fontSize: 12,
-              color: fg,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.6,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1024,14 +1023,14 @@ class _IconActionButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 40,
-        height: 40,
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           color: const Color(0xFFF3F3FE),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFC3C6D7)),
         ),
-        child: Icon(icon, color: AppColors.textSecondary, size: 22),
+        child: Icon(icon, color: AppColors.textSecondary, size: 18),
       ),
     );
   }
@@ -1099,8 +1098,10 @@ class _B2bCtaCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: AppColors.brandBlue,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -1157,17 +1158,23 @@ class _HubStatCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.caption.copyWith(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w700,
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.heading2.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w900,
+                    height: 1.1,
                   ),
                 ),
               ],

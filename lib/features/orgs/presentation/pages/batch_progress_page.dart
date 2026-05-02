@@ -48,12 +48,19 @@ class BatchProgressPage extends StatelessWidget {
                   height: 40,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: const Color(0xFFD6E2FF), width: 2),
+                    border: Border.all(
+                      color: const Color(0xFFD6E2FF),
+                      width: 2,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: Image.network(
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuD3UJZRgObtaBX7bhTJRtuTNRzReXSH7PyCQxwuqRBE5eMBV7MhAS1J2d7MJ5eWZZEWzaBXKzqkLgXIgBuIk9EG_ZOS5pcng9tOF88aeG_SYYf7fvgjt6OzHrAEMYWEERb0AG5jsyZIoYTQOBvdxzPJjfrdtq-vUzs_97S_NbAWG9a1Uwvd5-ar-9d9nkIXMaTVZYvd_DgDkSsT6acFLww1Pb-asRMcVfwCpIdEhBWae4myGZsO5TNqzK2FuMYez1Hmdb-SNKlvk_s',
-                    fit: BoxFit.cover,
+                  child: Container(
+                    color: AppColors.blueTint,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.business_rounded,
+                      color: AppColors.brandBlue,
+                    ),
                   ),
                 ),
               ),
@@ -76,84 +83,82 @@ class BatchProgressPage extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(0, 24, 0, 24),
             sliver: SliverList(
-              delegate: SliverChildListDelegate.fixed(
-                <Widget>[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: _BatchSearchField(),
-                  ),
-                  const SizedBox(height: 24),
-                  _SummaryCarousel(
-                    items: const <_SummaryItem>[
-                      _SummaryItem(
-                        label: 'Total Batches',
-                        value: '12',
-                        valueColor: AppColors.brandBlue,
-                        borderColor: Color(0xFFEFF6FF),
+              delegate: SliverChildListDelegate.fixed(<Widget>[
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: _BatchSearchField(),
+                ),
+                const SizedBox(height: 24),
+                _SummaryCarousel(
+                  items: const <_SummaryItem>[
+                    _SummaryItem(
+                      label: 'Total Batches',
+                      value: '12',
+                      valueColor: AppColors.brandBlue,
+                      borderColor: Color(0xFFEFF6FF),
+                    ),
+                    _SummaryItem(
+                      label: 'Active',
+                      value: '3',
+                      valueColor: AppColors.brandBlue,
+                      borderColor: Color(0xFFEFF6FF),
+                    ),
+                    _SummaryItem(
+                      label: 'Alerts',
+                      value: '1',
+                      valueColor: AppColors.error,
+                      borderColor: Color(0xFFFEF2F2),
+                      trailingIcon: Icons.warning_amber_rounded,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'Batch Directory',
+                          style: AppTypography.heading2.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                      _SummaryItem(
-                        label: 'Active',
-                        value: '3',
-                        valueColor: AppColors.brandBlue,
-                        borderColor: Color(0xFFEFF6FF),
-                      ),
-                      _SummaryItem(
-                        label: 'Alerts',
-                        value: '1',
-                        valueColor: AppColors.error,
-                        borderColor: Color(0xFFFEF2F2),
-                        trailingIcon: Icons.warning_amber_rounded,
+                      TextButton(
+                        onPressed: () {},
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.brandBlue,
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text(
+                          'See All',
+                          style: AppTypography.body2.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.brandBlue,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                ),
+                const SizedBox(height: 16),
+                for (final _BatchDirectoryItem item in directory) ...<Widget>[
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            'Batch Directory',
-                            style: AppTypography.heading2.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.brandBlue,
-                            padding: EdgeInsets.zero,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          child: Text(
-                            'See All',
-                            style: AppTypography.body2.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.brandBlue,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: _BatchDirectoryCard(item: item),
                   ),
                   const SizedBox(height: 16),
-                  for (final _BatchDirectoryItem item in directory) ...<Widget>[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _BatchDirectoryCard(item: item),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  const SizedBox(height: 16),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: _VerifiedInfrastructureBadge(),
-                  ),
-                  const SizedBox(height: 110),
                 ],
-              ),
+                const SizedBox(height: 16),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: _VerifiedInfrastructureBadge(),
+                ),
+                const SizedBox(height: 110),
+              ]),
             ),
           ),
         ],
@@ -182,8 +187,9 @@ class _BatchSearchField extends StatelessWidget {
             style: AppTypography.body2.copyWith(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: 'Find batches...',
-              hintStyle:
-                  AppTypography.body2.copyWith(color: AppColors.textTertiary),
+              hintStyle: AppTypography.body2.copyWith(
+                color: AppColors.textTertiary,
+              ),
               border: InputBorder.none,
             ),
           ),
@@ -376,8 +382,12 @@ class _BatchDirectoryCard extends StatelessWidget {
       _BatchStatus.alert => 'Alert',
     };
 
-    final Color progressTextColor = isAlert ? AppColors.error : AppColors.brandBlue;
-    final Color trackColor = isAlert ? const Color(0xFFFFDAD6) : AppColors.blueTint;
+    final Color progressTextColor = isAlert
+        ? AppColors.error
+        : AppColors.brandBlue;
+    final Color trackColor = isAlert
+        ? const Color(0xFFFFDAD6)
+        : AppColors.blueTint;
     final Color fillColor = isAlert ? AppColors.error : AppColors.brandBlue;
 
     return InkWell(
@@ -494,7 +504,10 @@ class _BatchDirectoryCard extends StatelessWidget {
             if (item.alertMessage != null) ...<Widget>[
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF2F2),
                   borderRadius: BorderRadius.circular(10),
@@ -544,7 +557,11 @@ class _VerifiedInfrastructureBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(Icons.verified_user_rounded, color: AppColors.brandBlue, size: 18),
+            const Icon(
+              Icons.verified_user_rounded,
+              color: AppColors.brandBlue,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Text(
               'TruMarkZ Verified Infrastructure',

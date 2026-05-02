@@ -10,13 +10,11 @@ class CredentialsApprovedPage extends StatefulWidget {
   const CredentialsApprovedPage({super.key});
 
   @override
-  State<CredentialsApprovedPage> createState() => _CredentialsApprovedPageState();
+  State<CredentialsApprovedPage> createState() =>
+      _CredentialsApprovedPageState();
 }
 
 class _CredentialsApprovedPageState extends State<CredentialsApprovedPage> {
-  static const String _secondaryImageUrl =
-      'https://lh3.googleusercontent.com/aida/ADBb0uhJBdF3vTRwoK3NOiP7nL3OPGX7zx5l-funeCyySeTy4MoTcHlrG4qr9G_e4YgprZedpjQeEiT3N5EJJVEmvhhYmTweTTInBuwQsTfUv5q6j0-n5iA-kwvqjDDvdbcI0TxCUy4MtZk73p07nZOb71uEoOvHsS-BRSY-Q6bJksc2U_V3o19JXBHAjKXV3UIp2-jt1uRtYNX10ZZjudf0QvXRtKyj6xnABsBNwOUd7mQhxqaUIe0BszW_FoGDvw5T39SvwJ3BS2QO1w';
-
   double _progress = 0.12;
 
   @override
@@ -46,7 +44,9 @@ class _CredentialsApprovedPageState extends State<CredentialsApprovedPage> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final String requestId = (qp['requestId']?.trim().isNotEmpty ?? false)
         ? qp['requestId']!.trim()
         : 'TRM-092-X12';
@@ -62,7 +62,10 @@ class _CredentialsApprovedPageState extends State<CredentialsApprovedPage> {
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.brandBlue),
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: AppColors.brandBlue,
+          ),
         ),
         title: Text(
           'Approval',
@@ -261,10 +264,7 @@ class _SuccessCard extends StatelessWidget {
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: <Color>[
-                        Color(0xFF2563EB),
-                        Color(0xFF1E3A8A),
-                      ],
+                      colors: <Color>[Color(0xFF2563EB), Color(0xFF1E3A8A)],
                     ),
                     borderRadius: BorderRadius.circular(999),
                   ),
@@ -292,26 +292,24 @@ class _SuccessCard extends StatelessWidget {
             width: double.infinity,
             child: FilledButton(
               onPressed: () => context.go(AppRouter.dashboardPath),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ).copyWith(
-                backgroundColor: const WidgetStatePropertyAll<Color>(
-                  Colors.transparent,
-                ),
-              ),
+              style:
+                  FilledButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ).copyWith(
+                    backgroundColor: const WidgetStatePropertyAll<Color>(
+                      Colors.transparent,
+                    ),
+                  ),
               child: Ink(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: <Color>[
-                      Color(0xFF2563EB),
-                      Color(0xFF1E3A8A),
-                    ],
+                    colors: <Color>[Color(0xFF2563EB), Color(0xFF1E3A8A)],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -335,7 +333,11 @@ class _SuccessCard extends StatelessWidget {
 }
 
 class _StepRow extends StatelessWidget {
-  const _StepRow({required this.label, required this.done, this.dimmed = false});
+  const _StepRow({
+    required this.label,
+    required this.done,
+    this.dimmed = false,
+  });
 
   final String label;
   final bool done;
@@ -345,8 +347,9 @@ class _StepRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color bg = done ? const Color(0xFFD1FAE5) : const Color(0xFFE1E2ED);
     final Color fg = done ? const Color(0xFF059669) : const Color(0xFF737686);
-    final IconData icon =
-        done ? Icons.check_circle_rounded : Icons.radio_button_unchecked;
+    final IconData icon = done
+        ? Icons.check_circle_rounded
+        : Icons.radio_button_unchecked;
 
     return Opacity(
       opacity: dimmed ? 0.4 : 1,
@@ -363,9 +366,7 @@ class _StepRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: AppTypography.body1.copyWith(
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
             ),
           ),
         ],
@@ -399,9 +400,13 @@ class _SecondaryInfoCard extends StatelessWidget {
             child: SizedBox(
               width: 64,
               height: 64,
-              child: Image.network(
-                _CredentialsApprovedPageState._secondaryImageUrl,
-                fit: BoxFit.cover,
+              child: Container(
+                color: AppColors.blueTint,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.layers_rounded,
+                  color: AppColors.brandBlue,
+                ),
               ),
             ),
           ),
@@ -520,11 +525,7 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(
-              icon,
-              color: color,
-              fill: filled && active ? 1.0 : 0.0,
-            ),
+            Icon(icon, color: color, fill: filled && active ? 1.0 : 0.0),
             const SizedBox(height: 4),
             Text(
               label,

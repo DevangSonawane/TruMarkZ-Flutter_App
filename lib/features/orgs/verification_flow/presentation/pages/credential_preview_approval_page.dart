@@ -9,12 +9,11 @@ import '../../../../../core/theme/app_typography.dart';
 class CredentialPreviewApprovalPage extends StatelessWidget {
   const CredentialPreviewApprovalPage({super.key});
 
-  static const String _photoUrl =
-      'https://lh3.googleusercontent.com/aida/ADBb0uhJBdF3vTRwoK3NOiP7nL3OPGX7zx5l-funeCyySeTy4MoTcHlrG4qr9G_e4YgprZedpjQeEiT3N5EJJVEmvhhYmTweTTInBuwQsTfUv5q6j0-n5iA-kwvqjDDvdbcI0TxCUy4MtZk73p07nZOb71uEoOvHsS-BRSY-Q6bJksc2U_V3o19JXBHAjKXV3UIp2-jt1uRtYNX10ZZjudf0QvXRtKyj6xnABsBNwOUd7mQhxqaUIe0BszW_FoGDvw5T39SvwJ3BS2QO1w';
-
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final String template = (qp['template'] ?? 't1').toLowerCase();
     final String templateLabel = switch (template) {
       't2' => 'Healthcare / Nurse',
@@ -168,21 +167,12 @@ class _CredentialIdCard extends StatelessWidget {
                         ),
                       ),
                       child: ClipOval(
-                        child: Image.network(
-                          CredentialPreviewApprovalPage._photoUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder:
-                              (
-                                BuildContext context,
-                                Object error,
-                                StackTrace? stackTrace,
-                              ) => ColoredBox(
-                                color: AppColors.blueTint,
-                                child: Icon(
-                                  Icons.person_rounded,
-                                  color: AppColors.brandBlue.withAlpha(200),
-                                ),
-                              ),
+                        child: ColoredBox(
+                          color: AppColors.blueTint,
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: AppColors.brandBlue.withAlpha(200),
+                          ),
                         ),
                       ),
                     ),
@@ -245,8 +235,9 @@ class _CredentialIdCard extends StatelessWidget {
                                 Text(
                                   'STATUS',
                                   style: AppTypography.caption.copyWith(
-                                    color: const Color(0xFF1E3A8A)
-                                        .withAlpha(153),
+                                    color: const Color(
+                                      0xFF1E3A8A,
+                                    ).withAlpha(153),
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.2,
                                   ),
@@ -286,9 +277,7 @@ class _CredentialIdCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.black.withAlpha(18),
-                          ),
+                          border: Border.all(color: Colors.black.withAlpha(18)),
                           boxShadow: <BoxShadow>[
                             BoxShadow(
                               color: Colors.black.withAlpha(14),
@@ -465,18 +454,24 @@ class _QrPainter extends CustomPainter {
 
     // Finder patterns (simplified).
     canvas.drawRect(Rect.fromLTWH(s(12), s(12), s(20), s(20)), p);
-    canvas.drawRect(Rect.fromLTWH(s(16), s(16), s(12), s(12)), Paint()
-      ..color = Colors.white);
+    canvas.drawRect(
+      Rect.fromLTWH(s(16), s(16), s(12), s(12)),
+      Paint()..color = Colors.white,
+    );
     canvas.drawRect(Rect.fromLTWH(s(20), s(20), s(4), s(4)), p);
 
     canvas.drawRect(Rect.fromLTWH(s(56), s(12), s(20), s(20)), p);
-    canvas.drawRect(Rect.fromLTWH(s(60), s(16), s(12), s(12)), Paint()
-      ..color = Colors.white);
+    canvas.drawRect(
+      Rect.fromLTWH(s(60), s(16), s(12), s(12)),
+      Paint()..color = Colors.white,
+    );
     canvas.drawRect(Rect.fromLTWH(s(64), s(20), s(4), s(4)), p);
 
     canvas.drawRect(Rect.fromLTWH(s(12), s(56), s(20), s(20)), p);
-    canvas.drawRect(Rect.fromLTWH(s(16), s(60), s(12), s(12)), Paint()
-      ..color = Colors.white);
+    canvas.drawRect(
+      Rect.fromLTWH(s(16), s(60), s(12), s(12)),
+      Paint()..color = Colors.white,
+    );
     canvas.drawRect(Rect.fromLTWH(s(20), s(64), s(4), s(4)), p);
 
     // Some random blocks.

@@ -85,22 +85,21 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           SliverPadding(
             padding: EdgeInsets.fromLTRB(20, 24, 20, 32 + bottomInset),
             sliver: SliverList(
-              delegate: SliverChildListDelegate.fixed(
-                <Widget>[
-                  _OrgProfileHeader(onEdit: () {}),
-                  const SizedBox(height: 24),
-                  const _GeneralInfoCard(),
-                  const SizedBox(height: 24),
-                  _SecurityPrivacyCard(
-                    twoFaEnabled: _twoFaEnabled,
-                    onTwoFaChanged: (bool v) =>
-                        setState(() => _twoFaEnabled = v),
-                  ),
-                  const SizedBox(height: 24),
-                  const _TeamAccessCard(),
-                  const SizedBox(height: 110),
-                ],
-              ),
+              delegate: SliverChildListDelegate.fixed(<Widget>[
+                _OrgProfileHeader(onEdit: () {}),
+                const SizedBox(height: 24),
+                const _GeneralInfoCard(),
+                const SizedBox(height: 24),
+                _SecurityPrivacyCard(
+                  twoFaEnabled: _twoFaEnabled,
+                  onTwoFaChanged: (bool v) => setState(() => _twoFaEnabled = v),
+                ),
+                const SizedBox(height: 24),
+                const _TeamAccessCard(),
+                const SizedBox(height: 24),
+                _LogoutCard(onLogout: () => context.go(AppRouter.loginPath)),
+                const SizedBox(height: 110),
+              ]),
             ),
           ),
         ],
@@ -138,9 +137,14 @@ class _OrgProfileHeader extends StatelessWidget {
                 ],
               ),
               child: ClipOval(
-                child: Image.network(
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuArZ6h5TfQXT3ALnPvdVcMYixDjkdGMIN8fdlXqxIgQ8-k0MarAi-OBlBBhjFXLMdKrOJWEYFc0y-tGb75X3djUsxDN_605xzhyFrbcvaSiWDGBRFEHoEtEr2ucsY4ZLM0rUH7-KB9qIrdnMoM2S_3of79RAPMWCuT3vz5TVaMe7Kp2TF9oQEQ5ClRbTBOtR-ZAZiFfubR093NMzrdIY8wOmdTOktfUeyWz1kVNPn_v5MC1H_CdB7Ua5ALkrgdH2P-WXmpjOfOWKn8',
-                  fit: BoxFit.cover,
+                child: Container(
+                  color: AppColors.blueTint,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: AppColors.brandBlue,
+                    size: 44,
+                  ),
                 ),
               ),
             ),
@@ -206,20 +210,14 @@ class _OrgProfileHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        _GradientPrimaryButton(
-          label: 'Edit Public Profile',
-          onPressed: onEdit,
-        ),
+        _GradientPrimaryButton(label: 'Edit Public Profile', onPressed: onEdit),
       ],
     );
   }
 }
 
 class _GradientPrimaryButton extends StatelessWidget {
-  const _GradientPrimaryButton({
-    required this.label,
-    required this.onPressed,
-  });
+  const _GradientPrimaryButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;
@@ -299,6 +297,52 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _LogoutCard extends StatelessWidget {
+  const _LogoutCard({required this.onLogout});
+
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: 'Account',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            'You will be returned to the login / signup screen.',
+            style: AppTypography.body2.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onLogout,
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'Log out',
+                style: AppTypography.body1.copyWith(
+                  color: const Color(0xFFB91C1C),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RecessedField extends StatelessWidget {
   const _RecessedField({
     required this.label,
@@ -365,7 +409,9 @@ class _GeneralInfoCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: const <Widget>[
-              Expanded(child: _RecessedField(label: 'Industry', value: 'Fintech')),
+              Expanded(
+                child: _RecessedField(label: 'Industry', value: 'Fintech'),
+              ),
               SizedBox(width: 12),
               Expanded(
                 child: _RecessedField(
@@ -548,7 +594,10 @@ class _AuditRow extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textTertiary),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textTertiary,
+          ),
         ],
       ),
     );
@@ -666,21 +715,39 @@ class _MemberRow extends StatelessWidget {
   final bool nameMuted;
 
   static const List<double> _grayscaleMatrix = <double>[
-    0.2126, 0.7152, 0.0722, 0, 0,
-    0.2126, 0.7152, 0.0722, 0, 0,
-    0.2126, 0.7152, 0.0722, 0, 0,
-    0, 0, 0, 1, 0,
+    0.2126,
+    0.7152,
+    0.0722,
+    0,
+    0,
+    0.2126,
+    0.7152,
+    0.0722,
+    0,
+    0,
+    0.2126,
+    0.7152,
+    0.0722,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
   ];
 
   @override
   Widget build(BuildContext context) {
-    Widget avatar = ClipOval(
-      child: Image.network(
-        imageUrl,
-        width: 48,
-        height: 48,
-        fit: BoxFit.cover,
+    Widget avatar = Container(
+      width: 48,
+      height: 48,
+      decoration: const BoxDecoration(
+        color: AppColors.blueTint,
+        shape: BoxShape.circle,
       ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.person_rounded, color: AppColors.brandBlue),
     );
     if (grayscale) {
       avatar = ColorFiltered(
@@ -712,11 +779,15 @@ class _MemberRow extends StatelessWidget {
                   children: <Widget>[
                     Icon(roleIcon, size: 14, color: roleIconColor),
                     const SizedBox(width: 6),
-                    Text(
-                      role,
-                      style: AppTypography.caption.copyWith(
-                        color: roleColor ?? AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Text(
+                        role,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption.copyWith(
+                          color: roleColor ?? AppColors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -724,6 +795,8 @@ class _MemberRow extends StatelessWidget {
               else
                 Text(
                   role,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.caption.copyWith(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
@@ -746,4 +819,3 @@ class _Divider extends StatelessWidget {
     return Container(height: 1, color: const Color(0xFFF8FAFC));
   }
 }
-

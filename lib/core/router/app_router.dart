@@ -6,6 +6,7 @@ import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/pages/role_selection_page.dart';
 import '../../features/individual/presentation/pages/individual_dashboard_page.dart';
 import '../../features/individual/presentation/pages/individual_profile_page.dart';
+import '../../features/individual/presentation/pages/individual_skill_tree_page.dart';
 import '../../features/individual/presentation/pages/individual_vault_page.dart';
 import '../../features/individual/presentation/shell/app_shell_page.dart';
 import '../../features/notifications/presentation/pages/notification_centre_page.dart';
@@ -17,6 +18,8 @@ import '../../features/orgs/presentation/pages/org_dashboard_page.dart';
 import '../../features/orgs/presentation/pages/profile_settings_page.dart';
 import '../../features/orgs/presentation/pages/registry_search_page.dart';
 import '../../features/orgs/presentation/pages/verification_plan_builder_page.dart';
+import '../../features/orgs/presentation/pages/verification_report_detail_page.dart';
+import '../../features/orgs/presentation/pages/verification_reports_page.dart';
 import '../../features/orgs/presentation/shell/org_shell_page.dart';
 import '../../features/skills/presentation/pages/skill_tree_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/batch_job_running_page.dart';
@@ -56,6 +59,8 @@ class AppRouter {
   static const String appCredentialDetailPath = '/app/batches/credential';
   static const String appRegistryPath = '/app/registry';
   static const String settingsPath = '/app/settings';
+  static const String appReportsPath = '/app/reports';
+  static const String appReportDetailPath = '/app/reports/detail';
 
   static const String notificationsPath = '/notifications';
 
@@ -204,6 +209,24 @@ class AppRouter {
                   child: const ProfileSettingsPage(),
                 ),
           ),
+          GoRoute(
+            path: appReportsPath,
+            name: 'app_reports',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const VerificationReportsPage(),
+                ),
+          ),
+          GoRoute(
+            path: appReportDetailPath,
+            name: 'app_report_detail',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const VerificationReportDetailPage(),
+                ),
+          ),
         ],
       ),
       ShellRoute(
@@ -223,7 +246,10 @@ class AppRouter {
             path: individualScanPath,
             name: 'individual_scan',
             pageBuilder: (BuildContext context, GoRouterState state) =>
-                _slideFadePage(state: state, child: const QRScannerPage()),
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualSkillTreePage(),
+                ),
           ),
           GoRoute(
             path: individualVaultPath,
@@ -356,7 +382,10 @@ class AppRouter {
         path: credentialsApprovedPath,
         name: 'credentials_approved',
         pageBuilder: (BuildContext context, GoRouterState state) =>
-            _slideFadePage(state: state, child: const CredentialsApprovedPage()),
+            _slideFadePage(
+              state: state,
+              child: const CredentialsApprovedPage(),
+            ),
       ),
       GoRoute(
         path: batchJobRunningPath,

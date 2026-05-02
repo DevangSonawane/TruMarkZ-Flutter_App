@@ -14,11 +14,6 @@ class BatchJobRunningPage extends StatefulWidget {
 }
 
 class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
-  static const String _heroImageUrl =
-      'https://lh3.googleusercontent.com/aida/ADBb0ugfgT1327qtmZBb5HCEWgfJ4VvfkZUxLItWYdnrVHewXjKqYhiYPXFxXtgZN0sYwzbJdhcN63zBAqEpwlIeEfTb3-1Ccv0U3IU7v6iVFB8wC1nr8dBCzLuUeTGH4VxwMSkH1HQUu4Fo6dJu3LhgK8L-rJuOmHBqZ4OTIY82JzuBFnrYv8Hqz8h9L65XZa7lULryoN9naurnlnCnNHf9tTY6-SqJW0sKuy6KrT55Q3IDQYF-rYBI3fRzxmOd584HnqfbRBrwvLtWLA';
-  static const String _secondaryImageUrl =
-      'https://lh3.googleusercontent.com/aida/ADBb0uhJBdF3vTRwoK3NOiP7nL3OPGX7zx5l-funeCyySeTy4MoTcHlrG4qr9G_e4YgprZedpjQeEiT3N5EJJVEmvhhYmTweTTInBuwQsTfUv5q6j0-n5iA-kwvqjDDvdbcI0TxCUy4MtZk73p07nZOb71uEoOvHsS-BRSY-Q6bJksc2U_V3o19JXBHAjKXV3UIp2-jt1uRtYNX10ZZjudf0QvXRtKyj6xnABsBNwOUd7mQhxqaUIe0BszW_FoGDvw5T39SvwJ3BS2QO1w';
-
   double _progress = 0.12;
 
   @override
@@ -73,7 +68,9 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final String requestId = (qp['requestId']?.trim().isNotEmpty ?? false)
         ? qp['requestId']!.trim()
         : 'TRM-092-X12';
@@ -265,10 +262,14 @@ class _SuccessCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: AspectRatio(
               aspectRatio: 0.83,
-              child: Image.network(
-                _BatchJobRunningPageState._heroImageUrl,
-                fit: BoxFit.cover,
-                opacity: const AlwaysStoppedAnimation<double>(0.9),
+              child: Container(
+                color: AppColors.blueTint,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.image_rounded,
+                  color: AppColors.brandBlue,
+                  size: 44,
+                ),
               ),
             ),
           ),
@@ -339,26 +340,24 @@ class _SuccessCard extends StatelessWidget {
             width: double.infinity,
             child: FilledButton(
               onPressed: () => context.go(AppRouter.dashboardPath),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ).copyWith(
-                backgroundColor: const WidgetStatePropertyAll<Color>(
-                  Colors.transparent,
-                ),
-              ),
+              style:
+                  FilledButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ).copyWith(
+                    backgroundColor: const WidgetStatePropertyAll<Color>(
+                      Colors.transparent,
+                    ),
+                  ),
               child: Ink(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: <Color>[
-                      Color(0xFF2563EB),
-                      Color(0xFF1E3A8A),
-                    ],
+                    colors: <Color>[Color(0xFF2563EB), Color(0xFF1E3A8A)],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -382,7 +381,11 @@ class _SuccessCard extends StatelessWidget {
 }
 
 class _StepRow extends StatelessWidget {
-  const _StepRow({required this.label, required this.done, this.dimmed = false});
+  const _StepRow({
+    required this.label,
+    required this.done,
+    this.dimmed = false,
+  });
 
   final String label;
   final bool done;
@@ -392,8 +395,9 @@ class _StepRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color bg = done ? const Color(0xFFD1FAE5) : const Color(0xFFE1E2ED);
     final Color fg = done ? const Color(0xFF059669) : const Color(0xFF737686);
-    final IconData icon =
-        done ? Icons.check_circle_rounded : Icons.radio_button_unchecked;
+    final IconData icon = done
+        ? Icons.check_circle_rounded
+        : Icons.radio_button_unchecked;
 
     return Opacity(
       opacity: dimmed ? 0.4 : 1,
@@ -410,9 +414,7 @@ class _StepRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: AppTypography.body1.copyWith(
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
             ),
           ),
         ],
@@ -444,9 +446,13 @@ class _SecondaryInfoCard extends StatelessWidget {
             child: SizedBox(
               width: 64,
               height: 64,
-              child: Image.network(
-                _BatchJobRunningPageState._secondaryImageUrl,
-                fit: BoxFit.cover,
+              child: Container(
+                color: AppColors.blueTint,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.layers_rounded,
+                  color: AppColors.brandBlue,
+                ),
               ),
             ),
           ),
@@ -565,11 +571,7 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(
-              icon,
-              color: color,
-              fill: filled && active ? 1.0 : 0.0,
-            ),
+            Icon(icon, color: color, fill: filled && active ? 1.0 : 0.0),
             const SizedBox(height: 4),
             Text(
               label.toUpperCase(),

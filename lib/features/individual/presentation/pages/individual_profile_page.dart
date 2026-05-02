@@ -1,7 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
@@ -82,56 +84,56 @@ class IndividualProfilePage extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
             sliver: SliverList(
-              delegate: SliverChildListDelegate.fixed(
-                <Widget>[
-                  const _ProfileHeaderCard(),
-                  const SizedBox(height: 24),
-                  const _SectionCard(
-                    title: 'Education',
-                    items: <_SectionItemData>[
-                      _SectionItemData(
-                        icon: Icons.school_outlined,
-                        title: 'M.S. Cyber Security',
-                        subtitle: 'Stanford University • 2021',
-                        status: _ItemStatus.verified,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const _SectionCard(
-                    title: 'Experience',
-                    items: <_SectionItemData>[
-                      _SectionItemData(
-                        icon: Icons.work_outline,
-                        title: 'Senior Identity Architect',
-                        subtitle: 'AuthGlobal Corp • 2021 – Present',
-                        status: _ItemStatus.verified,
-                      ),
-                      _SectionItemData(
-                        icon: Icons.work_outline,
-                        title: 'Systems Analyst',
-                        subtitle: 'TechNexus Solutions • 2018 – 2021',
-                        status: _ItemStatus.pending,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const _SectionCard(
-                    title: 'Certifications',
-                    items: <_SectionItemData>[
-                      _SectionItemData(
-                        icon: Icons.workspace_premium_outlined,
-                        title: 'CISSP Certification',
-                        subtitle: 'ISC2 • Issued May 2022',
-                        status: _ItemStatus.verified,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const _AddAchievementCard(),
-                  SizedBox(height: 84 + bottomInset),
-                ],
-              ),
+              delegate: SliverChildListDelegate.fixed(<Widget>[
+                const _ProfileHeaderCard(),
+                const SizedBox(height: 24),
+                const _SectionCard(
+                  title: 'Education',
+                  items: <_SectionItemData>[
+                    _SectionItemData(
+                      icon: Icons.school_outlined,
+                      title: 'M.S. Cyber Security',
+                      subtitle: 'Stanford University • 2021',
+                      status: _ItemStatus.verified,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const _SectionCard(
+                  title: 'Experience',
+                  items: <_SectionItemData>[
+                    _SectionItemData(
+                      icon: Icons.work_outline,
+                      title: 'Senior Identity Architect',
+                      subtitle: 'AuthGlobal Corp • 2021 – Present',
+                      status: _ItemStatus.verified,
+                    ),
+                    _SectionItemData(
+                      icon: Icons.work_outline,
+                      title: 'Systems Analyst',
+                      subtitle: 'TechNexus Solutions • 2018 – 2021',
+                      status: _ItemStatus.pending,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const _SectionCard(
+                  title: 'Certifications',
+                  items: <_SectionItemData>[
+                    _SectionItemData(
+                      icon: Icons.workspace_premium_outlined,
+                      title: 'CISSP Certification',
+                      subtitle: 'ISC2 • Issued May 2022',
+                      status: _ItemStatus.verified,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const _AddAchievementCard(),
+                const SizedBox(height: 24),
+                _LogoutCard(onLogout: () => context.go(AppRouter.loginPath)),
+                SizedBox(height: 84 + bottomInset),
+              ]),
             ),
           ),
         ],
@@ -179,9 +181,14 @@ class _ProfileHeaderCard extends StatelessWidget {
                   ],
                 ),
                 child: ClipOval(
-                  child: Image.network(
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuDhHEouZl9yk8uWJL_TBfaHQ-CYle27aecCjUfcdDg5eekp7PvoN8ESKT0LkEGap5-I1tNVG4KVPThBvIX4Nf3_vxlYO20PxY9-utfbyMgGrWBnYAqeFSEZzukKteIeMb87vcH5MmOckYqlmc0NPWB8EEXzAcF1Y-y709rgqK31RlEsNdmYdCkabvoFAYLmJlrc_7wdrfnihOCyjKD19_1BndrsSU7lNKznV3nw10Hu3kkqhCH3XNKPNLG6xwAyj0_kuaQAxNEgiMs',
-                    fit: BoxFit.cover,
+                  child: Container(
+                    color: AppColors.blueTint,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.person_rounded,
+                      color: AppColors.brandBlue,
+                      size: 44,
+                    ),
                   ),
                 ),
               ),
@@ -263,11 +270,73 @@ class _SectionItemData {
   final _ItemStatus status;
 }
 
+class _LogoutCard extends StatelessWidget {
+  const _LogoutCard({required this.onLogout});
+
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x142563EB),
+            blurRadius: 12,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            'Account',
+            style: AppTypography.heading2.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Log out to return to the login / signup screen.',
+            style: AppTypography.body2.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onLogout,
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F2),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'Log out',
+                style: AppTypography.body1.copyWith(
+                  color: const Color(0xFFB91C1C),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    required this.items,
-  });
+  const _SectionCard({required this.title, required this.items});
 
   final String title;
   final List<_SectionItemData> items;
@@ -393,8 +462,12 @@ class _StatusPill extends StatelessWidget {
     final bool verified = status == _ItemStatus.verified;
     final Color bg = verified ? AppColors.successBg : const Color(0xFFFFFBEB);
     final Color fg = verified ? const Color(0xFF047857) : AppColors.warning;
-    final Color border = verified ? const Color(0xFFB7F7D0) : AppColors.warningBg;
-    final IconData icon = verified ? Icons.check_circle : Icons.hourglass_bottom;
+    final Color border = verified
+        ? const Color(0xFFB7F7D0)
+        : AppColors.warningBg;
+    final IconData icon = verified
+        ? Icons.check_circle
+        : Icons.hourglass_bottom;
     final String label = verified ? 'Verified' : 'Pending';
 
     return Container(

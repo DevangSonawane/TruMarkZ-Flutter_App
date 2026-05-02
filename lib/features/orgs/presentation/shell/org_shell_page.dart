@@ -40,6 +40,7 @@ class OrgShellPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final GoRouter router = GoRouter.of(context);
     final String location = GoRouterState.of(context).uri.toString();
     final String path = Uri.parse(location).path;
     final int currentIndex = _indexForLocation(location);
@@ -52,36 +53,46 @@ class OrgShellPage extends StatelessWidget {
       return Scaffold(body: child);
     }
 
-    return Scaffold(
-      body: child,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.brandBlue,
-        foregroundColor: Colors.white,
-        onPressed: () => context.push(AppRouter.verificationPlanSetupPath),
-        child: const Icon(Icons.add_rounded, size: 30),
-      ),
-      bottomNavigationBar: TMZBottomNav(
-        currentIndex: currentIndex,
-        onTap: (int i) => _onTap(context, i),
-        showLabels: false,
-        middleGapAfterIndex: 1,
-        middleGapWidth: 72,
-        items: const <TMZBottomNavItem>[
-          TMZBottomNavItem(label: 'Home', icon: Icons.grid_view_rounded),
-          TMZBottomNavItem(
-            label: 'Batches',
-            icon: Icons.stacked_bar_chart_rounded,
-          ),
-          TMZBottomNavItem(
-            label: 'Registry',
-            icon: Icons.fact_check_outlined,
-          ),
-          TMZBottomNavItem(
-            label: 'Profile',
-            icon: Icons.manage_accounts_outlined,
-          ),
-        ],
+    final bool allowSystemBack =
+        router.canPop() || path == AppRouter.dashboardPath;
+
+    return PopScope(
+      canPop: allowSystemBack,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
+        context.go(AppRouter.dashboardPath);
+      },
+      child: Scaffold(
+        body: child,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: AppColors.brandBlue,
+          foregroundColor: Colors.white,
+          onPressed: () => context.push(AppRouter.verificationPlanSetupPath),
+          child: const Icon(Icons.add_rounded, size: 30),
+        ),
+        bottomNavigationBar: TMZBottomNav(
+          currentIndex: currentIndex,
+          onTap: (int i) => _onTap(context, i),
+          showLabels: false,
+          middleGapAfterIndex: 1,
+          middleGapWidth: 72,
+          items: const <TMZBottomNavItem>[
+            TMZBottomNavItem(label: 'Home', icon: Icons.grid_view_rounded),
+            TMZBottomNavItem(
+              label: 'Batches',
+              icon: Icons.stacked_bar_chart_rounded,
+            ),
+            TMZBottomNavItem(
+              label: 'Registry',
+              icon: Icons.fact_check_outlined,
+            ),
+            TMZBottomNavItem(
+              label: 'Profile',
+              icon: Icons.manage_accounts_outlined,
+            ),
+          ],
+        ),
       ),
     );
   }

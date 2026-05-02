@@ -49,20 +49,13 @@ class _IndividualVaultPageState extends State<IndividualVaultPage> {
                 border: Border.all(color: const Color(0xFFC3C6D7)),
               ),
               child: ClipOval(
-                child: Image.network(
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuBEb1kTYzFPQMLfp5LGSd-fkQpWlAQnCVGyiYiDpoIjRWRspbwCLlVkaKbwZvGF_rQL-lUfyuWEtJSKWLRhS0qNq8TmFP3GwKVc1wiPayuZcIc-aDbI56WMMUzAf73K5owINZyJ3dRdVzPojS-noVIcAwiqgL7wq-Ld0Hi09loCey1E6Od6YsZHJfCbGGJrIc0qNq3rrYqPNazAL_DS4EoaS8TM_de_TH3DZWUY5rvVmWp_JzAAecssUQMGRdIunCE2M5qRYMCA23o',
-                  fit: BoxFit.cover,
-                  errorBuilder:
-                      (
-                        BuildContext context,
-                        Object error,
-                        StackTrace? stackTrace,
-                      ) {
-                        return Icon(
-                          Icons.person_rounded,
-                          color: AppColors.textTertiary.withAlpha(180),
-                        );
-                      },
+                child: Container(
+                  color: AppColors.blueTint,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.person_rounded,
+                    color: AppColors.textTertiary.withAlpha(180),
+                  ),
                 ),
               ),
             ),

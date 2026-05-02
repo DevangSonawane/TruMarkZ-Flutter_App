@@ -131,9 +131,9 @@ class OrgDashboardPage extends StatelessWidget {
                     onTap: () => context.go(AppRouter.walletPath),
                   ),
                   _QuickActionCard(
-                    label: 'Skill Tree',
-                    icon: Icons.account_tree_outlined,
-                    onTap: () => context.go(AppRouter.skillTreePath),
+                    label: 'View Reports',
+                    icon: Icons.description_outlined,
+                    onTap: () => context.go(AppRouter.appReportsPath),
                   ),
                   _QuickActionCard(
                     label: 'Registry Search',
@@ -599,6 +599,8 @@ class _QuickActionCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.body2.copyWith(
+                  fontSize: 13,
+                  height: 1.15,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
                 ),
