@@ -464,7 +464,7 @@ class _RegistryResultCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => context.go(AppRouter.publicVerificationResultPath),
+        onTap: () {},
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -544,9 +544,7 @@ class _RegistryResultCard extends StatelessWidget {
                           ],
                           InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            onTap: () => context.go(
-                              AppRouter.publicVerificationResultPath,
-                            ),
+                            onTap: () {},
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 6,

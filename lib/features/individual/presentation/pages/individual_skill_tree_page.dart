@@ -87,14 +87,6 @@ class IndividualSkillTreePage extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(20, 18, 20, 24 + bottomInset),
             sliver: SliverList(
               delegate: SliverChildListDelegate.fixed(<Widget>[
-                Text(
-                  'Your verified digital resume - every item is blockchain-backed',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x5),
                 const _StatsRow(),
                 const SizedBox(height: AppSpacing.x6),
                 const _SectionCard(
@@ -178,6 +170,15 @@ class IndividualSkillTreePage extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.x6),
+                Text(
+                  'Your verified digital resume - every item is blockchain-backed',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.x8),
               ]),
             ),
@@ -200,6 +201,7 @@ class _StatsRow extends StatelessWidget {
             label: 'Total Entries',
             value: '9',
             icon: Icons.library_books_outlined,
+            valueColor: AppColors.brandBlue,
           ),
         ),
         SizedBox(width: AppSpacing.x3),
@@ -208,6 +210,7 @@ class _StatsRow extends StatelessWidget {
             label: 'Verified',
             value: '8',
             icon: Icons.verified_rounded,
+            valueColor: AppColors.success,
           ),
         ),
         SizedBox(width: AppSpacing.x3),
@@ -216,6 +219,7 @@ class _StatsRow extends StatelessWidget {
             label: 'Pending',
             value: '1',
             icon: Icons.hourglass_top_rounded,
+            valueColor: AppColors.warning,
           ),
         ),
       ],
@@ -228,68 +232,57 @@ class _StatCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
+    required this.valueColor,
   });
 
   final String label;
   final String value;
   final IconData icon;
+  final Color valueColor;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFEEF3FF)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.brandBlue.withAlpha(0x12),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: AppColors.brandBlue.withAlpha(14),
-              shape: BoxShape.circle,
+    return SizedBox(
+      height: 80,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFEEF3FF)),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: AppColors.brandBlue.withAlpha(0x12),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
-            alignment: Alignment.center,
-            child: Icon(icon, size: 18, color: AppColors.brandBlue),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textTertiary,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: AppTypography.heading1.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                    height: 1.1,
-                  ),
-                ),
-              ],
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                height: 1.05,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: AppTypography.heading1.copyWith(
+                color: valueColor,
+                fontWeight: FontWeight.w900,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

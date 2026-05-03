@@ -35,23 +35,10 @@ class IndividualDashboardPage extends StatelessWidget {
         ),
         title: Row(
           children: <Widget>[
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.brandBlue, width: 2),
-              ),
-              child: ClipOval(
-                child: Container(
-                  color: AppColors.blueTint,
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.person_rounded,
-                    color: AppColors.brandBlue.withAlpha(200),
-                  ),
-                ),
-              ),
+            const Icon(
+              Icons.shield_rounded,
+              color: AppColors.brandBlue,
+              size: 22,
             ),
             const SizedBox(width: AppSpacing.x3),
             Text(
@@ -83,7 +70,25 @@ class IndividualDashboardPage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.x2),
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.x3),
+            child: InkWell(
+              onTap: () => context.push(AppRouter.individualProfilePath),
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: AppColors.blueTint,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.account_circle_outlined,
+                  color: AppColors.brandBlue,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       body: ListView(
