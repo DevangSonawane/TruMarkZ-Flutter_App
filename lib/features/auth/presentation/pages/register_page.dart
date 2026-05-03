@@ -20,16 +20,18 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
       body: SafeArea(
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.x6,
             AppSpacing.x8,
             AppSpacing.x6,
-            AppSpacing.x6,
+            AppSpacing.x6 + systemBottomInset,
           ),
           children: <Widget>[
             Center(

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
@@ -28,7 +27,6 @@ class _OrganisationRegistrationPageState
   final TextEditingController _orgName = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _gst = TextEditingController();
-  final TextEditingController _businessReg = TextEditingController();
   final TextEditingController _officialEmail = TextEditingController();
   final TextEditingController _mobile = TextEditingController();
 
@@ -147,7 +145,6 @@ class _OrganisationRegistrationPageState
     _orgName.dispose();
     _address.dispose();
     _gst.dispose();
-    _businessReg.dispose();
     _officialEmail.dispose();
     _mobile.dispose();
     super.dispose();
@@ -156,36 +153,24 @@ class _OrganisationRegistrationPageState
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 12,
-        title: Row(
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 18,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
-            ),
-            const SizedBox(width: AppSpacing.x2),
-            Text('TruMarkZ', style: AppTypography.heading2),
-          ],
+        leading: IconButton(
+          onPressed: () => context.go(AppRouter.roleSelectionPath),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.x4),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.x4,
+          AppSpacing.x4,
+          AppSpacing.x4,
+          AppSpacing.x4 + systemBottomInset,
+        ),
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              IconButton(
-                onPressed: () => context.pop(),
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-              const Spacer(),
-              const SizedBox(width: 48),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.x2),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
@@ -286,12 +271,6 @@ class _OrganisationRegistrationPageState
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: AppSpacing.x3),
-                TMZInput(
-                  label: 'Business Registration Number',
-                  hint: 'U12345DL2023PTC',
-                  controller: _businessReg,
-                ),
-                const SizedBox(height: AppSpacing.x3),
                 _label('Official Email'),
                 const SizedBox(height: AppSpacing.x2),
                 TextField(
@@ -348,19 +327,6 @@ class _OrganisationRegistrationPageState
                     '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(_officialEmail.text.trim())}&org=${Uri.encodeComponent(_orgName.text.trim())}',
                   )
                 : null,
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          Center(
-            child: InkWell(
-              onTap: () => context.go(AppRouter.skillTreePath),
-              child: Text(
-                'Registering as an Individual instead?',
-                style: AppTypography.body2.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
           ),
         ],
       ),

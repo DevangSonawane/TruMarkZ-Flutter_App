@@ -15,6 +15,7 @@ class PublicVerificationResultPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
       appBar: AppBar(
@@ -31,7 +32,12 @@ class PublicVerificationResultPage extends StatelessWidget {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.x4),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.x4,
+          AppSpacing.x4,
+          AppSpacing.x4,
+          AppSpacing.x4 + systemBottomInset,
+        ),
         children: <Widget>[
           Text('Result', style: AppTypography.display2),
           const SizedBox(height: AppSpacing.x3),

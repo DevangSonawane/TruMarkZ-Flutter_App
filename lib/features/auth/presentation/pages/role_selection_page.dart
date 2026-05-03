@@ -6,7 +6,6 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/tmz_button.dart';
 
 enum _Role { organisation, individual, verifying }
 
@@ -39,12 +38,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
             Text('TruMarkZ', style: AppTypography.heading2),
           ],
         ),
-        actions: <Widget>[
-          IconButton(
-            icon: const Icon(Icons.help_outline_rounded),
-            onPressed: () {},
-          ),
-        ],
+        actions: <Widget>[],
       ),
       body: SafeArea(
         child: Stack(
@@ -113,44 +107,93 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
               alignment: Alignment.bottomCenter,
               child: SafeArea(
                 top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.x6,
-                    AppSpacing.x2,
-                    AppSpacing.x6,
-                    AppSpacing.x6,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      TMZButton(
-                        label: 'Continue',
-                        onPressed: _selected == null
-                            ? null
-                            : () {
-                                switch (_selected!) {
-                                  case _Role.organisation:
-                                    context.go(
-                                      AppRouter.organisationRegistrationPath,
-                                    );
-                                  case _Role.individual:
-                                    context.go(
-                                      AppRouter.individualIdentityPath,
-                                    );
-                                  case _Role.verifying:
-                                    context.go(AppRouter.appRegistryPath);
-                                }
-                              },
+                minimum: const EdgeInsets.fromLTRB(
+                  AppSpacing.x6,
+                  AppSpacing.x2,
+                  AppSpacing.x6,
+                  AppSpacing.x6,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: _selected == null
+                          ? const SizedBox.shrink()
+                          : SizedBox(
+                              key: const ValueKey<String>('continue_button'),
+                              height: 54,
+                              width: double.infinity,
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(999),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(999),
+                                  onTap: () {
+                                    switch (_selected!) {
+                                      case _Role.organisation:
+                                        context.go(
+                                          AppRouter
+                                              .organisationRegistrationPath,
+                                        );
+                                      case _Role.individual:
+                                        context.go(
+                                          AppRouter.individualIdentityPath,
+                                        );
+                                      case _Role.verifying:
+                                        context.go(AppRouter.appRegistryPath);
+                                    }
+                                  },
+                                  splashColor: Colors.white.withAlpha(31),
+                                  highlightColor: Colors.white.withAlpha(18),
+                                  child: SizedBox.expand(
+                                    child: Ink(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                        gradient: const LinearGradient(
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight,
+                                          colors: <Color>[
+                                            AppColors.brandBlue,
+                                            AppColors.deepNavy,
+                                          ],
+                                        ),
+                                        boxShadow: <BoxShadow>[
+                                          BoxShadow(
+                                            color: AppColors.brandBlue
+                                                .withAlpha(0x59),
+                                            blurRadius: 16,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          'Continue',
+                                          style: AppTypography.button.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    Text(
+                      'You can change this later in settings.',
+                      style: AppTypography.caption.copyWith(
+                        color: const Color(0xFF94A3B8),
                       ),
-                      const SizedBox(height: AppSpacing.x3),
-                      Text(
-                        'You can change this later in settings.',
-                        style: AppTypography.caption.copyWith(
-                          color: const Color(0xFF94A3B8),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

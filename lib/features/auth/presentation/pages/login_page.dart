@@ -21,10 +21,12 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
       body: SafeArea(
+        bottom: false,
         child: Stack(
           children: <Widget>[
             Positioned.fill(
@@ -43,11 +45,11 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             ListView(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 AppSpacing.x4,
                 AppSpacing.x6,
                 AppSpacing.x4,
-                AppSpacing.x5,
+                AppSpacing.x5 + systemBottomInset,
               ),
               children: <Widget>[
                 Center(

@@ -48,16 +48,6 @@ class OrgDashboardPage extends StatelessWidget {
             onPressed: () => context.push(AppRouter.notificationsPath),
             icon: const Icon(Icons.notifications_none_rounded),
           ),
-          const SizedBox(width: AppSpacing.x2),
-          const CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.textPrimary,
-            child: Icon(
-              Icons.lock_outline_rounded,
-              size: 18,
-              color: Colors.white,
-            ),
-          ),
           const SizedBox(width: AppSpacing.x3),
         ],
       ),

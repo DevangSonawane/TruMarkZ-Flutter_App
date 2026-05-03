@@ -30,10 +30,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
       body: SafeArea(
+        bottom: false,
         child: Stack(
           children: <Widget>[
             Positioned.fill(
@@ -85,11 +87,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
               alignment: Alignment.bottomCenter,
               child:
                   Container(
-                        padding: const EdgeInsets.fromLTRB(
+                        padding: EdgeInsets.fromLTRB(
                           AppSpacing.x6,
                           AppSpacing.x6,
                           AppSpacing.x6,
-                          AppSpacing.x6,
+                          AppSpacing.x6 + systemBottomInset,
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.cardSurface,
