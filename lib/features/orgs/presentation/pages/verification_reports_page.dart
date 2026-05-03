@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/animations/screen_entry_mixin.dart';
@@ -58,23 +57,17 @@ class _VerificationReportsPageState extends State<VerificationReportsPage>
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final List<_ReportRow> visible = _filtered;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
       appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 22,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
-            ),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('Verification Reports'),
-          ],
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => context.go(AppRouter.dashboardPath),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
+        title: const Text('Verification Reports'),
       ),
       body: SafeArea(
         child: ListView(
@@ -144,17 +137,21 @@ class _VerificationReportsPageState extends State<VerificationReportsPage>
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Row(
-        children: <Widget>[
-          for (int i = 0; i < tabs.length; i++) ...<Widget>[
-            _FilterChip(
-              label: tabs[i],
-              selected: _tabIndex == i,
-              onTap: () => setState(() => _tabIndex = i),
-            ),
-            const SizedBox(width: AppSpacing.x2),
+      clipBehavior: Clip.none,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Row(
+          children: <Widget>[
+            for (int i = 0; i < tabs.length; i++) ...<Widget>[
+              _FilterChip(
+                label: tabs[i],
+                selected: _tabIndex == i,
+                onTap: () => setState(() => _tabIndex = i),
+              ),
+              const SizedBox(width: AppSpacing.x2),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -199,7 +196,9 @@ class _ReportCard extends StatelessWidget {
                       report.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.heading2.copyWith(
+                      style: AppTypography.body1.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
                         color: AppColors.textPrimary,
                       ),
                     ),
@@ -253,8 +252,9 @@ class _FilterChip extends StatelessWidget {
         child: Text(
           label,
           style: AppTypography.body2.copyWith(
+            fontSize: 13,
             color: selected ? Colors.white : AppColors.textSecondary,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

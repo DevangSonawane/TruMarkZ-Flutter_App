@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/theme/app_colors.dart';
@@ -19,26 +18,20 @@ class CredentialDetailPage extends StatelessWidget {
       context,
     ).uri.queryParameters;
 
-    final String name = (qp['name'] ?? 'John Doe').trim().isNotEmpty
-        ? qp['name']!.trim()
+    final String? nameParam = qp['name'];
+    final String name = (nameParam ?? '').trim().isNotEmpty
+        ? nameParam!.trim()
         : 'John Doe';
+
+    final String? idParam = qp['id'];
+    final String credentialId = (idParam ?? '').trim().isNotEmpty
+        ? idParam!.trim()
+        : 'TMZ-9F3A-C812';
     final String statusRaw = (qp['status'] ?? 'verified').trim();
     final bool verified = statusRaw.toLowerCase() == 'verified';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 22,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
-            ),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('Credential Detail'),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: Text(credentialId)),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.x4),
         children: <Widget>[
@@ -61,7 +54,7 @@ class CredentialDetailPage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.x2),
                 Text(
-                  'Owner: $name\nCredential ID: TMZ-9F3A-C812\nIssued: 29/04/2026',
+                  'Owner: $name\nCredential ID: $credentialId\nIssued: 29/04/2026',
                   style: AppTypography.body2.copyWith(
                     color: scheme.onSurface.withAlpha(170),
                     height: 1.35,

@@ -53,14 +53,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            actions: <Widget>[
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.more_vert_rounded),
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 8),
-            ],
+            actions: <Widget>[],
             flexibleSpace: ClipRect(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
@@ -271,6 +264,7 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEFF6FF)),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x142563EB),
@@ -360,8 +354,15 @@ class _RecessedField extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0D2563EB),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,7 +371,7 @@ class _RecessedField extends StatelessWidget {
             label.toUpperCase(),
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               letterSpacing: 1.0,
             ),
           ),
@@ -378,7 +379,7 @@ class _RecessedField extends StatelessWidget {
           Text(
             value,
             style: AppTypography.body1.copyWith(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: valueColor ?? AppColors.textPrimary,
             ),
           ),
@@ -396,6 +397,7 @@ class _GeneralInfoCard extends StatelessWidget {
     return _SectionCard(
       title: 'General Information',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           const _RecessedField(
             label: 'Official Name',
@@ -417,7 +419,7 @@ class _GeneralInfoCard extends StatelessWidget {
                 child: _RecessedField(
                   label: 'Status',
                   value: 'Active',
-                  valueColor: AppColors.brandBlue,
+                  valueColor: AppColors.success,
                 ),
               ),
             ],

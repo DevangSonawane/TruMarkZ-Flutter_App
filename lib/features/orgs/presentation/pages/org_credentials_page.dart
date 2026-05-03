@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
@@ -73,23 +72,15 @@ class OrgCredentialsPage extends StatelessWidget {
         titleSpacing: 8,
         title: Row(
           children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 18,
-              colorFilter: const ColorFilter.mode(
-                AppColors.brandBlue,
-                BlendMode.srcIn,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.x2),
             Expanded(
               child: Text(
                 'Create Credentials',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.heading2.copyWith(
+                  fontSize: 16,
                   color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -118,7 +109,18 @@ class OrgCredentialsPage extends StatelessWidget {
         ),
         children: <Widget>[
           for (final _CredentialCardModel model in cards) ...<Widget>[
-            _CredentialListCard(model: model, onTap: () {}),
+            _CredentialListCard(
+              model: model,
+              onTap: () {
+                final String status = switch (model.status) {
+                  _CredentialStatus.valid => 'verified',
+                  _ => 'pending',
+                };
+                context.push(
+                  '${AppRouter.credentialDetailPath}?name=${Uri.encodeComponent(model.title)}&status=$status',
+                );
+              },
+            ),
             const SizedBox(height: AppSpacing.x3),
           ],
         ],
@@ -180,35 +182,37 @@ class _CredentialListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (_CredentialStatusStyle statusStyle, Color qrColor) = switch (model
-        .status) {
+    final (
+      _CredentialStatusStyle statusStyle,
+      Color qrColor,
+    ) = switch (model.status) {
       _CredentialStatus.valid => (
-          const _CredentialStatusStyle(
-            label: 'VALID',
-            bg: Color(0xFFECFDF3),
-            fg: Color(0xFF16A34A),
-            border: Color(0xFFD1FAE5),
-          ),
-          const Color(0xFF94A3B8),
+        const _CredentialStatusStyle(
+          label: 'VALID',
+          bg: Color(0xFFECFDF3),
+          fg: Color(0xFF16A34A),
+          border: Color(0xFFD1FAE5),
         ),
+        const Color(0xFF94A3B8),
+      ),
       _CredentialStatus.expired => (
-          const _CredentialStatusStyle(
-            label: 'EXPIRED',
-            bg: Color(0xFFFFFBEB),
-            fg: Color(0xFFD97706),
-            border: Color(0xFFFDE68A),
-          ),
-          const Color(0xFF94A3B8),
+        const _CredentialStatusStyle(
+          label: 'EXPIRED',
+          bg: Color(0xFFFFFBEB),
+          fg: Color(0xFFD97706),
+          border: Color(0xFFFDE68A),
         ),
+        const Color(0xFF94A3B8),
+      ),
       _CredentialStatus.revoked => (
-          const _CredentialStatusStyle(
-            label: 'REVOKED',
-            bg: Color(0xFFFFF1F2),
-            fg: Color(0xFFE11D48),
-            border: Color(0xFFFECACA),
-          ),
-          const Color(0xFFE2E8F0),
+        const _CredentialStatusStyle(
+          label: 'REVOKED',
+          bg: Color(0xFFFFF1F2),
+          fg: Color(0xFFE11D48),
+          border: Color(0xFFFECACA),
         ),
+        const Color(0xFFE2E8F0),
+      ),
     };
 
     return GestureDetector(
@@ -245,7 +249,7 @@ class _CredentialListCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.body1.copyWith(
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF0F172A),
                       ),
@@ -277,11 +281,7 @@ class _CredentialListCard extends StatelessWidget {
                 children: <Widget>[
                   _CredentialStatusPill(style: statusStyle),
                   const SizedBox(height: 12),
-                  Icon(
-                    Icons.qr_code_2_rounded,
-                    size: 20,
-                    color: qrColor,
-                  ),
+                  Icon(Icons.qr_code_2_rounded, size: 20, color: qrColor),
                 ],
               ),
             ],
@@ -347,8 +347,8 @@ class _AvatarWithBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 52,
-      height: 52,
+      width: 46,
+      height: 46,
       child: Stack(
         clipBehavior: Clip.none,
         children: <Widget>[
@@ -359,7 +359,7 @@ class _AvatarWithBadge extends StatelessWidget {
                 child: Text(
                   initials,
                   style: AppTypography.heading2.copyWith(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: fg,
                   ),
@@ -371,8 +371,8 @@ class _AvatarWithBadge extends StatelessWidget {
             right: -2,
             bottom: -2,
             child: Container(
-              width: 24,
-              height: 24,
+              width: 20,
+              height: 20,
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
@@ -387,7 +387,7 @@ class _AvatarWithBadge extends StatelessWidget {
               ),
               child: const Icon(
                 Icons.verified_user_rounded,
-                size: 14,
+                size: 12,
                 color: AppColors.brandBlue,
               ),
             ),

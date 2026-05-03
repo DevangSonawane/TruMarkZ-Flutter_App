@@ -41,7 +41,9 @@ class BatchCreatedSuccessPage extends StatelessWidget {
       'Nov',
       'Dec',
     ];
-    final int hour12 = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final int hour12 = dt.hour == 0
+        ? 12
+        : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
     final String mm = dt.minute.toString().padLeft(2, '0');
     final String ampm = dt.hour >= 12 ? 'PM' : 'AM';
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}, $hour12:$mm $ampm';
@@ -49,17 +51,20 @@ class BatchCreatedSuccessPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
 
-    final String batchName =
-        (qp['batch']?.trim().isNotEmpty ?? false) ? qp['batch']!.trim() : 'New Batch';
+    final String batchName = (qp['batch']?.trim().isNotEmpty ?? false)
+        ? qp['batch']!.trim()
+        : 'New Batch';
     final int records = _tryParseInt(qp['records'], fallback: 80);
     final Set<String> checks = _parseCsvSet(qp['checks']);
     final int selectedChecks = checks.isEmpty ? 6 : checks.length;
     final int tasksCreated = records * selectedChecks;
 
-    final DateTime startedOn = DateTime.tryParse(qp['startedOn'] ?? '')?.toLocal() ??
-        DateTime.now();
+    final DateTime startedOn =
+        DateTime.tryParse(qp['startedOn'] ?? '')?.toLocal() ?? DateTime.now();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4FF),
@@ -88,7 +93,10 @@ class BatchCreatedSuccessPage extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFEEF3FF), width: 4),
+                        border: Border.all(
+                          color: const Color(0xFFEEF3FF),
+                          width: 4,
+                        ),
                         boxShadow: <BoxShadow>[
                           BoxShadow(
                             color: const Color(0xFF2563EB).withAlpha(16),
@@ -182,43 +190,55 @@ class BatchCreatedSuccessPage extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: AppSpacing.x4),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F3FE),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  'Total Tasks Created',
-                                  style: AppTypography.caption.copyWith(
-                                    color: const Color(0xFF394C84),
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 320),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3F3FE),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                const SizedBox(height: 6),
-                                RichText(
-                                  text: TextSpan(
-                                    style: AppTypography.body1.copyWith(
-                                      color: AppColors.brandBlue,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                    children: <InlineSpan>[
-                                      TextSpan(text: tasksCreated.toString()),
-                                      TextSpan(
-                                        text:
-                                            '  (${records.toString()} Records x ${selectedChecks.toString()} Checks)',
-                                        style: AppTypography.caption.copyWith(
-                                          color: const Color(0xFF737686),
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: <Widget>[
+                                    Text(
+                                      'Total Tasks Created',
+                                      textAlign: TextAlign.center,
+                                      style: AppTypography.caption.copyWith(
+                                        color: const Color(0xFF394C84),
+                                        fontWeight: FontWeight.w700,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    RichText(
+                                      textAlign: TextAlign.center,
+                                      text: TextSpan(
+                                        style: AppTypography.body1.copyWith(
+                                          color: const Color(0xFF16A34A),
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                        children: <InlineSpan>[
+                                          TextSpan(
+                                            text: tasksCreated.toString(),
+                                          ),
+                                          TextSpan(
+                                            text:
+                                                '  (${records.toString()} Records x ${selectedChecks.toString()} Checks)',
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: const Color(
+                                                    0xFF737686,
+                                                  ),
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                           const SizedBox(height: AppSpacing.x4),
@@ -251,7 +271,9 @@ class BatchCreatedSuccessPage extends StatelessWidget {
                                       ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFEEF3FF),
-                                        borderRadius: BorderRadius.circular(999),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
                                       ),
                                       child: Text(
                                         'Processing Started',

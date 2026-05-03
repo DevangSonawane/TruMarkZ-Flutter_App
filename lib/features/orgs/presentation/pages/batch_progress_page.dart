@@ -41,29 +41,17 @@ class BatchProgressPage extends StatelessWidget {
               ],
             ),
             actions: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(right: 20),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: const Color(0xFFD6E2FF),
-                      width: 2,
-                    ),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Container(
-                    color: AppColors.blueTint,
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.business_rounded,
-                      color: AppColors.brandBlue,
-                    ),
-                  ),
-                ),
+              IconButton(
+                tooltip: 'Notifications',
+                onPressed: () => context.push(AppRouter.notificationsPath),
+                icon: const Icon(Icons.notifications_none_rounded),
               ),
+              IconButton(
+                tooltip: 'Profile',
+                onPressed: () => context.push(AppRouter.settingsPath),
+                icon: const Icon(Icons.account_circle_outlined),
+              ),
+              const SizedBox(width: 8),
             ],
             flexibleSpace: Container(
               decoration: const BoxDecoration(
@@ -152,11 +140,6 @@ class BatchProgressPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                 ],
-                const SizedBox(height: 16),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: _VerifiedInfrastructureBadge(),
-                ),
                 const SizedBox(height: 110),
               ]),
             ),
@@ -173,7 +156,7 @@ class _BatchSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Stack(
-      alignment: Alignment.centerLeft,
+      alignment: Alignment.center,
       children: <Widget>[
         Container(
           height: 54,
@@ -182,21 +165,35 @@ class _BatchSearchField extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-          padding: const EdgeInsets.only(left: 44),
+        ),
+        const Positioned(
+          left: 14,
+          child: Icon(Icons.search, color: AppColors.textTertiary),
+        ),
+        Positioned.fill(
           child: TextField(
+            textAlign: TextAlign.center,
+            textAlignVertical: TextAlignVertical.center,
             style: AppTypography.body2.copyWith(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: 'Find batches...',
               hintStyle: AppTypography.body2.copyWith(
                 color: AppColors.textTertiary,
               ),
+              isDense: false,
+              filled: false,
+              fillColor: Colors.transparent,
+              // Keep left/right padding symmetric so the centered hint/text
+              // stays visually centered even with the left icon.
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 44,
+                vertical: 16,
+              ),
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
             ),
           ),
-        ),
-        const Positioned(
-          left: 14,
-          child: Icon(Icons.search, color: AppColors.textTertiary),
         ),
       ],
     );
@@ -227,7 +224,7 @@ class _SummaryCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 120,
+      height: 92,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -254,26 +251,28 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 160,
-      padding: const EdgeInsets.all(20),
+      width: 140,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: item.borderColor),
-        boxShadow: const <BoxShadow>[
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Color(0x142563EB),
+            color: AppColors.brandBlue.withAlpha(0x14),
             blurRadius: 12,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           Text(
             item.label,
             style: AppTypography.caption.copyWith(
+              fontSize: 10,
               color: item.trailingIcon != null
                   ? AppColors.error
                   : AppColors.textTertiary,
@@ -287,8 +286,8 @@ class _SummaryCard extends StatelessWidget {
                 item.value,
                 style: AppTypography.display1.copyWith(
                   color: item.valueColor,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               if (item.trailingIcon != null) ...<Widget>[
@@ -534,43 +533,6 @@ class _BatchDirectoryCard extends StatelessWidget {
                 ),
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VerifiedInfrastructureBadge extends StatelessWidget {
-  const _VerifiedInfrastructureBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.blueTint,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFFDBEAFE)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(
-              Icons.verified_user_rounded,
-              color: AppColors.brandBlue,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'TruMarkZ Verified Infrastructure',
-              style: AppTypography.body2.copyWith(
-                fontSize: 13,
-                color: AppColors.brandBlue,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
           ],
         ),
       ),

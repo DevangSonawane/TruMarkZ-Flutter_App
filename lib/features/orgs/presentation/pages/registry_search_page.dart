@@ -7,8 +7,6 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
-enum _EntityFilter { all, individuals, organisations }
-
 class RegistrySearchPage extends StatefulWidget {
   const RegistrySearchPage({super.key});
 
@@ -17,12 +15,10 @@ class RegistrySearchPage extends StatefulWidget {
 }
 
 class _RegistrySearchPageState extends State<RegistrySearchPage> {
-  _EntityFilter _filter = _EntityFilter.all;
   String _selectedCategory = 'Consultants';
 
   @override
   Widget build(BuildContext context) {
-    final List<_RecentVerified> recent = _RecentVerified.sample();
     final List<_RegistryResult> results = _RegistryResult.sample();
 
     return Scaffold(
@@ -82,17 +78,13 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
             sliver: SliverList(
               delegate: SliverChildListDelegate.fixed(<Widget>[
                 _HeroHubCard(
-                  filter: _filter,
                   selectedCategory: _selectedCategory,
-                  onFilterChanged: (v) => setState(() => _filter = v),
                   onCategoryChanged: (v) =>
                       setState(() => _selectedCategory = v),
                 ),
-                const SizedBox(height: 24),
-                _RecentlyVerifiedSection(items: recent),
-                const SizedBox(height: 18),
-                _ResultsHeader(onExport: () {}),
                 const SizedBox(height: 16),
+                _ResultsHeader(onExport: () {}),
+                const SizedBox(height: 12),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints c) {
                     final int cols = c.maxWidth >= 720 ? 2 : 1;
@@ -102,9 +94,9 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
                       itemCount: results.length,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: cols,
-                        mainAxisSpacing: 24,
-                        crossAxisSpacing: 24,
-                        childAspectRatio: cols == 1 ? 1.65 : 1.75,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        mainAxisExtent: 148,
                       ),
                       itemBuilder: (BuildContext context, int index) {
                         return _RegistryResultCard(result: results[index]);
@@ -112,9 +104,9 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 10),
                 const _B2bCtaCard(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 8),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints c) {
                     final int cols = c.maxWidth >= 860 ? 3 : 1;
@@ -122,8 +114,8 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       crossAxisCount: cols,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
                       childAspectRatio: cols == 1 ? 3.6 : 2.9,
                       children: const <Widget>[
                         _HubStatCard(
@@ -163,15 +155,11 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
 
 class _HeroHubCard extends StatelessWidget {
   const _HeroHubCard({
-    required this.filter,
     required this.selectedCategory,
-    required this.onFilterChanged,
     required this.onCategoryChanged,
   });
 
-  final _EntityFilter filter;
   final String selectedCategory;
-  final ValueChanged<_EntityFilter> onFilterChanged;
   final ValueChanged<String> onCategoryChanged;
 
   @override
@@ -222,8 +210,6 @@ class _HeroHubCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          _EntitySegmented(value: filter, onChanged: onFilterChanged),
-          const SizedBox(height: 16),
           _BigSearchField(
             hintText: 'Search by name, GSTIN, Aadhaar, or company ID...',
             onChanged: (_) {},
@@ -248,98 +234,6 @@ class _HeroHubCard extends StatelessWidget {
   }
 }
 
-class _EntitySegmented extends StatelessWidget {
-  const _EntitySegmented({required this.value, required this.onChanged});
-
-  final _EntityFilter value;
-  final ValueChanged<_EntityFilter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    const Color bg = Color(0xFFF3F3FE);
-    const Color border = Color(0xFFC3C6D7);
-    final Widget row = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        _SegButton(
-          label: 'All Entities',
-          active: value == _EntityFilter.all,
-          onTap: () => onChanged(_EntityFilter.all),
-        ),
-        _SegButton(
-          label: 'Individuals',
-          active: value == _EntityFilter.individuals,
-          onTap: () => onChanged(_EntityFilter.individuals),
-        ),
-        _SegButton(
-          label: 'Organisations',
-          active: value == _EntityFilter.organisations,
-          onTap: () => onChanged(_EntityFilter.organisations),
-        ),
-      ],
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: row,
-      ),
-    );
-  }
-}
-
-class _SegButton extends StatelessWidget {
-  const _SegButton({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? AppColors.brandBlue : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: active
-              ? const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x332563EB),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ]
-              : const <BoxShadow>[],
-        ),
-        child: Text(
-          label,
-          style: AppTypography.body2.copyWith(
-            color: active ? Colors.white : AppColors.textSecondary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _BigSearchField extends StatelessWidget {
   const _BigSearchField({required this.hintText, required this.onChanged});
 
@@ -348,38 +242,39 @@ class _BigSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.centerLeft,
-      children: <Widget>[
-        Container(
-          height: 56,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF3F3FE),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFC3C6D7)),
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F3FE),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFC3C6D7)),
+      ),
+      alignment: Alignment.center,
+      child: TextField(
+        onChanged: onChanged,
+        textAlign: TextAlign.center,
+        textAlignVertical: TextAlignVertical.center,
+        style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: AppTypography.body1.copyWith(
+            color: AppColors.textTertiary,
           ),
-          padding: const EdgeInsets.only(left: 52, right: 16),
-          child: TextField(
-            onChanged: onChanged,
-            style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: hintText,
-              hintStyle: AppTypography.body1.copyWith(
-                color: AppColors.textTertiary,
-              ),
-              border: InputBorder.none,
-            ),
-          ),
-        ),
-        const Positioned(
-          left: 18,
-          child: Icon(
+          prefixIcon: const Icon(
             Icons.search_rounded,
             color: AppColors.brandBlue,
-            size: 26,
+            size: 24,
           ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 44),
+          isDense: true,
+          filled: false,
+          fillColor: Colors.transparent,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
         ),
-      ],
+      ),
     );
   }
 }
@@ -419,187 +314,6 @@ class _PillChip extends StatelessWidget {
   }
 }
 
-class _RecentVerified {
-  const _RecentVerified({
-    required this.title,
-    required this.timeLabel,
-    required this.badge,
-    this.imageUrl,
-    this.badgeBg,
-    this.badgeFg,
-  });
-
-  final String title;
-  final String timeLabel;
-  final String badge;
-  final String? imageUrl;
-  final Color? badgeBg;
-  final Color? badgeFg;
-
-  static List<_RecentVerified> sample() => const <_RecentVerified>[
-    _RecentVerified(
-      title: 'NexGen Systems',
-      timeLabel: '2 mins ago',
-      badge: 'NS',
-      badgeBg: Color(0xFFEFF6FF),
-      badgeFg: AppColors.brandBlue,
-    ),
-    _RecentVerified(
-      title: 'Sarah Mitchell',
-      timeLabel: '15 mins ago',
-      badge: 'SM',
-      imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDHV6Ah7MV4AlpMeISFp-qOJfp9ArKAwNUzZR29uoXWQSDV3x4S6E65gwZGqzi8HvOy4RWCLqj8y387x8TR2nU3LJSIjXmnA4-Cdsz1iKrLKWjZgTTUTh44kdYBFkmij80E0FFJD6e6WFV4m6NiM73DGfDUTSWNgbQaQEmonm4cOb9YOIva1enNu4fzgIqOR-FWOr8ibUkxU_-Q2u8j8bjWUN3I99WPVimGTvk-eaLZyj8tUk7SIWQQCbXCZK97XxtlPpCb9V2VN6M',
-    ),
-    _RecentVerified(
-      title: 'Flow Logistics',
-      timeLabel: '1 hour ago',
-      badge: 'FL',
-      badgeBg: Color(0xFFFEF3C7),
-      badgeFg: Color(0xFFB45309),
-    ),
-  ];
-}
-
-class _RecentlyVerifiedSection extends StatelessWidget {
-  const _RecentlyVerifiedSection({required this.items});
-
-  final List<_RecentVerified> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Row(
-            children: <Widget>[
-              const Icon(Icons.verified_rounded, color: AppColors.brandBlue),
-              const SizedBox(width: 8),
-              Text(
-                'Recently Verified Entities',
-                style: AppTypography.heading2.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 76,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            itemBuilder: (BuildContext context, int index) {
-              return _RecentVerifiedCard(item: items[index]);
-            },
-            separatorBuilder: (BuildContext context, int index) =>
-                const SizedBox(width: 12),
-            itemCount: items.length,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RecentVerifiedCard extends StatelessWidget {
-  const _RecentVerifiedCard({required this.item});
-
-  final _RecentVerified item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 240,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0x4DC3C6D7)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x0F0F172A),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: <Widget>[
-          _AvatarSquare(
-            badge: item.badge,
-            imageUrl: item.imageUrl,
-            bg: item.badgeBg,
-            fg: item.badgeFg,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  item.timeLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption.copyWith(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AvatarSquare extends StatelessWidget {
-  const _AvatarSquare({required this.badge, this.imageUrl, this.bg, this.fg});
-
-  final String badge;
-  final String? imageUrl;
-  final Color? bg;
-  final Color? fg;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: bg ?? const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        badge,
-        style: AppTypography.body2.copyWith(
-          color: fg ?? AppColors.brandBlue,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
 class _ResultsHeader extends StatelessWidget {
   const _ResultsHeader({required this.onExport});
 
@@ -619,29 +333,10 @@ class _ResultsHeader extends StatelessWidget {
             ),
           ),
         ),
-        InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onExport,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            child: Row(
-              children: <Widget>[
-                Text(
-                  'Export Result List',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Icon(
-                  Icons.download_rounded,
-                  size: 18,
-                  color: AppColors.brandBlue,
-                ),
-              ],
-            ),
-          ),
+        IconButton(
+          tooltip: 'Download',
+          onPressed: onExport,
+          icon: const Icon(Icons.download_rounded, color: AppColors.brandBlue),
         ),
       ],
     );

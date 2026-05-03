@@ -27,8 +27,10 @@ class BatchTrackingDetailPage extends StatelessWidget {
     final int records = _tryParseInt(qp['records'], fallback: 200);
     final String createdLabel = (qp['created'] ?? '02 Apr').trim();
     final String slaLabel = (qp['sla'] ?? '5 days').trim();
-    final double progress = _tryParseDouble(qp['progress'], fallback: 0.85)
-        .clamp(0, 1);
+    final double progress = _tryParseDouble(
+      qp['progress'],
+      fallback: 0.85,
+    ).clamp(0, 1);
     final int riskCount = _tryParseInt(qp['risk'], fallback: 24);
 
     return Scaffold(
@@ -51,19 +53,15 @@ class BatchTrackingDetailPage extends StatelessWidget {
           color: AppColors.brandBlue,
         ),
         title: Text(
-          'Batch Progress',
+          batchName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: AppTypography.heading1.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
-        actions: <Widget>[
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_rounded),
-            color: AppColors.textSecondary,
-          ),
-        ],
+        actions: <Widget>[],
         flexibleSpace: ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -119,11 +117,11 @@ class BatchTrackingDetailPage extends StatelessWidget {
 
 class _CardShadow extends BoxShadow {
   const _CardShadow()
-      : super(
-          color: const Color(0x142563EB),
-          blurRadius: 12,
-          offset: const Offset(0, 2),
-        );
+    : super(
+        color: const Color(0x142563EB),
+        blurRadius: 12,
+        offset: const Offset(0, 2),
+      );
 }
 
 class _QuickStatsGrid extends StatelessWidget {
@@ -141,11 +139,17 @@ class _QuickStatsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Expanded(child: _StatCard(label: 'Records', value: '$records')),
+        Expanded(
+          child: _StatCard(label: 'Records', value: '$records'),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _StatCard(label: 'Created', value: createdLabel)),
+        Expanded(
+          child: _StatCard(label: 'Created', value: createdLabel),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _StatCard(label: 'SLA', value: slaLabel)),
+        Expanded(
+          child: _StatCard(label: 'SLA', value: slaLabel),
+        ),
       ],
     );
   }
@@ -493,12 +497,7 @@ class _Pill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(
-              icon,
-              size: 14,
-              color: fg,
-              fill: filledIcon ? 1 : 0,
-            ),
+            Icon(icon, size: 14, color: fg, fill: filledIcon ? 1 : 0),
             const SizedBox(width: 6),
           ],
           Text(
