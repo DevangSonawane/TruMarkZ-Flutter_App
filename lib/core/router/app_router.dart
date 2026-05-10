@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/pages/role_selection_page.dart';
+import '../../features/auth/presentation/pages/forgot_password_page.dart';
+import '../services/token_storage.dart';
 import '../../features/individual/presentation/pages/individual_dashboard_page.dart';
 import '../../features/individual/presentation/pages/individual_profile_page.dart';
 import '../../features/individual/presentation/pages/individual_skill_tree_page.dart';
@@ -49,6 +52,7 @@ class AppRouter {
   static const String roleSelectionPath = '/role-selection';
   static const String loginPath = '/login';
   static const String registerPath = '/register';
+  static const String forgotPasswordPath = '/forgot-password';
 
   static const String dashboardPath = '/app/dashboard';
   static const String walletPath = '/app/wallet';
@@ -108,6 +112,41 @@ class AppRouter {
 
   static final GoRouter router = GoRouter(
     initialLocation: splashPath,
+    redirect: (BuildContext context, GoRouterState state) async {
+      final ProviderContainer container = ProviderScope.containerOf(context);
+      final TokenStorage tokenStorage = container.read(tokenStorageProvider);
+      final String? token = await tokenStorage.getToken();
+      final bool isAuthenticated = token != null && token.trim().isNotEmpty;
+
+      final bool forceAuthFlow =
+          state.uri.queryParameters['force']?.toLowerCase() == 'true';
+      if (forceAuthFlow &&
+          (state.matchedLocation.startsWith(loginPath) ||
+              state.matchedLocation.startsWith(registerPath))) {
+        return null;
+      }
+
+      final bool isOnAuthPage =
+          state.matchedLocation.startsWith(loginPath) ||
+          state.matchedLocation.startsWith(registerPath) ||
+          state.matchedLocation.startsWith(forgotPasswordPath) ||
+          state.matchedLocation == splashPath ||
+          state.matchedLocation.startsWith(onboardingPath) ||
+          state.matchedLocation.startsWith(roleSelectionPath) ||
+          state.matchedLocation.startsWith(organisationRegistrationPath) ||
+          state.matchedLocation.startsWith(otpVerificationPath) ||
+          state.matchedLocation.startsWith(pendingApprovalPath) ||
+          state.matchedLocation.startsWith(publicVerificationResultPath);
+
+      if (!isAuthenticated && !isOnAuthPage) return loginPath;
+
+      if (isAuthenticated &&
+          (state.matchedLocation == loginPath || state.matchedLocation == registerPath)) {
+        final String loginType = (await tokenStorage.getLoginType()) ?? '';
+        return loginType == 'individual' ? individualIdentityPath : dashboardPath;
+      }
+      return null;
+    },
     routes: <RouteBase>[
       GoRoute(
         path: splashPath,
@@ -138,6 +177,12 @@ class AppRouter {
         name: 'register',
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const RegisterPage()),
+      ),
+      GoRoute(
+        path: forgotPasswordPath,
+        name: 'forgot_password',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const ForgotPasswordPage()),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) =>

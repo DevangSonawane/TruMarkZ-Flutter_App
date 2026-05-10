@@ -1,34 +1,110 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
+import '../../../../../core/models/auth_models.dart';
+import '../../../../../core/network/api_client.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_input.dart';
 import '../../../../../core/widgets/tmz_select.dart';
+import '../../../../auth/data/auth_repository.dart';
 
-class OrganisationRegistrationPage extends StatefulWidget {
+class OrganisationRegistrationPage extends ConsumerStatefulWidget {
   const OrganisationRegistrationPage({super.key});
 
   @override
-  State<OrganisationRegistrationPage> createState() =>
+  ConsumerState<OrganisationRegistrationPage> createState() =>
       _OrganisationRegistrationPageState();
 }
 
 class _OrganisationRegistrationPageState
-    extends State<OrganisationRegistrationPage> {
+    extends ConsumerState<OrganisationRegistrationPage> {
   String? _industry;
   bool _otpSent = false;
+  bool _isSendingOtp = false;
 
   final TextEditingController _orgName = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _gst = TextEditingController();
+  final TextEditingController _businessRegNumber = TextEditingController();
+  final TextEditingController _password = TextEditingController();
   final TextEditingController _officialEmail = TextEditingController();
   final TextEditingController _mobile = TextEditingController();
+
+  bool _looksLikeEmail(String value) {
+    final String v = value.trim();
+    if (!v.contains('@')) return false;
+    final int at = v.indexOf('@');
+    if (at <= 0 || at == v.length - 1) return false;
+    return v.substring(at + 1).contains('.');
+  }
+
+  Future<void> _sendOtp() async {
+    final String orgName = _orgName.text.trim();
+    final String address = _address.text.trim();
+    final String gst = _gst.text.trim();
+    final String brn = _businessRegNumber.text.trim();
+    final String officialEmail = _officialEmail.text.trim();
+    final String password = _password.text;
+    final String mobile = _mobile.text.trim();
+
+    if (officialEmail.isEmpty || !_looksLikeEmail(officialEmail)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email address.')),
+      );
+      return;
+    }
+    if (orgName.isEmpty || address.isEmpty || gst.isEmpty || brn.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all required fields.')),
+      );
+      return;
+    }
+    if (password.trim().length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 8 characters.')),
+      );
+      return;
+    }
+
+    setState(() => _isSendingOtp = true);
+    try {
+      // TODO(dev): API currently has no field for industry; keep collecting it but do not send.
+      await ref.read(authRepositoryProvider).registerOrg(
+            RegisterOrgRequest(
+              organizationName: orgName,
+              gstNumber: gst,
+              businessRegistrationNumber: brn,
+              address: address,
+              email: officialEmail,
+              mobile: mobile.isEmpty ? null : mobile,
+              password: password,
+            ),
+          );
+      if (!mounted) return;
+      setState(() => _otpSent = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OTP sent to your email')),
+      );
+      unawaited(_showOtpSentPopup());
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingOtp = false);
+    }
+  }
 
   Future<void> _showOtpSentPopup() async {
     if (!mounted) return;
@@ -145,6 +221,8 @@ class _OrganisationRegistrationPageState
     _orgName.dispose();
     _address.dispose();
     _gst.dispose();
+    _businessRegNumber.dispose();
+    _password.dispose();
     _officialEmail.dispose();
     _mobile.dispose();
     super.dispose();
@@ -271,6 +349,19 @@ class _OrganisationRegistrationPageState
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Business Registration Number',
+                  hint: 'Registration / CIN / License',
+                  controller: _businessRegNumber,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Password',
+                  hint: '••••••••',
+                  controller: _password,
+                  obscureText: true,
+                ),
+                const SizedBox(height: AppSpacing.x3),
                 _label('Official Email'),
                 const SizedBox(height: AppSpacing.x2),
                 TextField(
@@ -280,11 +371,14 @@ class _OrganisationRegistrationPageState
                     hintText: 'contact@organisation.com',
                     prefixIcon: const Icon(Icons.mail_outline_rounded),
                     suffixIcon: TextButton(
-                      onPressed: () {
-                        setState(() => _otpSent = true);
-                        unawaited(_showOtpSentPopup());
-                      },
-                      child: const Text('Send OTP'),
+                      onPressed: _isSendingOtp ? null : _sendOtp,
+                      child: _isSendingOtp
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Send OTP'),
                     ),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
@@ -324,7 +418,7 @@ class _OrganisationRegistrationPageState
             label: 'Continue',
             onPressed: _otpSent
                 ? () => context.go(
-                    '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(_officialEmail.text.trim())}&org=${Uri.encodeComponent(_orgName.text.trim())}',
+                    '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(_officialEmail.text.trim())}&org=${Uri.encodeComponent(_orgName.text.trim())}&type=organization',
                   )
                 : null,
           ),

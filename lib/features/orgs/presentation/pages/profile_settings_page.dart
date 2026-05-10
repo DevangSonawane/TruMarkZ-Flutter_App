@@ -1,20 +1,23 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../auth/application/auth_notifier.dart';
+import '../../../auth/application/auth_state.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
-class ProfileSettingsPage extends StatefulWidget {
+class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
 
   @override
-  State<ProfileSettingsPage> createState() => _ProfileSettingsPageState();
+  ConsumerState<ProfileSettingsPage> createState() => _ProfileSettingsPageState();
 }
 
-class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
+class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   bool _twoFaEnabled = true;
 
   void _goBack(BuildContext context) {
@@ -29,6 +32,16 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final profile = authAsync.value?.userProfile;
+    final String displayName =
+        profile?.fullName?.trim().isNotEmpty == true
+            ? profile!.fullName!.trim()
+            : (profile?.organizationName?.trim().isNotEmpty == true
+                ? profile!.organizationName!.trim()
+                : 'User');
+    final String email = profile?.email ?? '';
+    final bool isVerified = profile?.isVerified == true;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -79,7 +92,12 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             padding: EdgeInsets.fromLTRB(20, 24, 20, 32 + bottomInset),
             sliver: SliverList(
               delegate: SliverChildListDelegate.fixed(<Widget>[
-                _OrgProfileHeader(onEdit: () {}),
+                _OrgProfileHeader(
+                  onEdit: () {},
+                  displayName: displayName,
+                  email: email,
+                  isVerified: isVerified,
+                ),
                 const SizedBox(height: 24),
                 const _GeneralInfoCard(),
                 const SizedBox(height: 24),
@@ -90,7 +108,12 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 const SizedBox(height: 24),
                 const _TeamAccessCard(),
                 const SizedBox(height: 24),
-                _LogoutCard(onLogout: () => context.go(AppRouter.loginPath)),
+                _LogoutCard(
+                  onLogout: () async {
+                    await ref.read(authNotifierProvider.notifier).logout();
+                    if (context.mounted) context.go(AppRouter.roleSelectionPath);
+                  },
+                ),
                 const SizedBox(height: 110),
               ]),
             ),
@@ -102,9 +125,17 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
 }
 
 class _OrgProfileHeader extends StatelessWidget {
-  const _OrgProfileHeader({required this.onEdit});
+  const _OrgProfileHeader({
+    required this.onEdit,
+    required this.displayName,
+    required this.email,
+    required this.isVerified,
+  });
 
   final VoidCallback onEdit;
+  final String displayName;
+  final String email;
+  final bool isVerified;
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +199,7 @@ class _OrgProfileHeader extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          'Global Fintech Institute',
+          displayName,
           textAlign: TextAlign.center,
           style: AppTypography.display2.copyWith(
             color: AppColors.textPrimary,
@@ -176,6 +207,17 @@ class _OrgProfileHeader extends StatelessWidget {
             fontSize: 22,
           ),
         ),
+        if (email.trim().isNotEmpty) ...<Widget>[
+          const SizedBox(height: 6),
+          Text(
+            email,
+            textAlign: TextAlign.center,
+            style: AppTypography.body2.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -193,7 +235,7 @@ class _OrgProfileHeader extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'TruMarkZ Verified',
+                isVerified ? 'Verified' : 'Pending',
                 style: AppTypography.body2.copyWith(
                   color: AppColors.brandBlue,
                   fontWeight: FontWeight.w800,

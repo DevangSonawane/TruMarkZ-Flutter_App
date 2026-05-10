@@ -141,7 +141,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                               width: double.infinity,
                               child: TMZButton(
                                 onPressed: () =>
-                                    context.go(AppRouter.loginPath),
+                                    context.go(AppRouter.roleSelectionPath),
                                 label: 'Get Started',
                               ),
                             ),
@@ -156,7 +156,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                   ),
                                 ),
                                 InkWell(
-                                  onTap: () => context.go(AppRouter.loginPath),
+                                  onTap: () =>
+                                      context.go(AppRouter.roleSelectionPath),
                                   child: Text(
                                     'Sign In',
                                     style: AppTypography.body2.copyWith(

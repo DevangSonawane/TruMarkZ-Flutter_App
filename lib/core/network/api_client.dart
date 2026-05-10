@@ -1,0 +1,125 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../router/app_router.dart';
+import '../services/token_storage.dart';
+
+class ApiException implements Exception {
+  const ApiException({required this.statusCode, required this.message});
+
+  final int? statusCode;
+  final String message;
+
+  @override
+  String toString() => 'ApiException(statusCode: $statusCode, message: $message)';
+}
+
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient(tokenStorage: ref.read(tokenStorageProvider));
+});
+
+class ApiClient {
+  ApiClient({required TokenStorage tokenStorage})
+      : _tokenStorage = tokenStorage,
+        _dio = Dio(
+          BaseOptions(
+            baseUrl: 'https://trumarkz-api-54038467488.asia-south1.run.app',
+            connectTimeout: const Duration(seconds: 30),
+            receiveTimeout: const Duration(seconds: 30),
+            headers: <String, dynamic>{
+              Headers.contentTypeHeader: Headers.jsonContentType,
+              Headers.acceptHeader: Headers.jsonContentType,
+            },
+          ),
+        ) {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) async {
+          final String? token = await _tokenStorage.getToken();
+          if (token != null && token.trim().isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
+        onError: (DioException err, ErrorInterceptorHandler handler) async {
+          final int? statusCode = err.response?.statusCode;
+          if (statusCode == 401) {
+            await _tokenStorage.clearAll();
+            scheduleMicrotask(
+              () => AppRouter.router.go(AppRouter.roleSelectionPath),
+            );
+            handler.next(err);
+            return;
+          }
+
+          final String message = _extractErrorMessage(err) ?? 'Something went wrong. Please try again.';
+          handler.reject(
+            DioException(
+              requestOptions: err.requestOptions,
+              response: err.response,
+              type: err.type,
+              error: ApiException(statusCode: statusCode, message: message),
+              stackTrace: err.stackTrace,
+              message: err.message,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  final Dio _dio;
+  final TokenStorage _tokenStorage;
+
+  Future<Map<String, dynamic>> get(String path) async {
+    try {
+      final Response<dynamic> res = await _dio.get<dynamic>(path);
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(statusCode: null, message: 'Something went wrong. Please try again.');
+    }
+  }
+
+  Future<Map<String, dynamic>> post(String path, {Object? data}) async {
+    try {
+      final Response<dynamic> res = await _dio.post<dynamic>(path, data: data);
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(statusCode: null, message: 'Something went wrong. Please try again.');
+    }
+  }
+
+  Map<String, dynamic> _asMap(dynamic data) {
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return <String, dynamic>{};
+  }
+
+  ApiException _toApiException(DioException e) {
+    final Object? inner = e.error;
+    if (inner is ApiException) return inner;
+    final int? statusCode = e.response?.statusCode;
+    final String message = _extractErrorMessage(e) ?? 'Something went wrong. Please try again.';
+    return ApiException(statusCode: statusCode, message: message);
+  }
+
+  String? _extractErrorMessage(DioException err) {
+    final dynamic data = err.response?.data;
+    if (data is Map && data['detail'] != null) {
+      return data['detail']?.toString();
+    }
+    if (data is Map && data['message'] != null) {
+      return data['message']?.toString();
+    }
+    if (data is String && data.trim().isNotEmpty) {
+      return data.trim();
+    }
+    return null;
+  }
+}

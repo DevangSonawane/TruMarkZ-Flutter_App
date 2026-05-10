@@ -87,7 +87,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                   icon: Icons.shield_rounded,
                   title: 'I represent an Organisation',
                   subtitle: 'Verify workers, products &\nservices in bulk',
-                  onTap: () => setState(() => _selected = _Role.organisation),
+                  onTap: () {
+                    setState(() => _selected = _Role.organisation);
+                    context.go('${AppRouter.loginPath}?type=organization&force=true');
+                  },
                 ),
                 const SizedBox(height: AppSpacing.x4),
                 _ChoiceCard(
@@ -95,11 +98,17 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                   icon: Icons.person_outline_rounded,
                   title: 'I am an Individual',
                   subtitle: 'Build your verified skill tree\ncredential',
-                  onTap: () => setState(() => _selected = _Role.individual),
+                  onTap: () {
+                    setState(() => _selected = _Role.individual);
+                    context.go('${AppRouter.loginPath}?type=individual&force=true');
+                  },
                 ),
                 const SizedBox(height: AppSpacing.x6),
                 _PromoCard(
-                  onTap: () => setState(() => _selected = _Role.verifying),
+                  onTap: () {
+                    setState(() => _selected = _Role.verifying);
+                    context.go(AppRouter.publicVerificationResultPath);
+                  },
                 ),
               ],
             ),
@@ -135,15 +144,16 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                     switch (_selected!) {
                                       case _Role.organisation:
                                         context.go(
-                                          AppRouter
-                                              .organisationRegistrationPath,
+                                          '${AppRouter.loginPath}?type=organization',
                                         );
                                       case _Role.individual:
                                         context.go(
-                                          AppRouter.individualIdentityPath,
+                                          '${AppRouter.loginPath}?type=individual',
                                         );
                                       case _Role.verifying:
-                                        context.go(AppRouter.appRegistryPath);
+                                        context.go(
+                                          AppRouter.publicVerificationResultPath,
+                                        );
                                     }
                                   },
                                   splashColor: Colors.white.withAlpha(31),

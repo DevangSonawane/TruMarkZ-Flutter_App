@@ -131,7 +131,9 @@ class IndividualProfilePage extends StatelessWidget {
                 const SizedBox(height: 24),
                 const _AddAchievementCard(),
                 const SizedBox(height: 24),
-                _LogoutCard(onLogout: () => context.go(AppRouter.loginPath)),
+                _LogoutCard(
+                  onLogout: () => context.go(AppRouter.roleSelectionPath),
+                ),
                 SizedBox(height: 84 + bottomInset),
               ]),
             ),

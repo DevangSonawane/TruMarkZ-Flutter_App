@@ -1,22 +1,88 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/models/auth_models.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
+import '../../data/auth_repository.dart';
 
-class RegisterPage extends StatefulWidget {
+class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  ConsumerState<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
+class _RegisterPageState extends ConsumerState<RegisterPage> {
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _addressController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onRegister() async {
+    final String fullName = _fullNameController.text.trim();
+    final String email = _emailController.text.trim();
+    final String address = _addressController.text.trim();
+    final String password = _passwordController.text;
+
+    if (fullName.isEmpty || email.isEmpty || address.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields.')),
+      );
+      return;
+    }
+    if (password.trim().length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 8 characters.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authRepositoryProvider).registerIndividual(
+            RegisterIndividualRequest(
+              fullName: fullName,
+              email: email,
+              mobile: null,
+              address: address,
+              password: password,
+            ),
+          );
+      if (!mounted) return;
+      context.go(
+        '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(email)}&type=individual',
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
@@ -108,6 +174,8 @@ class _RegisterPageState extends State<RegisterPage> {
                     label: 'Full Name',
                     hint: 'John Doe',
                     prefixIcon: Icons.person_outline_rounded,
+                    controller: _fullNameController,
+                    enabled: !_isLoading,
                   ),
                   const SizedBox(height: AppSpacing.x4),
                   TMZInput(
@@ -115,6 +183,16 @@ class _RegisterPageState extends State<RegisterPage> {
                     hint: 'name@company.com',
                     keyboardType: TextInputType.emailAddress,
                     prefixIcon: Icons.mail_outline_rounded,
+                    controller: _emailController,
+                    enabled: !_isLoading,
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+                  TMZInput(
+                    label: 'Address',
+                    hint: 'Your full address',
+                    prefixIcon: Icons.location_on_outlined,
+                    controller: _addressController,
+                    enabled: !_isLoading,
                   ),
                   const SizedBox(height: AppSpacing.x4),
                   TMZInput(
@@ -122,11 +200,14 @@ class _RegisterPageState extends State<RegisterPage> {
                     hint: '••••••••',
                     prefixIcon: Icons.lock_outline_rounded,
                     obscureText: true,
+                    controller: _passwordController,
+                    enabled: !_isLoading,
                   ),
                   const SizedBox(height: AppSpacing.x6),
                   TMZButton(
-                    onPressed: () => context.go(AppRouter.roleSelectionPath),
+                    onPressed: _isLoading ? null : _onRegister,
                     label: 'Register',
+                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: AppSpacing.x4),
                   Row(

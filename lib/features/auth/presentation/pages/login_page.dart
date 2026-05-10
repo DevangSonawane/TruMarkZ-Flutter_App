@@ -1,27 +1,82 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
+import '../../application/auth_notifier.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onSignIn() async {
+    final String emailOrMobile = _emailController.text.trim();
+    final String password = _passwordController.text;
+
+    if (emailOrMobile.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final String type =
+          GoRouterState.of(context).uri.queryParameters['type']?.trim().isNotEmpty == true
+              ? GoRouterState.of(context).uri.queryParameters['type']!.trim()
+              : 'individual';
+      if (type == 'organization') {
+        await ref.read(authNotifierProvider.notifier).loginOrg(emailOrMobile, password);
+      } else {
+        await ref.read(authNotifierProvider.notifier).loginIndividual(emailOrMobile, password);
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
+    final String type =
+        GoRouterState.of(context).uri.queryParameters['type']?.trim().isNotEmpty ==
+                true
+            ? GoRouterState.of(context).uri.queryParameters['type']!.trim()
+            : 'individual';
+    final bool isOrg = type == 'organization';
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -130,20 +185,13 @@ class _LoginPageState extends State<LoginPage> {
                         hint: 'name@company.com',
                         keyboardType: TextInputType.emailAddress,
                         prefixIcon: Icons.mail_outline_rounded,
+                        controller: _emailController,
+                        enabled: !_isLoading,
                       ),
                       const SizedBox(height: AppSpacing.x4),
                       Row(
                         children: <Widget>[
                           Text('Password', style: AppTypography.label),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () {},
-                            style: TextButton.styleFrom(
-                              foregroundColor: scheme.primary,
-                              padding: EdgeInsets.zero,
-                            ),
-                            child: const Text('Forgot Password?'),
-                          ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.x2),
@@ -152,12 +200,37 @@ class _LoginPageState extends State<LoginPage> {
                         hint: '••••••••',
                         prefixIcon: Icons.lock_outline_rounded,
                         obscureText: true,
+                        controller: _passwordController,
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: AppSpacing.x2),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () => context.go(AppRouter.forgotPasswordPath),
+                          style: TextButton.styleFrom(
+                            foregroundColor: scheme.primary,
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            'Forgot Password?',
+                            style: AppTypography.caption.copyWith(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: scheme.primary,
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.x6),
                       TMZButton(
-                        onPressed: () =>
-                            context.go(AppRouter.roleSelectionPath),
+                        onPressed: _isLoading ? null : _onSignIn,
                         label: 'Sign In',
+                        isLoading: _isLoading,
                       ),
                       const SizedBox(height: AppSpacing.x6),
                       Row(
@@ -184,7 +257,13 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           foregroundColor: AppColors.textPrimary,
                         ),
-                        onPressed: () {},
+                        onPressed: _isLoading
+                            ? null
+                            : () => ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Google Sign-in coming soon'),
+                                  ),
+                                ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
@@ -215,13 +294,19 @@ class _LoginPageState extends State<LoginPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
                           Text(
-                            "Don't have an account? ",
+                            isOrg
+                                ? "Don't have an org account? "
+                                : "Don't have an account? ",
                             style: AppTypography.body2.copyWith(
                               color: AppColors.textSecondary,
                             ),
                           ),
                           InkWell(
-                            onTap: () => context.go(AppRouter.registerPath),
+                            onTap: () => context.go(
+                              isOrg
+                                  ? AppRouter.organisationRegistrationPath
+                                  : AppRouter.registerPath,
+                            ),
                             child: Text(
                               'Register',
                               style: AppTypography.body2.copyWith(

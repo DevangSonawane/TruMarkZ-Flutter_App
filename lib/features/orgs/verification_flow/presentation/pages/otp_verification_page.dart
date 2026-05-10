@@ -1,37 +1,44 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_button.dart';
+import '../../../../auth/data/auth_repository.dart';
 
 class _OtpTokens {
   static const int otpLength = 6;
-  static const int totalSeconds = 48;
+  static const int totalSeconds = 600;
 }
 
-class OtpVerificationPage extends StatefulWidget {
+class OtpVerificationPage extends ConsumerStatefulWidget {
   const OtpVerificationPage({super.key});
 
   @override
-  State<OtpVerificationPage> createState() => _OtpVerificationPageState();
+  ConsumerState<OtpVerificationPage> createState() => _OtpVerificationPageState();
 }
 
-class _OtpVerificationPageState extends State<OtpVerificationPage> {
+class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
   late final List<TextEditingController> _controllers;
   late final List<FocusNode> _nodes;
+  Timer? _timer;
 
   bool _isComplete = false;
   int _secondsLeft = _OtpTokens.totalSeconds;
   bool _hasError = false;
   int _shake = 0;
+  bool _isVerifying = false;
+  bool _isResending = false;
 
   @override
   void initState() {
@@ -44,11 +51,12 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     for (final TextEditingController controller in _controllers) {
       controller.addListener(_recomputeComplete);
     }
-    _tickCountdown();
+    _startCountdown();
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     for (final TextEditingController controller in _controllers) {
       controller
         ..removeListener(_recomputeComplete)
@@ -68,17 +76,46 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     setState(() => _isComplete = complete);
   }
 
-  Future<void> _tickCountdown() async {
-    while (mounted && _secondsLeft > 0) {
-      await Future<void>.delayed(const Duration(seconds: 1));
+  void _startCountdown() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (Timer t) {
       if (!mounted) return;
+      if (_secondsLeft <= 0) {
+        t.cancel();
+        return;
+      }
       setState(() => _secondsLeft -= 1);
-    }
+    });
   }
 
-  void _resend() {
-    setState(() => _secondsLeft = _OtpTokens.totalSeconds);
-    _tickCountdown();
+  String _formatCountdown(int seconds) {
+    final int m = seconds ~/ 60;
+    final int s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _resend(String email) async {
+    if (_isResending) return;
+    setState(() => _isResending = true);
+    try {
+      await ref.read(authRepositoryProvider).forgotPassword(email);
+      if (!mounted) return;
+      setState(() => _secondsLeft = _OtpTokens.totalSeconds);
+      _startCountdown();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New code sent')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isResending = false);
+    }
   }
 
   void _handleDigitChanged(int index, String value) {
@@ -93,7 +130,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     if (index > 0) FocusScope.of(context).previousFocus();
   }
 
-  void _onVerify() {
+  Future<void> _onVerify(String email, String type) async {
     if (!_isComplete) {
       setState(() {
         _hasError = true;
@@ -101,32 +138,69 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       });
       return;
     }
-    final Map<String, String> qp = Map<String, String>.from(
-      GoRouterState.of(context).uri.queryParameters,
-    );
-    qp.putIfAbsent('status', () => 'waiting');
-    final String qs = qp.entries
-        .map(
-          (MapEntry<String, String> e) =>
-              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
-        )
-        .join('&');
-    context.go(
-      qs.isEmpty
-          ? AppRouter.pendingApprovalPath
-          : '${AppRouter.pendingApprovalPath}?$qs',
-    );
+    if (_isVerifying) return;
+    final String otp = _controllers.map((TextEditingController c) => c.text).join();
+    if (otp.trim().length != _OtpTokens.otpLength) {
+      setState(() {
+        _hasError = true;
+        _shake += 1;
+      });
+      return;
+    }
+
+    setState(() => _isVerifying = true);
+    try {
+      await ref.read(authRepositoryProvider).verifyOtp(
+            identifier: email,
+            otpCode: otp,
+            purpose: 'registration',
+          );
+      if (!mounted) return;
+
+      if (type == 'organization') {
+        context.go(AppRouter.pendingApprovalPath);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Email verified! Please log in.')),
+        );
+        context.go('${AppRouter.loginPath}?verified=true');
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      for (final TextEditingController c in _controllers) {
+        c.clear();
+      }
+      _nodes.first.requestFocus();
+      setState(() {
+        _hasError = true;
+        _shake += 1;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
+      for (final TextEditingController c in _controllers) {
+        c.clear();
+      }
+      _nodes.first.requestFocus();
+      setState(() {
+        _hasError = true;
+        _shake += 1;
+      });
+    } finally {
+      if (mounted) setState(() => _isVerifying = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String email =
-        GoRouterState.of(
-              context,
-            ).uri.queryParameters['email']?.trim().isNotEmpty ==
-            true
-        ? GoRouterState.of(context).uri.queryParameters['email']!.trim()
+    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final String email = (qp['email'] ?? '').trim().isNotEmpty
+        ? qp['email']!.trim()
         : 'admin@org.com';
+    final String type = (qp['type'] ?? 'organization').trim();
     final String displayEmail = _maskEmail(email);
 
     return Scaffold(
@@ -244,9 +318,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                                                       AppColors.blueTint,
                                                 ),
                                                 Text(
-                                                  _secondsLeft
-                                                      .toString()
-                                                      .padLeft(2, '0'),
+                                                  _formatCountdown(_secondsLeft),
                                                   style: AppTypography.caption
                                                       .copyWith(
                                                         color: AppColors
@@ -276,7 +348,9 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                                       ),
                                     if (_secondsLeft == 0)
                                       TextButton(
-                                        onPressed: _resend,
+                                        onPressed: _isResending
+                                            ? null
+                                            : () => _resend(email),
                                         child: Text(
                                           'Resend code',
                                           style: AppTypography.body2.copyWith(
@@ -288,7 +362,10 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                                     const SizedBox(height: AppSpacing.x4),
                                     TMZButton(
                                       label: 'Verify',
-                                      onPressed: _onVerify,
+                                      onPressed: _isVerifying
+                                          ? null
+                                          : () => _onVerify(email, type),
+                                      isLoading: _isVerifying,
                                     ),
                                     const SizedBox(height: AppSpacing.x4),
                                     TextButton.icon(
