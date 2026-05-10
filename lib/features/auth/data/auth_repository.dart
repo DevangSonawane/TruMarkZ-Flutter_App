@@ -108,11 +108,14 @@ class AuthRepository {
     );
   }
 
-  Future<void> forgotPassword(String emailOrMobile) async {
-    await _api.post(
+  Future<String?> forgotPassword(String emailOrMobile) async {
+    final Map<String, dynamic> res = await _api.post(
       '/auth/forgot-password',
       data: <String, dynamic>{'email_or_mobile': emailOrMobile},
     );
+    final dynamic data = res['data'];
+    final String token = data is Map ? (data['reset_token'] ?? '').toString() : '';
+    return token.trim().isEmpty ? null : token;
   }
 
   Future<void> resetPassword({required String token, required String newPassword}) async {
@@ -125,6 +128,50 @@ class AuthRepository {
   Future<UserProfile> getMe() async {
     final Map<String, dynamic> res = await _api.get('/auth/me');
     return UserProfile.fromJson(res);
+  }
+
+  Future<AssignIndividualResult> assignIndividualToOrg({
+    required String individualEmailOrMobile,
+  }) async {
+    final Map<String, dynamic> res = await _api.post(
+      '/auth/org/assign-individual',
+      data: AssignIndividualRequest(
+        individualEmailOrMobile: individualEmailOrMobile,
+      ).toJson(),
+    );
+    final dynamic data = res['data'];
+    if (data is Map) {
+      return AssignIndividualResult.fromJson(Map<String, dynamic>.from(data));
+    }
+    throw const ApiException(statusCode: null, message: 'Unexpected response. Please try again.');
+  }
+
+  Future<InviteIndividualResult> inviteIndividualToOrg({
+    String? email,
+    String? mobile,
+  }) async {
+    final Map<String, dynamic> res = await _api.post(
+      '/auth/org/invite-individual',
+      data: InviteIndividualRequest(email: email, mobile: mobile).toJson(),
+    );
+    final dynamic data = res['data'];
+    if (data is Map) {
+      return InviteIndividualResult.fromJson(Map<String, dynamic>.from(data));
+    }
+    throw const ApiException(statusCode: null, message: 'Unexpected response. Please try again.');
+  }
+
+  Future<List<AssignedIndividual>> getOrgIndividuals() async {
+    final Map<String, dynamic> res = await _api.get('/auth/org/individuals');
+    final dynamic data = res['data'];
+    final dynamic individuals = data is Map ? data['individuals'] : null;
+    if (individuals is List) {
+      return individuals
+          .whereType<Map>()
+          .map((Map e) => AssignedIndividual.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+    return const <AssignedIndividual>[];
   }
 
   Future<void> logout() => _tokenStorage.clearAll();

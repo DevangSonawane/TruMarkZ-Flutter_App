@@ -78,39 +78,53 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             : 'individual';
     final bool isOrg = type == 'organization';
 
-    return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0, -0.65),
-                    radius: 1.2,
-                    colors: <Color>[
-                      AppColors.blueTint,
-                      AppColors.pageBg,
-                      AppColors.cardSurface,
-                    ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
+        context.go(AppRouter.roleSelectionPath);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.pageBg,
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0, -0.65),
+                      radius: 1.2,
+                      colors: <Color>[
+                        AppColors.blueTint,
+                        AppColors.pageBg,
+                        AppColors.cardSurface,
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            ListView(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.x4,
-                AppSpacing.x6,
-                AppSpacing.x4,
-                AppSpacing.x5 + systemBottomInset,
-              ),
-              children: <Widget>[
-                Center(
-                  child: Container(
-                    width: 56,
-                    height: 56,
+              ListView(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.x4,
+                  AppSpacing.x6,
+                  AppSpacing.x4,
+                  AppSpacing.x5 + systemBottomInset,
+                ),
+                children: <Widget>[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: () => context.go(AppRouter.roleSelectionPath),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      color: scheme.primary,
+                    ),
+                  ),
+                  Center(
+                    child: Container(
+                      width: 56,
+                      height: 56,
                     decoration: BoxDecoration(
                       color: AppColors.cardSurface,
                       shape: BoxShape.circle,
@@ -349,9 +363,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                   ],
                 ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

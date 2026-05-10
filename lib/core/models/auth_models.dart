@@ -158,3 +158,80 @@ class UserProfile {
   }
 }
 
+class AssignIndividualRequest {
+  const AssignIndividualRequest({required this.individualEmailOrMobile});
+
+  final String individualEmailOrMobile;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'individual_email_or_mobile': individualEmailOrMobile,
+      };
+}
+
+class AssignIndividualResult {
+  const AssignIndividualResult({
+    required this.assignmentId,
+    required this.storagePath,
+  });
+
+  final String assignmentId;
+  final String storagePath;
+
+  factory AssignIndividualResult.fromJson(Map<String, dynamic> json) {
+    return AssignIndividualResult(
+      assignmentId: (json['assignment_id'] ?? '').toString(),
+      storagePath: (json['storage_path'] ?? '').toString(),
+    );
+  }
+}
+
+class InviteIndividualRequest {
+  const InviteIndividualRequest({this.email, this.mobile});
+
+  final String? email;
+  final String? mobile;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'email': email,
+        'mobile': mobile,
+      };
+}
+
+class InviteIndividualResult {
+  const InviteIndividualResult({required this.inviteToken});
+
+  final String inviteToken;
+
+  factory InviteIndividualResult.fromJson(Map<String, dynamic> json) {
+    return InviteIndividualResult(
+      inviteToken: (json['invite_token'] ?? '').toString(),
+    );
+  }
+}
+
+class AssignedIndividual {
+  const AssignedIndividual({
+    required this.assignmentId,
+    required this.individualId,
+    required this.storagePath,
+    required this.status,
+    required this.assignedAt,
+  });
+
+  final String assignmentId;
+  final String individualId;
+  final String storagePath;
+  final String status;
+  final String assignedAt;
+
+  factory AssignedIndividual.fromJson(Map<String, dynamic> json) {
+    return AssignedIndividual(
+      assignmentId: (json['assignment_id'] ?? '').toString(),
+      individualId: (json['individual_id'] ?? '').toString(),
+      storagePath: (json['storage_path'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      assignedAt: (json['assigned_at'] ?? '').toString(),
+    );
+  }
+}
+

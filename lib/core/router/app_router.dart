@@ -6,6 +6,7 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/pages/role_selection_page.dart';
 import '../../features/auth/presentation/pages/forgot_password_page.dart';
+import '../../features/auth/presentation/pages/reset_password_page.dart';
 import '../services/token_storage.dart';
 import '../../features/individual/presentation/pages/individual_dashboard_page.dart';
 import '../../features/individual/presentation/pages/individual_profile_page.dart';
@@ -53,6 +54,7 @@ class AppRouter {
   static const String loginPath = '/login';
   static const String registerPath = '/register';
   static const String forgotPasswordPath = '/forgot-password';
+  static const String resetPasswordPath = '/reset-password';
 
   static const String dashboardPath = '/app/dashboard';
   static const String walletPath = '/app/wallet';
@@ -130,6 +132,7 @@ class AppRouter {
           state.matchedLocation.startsWith(loginPath) ||
           state.matchedLocation.startsWith(registerPath) ||
           state.matchedLocation.startsWith(forgotPasswordPath) ||
+          state.matchedLocation.startsWith(resetPasswordPath) ||
           state.matchedLocation == splashPath ||
           state.matchedLocation.startsWith(onboardingPath) ||
           state.matchedLocation.startsWith(roleSelectionPath) ||
@@ -183,6 +186,12 @@ class AppRouter {
         name: 'forgot_password',
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const ForgotPasswordPage()),
+      ),
+      GoRoute(
+        path: resetPasswordPath,
+        name: 'reset_password',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const ResetPasswordPage()),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) =>

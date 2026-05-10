@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -11,56 +12,56 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
 import '../../data/auth_repository.dart';
-import '../../../../core/network/api_client.dart';
 
-class ForgotPasswordPage extends ConsumerStatefulWidget {
-  const ForgotPasswordPage({super.key});
+class ResetPasswordPage extends ConsumerStatefulWidget {
+  const ResetPasswordPage({super.key});
 
   @override
-  ConsumerState<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
+  ConsumerState<ResetPasswordPage> createState() => _ResetPasswordPageState();
 }
 
-class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
-  final TextEditingController _emailController = TextEditingController();
+class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmController.dispose();
     super.dispose();
   }
 
-  Future<void> _onSend() async {
-    final String email = _emailController.text.trim();
-    if (email.isEmpty) {
+  Future<void> _onReset(String token) async {
+    final String newPassword = _passwordController.text;
+    final String confirm = _confirmController.text;
+
+    if (newPassword.trim().length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email or mobile.')),
+        const SnackBar(content: Text('Password must be at least 8 characters.')),
+      );
+      return;
+    }
+    if (newPassword != confirm) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match.')),
       );
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final Map<String, String> qp =
-          GoRouterState.of(context).uri.queryParameters;
-      final String loginType = (qp['type'] ?? '').trim();
-      final String? token = await ref.read(authRepositoryProvider).forgotPassword(email);
+      await ref
+          .read(authRepositoryProvider)
+          .resetPassword(token: token, newPassword: newPassword);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('If this account exists, a reset link has been sent.'),
-        ),
+        const SnackBar(content: Text('Password reset successfully. Please log in.')),
       );
-      if (token != null && token.trim().isNotEmpty) {
-        context.go(
-          '${AppRouter.resetPasswordPath}?token=${Uri.encodeComponent(token)}${loginType.isEmpty ? '' : '&type=${Uri.encodeComponent(loginType)}'}&force=true',
-        );
-      }
+      context.go(AppRouter.loginPath);
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,6 +77,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
     final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final String token = (qp['token'] ?? '').trim();
     final String loginType = (qp['type'] ?? '').trim();
 
     return Scaffold(
@@ -107,6 +109,20 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                 AppSpacing.x5 + systemBottomInset,
               ),
               children: <Widget>[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => context.go(
+                              loginType.isEmpty
+                                  ? AppRouter.loginPath
+                                  : '${AppRouter.loginPath}?type=${Uri.encodeComponent(loginType)}&force=true',
+                            ),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: scheme.primary,
+                  ),
+                ),
                 Center(
                   child: Container(
                     width: 56,
@@ -169,46 +185,50 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       Text(
-                        'Forgot Password',
+                        'Reset Password',
                         style: AppTypography.heading1.copyWith(fontSize: 18),
                       ),
                       const SizedBox(height: AppSpacing.x1),
                       Text(
-                        'Enter your email or mobile and we’ll send a reset link/code.',
+                        'Create a new password for your account.',
                         style: AppTypography.body2.copyWith(
                           color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.x5),
                       TMZInput(
-                        label: 'Email / Mobile',
-                        hint: 'name@company.com',
-                        keyboardType: TextInputType.emailAddress,
-                        prefixIcon: Icons.mail_outline_rounded,
-                        controller: _emailController,
+                        label: 'New Password',
+                        hint: '••••••••',
+                        prefixIcon: Icons.lock_outline_rounded,
+                        obscureText: true,
+                        controller: _passwordController,
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: AppSpacing.x4),
+                      TMZInput(
+                        label: 'Confirm Password',
+                        hint: '••••••••',
+                        prefixIcon: Icons.lock_outline_rounded,
+                        obscureText: true,
+                        controller: _confirmController,
                         enabled: !_isLoading,
                       ),
                       const SizedBox(height: AppSpacing.x6),
                       TMZButton(
-                        onPressed: _isLoading ? null : _onSend,
-                        label: 'Send Reset Link',
+                        onPressed: _isLoading || token.isEmpty ? null : () => _onReset(token),
+                        label: 'Reset Password',
                         isLoading: _isLoading,
                       ),
-                      const SizedBox(height: AppSpacing.x4),
-                      TextButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () => context.go(
-                                  loginType.isEmpty
-                                      ? '${AppRouter.loginPath}?force=true'
-                                      : '${AppRouter.loginPath}?type=${Uri.encodeComponent(loginType)}&force=true',
-                                ),
-                        style: TextButton.styleFrom(
-                          foregroundColor: scheme.primary,
-                          padding: EdgeInsets.zero,
+                      if (token.isEmpty) ...<Widget>[
+                        const SizedBox(height: AppSpacing.x3),
+                        Text(
+                          'Missing reset token. Please request a new reset link.',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                        child: const Text('Back to login'),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -220,3 +240,4 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     );
   }
 }
+
