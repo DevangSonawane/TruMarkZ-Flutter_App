@@ -67,6 +67,8 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
+    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final String loginType = (qp['type'] ?? '').trim();
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -97,21 +99,20 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                 AppSpacing.x5 + systemBottomInset,
               ),
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    IconButton(
-                      onPressed: () => context.go(AppRouter.loginPath),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      color: scheme.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Forgot Password',
-                      style: AppTypography.heading1.copyWith(fontSize: 18),
-                    ),
-                  ],
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => context.go(
+                              loginType.isEmpty
+                                  ? AppRouter.loginPath
+                                  : '${AppRouter.loginPath}?type=${Uri.encodeComponent(loginType)}&force=true',
+                            ),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: scheme.primary,
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.x4),
                 Center(
                   child: Container(
                     width: 56,
@@ -138,6 +139,24 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                     ),
                   ),
                 ).animate().fadeIn(duration: 220.ms),
+                const SizedBox(height: AppSpacing.x3),
+                Text(
+                  'TruMarkZ',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.display2.copyWith(
+                    fontSize: 30,
+                    color: AppColors.textPrimary,
+                  ),
+                ).animate().fadeIn(delay: 40.ms, duration: 220.ms),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  'THE STANDARD IN DIGITAL VERIFICATION',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textSecondary,
+                    letterSpacing: 1.4,
+                  ),
+                ).animate().fadeIn(delay: 80.ms, duration: 220.ms),
                 const SizedBox(height: AppSpacing.x5),
                 Container(
                   decoration: BoxDecoration(
@@ -156,12 +175,12 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       Text(
-                        'Reset your password',
+                        'Forgot Password',
                         style: AppTypography.heading1.copyWith(fontSize: 18),
                       ),
                       const SizedBox(height: AppSpacing.x1),
                       Text(
-                        'Enter your email or mobile to receive a reset link/code.',
+                        'Enter your email or mobile and we’ll send a reset link/code.',
                         style: AppTypography.body2.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -183,7 +202,13 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                       ),
                       const SizedBox(height: AppSpacing.x4),
                       TextButton(
-                        onPressed: () => context.go(AppRouter.loginPath),
+                        onPressed: _isLoading
+                            ? null
+                            : () => context.go(
+                                  loginType.isEmpty
+                                      ? AppRouter.loginPath
+                                      : '${AppRouter.loginPath}?type=${Uri.encodeComponent(loginType)}&force=true',
+                                ),
                         style: TextButton.styleFrom(
                           foregroundColor: scheme.primary,
                           padding: EdgeInsets.zero,
@@ -201,4 +226,3 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     );
   }
 }
-
