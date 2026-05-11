@@ -119,7 +119,7 @@ class _SplashHero extends StatelessWidget {
                   end: const Offset(1.15, 1.15),
                 ),
             Image.asset(
-                  'assets/icons/app_icon.png',
+                  'assets/icons/headers_app_icon.png',
                   height: 72,
                   fit: BoxFit.contain,
                 )
