@@ -73,7 +73,10 @@ class TruMarkZApp extends StatelessWidget {
             title: 'TruMarkZ',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            darkTheme: AppTheme.dark,
+            // Dark theme currently causes low-contrast UI across many screens
+            // that use fixed light background colors. Keep visuals readable by
+            // using the light theme for both modes.
+            darkTheme: AppTheme.light,
             themeMode: themeController.themeMode,
             routerConfig: AppRouter.router,
           ),
