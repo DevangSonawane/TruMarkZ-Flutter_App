@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -58,10 +57,11 @@ class IdentityCard extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
+            Image.asset(
+              'assets/icons/headers_app_icon.png',
               height: 32,
               width: 32,
+              fit: BoxFit.contain,
             ),
             const Spacer(),
             badge,

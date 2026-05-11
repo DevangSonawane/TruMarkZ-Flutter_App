@@ -43,10 +43,10 @@ class IndividualDashboardPage extends ConsumerWidget {
         ),
         title: Row(
           children: <Widget>[
-            const Icon(
-              Icons.shield_rounded,
-              color: AppColors.brandBlue,
-              size: 22,
+            Image.asset(
+              'assets/icons/headers_app_icon.png',
+              height: 22,
+              fit: BoxFit.contain,
             ),
             const SizedBox(width: AppSpacing.x3),
             Text(

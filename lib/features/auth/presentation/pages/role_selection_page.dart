@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
@@ -21,18 +20,16 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       backgroundColor: AppColors.pageBg,
       appBar: AppBar(
         titleSpacing: 12,
         title: Row(
           children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 18,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
+            Image.asset(
+              'assets/icons/headers_app_icon.png',
+              height: 20,
+              fit: BoxFit.contain,
             ),
             const SizedBox(width: AppSpacing.x2),
             Text('TruMarkZ', style: AppTypography.heading2),

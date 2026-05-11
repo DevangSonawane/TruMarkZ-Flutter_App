@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
@@ -119,13 +118,10 @@ class _SplashHero extends StatelessWidget {
                   begin: const Offset(1, 1),
                   end: const Offset(1.15, 1.15),
                 ),
-            SvgPicture.asset(
-                  'assets/icons/trumarkz_shield.svg',
-                  height: 68,
-                  colorFilter: const ColorFilter.mode(
-                    Colors.white,
-                    BlendMode.srcIn,
-                  ),
+            Image.asset(
+                  'assets/icons/app_icon.png',
+                  height: 72,
+                  fit: BoxFit.contain,
                 )
                 .animate()
                 .fadeIn(duration: 320.ms)

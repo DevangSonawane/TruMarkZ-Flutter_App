@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
 
@@ -217,13 +216,10 @@ class _OnboardingHero extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
               ),
-              SvgPicture.asset(
-                    'assets/icons/trumarkz_shield.svg',
-                    height: 86,
-                    colorFilter: ColorFilter.mode(
-                      scheme.primary,
-                      BlendMode.srcIn,
-                    ),
+              Image.asset(
+                    'assets/icons/headers_app_icon.png',
+                    height: 92,
+                    fit: BoxFit.contain,
                   )
                   .animate()
                   .fadeIn(duration: 250.ms)

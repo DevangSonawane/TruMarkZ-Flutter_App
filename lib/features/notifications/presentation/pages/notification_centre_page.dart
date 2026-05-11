@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -16,7 +15,7 @@ class NotificationCentrePage extends StatelessWidget {
       appBar: AppBar(
         title: Row(
           children: <Widget>[
-            SvgPicture.asset('assets/icons/trumarkz_shield.svg', height: 24),
+            Image.asset('assets/icons/headers_app_icon.png', height: 24),
             const SizedBox(width: AppSpacing.x2),
             const Text('Notification Centre'),
           ],

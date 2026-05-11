@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
@@ -288,14 +287,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
         ),
         title: Row(
           children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 18,
-              colorFilter: const ColorFilter.mode(
-                AppColors.brandBlue,
-                BlendMode.srcIn,
-              ),
-            ),
+            Image.asset('assets/icons/headers_app_icon.png', height: 20),
             const SizedBox(width: AppSpacing.x2),
             Text(
               _stepTitle,

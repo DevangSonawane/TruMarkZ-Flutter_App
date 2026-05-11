@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui';
 
@@ -19,7 +18,6 @@ class OrgDashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final profile = authAsync.value?.userProfile;
     final String displayName =
@@ -43,10 +41,10 @@ class OrgDashboardPage extends ConsumerWidget {
         titleSpacing: 12,
         title: Row(
           children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 18,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
+            Image.asset(
+              'assets/icons/headers_app_icon.png',
+              height: 20,
+              fit: BoxFit.contain,
             ),
             const SizedBox(width: AppSpacing.x2),
             Text(

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/network/api_client.dart';
@@ -477,13 +476,10 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          SvgPicture.asset(
-                            'assets/icons/trumarkz_shield.svg',
-                            height: 20,
-                            colorFilter: const ColorFilter.mode(
-                              AppColors.brandBlue,
-                              BlendMode.srcIn,
-                            ),
+                          Image.asset(
+                            'assets/icons/headers_app_icon.png',
+                            height: 22,
+                            fit: BoxFit.contain,
                           ),
                           const SizedBox(width: AppSpacing.x2),
                           Text(

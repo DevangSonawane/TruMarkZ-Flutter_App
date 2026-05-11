@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
@@ -123,13 +122,10 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                       ],
                     ),
                     alignment: Alignment.center,
-                    child: SvgPicture.asset(
-                      'assets/icons/trumarkz_shield.svg',
-                      height: 22,
-                      colorFilter: const ColorFilter.mode(
-                        AppColors.brandBlue,
-                        BlendMode.srcIn,
-                      ),
+                    child: Image.asset(
+                      'assets/icons/headers_app_icon.png',
+                      height: 26,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ).animate().fadeIn(duration: 220.ms),

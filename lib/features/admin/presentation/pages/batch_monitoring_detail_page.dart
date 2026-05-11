@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/tmz_card.dart';
@@ -9,16 +8,11 @@ class BatchMonitoringDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 22,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
-            ),
+            Image.asset('assets/icons/headers_app_icon.png', height: 22),
             const SizedBox(width: AppSpacing.x2),
             const Text('Batch Monitoring'),
           ],

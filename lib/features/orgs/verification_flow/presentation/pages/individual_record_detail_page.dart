@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
@@ -61,11 +60,7 @@ class IndividualRecordDetailPage extends StatelessWidget {
       appBar: AppBar(
         title: Row(
           children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/trumarkz_shield.svg',
-              height: 22,
-              colorFilter: ColorFilter.mode(scheme.primary, BlendMode.srcIn),
-            ),
+            Image.asset('assets/icons/headers_app_icon.png', height: 22),
             const SizedBox(width: AppSpacing.x2),
             const Text('Individual Record Detail'),
           ],

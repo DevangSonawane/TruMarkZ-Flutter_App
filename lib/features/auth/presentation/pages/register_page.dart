@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
@@ -136,17 +135,14 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     ),
                   ],
                 ),
-                alignment: Alignment.center,
-                child: SvgPicture.asset(
-                  'assets/icons/trumarkz_shield.svg',
-                  height: 26,
-                  colorFilter: const ColorFilter.mode(
-                    AppColors.brandBlue,
-                    BlendMode.srcIn,
+                    alignment: Alignment.center,
+                    child: Image.asset(
+                      'assets/icons/headers_app_icon.png',
+                      height: 30,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-              ),
-            ),
             const SizedBox(height: AppSpacing.x4),
             Text(
               'TruMarkZ',
