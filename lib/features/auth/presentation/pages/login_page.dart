@@ -355,7 +355,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             onTap: () => context.go(
                               isOrg
                                   ? AppRouter.organisationRegistrationPath
-                                  : AppRouter.registerPath,
+                                  : '${AppRouter.registerPath}?force=true',
                             ),
                             child: Text(
                               'Register',

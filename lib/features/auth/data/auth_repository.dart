@@ -67,30 +67,31 @@ class AuthRepository {
     return parsed.userId;
   }
 
-  Future<String> registerIndividual(RegisterIndividualRequest request) async {
+  Future<void> registerIndividual(RegisterIndividualRequest request) async {
     final Map<String, dynamic> res = await _api.post(
       '/auth/register/individual',
       data: request.toJson(),
     );
+    // Some backend deployments may respond without a `data.user_id` payload
+    // (e.g. only a success `message`). If the request succeeded (2xx), treat it
+    // as success and let the OTP step continue.
     final dynamic data = res['data'];
-    final String userId = data is Map ? (data['user_id'] ?? '').toString() : '';
-    if (userId.trim().isEmpty) {
-      throw const ApiException(statusCode: null, message: 'Unexpected response. Please try again.');
+    if (data is Map) {
+      final String userId = (data['user_id'] ?? '').toString();
+      if (userId.trim().isNotEmpty) return;
     }
-    return userId;
   }
 
-  Future<String> registerOrg(RegisterOrgRequest request) async {
+  Future<void> registerOrg(RegisterOrgRequest request) async {
     final Map<String, dynamic> res = await _api.post(
       '/auth/register/organization',
       data: request.toJson(),
     );
     final dynamic data = res['data'];
-    final String userId = data is Map ? (data['user_id'] ?? '').toString() : '';
-    if (userId.trim().isEmpty) {
-      throw const ApiException(statusCode: null, message: 'Unexpected response. Please try again.');
+    if (data is Map) {
+      final String userId = (data['user_id'] ?? '').toString();
+      if (userId.trim().isNotEmpty) return;
     }
-    return userId;
   }
 
   Future<void> verifyOtp({

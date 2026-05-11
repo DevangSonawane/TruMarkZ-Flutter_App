@@ -301,48 +301,30 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                 child: Column(
                                   children: <Widget>[
                                     if (_secondsLeft > 0)
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: <Widget>[
-                                          SizedBox(
-                                            width: 24,
-                                            height: 24,
-                                            child: Stack(
-                                              alignment: Alignment.center,
-                                              children: <Widget>[
-                                                CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  value:
-                                                      1 -
-                                                      (_secondsLeft /
-                                                          _OtpTokens
-                                                              .totalSeconds),
-                                                  color: AppColors.brandBlue,
-                                                  backgroundColor:
-                                                      AppColors.blueTint,
-                                                ),
-                                                Text(
-                                                  _formatCountdown(_secondsLeft),
-                                                  style: AppTypography.caption
-                                                      .copyWith(
-                                                        color: AppColors
-                                                            .textSecondary,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: AppSpacing.x2),
-                                          Text(
-                                            'Resend code',
+                                      Center(
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(milliseconds: 220),
+                                          transitionBuilder: (Widget child, Animation<double> anim) {
+                                            return FadeTransition(
+                                              opacity: anim,
+                                              child: SlideTransition(
+                                                position: Tween<Offset>(
+                                                  begin: const Offset(0, 0.2),
+                                                  end: Offset.zero,
+                                                ).animate(anim),
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                          child: Text(
+                                            'Resend in ${_formatCountdown(_secondsLeft)}',
+                                            key: ValueKey<int>(_secondsLeft),
+                                            textAlign: TextAlign.center,
                                             style: AppTypography.body2.copyWith(
                                               color: AppColors.textTertiary,
                                             ),
                                           ),
-                                        ],
+                                        ),
                                       )
                                     else
                                       Text(
@@ -454,8 +436,13 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                     ),
                                     const SizedBox(height: AppSpacing.x4),
                                     TextButton.icon(
-                                      onPressed: () =>
-                                          context.go(AppRouter.loginPath),
+                                      onPressed: () {
+                                        final String encodedType =
+                                            Uri.encodeComponent(type);
+                                        context.go(
+                                          '${AppRouter.loginPath}?type=$encodedType&force=true',
+                                        );
+                                      },
                                       icon: const Icon(
                                         Icons.arrow_back_rounded,
                                         size: 18,

@@ -42,9 +42,16 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     final String address = _addressController.text.trim();
     final String password = _passwordController.text;
 
-    if (fullName.isEmpty || email.isEmpty || address.isEmpty || password.isEmpty) {
+    final List<String> missing = <String>[
+      if (fullName.isEmpty) 'Full Name',
+      if (email.isEmpty) 'Email',
+      if (password.isEmpty) 'Password',
+    ];
+    if (missing.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields.')),
+        SnackBar(
+          content: Text('Please enter: ${missing.join(', ')}.'),
+        ),
       );
       return;
     }
@@ -62,7 +69,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               fullName: fullName,
               email: email,
               mobile: null,
-              address: address,
+              address: address.isEmpty ? null : address,
               password: password,
             ),
           );
@@ -202,7 +209,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                   const SizedBox(height: AppSpacing.x4),
                   TMZInput(
-                    label: 'Address',
+                    label: 'Address (optional)',
                     hint: 'Your full address',
                     prefixIcon: Icons.location_on_outlined,
                     controller: _addressController,
@@ -234,7 +241,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                         ),
                       ),
                       InkWell(
-                        onTap: () => context.go(AppRouter.loginPath),
+                        onTap: () => context.go(
+                          '${AppRouter.loginPath}?type=individual&force=true',
+                        ),
                         child: Text(
                           'Sign In',
                           style: AppTypography.body2.copyWith(

@@ -60,9 +60,16 @@ class _OrganisationRegistrationPageState
       );
       return;
     }
-    if (orgName.isEmpty || address.isEmpty || gst.isEmpty || brn.isEmpty || password.isEmpty) {
+
+    final List<String> missing = <String>[
+      if (orgName.isEmpty) 'Organisation Name',
+      if (password.isEmpty) 'Password',
+    ];
+    if (missing.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all required fields.')),
+        SnackBar(
+          content: Text('Please enter: ${missing.join(', ')}.'),
+        ),
       );
       return;
     }
@@ -79,9 +86,9 @@ class _OrganisationRegistrationPageState
       await ref.read(authRepositoryProvider).registerOrg(
             RegisterOrgRequest(
               organizationName: orgName,
-              gstNumber: gst,
-              businessRegistrationNumber: brn,
-              address: address,
+              gstNumber: gst.isEmpty ? null : gst,
+              businessRegistrationNumber: brn.isEmpty ? null : brn,
+              address: address.isEmpty ? null : address,
               email: officialEmail,
               mobile: mobile.isEmpty ? null : mobile,
               password: password,
@@ -338,6 +345,9 @@ class _OrganisationRegistrationPageState
                     ),
                     TMZSelectOption(value: 'Others', label: 'Others'),
                   ],
+                  sheetInitialChildSize: 0.5,
+                  sheetMinChildSize: 0.5,
+                  sheetMaxChildSize: 0.5,
                   onChanged: (String? value) =>
                       setState(() => _industry = value),
                 ),
@@ -346,7 +356,7 @@ class _OrganisationRegistrationPageState
                   label: 'GST Number',
                   hint: '22AAAAA0000A1Z5',
                   controller: _gst,
-                  keyboardType: TextInputType.number,
+                  keyboardType: TextInputType.text,
                 ),
                 const SizedBox(height: AppSpacing.x3),
                 TMZInput(

@@ -7,7 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 
-enum _Role { organisation, individual, verifying }
+enum _Role { organisation, individual }
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
@@ -103,13 +103,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                     context.go('${AppRouter.loginPath}?type=individual&force=true');
                   },
                 ),
-                const SizedBox(height: AppSpacing.x6),
-                _PromoCard(
-                  onTap: () {
-                    setState(() => _selected = _Role.verifying);
-                    context.go(AppRouter.publicVerificationResultPath);
-                  },
-                ),
               ],
             ),
             Align(
@@ -149,10 +142,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                       case _Role.individual:
                                         context.go(
                                           '${AppRouter.loginPath}?type=individual',
-                                        );
-                                      case _Role.verifying:
-                                        context.go(
-                                          AppRouter.publicVerificationResultPath,
                                         );
                                     }
                                   },
@@ -295,129 +284,4 @@ class _ChoiceCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PromoCard extends StatelessWidget {
-  const _PromoCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        height: 130,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          gradient: LinearGradient(
-            colors: <Color>[
-              scheme.primary.withAlpha(28),
-              scheme.primary.withAlpha(10),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          border: Border.all(color: scheme.outlineVariant),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withAlpha(8),
-              blurRadius: 20,
-              offset: const Offset(0, 14),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: CustomPaint(
-                  painter: _WavePainter(color: scheme.primary.withAlpha(22)),
-                ),
-              ),
-            ),
-            Positioned(
-              left: AppSpacing.x4,
-              top: AppSpacing.x4,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Just Verifying',
-                    style: AppTypography.heading2.copyWith(
-                      color: const Color(0xFF0B0F19),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Scan a QR code or\nsearch the registry',
-                    style: AppTypography.body2.copyWith(
-                      color: const Color(0xFF64748B),
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              right: 14,
-              top: 14,
-              child: Opacity(
-                opacity: 0.25,
-                child: SvgPicture.asset(
-                  'assets/icons/trumarkz_shield.svg',
-                  height: 52,
-                  colorFilter: ColorFilter.mode(
-                    scheme.primary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: AppSpacing.x4,
-              bottom: AppSpacing.x4,
-              child: Icon(Icons.qr_code_scanner_rounded, color: scheme.primary),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WavePainter extends CustomPainter {
-  const _WavePainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10;
-
-    for (int i = 0; i < 3; i++) {
-      final Path path = Path();
-      final double y = size.height * (0.25 + i * 0.25);
-      path.moveTo(-20, y);
-      path.cubicTo(
-        size.width * 0.25,
-        y - 18,
-        size.width * 0.55,
-        y + 18,
-        size.width + 20,
-        y,
-      );
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _WavePainter oldDelegate) =>
-      oldDelegate.color != color;
 }

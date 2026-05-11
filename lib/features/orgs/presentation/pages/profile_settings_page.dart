@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/models/auth_models.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -99,7 +100,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                   isVerified: isVerified,
                 ),
                 const SizedBox(height: 24),
-                const _GeneralInfoCard(),
+                _GeneralInfoCard(profile: profile),
                 const SizedBox(height: 24),
                 _SecurityPrivacyCard(
                   twoFaEnabled: _twoFaEnabled,
@@ -432,44 +433,73 @@ class _RecessedField extends StatelessWidget {
 }
 
 class _GeneralInfoCard extends StatelessWidget {
-  const _GeneralInfoCard();
+  const _GeneralInfoCard({required this.profile});
+
+  final UserProfile? profile;
 
   @override
   Widget build(BuildContext context) {
+    final String orgName =
+        profile?.organizationName?.trim().isNotEmpty == true
+            ? profile!.organizationName!.trim()
+            : (profile?.fullName?.trim().isNotEmpty == true
+                ? profile!.fullName!.trim()
+                : '—');
+    final String email =
+        profile?.email.trim().isNotEmpty == true ? profile!.email.trim() : '—';
+    final String registrationNumber =
+        profile?.businessRegistrationNumber?.trim().isNotEmpty == true
+            ? profile!.businessRegistrationNumber!.trim()
+            : '—';
+    final String industry =
+        profile?.industry?.trim().isNotEmpty == true
+            ? profile!.industry!.trim()
+            : '—';
+    final String address =
+        profile?.address?.trim().isNotEmpty == true
+            ? profile!.address!.trim()
+            : '—';
+    final bool isActive = profile?.isActive == true;
+
     return _SectionCard(
       title: 'General Information',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const _RecessedField(
+          _RecessedField(
             label: 'Official Name',
-            value: 'Global Fintech Institute Ltd.',
+            value: orgName,
           ),
           const SizedBox(height: 16),
-          const _RecessedField(
+          _RecessedField(
+            label: 'Official Email',
+            value: email,
+          ),
+          const SizedBox(height: 16),
+          _RecessedField(
             label: 'Registration Number',
-            value: 'GFI-99283-XLM',
+            value: registrationNumber,
           ),
           const SizedBox(height: 16),
           Row(
-            children: const <Widget>[
+            children: <Widget>[
               Expanded(
-                child: _RecessedField(label: 'Industry', value: 'Fintech'),
+                child: _RecessedField(label: 'Industry', value: industry),
               ),
               SizedBox(width: 12),
               Expanded(
                 child: _RecessedField(
                   label: 'Status',
-                  value: 'Active',
-                  valueColor: AppColors.success,
+                  value: isActive ? 'Active' : 'Inactive',
+                  valueColor: isActive ? AppColors.success : AppColors.textTertiary,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          const _RecessedField(
+          _RecessedField(
             label: 'Head Office Address',
-            value: 'One Financial Plaza, Level 42, Singapore 048619',
+            value: address,
           ),
         ],
       ),

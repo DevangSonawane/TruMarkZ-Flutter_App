@@ -19,6 +19,9 @@ class TMZSelect<T> extends StatefulWidget {
     this.hint = 'Select an option',
     this.onChanged,
     this.enabled = true,
+    this.sheetInitialChildSize = 0.55,
+    this.sheetMinChildSize = 0.35,
+    this.sheetMaxChildSize = 0.85,
   });
 
   final String label;
@@ -27,6 +30,9 @@ class TMZSelect<T> extends StatefulWidget {
   final String hint;
   final ValueChanged<T?>? onChanged;
   final bool enabled;
+  final double sheetInitialChildSize;
+  final double sheetMinChildSize;
+  final double sheetMaxChildSize;
 
   @override
   State<TMZSelect<T>> createState() => _TMZSelectState<T>();
@@ -138,6 +144,9 @@ class _TMZSelectState<T> extends State<TMZSelect<T>> {
                 title: widget.label,
                 options: widget.options,
                 value: widget.value,
+                initialChildSize: widget.sheetInitialChildSize,
+                minChildSize: widget.sheetMinChildSize,
+                maxChildSize: widget.sheetMaxChildSize,
               );
             },
           );
@@ -154,14 +163,22 @@ class _TMZSelectSheet<T> extends StatelessWidget {
     required this.title,
     required this.options,
     required this.value,
+    required this.initialChildSize,
+    required this.minChildSize,
+    required this.maxChildSize,
   });
 
   final String title;
   final List<TMZSelectOption<T>> options;
   final T? value;
+  final double initialChildSize;
+  final double minChildSize;
+  final double maxChildSize;
 
   @override
   Widget build(BuildContext context) {
+    final bool fixedHeight =
+        initialChildSize == minChildSize && minChildSize == maxChildSize;
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
@@ -176,82 +193,114 @@ class _TMZSelectSheet<T> extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: DecoratedBox(
           decoration: const BoxDecoration(color: AppColors.cardSurface),
-          child: DraggableScrollableSheet(
-            initialChildSize: 0.55,
-            minChildSize: 0.35,
-            maxChildSize: 0.85,
-            builder: (BuildContext context, ScrollController controller) {
-              return Column(
-                children: <Widget>[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+          child: fixedHeight
+              ? FractionallySizedBox(
+                  heightFactor: initialChildSize,
+                  alignment: Alignment.bottomCenter,
+                  child: _SheetContent<T>(
+                    title: title,
+                    options: options,
+                    value: value,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        title,
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
+                )
+              : DraggableScrollableSheet(
+                  initialChildSize: initialChildSize,
+                  minChildSize: minChildSize,
+                  maxChildSize: maxChildSize,
+                  builder: (BuildContext context, ScrollController controller) {
+                    return _SheetContent<T>(
+                      title: title,
+                      options: options,
+                      value: value,
                       controller: controller,
-                      itemCount: options.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        final TMZSelectOption<T> option = options[index];
-                        final bool selected = option.value == value;
-                        return Material(
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetContent<T> extends StatelessWidget {
+  const _SheetContent({
+    required this.title,
+    required this.options,
+    required this.value,
+    this.controller,
+  });
+
+  final String title;
+  final List<TMZSelectOption<T>> options;
+  final T? value;
+  final ScrollController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: 10),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.border,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              title,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            controller: controller,
+            itemCount: options.length,
+            itemBuilder: (BuildContext context, int index) {
+              final TMZSelectOption<T> option = options[index];
+              final bool selected = option.value == value;
+              return Material(
+                color: selected ? AppColors.blueTint : Colors.transparent,
+                child: ListTile(
+                  onTap: () => Navigator.of(context).pop(option),
+                  leading: option.icon == null
+                      ? null
+                      : Icon(
+                          option.icon,
                           color: selected
-                              ? AppColors.blueTint
-                              : Colors.transparent,
-                          child: ListTile(
-                            onTap: () => Navigator.of(context).pop(option),
-                            leading: option.icon == null
-                                ? null
-                                : Icon(
-                                    option.icon,
-                                    color: selected
-                                        ? AppColors.brandBlue
-                                        : AppColors.textTertiary,
-                                  ),
-                            title: Text(
-                              option.label,
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            trailing: selected
-                                ? const Icon(
-                                    Icons.check_rounded,
-                                    color: AppColors.brandBlue,
-                                  )
-                                : null,
-                          ),
-                        );
-                      },
+                              ? AppColors.brandBlue
+                              : AppColors.textTertiary,
+                        ),
+                  title: Text(
+                    option.label,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                ],
+                  trailing: selected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.brandBlue,
+                        )
+                      : null,
+                ),
               );
             },
           ),
         ),
-      ),
+      ],
     );
   }
 }

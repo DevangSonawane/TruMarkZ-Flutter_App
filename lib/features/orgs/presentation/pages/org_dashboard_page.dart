@@ -28,6 +28,11 @@ class OrgDashboardPage extends ConsumerWidget {
             : (profile?.fullName?.trim().isNotEmpty == true
                 ? profile!.fullName!.trim()
                 : 'User');
+    final bool isVerified = profile?.isVerified == true;
+    final String brn =
+        profile?.businessRegistrationNumber?.trim().isNotEmpty == true
+            ? profile!.businessRegistrationNumber!.trim()
+            : '';
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -70,7 +75,12 @@ class OrgDashboardPage extends ConsumerWidget {
           AppSpacing.x8,
         ),
         children: <Widget>[
-          _HeroGreetingCard(name: displayName, onTapSummary: () {})
+          _HeroGreetingCard(
+            name: displayName,
+            isVerified: isVerified,
+            registrationNumber: brn,
+            onTapSummary: () {},
+          )
               .animate()
               .fadeIn(duration: 220.ms)
               .slideY(
@@ -197,13 +207,26 @@ class OrgDashboardPage extends ConsumerWidget {
 }
 
 class _HeroGreetingCard extends StatelessWidget {
-  const _HeroGreetingCard({required this.name, required this.onTapSummary});
+  const _HeroGreetingCard({
+    required this.name,
+    required this.onTapSummary,
+    required this.isVerified,
+    required this.registrationNumber,
+  });
 
   final String name;
   final VoidCallback onTapSummary;
+  final bool isVerified;
+  final String registrationNumber;
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pills = <Widget>[
+      _HeroPill(label: isVerified ? 'Verified' : 'Pending'),
+      if (registrationNumber.trim().isNotEmpty)
+        _HeroPill(label: 'Reg: ${registrationNumber.trim()}'),
+    ];
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -251,13 +274,10 @@ class _HeroGreetingCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.x4),
-                    const Wrap(
+                    Wrap(
                       spacing: AppSpacing.x2,
                       runSpacing: AppSpacing.x2,
-                      children: <Widget>[
-                        _HeroPill(label: '1,240 Verified'),
-                        _HeroPill(label: '3 Active'),
-                      ],
+                      children: pills,
                     ),
                   ],
                 ),

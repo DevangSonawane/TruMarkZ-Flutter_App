@@ -47,53 +47,68 @@ class RegisterIndividualRequest {
     required this.fullName,
     required this.email,
     this.mobile,
-    required this.address,
+    this.address,
     required this.password,
   });
 
   final String fullName;
   final String email;
   final String? mobile;
-  final String address;
+  final String? address;
   final String password;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'full_name': fullName,
-        'email': email,
-        'mobile': mobile,
-        'address': address,
-        'password': password,
-      };
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = <String, dynamic>{
+      'full_name': fullName,
+      'email': email,
+      'mobile': mobile,
+      'password': password,
+    };
+    if (address != null && address!.trim().isNotEmpty) {
+      json['address'] = address;
+    }
+    return json;
+  }
 }
 
 class RegisterOrgRequest {
   const RegisterOrgRequest({
     required this.organizationName,
-    required this.gstNumber,
-    required this.businessRegistrationNumber,
-    required this.address,
+    this.gstNumber,
+    this.businessRegistrationNumber,
+    this.address,
     required this.email,
     this.mobile,
     required this.password,
   });
 
   final String organizationName;
-  final String gstNumber;
-  final String businessRegistrationNumber;
-  final String address;
+  final String? gstNumber;
+  final String? businessRegistrationNumber;
+  final String? address;
   final String email;
   final String? mobile;
   final String password;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'organization_name': organizationName,
-        'gst_number': gstNumber,
-        'business_registration_number': businessRegistrationNumber,
-        'address': address,
-        'email': email,
-        'mobile': mobile,
-        'password': password,
-      };
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = <String, dynamic>{
+      'organization_name': organizationName,
+      'email': email,
+      'mobile': mobile,
+      'password': password,
+    };
+    if (gstNumber != null && gstNumber!.trim().isNotEmpty) {
+      json['gst_number'] = gstNumber;
+    }
+    if (businessRegistrationNumber != null &&
+        businessRegistrationNumber!.trim().isNotEmpty) {
+      json['business_registration_number'] = businessRegistrationNumber;
+    }
+    if (address != null && address!.trim().isNotEmpty) {
+      json['address'] = address;
+    }
+    return json;
+  }
 }
 
 class OtpVerifyRequest {
@@ -122,6 +137,10 @@ class UserProfile {
     required this.email,
     required this.mobile,
     required this.organizationName,
+    required this.gstNumber,
+    required this.businessRegistrationNumber,
+    required this.industry,
+    required this.address,
     required this.isActive,
     required this.isVerified,
     required this.emailVerified,
@@ -135,6 +154,10 @@ class UserProfile {
   final String email;
   final String? mobile;
   final String? organizationName;
+  final String? gstNumber;
+  final String? businessRegistrationNumber;
+  final String? industry;
+  final String? address;
   final bool isActive;
   final bool isVerified;
   final bool emailVerified;
@@ -149,6 +172,10 @@ class UserProfile {
       email: (json['email'] ?? '').toString(),
       mobile: json['mobile']?.toString(),
       organizationName: json['organization_name']?.toString(),
+      gstNumber: json['gst_number']?.toString(),
+      businessRegistrationNumber: json['business_registration_number']?.toString(),
+      industry: json['industry']?.toString(),
+      address: json['address']?.toString(),
       isActive: json['is_active'] == true,
       isVerified: json['is_verified'] == true,
       emailVerified: json['email_verified'] == true,
@@ -234,4 +261,3 @@ class AssignedIndividual {
     );
   }
 }
-
