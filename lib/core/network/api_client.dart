@@ -111,11 +111,25 @@ class ApiClient {
 
   String? _extractErrorMessage(DioException err) {
     final dynamic data = err.response?.data;
-    if (data is Map && data['detail'] != null) {
-      return data['detail']?.toString();
-    }
-    if (data is Map && data['message'] != null) {
-      return data['message']?.toString();
+    if (data is Map) {
+      final dynamic detail = data['detail'];
+      if (detail is String && detail.trim().isNotEmpty) return detail.trim();
+      if (detail is List && detail.isNotEmpty) {
+        final dynamic first = detail.first;
+        if (first is String && first.trim().isNotEmpty) return first.trim();
+        if (first is Map) {
+          final Map<String, dynamic> m = Map<String, dynamic>.from(first);
+          final dynamic msg = m['msg'] ?? m['message'] ?? m['detail'];
+          if (msg is String && msg.trim().isNotEmpty) return msg.trim();
+        }
+      }
+      if (detail is Map) {
+        final Map<String, dynamic> m = Map<String, dynamic>.from(detail);
+        final dynamic msg = m['message'] ?? m['detail'];
+        if (msg is String && msg.trim().isNotEmpty) return msg.trim();
+      }
+      final dynamic message = data['message'];
+      if (message is String && message.trim().isNotEmpty) return message.trim();
     }
     if (data is String && data.trim().isNotEmpty) {
       return data.trim();

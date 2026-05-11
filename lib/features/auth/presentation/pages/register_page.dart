@@ -72,7 +72,21 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      final String msg = e.message.toLowerCase();
+      final bool likelyOtpPending =
+          msg.contains('already registered') ||
+          msg.contains('already in progress') ||
+          msg.contains('registration already') ||
+          (msg.contains('verify') && msg.contains('otp'));
+      if (likelyOtpPending) {
+        context.go(
+          '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(email)}&type=individual',
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

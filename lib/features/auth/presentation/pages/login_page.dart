@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +13,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
 import '../../application/auth_notifier.dart';
+import '../../application/pending_auth.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -49,6 +51,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           GoRouterState.of(context).uri.queryParameters['type']?.trim().isNotEmpty == true
               ? GoRouterState.of(context).uri.queryParameters['type']!.trim()
               : 'individual';
+      if (kDebugMode) {
+        debugPrint('[Login] attempt type=$type identifier=$emailOrMobile');
+      }
       if (type == 'organization') {
         await ref.read(authNotifierProvider.notifier).loginOrg(emailOrMobile, password);
       } else {
@@ -56,9 +61,40 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       }
     } on ApiException catch (e) {
       if (!mounted) return;
+      final String msg = e.message.toLowerCase();
+      final bool requiresOtp =
+          (e.statusCode != 401) &&
+          (msg.contains('not verified') ||
+              msg.contains('verify your email') ||
+              msg.contains('verify your otp') ||
+              msg.contains('verify otp') ||
+              msg.contains('registration already in progress') ||
+              msg.contains('already in progress') ||
+              (msg.contains('verify') && msg.contains('otp')));
+      if (kDebugMode) {
+        debugPrint(
+          '[Login] ApiException status=${e.statusCode} message="${e.message}" requiresOtp=$requiresOtp',
+        );
+      }
+      if (requiresOtp) {
+        final String type =
+            GoRouterState.of(context).uri.queryParameters['type']?.trim().isNotEmpty == true
+                ? GoRouterState.of(context).uri.queryParameters['type']!.trim()
+                : 'individual';
+        ref.read(pendingLoginProvider.notifier).state = PendingLogin(
+          loginType: type == 'organization' ? 'organization' : 'individual',
+          emailOrMobile: emailOrMobile,
+          password: password,
+        );
+        AppRouter.router.go(
+          '${AppRouter.otpVerificationPath}?identifier=${Uri.encodeComponent(emailOrMobile)}&type=${Uri.encodeComponent(type)}&after=login',
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
+      if (kDebugMode) debugPrint('[Login] unknown error');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Something went wrong. Please try again.')),
       );

@@ -1,19 +1,27 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../auth/application/auth_notifier.dart';
+import '../../../auth/application/auth_state.dart';
 
-class IndividualProfilePage extends StatelessWidget {
+class IndividualProfilePage extends ConsumerWidget {
   const IndividualProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     const Color pageSurface = Color(0xFFFAF8FF);
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final String displayName =
+        authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
+            ? authAsync.value!.userProfile!.fullName!.trim()
+            : 'User';
     return Scaffold(
       backgroundColor: pageSurface,
       body: CustomScrollView(
@@ -55,7 +63,7 @@ class IndividualProfilePage extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'My Skill Tree',
+                              'Profile Page',
                               style: AppTypography.heading1.copyWith(
                                 color: AppColors.brandBlue,
                                 fontWeight: FontWeight.w800,
@@ -85,7 +93,7 @@ class IndividualProfilePage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
             sliver: SliverList(
               delegate: SliverChildListDelegate.fixed(<Widget>[
-                const _ProfileHeaderCard(),
+                _ProfileHeaderCard(displayName: displayName),
                 const SizedBox(height: 24),
                 const _SectionCard(
                   title: 'Education',
@@ -145,7 +153,9 @@ class IndividualProfilePage extends StatelessWidget {
 }
 
 class _ProfileHeaderCard extends StatelessWidget {
-  const _ProfileHeaderCard();
+  const _ProfileHeaderCard({required this.displayName});
+
+  final String displayName;
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +225,7 @@ class _ProfileHeaderCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Alex Rivera',
+            displayName,
             textAlign: TextAlign.center,
             style: AppTypography.display2.copyWith(
               color: AppColors.textPrimary,

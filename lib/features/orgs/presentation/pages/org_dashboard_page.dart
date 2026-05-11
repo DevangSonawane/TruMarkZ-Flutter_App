@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui';
@@ -10,13 +11,23 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_badge.dart';
 import '../../../../core/widgets/tmz_card.dart';
+import '../../../auth/application/auth_notifier.dart';
+import '../../../auth/application/auth_state.dart';
 
-class OrgDashboardPage extends StatelessWidget {
+class OrgDashboardPage extends ConsumerWidget {
   const OrgDashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final profile = authAsync.value?.userProfile;
+    final String displayName =
+        profile?.organizationName?.trim().isNotEmpty == true
+            ? profile!.organizationName!.trim()
+            : (profile?.fullName?.trim().isNotEmpty == true
+                ? profile!.fullName!.trim()
+                : 'User');
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -59,7 +70,7 @@ class OrgDashboardPage extends StatelessWidget {
           AppSpacing.x8,
         ),
         children: <Widget>[
-          _HeroGreetingCard(name: 'Ravi', onTapSummary: () {})
+          _HeroGreetingCard(name: displayName, onTapSummary: () {})
               .animate()
               .fadeIn(duration: 220.ms)
               .slideY(

@@ -15,6 +15,8 @@ import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/data/auth_repository.dart';
+import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/pending_auth.dart';
 
 class _OtpTokens {
   static const int otpLength = 6;
@@ -197,11 +199,14 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
   @override
   Widget build(BuildContext context) {
     final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
-    final String email = (qp['email'] ?? '').trim().isNotEmpty
-        ? qp['email']!.trim()
-        : 'admin@org.com';
+    final String identifier =
+        (qp['identifier'] ?? qp['email'] ?? '').trim().isNotEmpty
+            ? (qp['identifier'] ?? qp['email'])!.trim()
+            : 'admin@org.com';
     final String type = (qp['type'] ?? 'organization').trim();
-    final String displayEmail = _maskEmail(email);
+    final String after = (qp['after'] ?? '').trim();
+    final String displayIdentifier =
+        identifier.contains('@') ? _maskEmail(identifier) : identifier;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -262,7 +267,7 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                               ),
                               const SizedBox(height: AppSpacing.x2),
                               Text(
-                                'We sent a 6-digit OTP to $displayEmail',
+                                'We sent a 6-digit OTP to $displayIdentifier',
                                 style: AppTypography.body2.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
@@ -350,7 +355,7 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                       TextButton(
                                         onPressed: _isResending
                                             ? null
-                                            : () => _resend(email),
+                                            : () => _resend(identifier),
                                         child: Text(
                                           'Resend code',
                                           style: AppTypography.body2.copyWith(
@@ -364,7 +369,87 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                       label: 'Verify',
                                       onPressed: _isVerifying
                                           ? null
-                                          : () => _onVerify(email, type),
+                                          : () async {
+                                              final ScaffoldMessengerState messenger =
+                                                  ScaffoldMessenger.of(context);
+                                              final String encodedType =
+                                                  Uri.encodeComponent(type);
+                                              await _onVerify(identifier, type);
+                                              if (!mounted) return;
+                                              if (after != 'login') return;
+
+                                              final PendingLogin? pending =
+                                                  ref.read(pendingLoginProvider);
+                                              if (pending == null) {
+                                                AppRouter.router.go(
+                                                  '${AppRouter.loginPath}?type=$encodedType&force=true',
+                                                );
+                                                return;
+                                              }
+
+                                              try {
+                                                if (pending.loginType ==
+                                                    'organization') {
+                                                  await ref
+                                                      .read(
+                                                        authNotifierProvider
+                                                            .notifier,
+                                                      )
+                                                      .loginOrg(
+                                                        pending.emailOrMobile,
+                                                        pending.password,
+                                                      );
+                                                } else {
+                                                  await ref
+                                                      .read(
+                                                        authNotifierProvider
+                                                            .notifier,
+                                                      )
+                                                      .loginIndividual(
+                                                        pending.emailOrMobile,
+                                                        pending.password,
+                                                      );
+                                                }
+                                                ref
+                                                    .read(
+                                                      pendingLoginProvider
+                                                          .notifier,
+                                                    )
+                                                    .state = null;
+                                              } on ApiException catch (e) {
+                                                ref
+                                                    .read(
+                                                      pendingLoginProvider
+                                                          .notifier,
+                                                    )
+                                                    .state = null;
+                                                messenger.showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(e.message),
+                                                  ),
+                                                );
+                                                AppRouter.router.go(
+                                                  '${AppRouter.loginPath}?type=$encodedType&force=true',
+                                                );
+                                              } catch (_) {
+                                                ref
+                                                    .read(
+                                                      pendingLoginProvider
+                                                          .notifier,
+                                                    )
+                                                    .state = null;
+                                                messenger.showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Something went wrong. Please try again.',
+                                                    ),
+                                                  ),
+                                                );
+                                                AppRouter.router.go(
+                                                  '${AppRouter.loginPath}?type=$encodedType&force=true',
+                                                );
+                                              }
+                                            },
                                       isLoading: _isVerifying,
                                     ),
                                     const SizedBox(height: AppSpacing.x4),

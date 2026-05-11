@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui';
 
@@ -6,12 +7,19 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../auth/application/auth_notifier.dart';
+import '../../../auth/application/auth_state.dart';
 
-class IndividualDashboardPage extends StatelessWidget {
+class IndividualDashboardPage extends ConsumerWidget {
   const IndividualDashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final String displayName =
+        authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
+            ? authAsync.value!.userProfile!.fullName!.trim()
+            : 'User';
     return Scaffold(
       backgroundColor: const Color(0xFFFAF8FF),
       appBar: AppBar(
@@ -99,7 +107,7 @@ class IndividualDashboardPage extends StatelessWidget {
           AppSpacing.x10,
         ),
         children: <Widget>[
-          const _IdentityHeroCard(),
+          _IdentityHeroCard(displayName: displayName),
           const SizedBox(height: AppSpacing.x6),
           const _QuickStatsRow(),
           const SizedBox(height: AppSpacing.x6),
@@ -144,7 +152,9 @@ class IndividualDashboardPage extends StatelessWidget {
 }
 
 class _IdentityHeroCard extends StatelessWidget {
-  const _IdentityHeroCard();
+  const _IdentityHeroCard({required this.displayName});
+
+  final String displayName;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +208,7 @@ class _IdentityHeroCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Marcus Sterling',
+                              displayName,
                               style: AppTypography.display1.copyWith(
                                 fontSize: 28,
                                 height: 1.05,
