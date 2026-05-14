@@ -13,7 +13,8 @@ class ApiException implements Exception {
   final String message;
 
   @override
-  String toString() => 'ApiException(statusCode: $statusCode, message: $message)';
+  String toString() =>
+      'ApiException(statusCode: $statusCode, message: $message)';
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -22,27 +23,199 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 
 class ApiClient {
   ApiClient({required TokenStorage tokenStorage})
-      : _tokenStorage = tokenStorage,
-        _dio = Dio(
-          BaseOptions(
-            baseUrl: 'https://trumarkz-api-54038467488.asia-south1.run.app',
-            connectTimeout: const Duration(seconds: 30),
-            receiveTimeout: const Duration(seconds: 30),
-            headers: <String, dynamic>{
-              Headers.contentTypeHeader: Headers.jsonContentType,
-              Headers.acceptHeader: Headers.jsonContentType,
-            },
-          ),
-        ) {
-    _dio.interceptors.add(
+    : _tokenStorage = tokenStorage,
+      _dio = Dio(
+        BaseOptions(
+          baseUrl: 'https://trumarkz-api-54038467488.asia-south1.run.app',
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+          headers: <String, dynamic>{
+            Headers.contentTypeHeader: Headers.jsonContentType,
+            Headers.acceptHeader: Headers.jsonContentType,
+          },
+        ),
+      ),
+      _verificationDio = Dio(
+        BaseOptions(
+          baseUrl: 'https://trumarkz-api.asynk.in',
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+          headers: <String, dynamic>{
+            Headers.acceptHeader: Headers.jsonContentType,
+          },
+        ),
+      ) {
+    _configureDio(_dio);
+    _configureDio(_verificationDio);
+  }
+
+  final Dio _dio;
+  final Dio _verificationDio;
+  final TokenStorage _tokenStorage;
+
+  Future<Map<String, dynamic>> get(String path) async {
+    try {
+      final Response<dynamic> res = await _dio.get<dynamic>(path);
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> post(String path, {Object? data}) async {
+    try {
+      final Response<dynamic> res = await _dio.post<dynamic>(path, data: data);
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  // For multipart (file upload) requests — no Content-Type override, let Dio set boundary
+  Future<Map<String, dynamic>> postMultipart(
+    String path,
+    FormData formData,
+  ) async {
+    try {
+      final Response<dynamic> res = await _dio.post<dynamic>(
+        path,
+        data: formData,
+      );
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  // For PATCH requests
+  Future<Map<String, dynamic>> patch(String path, {Object? data}) async {
+    try {
+      final Response<dynamic> res = await _dio.patch<dynamic>(path, data: data);
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> verificationGet(String path) async {
+    try {
+      final Response<dynamic> res = await _verificationDio.get<dynamic>(path);
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> verificationPost(
+    String path, {
+    Object? data,
+  }) async {
+    try {
+      final Response<dynamic> res = await _verificationDio.post<dynamic>(
+        path,
+        data: data,
+      );
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> verificationPatch(
+    String path, {
+    Object? data,
+  }) async {
+    try {
+      final Response<dynamic> res = await _verificationDio.patch<dynamic>(
+        path,
+        data: data,
+      );
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> verificationPostMultipart(
+    String path,
+    FormData formData, {
+    bool skipAuth = false,
+  }) async {
+    try {
+      final Options? options = skipAuth
+          ? Options(extra: <String, dynamic>{'skipAuth': true})
+          : null;
+      final Response<dynamic> res = await _verificationDio.post<dynamic>(
+        path,
+        data: formData,
+        options: options,
+      );
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  Map<String, dynamic> _asMap(dynamic data) {
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return <String, dynamic>{};
+  }
+
+  void _configureDio(Dio dio) {
+    dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (RequestOptions options, RequestInterceptorHandler handler) async {
-          final String? token = await _tokenStorage.getToken();
-          if (token != null && token.trim().isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
-          }
-          handler.next(options);
-        },
+        onRequest:
+            (RequestOptions options, RequestInterceptorHandler handler) async {
+              final bool skipAuth = options.extra['skipAuth'] == true;
+              if (!skipAuth) {
+                final String? token = await _tokenStorage.getToken();
+                if (token != null && token.trim().isNotEmpty) {
+                  options.headers['Authorization'] = 'Bearer $token';
+                }
+              }
+              handler.next(options);
+            },
         onError: (DioException err, ErrorInterceptorHandler handler) async {
           final int? statusCode = err.response?.statusCode;
           if (statusCode == 401) {
@@ -54,7 +227,9 @@ class ApiClient {
             return;
           }
 
-          final String message = _extractErrorMessage(err) ?? 'Something went wrong. Please try again.';
+          final String message =
+              _extractErrorMessage(err) ??
+              'Something went wrong. Please try again.';
           handler.reject(
             DioException(
               requestOptions: err.requestOptions,
@@ -70,42 +245,12 @@ class ApiClient {
     );
   }
 
-  final Dio _dio;
-  final TokenStorage _tokenStorage;
-
-  Future<Map<String, dynamic>> get(String path) async {
-    try {
-      final Response<dynamic> res = await _dio.get<dynamic>(path);
-      return _asMap(res.data);
-    } on DioException catch (e) {
-      throw _toApiException(e);
-    } catch (_) {
-      throw const ApiException(statusCode: null, message: 'Something went wrong. Please try again.');
-    }
-  }
-
-  Future<Map<String, dynamic>> post(String path, {Object? data}) async {
-    try {
-      final Response<dynamic> res = await _dio.post<dynamic>(path, data: data);
-      return _asMap(res.data);
-    } on DioException catch (e) {
-      throw _toApiException(e);
-    } catch (_) {
-      throw const ApiException(statusCode: null, message: 'Something went wrong. Please try again.');
-    }
-  }
-
-  Map<String, dynamic> _asMap(dynamic data) {
-    if (data is Map<String, dynamic>) return data;
-    if (data is Map) return Map<String, dynamic>.from(data);
-    return <String, dynamic>{};
-  }
-
   ApiException _toApiException(DioException e) {
     final Object? inner = e.error;
     if (inner is ApiException) return inner;
     final int? statusCode = e.response?.statusCode;
-    final String message = _extractErrorMessage(e) ?? 'Something went wrong. Please try again.';
+    final String message =
+        _extractErrorMessage(e) ?? 'Something went wrong. Please try again.';
     return ApiException(statusCode: statusCode, message: message);
   }
 

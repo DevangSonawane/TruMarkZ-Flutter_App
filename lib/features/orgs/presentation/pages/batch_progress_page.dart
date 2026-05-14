@@ -1,16 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/models/verification_models.dart';
+import '../../application/verification_list_notifier.dart';
 
-class BatchProgressPage extends StatelessWidget {
+class BatchProgressPage extends ConsumerStatefulWidget {
   const BatchProgressPage({super.key});
 
   @override
+  ConsumerState<BatchProgressPage> createState() => _BatchProgressPageState();
+}
+
+class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(
+      () => ref.read(verificationListNotifierProvider.notifier).load(),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final List<_BatchDirectoryItem> directory = _BatchDirectoryItem.sample();
+    final VerificationListState state = ref.watch(
+      verificationListNotifierProvider,
+    );
+    final AsyncValue<VerificationListResponse> dataAsync = state.data;
+
+    final VerificationListResponse? data = dataAsync.valueOrNull;
+    final List<_BatchDirectoryItem> directory = data == null
+        ? const <_BatchDirectoryItem>[]
+        : _BatchDirectoryItem.fromUsers(data.users);
+
+    final int totalBatches = directory.length;
+    final int pending = data?.pending ?? 0;
+    final int verified = data?.verified ?? 0;
+    final int failed = data?.failed ?? 0;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -78,29 +107,44 @@ class BatchProgressPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 _SummaryCarousel(
-                  items: const <_SummaryItem>[
+                  items: <_SummaryItem>[
                     _SummaryItem(
                       label: 'Total Batches',
-                      value: '12',
+                      value: totalBatches.toString(),
                       valueColor: AppColors.brandBlue,
-                      borderColor: Color(0xFFEFF6FF),
+                      borderColor: const Color(0xFFEFF6FF),
                     ),
                     _SummaryItem(
-                      label: 'Active',
-                      value: '3',
-                      valueColor: AppColors.brandBlue,
-                      borderColor: Color(0xFFEFF6FF),
+                      label: 'Pending',
+                      value: pending.toString(),
+                      valueColor: const Color(0xFFF59E0B),
+                      borderColor: const Color(0xFFFFFBEB),
                     ),
                     _SummaryItem(
-                      label: 'Alerts',
-                      value: '1',
+                      label: 'Verified',
+                      value: verified.toString(),
+                      valueColor: AppColors.success,
+                      borderColor: const Color(0xFFF0FDF4),
+                    ),
+                    _SummaryItem(
+                      label: 'Failed',
+                      value: failed.toString(),
                       valueColor: AppColors.error,
-                      borderColor: Color(0xFFFEF2F2),
-                      trailingIcon: Icons.warning_amber_rounded,
+                      borderColor: const Color(0xFFFEF2F2),
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _StatusFilterRow(
+                    selected: state.statusFilter,
+                    onSelect: (String? v) => ref
+                        .read(verificationListNotifierProvider.notifier)
+                        .setFilter(v),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
@@ -133,12 +177,29 @@ class BatchProgressPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                for (final _BatchDirectoryItem item in directory) ...<Widget>[
+                if (dataAsync.isLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (dataAsync.hasError)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _BatchDirectoryCard(item: item),
-                  ),
-                  const SizedBox(height: 16),
+                    child: _ErrorCard(
+                      message: dataAsync.error.toString(),
+                      onRetry: () => ref
+                          .read(verificationListNotifierProvider.notifier)
+                          .load(),
+                    ),
+                  )
+                else ...<Widget>[
+                  for (final _BatchDirectoryItem item in directory) ...<Widget>[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _BatchDirectoryCard(item: item),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ],
                 const SizedBox(height: 110),
               ]),
@@ -206,14 +267,12 @@ class _SummaryItem {
     required this.value,
     required this.valueColor,
     required this.borderColor,
-    this.trailingIcon,
   });
 
   final String label;
   final String value;
   final Color valueColor;
   final Color borderColor;
-  final IconData? trailingIcon;
 }
 
 class _SummaryCarousel extends StatelessWidget {
@@ -273,9 +332,7 @@ class _SummaryCard extends StatelessWidget {
             item.label,
             style: AppTypography.caption.copyWith(
               fontSize: 10,
-              color: item.trailingIcon != null
-                  ? AppColors.error
-                  : AppColors.textTertiary,
+              color: AppColors.textTertiary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -290,10 +347,6 @@ class _SummaryCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              if (item.trailingIcon != null) ...<Widget>[
-                const SizedBox(width: 6),
-                Icon(item.trailingIcon, color: item.valueColor, size: 20),
-              ],
             ],
           ),
         ],
@@ -306,55 +359,109 @@ enum _BatchStatus { completed, processing, alert }
 
 class _BatchDirectoryItem {
   const _BatchDirectoryItem({
-    required this.name,
-    required this.industry,
+    required this.batchId,
     required this.status,
     required this.progress,
     required this.records,
+    required this.verifiedCount,
+    required this.pendingCount,
+    required this.failedCount,
     required this.createdLabel,
-    required this.slaLabel,
     this.alertMessage,
   });
 
-  final String name;
-  final String industry;
+  final String batchId;
   final _BatchStatus status;
   final double progress;
   final int records;
+  final int verifiedCount;
+  final int pendingCount;
+  final int failedCount;
   final String createdLabel;
-  final String slaLabel;
   final String? alertMessage;
 
-  static List<_BatchDirectoryItem> sample() => const <_BatchDirectoryItem>[
-    _BatchDirectoryItem(
-      name: 'Driver Onboarding Q1',
-      industry: 'Transport Industry',
-      status: _BatchStatus.completed,
-      progress: 1,
-      records: 200,
-      createdLabel: '02 Apr',
-      slaLabel: '5 days',
-    ),
-    _BatchDirectoryItem(
-      name: 'Delivery Staff Batch 4',
-      industry: 'Logistics Industry',
-      status: _BatchStatus.processing,
-      progress: 0.45,
-      records: 200,
-      createdLabel: '02 Apr',
-      slaLabel: '5 days',
-    ),
-    _BatchDirectoryItem(
-      name: 'Security Personnel',
-      industry: 'Public Safety',
-      status: _BatchStatus.alert,
-      progress: 0.15,
-      records: 200,
-      createdLabel: '02 Apr',
-      slaLabel: '5 days',
-      alertMessage: '3 records require manual review',
-    ),
-  ];
+  static List<_BatchDirectoryItem> fromUsers(List<VerificationUser> users) {
+    final Map<String, List<VerificationUser>> groups =
+        <String, List<VerificationUser>>{};
+    for (final VerificationUser u in users) {
+      final String key = u.batchId.trim().isEmpty
+          ? 'unknown'
+          : u.batchId.trim();
+      (groups[key] ??= <VerificationUser>[]).add(u);
+    }
+
+    final List<_BatchDirectoryItem> items = <_BatchDirectoryItem>[];
+    for (final MapEntry<String, List<VerificationUser>> e in groups.entries) {
+      final List<VerificationUser> groupUsers = e.value;
+      int verified = 0;
+      int pending = 0;
+      int failed = 0;
+      DateTime? earliest;
+      for (final VerificationUser u in groupUsers) {
+        switch (u.verificationStatus) {
+          case 'verified':
+            verified += 1;
+          case 'failed':
+            failed += 1;
+          default:
+            pending += 1;
+        }
+        final DateTime? created = DateTime.tryParse(u.createdAt);
+        if (created != null) {
+          if (earliest == null || created.isBefore(earliest)) {
+            earliest = created;
+          }
+        }
+      }
+
+      final int total = groupUsers.length;
+      final double progress = total == 0 ? 0 : (verified / total);
+      final _BatchStatus status = failed > 0
+          ? _BatchStatus.alert
+          : (verified == total
+                ? _BatchStatus.completed
+                : _BatchStatus.processing);
+      final String createdLabel = _formatShortDate(earliest);
+      final String? alertMessage = failed > 0
+          ? '$failed record(s) failed verification'
+          : null;
+
+      items.add(
+        _BatchDirectoryItem(
+          batchId: e.key,
+          status: status,
+          progress: progress,
+          records: total,
+          verifiedCount: verified,
+          pendingCount: pending,
+          failedCount: failed,
+          createdLabel: createdLabel,
+          alertMessage: alertMessage,
+        ),
+      );
+    }
+    items.sort((a, b) => b.createdLabel.compareTo(a.createdLabel));
+    return items;
+  }
+
+  static String _formatShortDate(DateTime? dt) {
+    if (dt == null) return '—';
+    const List<String> months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]}';
+  }
 }
 
 class _BatchDirectoryCard extends StatelessWidget {
@@ -393,13 +500,7 @@ class _BatchDirectoryCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: () {
         context.push(
-          '${AppRouter.appBatchTrackingDetailPath}'
-          '?batch=${Uri.encodeQueryComponent(item.name)}'
-          '&industry=${Uri.encodeQueryComponent(item.industry)}'
-          '&records=${item.records}'
-          '&created=${Uri.encodeQueryComponent(item.createdLabel)}'
-          '&sla=${Uri.encodeQueryComponent(item.slaLabel)}'
-          '&progress=${item.progress}',
+          '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(item.batchId)}',
         );
       },
       child: Container(
@@ -429,7 +530,7 @@ class _BatchDirectoryCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        item.name,
+                        _labelForBatch(item.batchId),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.body2.copyWith(
@@ -439,7 +540,7 @@ class _BatchDirectoryCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        item.industry,
+                        'Created ${item.createdLabel} • ${item.records} records',
                         style: AppTypography.caption.copyWith(
                           color: AppColors.textTertiary,
                           fontWeight: FontWeight.w600,
@@ -535,6 +636,132 @@ class _BatchDirectoryCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+String _labelForBatch(String batchId) {
+  final String id = batchId.trim();
+  if (id.isEmpty || id == 'unknown') return 'Batch';
+  final String shortId = id.length <= 10 ? id : id.substring(0, 10);
+  return 'Batch $shortId';
+}
+
+class _StatusFilterRow extends StatelessWidget {
+  const _StatusFilterRow({required this.selected, required this.onSelect});
+
+  final String? selected;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: <Widget>[
+        _FilterChip(
+          label: 'All',
+          selected: selected == null,
+          onTap: () => onSelect(null),
+        ),
+        _FilterChip(
+          label: 'Pending',
+          selected: selected == 'pending_verification',
+          onTap: () => onSelect('pending_verification'),
+        ),
+        _FilterChip(
+          label: 'Verified',
+          selected: selected == 'verified',
+          onTap: () => onSelect('verified'),
+        ),
+        _FilterChip(
+          label: 'Failed',
+          selected: selected == 'failed',
+          onTap: () => onSelect('failed'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.brandBlue.withAlpha(18) : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? AppColors.brandBlue : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.body2.copyWith(
+            color: selected ? AppColors.brandBlue : AppColors.textSecondary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFEF2F2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Failed to load batches',
+            style: AppTypography.heading2.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.brandBlue),
+          ),
+        ],
       ),
     );
   }

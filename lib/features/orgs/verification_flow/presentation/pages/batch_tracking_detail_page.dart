@@ -1,37 +1,76 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/verification_models.dart';
+import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../data/verification_repository.dart';
 
-class BatchTrackingDetailPage extends StatelessWidget {
+class BatchTrackingDetailPage extends ConsumerStatefulWidget {
   const BatchTrackingDetailPage({super.key});
 
-  static int _tryParseInt(String? value, {required int fallback}) =>
-      int.tryParse(value ?? '') ?? fallback;
+  @override
+  ConsumerState<BatchTrackingDetailPage> createState() =>
+      _BatchTrackingDetailPageState();
+}
 
-  static double _tryParseDouble(String? value, {required double fallback}) =>
-      double.tryParse(value ?? '') ?? fallback;
+class _BatchTrackingDetailPageState
+    extends ConsumerState<BatchTrackingDetailPage> {
+  bool _didInit = false;
+  String _batchId = '';
+
+  AsyncValue<VerificationListResponse> _data = const AsyncLoading();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInit) return;
+    _didInit = true;
+    _batchId = (GoRouterState.of(context).uri.queryParameters['batch_id'] ?? '')
+        .trim();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _data = const AsyncLoading());
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final VerificationListResponse res = await repo.getAllVerifications(
+        batchId: _batchId,
+        limit: 500,
+        offset: 0,
+      );
+      if (!mounted) return;
+      setState(() => _data = AsyncData(res));
+    } on ApiException catch (e, st) {
+      if (!mounted) return;
+      setState(() => _data = AsyncError(e, st));
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _data = AsyncError(e, st));
+    }
+  }
+
+  void _goBack(BuildContext context) {
+    final GoRouter router = GoRouter.of(context);
+    if (router.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRouter.appBatchesPath);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(
-      context,
-    ).uri.queryParameters;
-
-    final String batchName = (qp['batch'] ?? 'Driver Onboarding Q1').trim();
-    final String industry = (qp['industry'] ?? 'Transport Industry').trim();
-    final int records = _tryParseInt(qp['records'], fallback: 200);
-    final String createdLabel = (qp['created'] ?? '02 Apr').trim();
-    final String slaLabel = (qp['sla'] ?? '5 days').trim();
-    final double progress = _tryParseDouble(
-      qp['progress'],
-      fallback: 0.85,
-    ).clamp(0, 1);
-    final int riskCount = _tryParseInt(qp['risk'], fallback: 24);
+    final String title = _batchId.trim().isEmpty
+        ? 'Batch'
+        : 'Batch ${_batchId.substring(0, _batchId.length.clamp(0, 10))}';
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -39,153 +78,144 @@ class BatchTrackingDetailPage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        toolbarHeight: 64,
         leading: IconButton(
-          onPressed: () {
-            final GoRouter router = GoRouter.of(context);
-            if (router.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRouter.appBatchesPath);
-            }
-          },
+          tooltip: 'Back',
+          onPressed: () => _goBack(context),
           icon: const Icon(Icons.arrow_back_rounded),
           color: AppColors.brandBlue,
         ),
         title: Text(
-          batchName,
+          title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTypography.heading1.copyWith(
             color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        actions: <Widget>[],
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.90),
-                border: const Border(
-                  bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1),
-                ),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x0D2563EB),
-                    blurRadius: 10,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-            ),
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          24,
-          20,
-          140 + MediaQuery.viewPaddingOf(context).bottom,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _QuickStatsGrid(
-              records: records,
-              createdLabel: createdLabel,
-              slaLabel: slaLabel,
+      body: SafeArea(
+        child: _data.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object err, _) => Padding(
+            padding: const EdgeInsets.all(AppSpacing.x4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Unable to load batch', style: AppTypography.display2),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  err.toString(),
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                ElevatedButton.icon(
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            _OverallProgressCard(progress: progress),
-            const SizedBox(height: 24),
-            _ComplianceChecksSection(
-              batchName: batchName,
-              industry: industry,
-              progress: progress,
-            ),
-            const SizedBox(height: 24),
-            _SlaAlertCard(riskCount: riskCount),
-          ],
+          ),
+          data: (VerificationListResponse res) {
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x4,
+                AppSpacing.x3,
+                AppSpacing.x4,
+                AppSpacing.x6,
+              ),
+              children: <Widget>[
+                _SummaryBar(
+                  verified: res.verified,
+                  pending: res.pending,
+                  failed: res.failed,
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                Text('Records', style: AppTypography.heading2),
+                const SizedBox(height: AppSpacing.x2),
+                for (final VerificationUser u in res.users) ...<Widget>[
+                  _UserTile(
+                    user: u,
+                    onTap: () => context.push(
+                      '${AppRouter.individualRecordDetailPath}?user_id=${Uri.encodeQueryComponent(u.id)}',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                ],
+                if (res.users.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.x6),
+                    child: Center(
+                      child: Text(
+                        'No records found.',
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _CardShadow extends BoxShadow {
-  const _CardShadow()
-    : super(
-        color: const Color(0x142563EB),
-        blurRadius: 12,
-        offset: const Offset(0, 2),
-      );
-}
-
-class _QuickStatsGrid extends StatelessWidget {
-  const _QuickStatsGrid({
-    required this.records,
-    required this.createdLabel,
-    required this.slaLabel,
+class _SummaryBar extends StatelessWidget {
+  const _SummaryBar({
+    required this.verified,
+    required this.pending,
+    required this.failed,
   });
 
-  final int records;
-  final String createdLabel;
-  final String slaLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: _StatCard(label: 'Records', value: '$records'),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(label: 'Created', value: createdLabel),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(label: 'SLA', value: slaLabel),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
+  final int verified;
+  final int pending;
+  final int failed;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const <BoxShadow>[_CardShadow()],
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border.withAlpha(140)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: AppColors.brandBlue.withAlpha(16),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: <Widget>[
-          Text(
-            label,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textTertiary,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: _Stat(
+              label: 'Verified',
+              value: verified,
+              color: AppColors.success,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: AppTypography.heading2.copyWith(
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w800,
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: _Stat(
+              label: 'Pending',
+              value: pending,
+              color: const Color(0xFFF59E0B),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: _Stat(
+              label: 'Failed',
+              value: failed,
+              color: AppColors.error,
             ),
           ),
         ],
@@ -194,317 +224,175 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _OverallProgressCard extends StatelessWidget {
-  const _OverallProgressCard({required this.progress});
+class _Stat extends StatelessWidget {
+  const _Stat({required this.label, required this.value, required this.color});
 
-  final double progress;
+  final String label;
+  final int value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final int pct = (progress * 100).round();
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const <BoxShadow>[_CardShadow()],
+        color: color.withAlpha(16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value.toString(),
+            style: AppTypography.heading1.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserTile extends StatelessWidget {
+  const _UserTile({required this.user, required this.onTap});
+
+  final VerificationUser user;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final (_StatusStyle style, String label) = _statusStyle(
+      user.verificationStatus,
+    );
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.x4),
+          child: Row(
             children: <Widget>[
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: style.bg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(style.icon, color: style.fg),
+              ),
+              const SizedBox(width: AppSpacing.x3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Overall Progress',
-                      style: AppTypography.heading2.copyWith(
-                        color: AppColors.textPrimary,
+                      user.fullName.trim().isEmpty ? 'Unnamed' : user.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body1.copyWith(
                         fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Verification phase in progress',
+                      user.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.body2.copyWith(
-                        color: AppColors.textTertiary,
+                        color: AppColors.textSecondary,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: <Widget>[
+                        _StatusBadge(label: label, style: style),
+                        const SizedBox(width: 10),
+                        if (user.inviteAccepted)
+                          _MiniPill(
+                            icon: Icons.check_rounded,
+                            label: 'Invite accepted',
+                            color: AppColors.success,
+                          )
+                        else
+                          _MiniPill(
+                            icon: Icons.schedule_rounded,
+                            label: 'Invite pending',
+                            color: const Color(0xFFF59E0B),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Text(
-                '$pct%',
-                style: AppTypography.display2.copyWith(
-                  fontSize: 28,
-                  color: AppColors.brandBlue,
-                  fontWeight: FontWeight.w900,
-                ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textTertiary,
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _GradientProgressBar(value: progress),
-        ],
-      ),
-    );
-  }
-}
-
-class _GradientProgressBar extends StatelessWidget {
-  const _GradientProgressBar({required this.value});
-
-  final double value;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        height: 12,
-        color: AppColors.blueTint,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: FractionallySizedBox(
-            widthFactor: value.clamp(0, 1),
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: <Color>[AppColors.brandBlue, Color(0xFF1D4ED8)],
-                ),
-              ),
-            ),
-          ),
         ),
       ),
     );
   }
-}
 
-class _ComplianceChecksSection extends StatelessWidget {
-  const _ComplianceChecksSection({
-    required this.batchName,
-    required this.industry,
-    required this.progress,
-  });
-
-  final String batchName;
-  final String industry;
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    // Keep these sample-y for now; later wire to real batch state.
-    final List<_ComplianceCheck> checks = <_ComplianceCheck>[
-      const _ComplianceCheck(
-        title: 'Identity Check',
-        subtitle: 'Biometric verified',
-        icon: Icons.fingerprint_rounded,
-        iconFg: AppColors.brandBlue,
-        iconBg: Color(0xFFEFF6FF),
-        status: _ComplianceStatus.verified,
-      ),
-      const _ComplianceCheck(
-        title: 'Criminal Record',
-        subtitle: 'Database searching...',
-        icon: Icons.gavel_rounded,
-        iconFg: AppColors.warning,
-        iconBg: Color(0xFFFFF7ED),
-        status: _ComplianceStatus.processing,
-      ),
-      const _ComplianceCheck(
-        title: 'Past Employment',
-        subtitle: 'Waiting for employer',
-        icon: Icons.work_rounded,
-        iconFg: AppColors.textTertiary,
-        iconBg: Color(0xFFF8FAFC),
-        status: _ComplianceStatus.pending,
-      ),
-      const _ComplianceCheck(
-        title: 'Address Verification',
-        subtitle: 'Mismatch detected',
-        icon: Icons.home_work_rounded,
-        iconFg: AppColors.error,
-        iconBg: Color(0xFFFEF2F2),
-        status: _ComplianceStatus.alert,
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                'Compliance Checks',
-                style: AppTypography.heading2.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Text(
-              'View All'.toUpperCase(),
-              style: AppTypography.caption.copyWith(
-                color: AppColors.brandBlue,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        for (final _ComplianceCheck check in checks) ...<Widget>[
-          _ComplianceCheckCard(check: check),
-          const SizedBox(height: 12),
-        ],
-      ],
-    );
+  static (_StatusStyle, String) _statusStyle(String raw) {
+    switch (raw) {
+      case 'verified':
+        return (const _StatusStyle.verified(), 'Verified');
+      case 'failed':
+        return (const _StatusStyle.failed(), 'Failed');
+      default:
+        return (const _StatusStyle.pending(), 'Pending');
+    }
   }
 }
 
-enum _ComplianceStatus { verified, processing, pending, alert }
-
-class _ComplianceCheck {
-  const _ComplianceCheck({
-    required this.title,
-    required this.subtitle,
+class _MiniPill extends StatelessWidget {
+  const _MiniPill({
     required this.icon,
-    required this.iconFg,
-    required this.iconBg,
-    required this.status,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color iconFg;
-  final Color iconBg;
-  final _ComplianceStatus status;
-}
-
-class _ComplianceCheckCard extends StatelessWidget {
-  const _ComplianceCheckCard({required this.check});
-
-  final _ComplianceCheck check;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget statusPill = switch (check.status) {
-      _ComplianceStatus.verified => _Pill(
-        bg: AppColors.blueTint,
-        fg: AppColors.brandBlue,
-        icon: Icons.verified_rounded,
-        label: 'Verified',
-        filledIcon: true,
-      ),
-      _ComplianceStatus.processing => _Pill(
-        bg: const Color(0xFFFFDBCD),
-        fg: AppColors.warning,
-        label: 'Processing',
-      ),
-      _ComplianceStatus.pending => _Pill(
-        bg: const Color(0xFFE1E2ED),
-        fg: AppColors.textTertiary,
-        label: 'Pending',
-      ),
-      _ComplianceStatus.alert => _Pill(
-        bg: const Color(0xFFFFDAD6),
-        fg: AppColors.error,
-        icon: Icons.warning_amber_rounded,
-        label: 'Alert',
-      ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const <BoxShadow>[_CardShadow()],
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: check.iconBg,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(check.icon, color: check.iconFg, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  check.title,
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  check.subtitle,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textTertiary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          statusPill,
-        ],
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.bg,
-    required this.fg,
     required this.label,
-    this.icon,
-    this.filledIcon = false,
+    required this.color,
   });
 
-  final Color bg;
-  final Color fg;
+  final IconData icon;
   final String label;
-  final IconData? icon;
-  final bool filledIcon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: bg,
+        color: color.withAlpha(16),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withAlpha(32)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (icon != null) ...<Widget>[
-            Icon(icon, size: 14, color: fg, fill: filledIcon ? 1 : 0),
-            const SizedBox(width: 6),
-          ],
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
           Text(
             label,
             style: AppTypography.caption.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -513,87 +401,53 @@ class _Pill extends StatelessWidget {
   }
 }
 
-class _SlaAlertCard extends StatelessWidget {
-  const _SlaAlertCard({required this.riskCount});
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.label, required this.style});
 
-  final int riskCount;
+  final String label;
+  final _StatusStyle style;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xCCFEF2F2),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFFFDAD6)),
+        color: style.bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: style.fg.withAlpha(30)),
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.history_toggle_off_rounded,
-                    color: AppColors.error,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        '$riskCount records at risk',
-                        style: AppTypography.body2.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Approaching SLA threshold',
-                        style: AppTypography.body2.copyWith(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              'Resolve',
-              style: AppTypography.body2.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
+      child: Text(
+        label.toUpperCase(),
+        style: AppTypography.caption.copyWith(
+          color: style.fg,
+          fontWeight: FontWeight.w900,
+          fontSize: 11,
+          letterSpacing: 0.8,
+        ),
       ),
     );
   }
+}
+
+class _StatusStyle {
+  const _StatusStyle({required this.bg, required this.fg, required this.icon});
+
+  final Color bg;
+  final Color fg;
+  final IconData icon;
+
+  const _StatusStyle.pending()
+    : bg = const Color(0xFFFFFBEB),
+      fg = const Color(0xFFF59E0B),
+      icon = Icons.hourglass_bottom_rounded;
+
+  const _StatusStyle.verified()
+    : bg = AppColors.successBg,
+      fg = AppColors.success,
+      icon = Icons.check_circle_rounded;
+
+  const _StatusStyle.failed()
+    : bg = AppColors.dangerBg,
+      fg = AppColors.error,
+      icon = Icons.cancel_rounded;
 }

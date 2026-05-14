@@ -2,23 +2,27 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
+import '../../../data/verification_repository.dart';
 
-class BulkUploadPage extends StatefulWidget {
+class BulkUploadPage extends ConsumerStatefulWidget {
   const BulkUploadPage({super.key});
 
   @override
-  State<BulkUploadPage> createState() => _BulkUploadPageState();
+  ConsumerState<BulkUploadPage> createState() => _BulkUploadPageState();
 }
 
-class _BulkUploadPageState extends State<BulkUploadPage> {
+class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   bool _didInitFromRoute = false;
 
   late final TextEditingController _batchNameController;
@@ -27,8 +31,10 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
   String _industry = 'transport';
   Set<String> _checks = <String>{'identity', 'address', 'criminal'};
 
-  bool _excelUploaded = true;
+  PickedFile? _pickedFile;
+  bool _excelUploaded = false;
   bool _photosZipUploaded = false;
+  bool _isUploading = false;
 
   List<Map<String, String>> _previewRows = <Map<String, String>>[];
 
@@ -206,7 +212,7 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
                 ),
                 const SizedBox(height: AppSpacing.x4),
                 TMZButton(
-                  label: 'Use Sample File',
+                  label: 'Use Sample File (Demo Mode)',
                   icon: Icons.auto_awesome_rounded,
                   onPressed: () {
                     Navigator.of(context).pop();
@@ -215,10 +221,21 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
                 ),
                 const SizedBox(height: AppSpacing.x2),
                 TMZButton(
-                  label: 'File Picker (Coming Soon)',
+                  label: 'Pick Excel File',
                   variant: TMZButtonVariant.secondary,
                   icon: Icons.folder_open_rounded,
-                  onPressed: null,
+                  onPressed: () async {
+                    final PickedFile? picked = await FilePickerUtil.pickExcel();
+                    if (!mounted) return;
+                    if (!context.mounted) return;
+                    if (picked == null) return;
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _pickedFile = picked;
+                      _excelUploaded = true;
+                      _previewRows = _buildSampleRows(_columns());
+                    });
+                  },
                 ),
               ],
             ),
@@ -236,32 +253,62 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
       );
       return;
     }
-    if (!_excelUploaded) {
+    if (_pickedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload an Excel/CSV file first.')),
+        const SnackBar(content: Text('Please upload an Excel file first.')),
       );
       return;
     }
 
-    final Map<String, String> qp = Map<String, String>.from(
-      GoRouterState.of(context).uri.queryParameters,
-    );
-    qp['columns'] = columns.join(',');
-    qp['batch'] = _batchNameController.text.trim();
-    qp.putIfAbsent('records', () => '80');
-    qp.putIfAbsent('checks', () => _checks.join(','));
-    qp['startedOn'] = DateTime.now().toIso8601String();
-    final String qs = qp.entries
-        .map(
-          (MapEntry<String, String> e) =>
-              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
-        )
-        .join('&');
-    context.push(
-      qs.isEmpty
-          ? AppRouter.batchCreatedSuccessPath
-          : '${AppRouter.batchCreatedSuccessPath}?$qs',
-    );
+    _uploadAndNavigate(columns);
+  }
+
+  Future<void> _uploadAndNavigate(List<String> columns) async {
+    if (_isUploading) return;
+    final PickedFile? file = _pickedFile;
+    if (file == null) return;
+
+    setState(() => _isUploading = true);
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final res = await repo.bulkUpload(
+        batchName: _batchNameController.text.trim(),
+        description: null,
+        fileBytes: file.bytes,
+        fileName: file.name,
+      );
+      if (!mounted) return;
+      final Uri uri = Uri(
+        path: AppRouter.batchCreatedSuccessPath,
+        queryParameters: <String, String>{
+          'batch_id': res.batchId,
+          'total_uploaded': res.totalUploaded.toString(),
+          'total_skipped': res.totalSkipped.toString(),
+          'errors': res.errors.length.toString(),
+          'columns': columns.join(','),
+          'checks': _checks.join(','),
+          'industry': _industry,
+          'batch': _batchNameController.text.trim(),
+        },
+      );
+      context.push(uri.toString());
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
   }
 
   @override
@@ -334,11 +381,11 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
                   const SizedBox(height: AppSpacing.x2),
                   _UploadTile(
                     title: 'Excel / CSV File',
-                    subtitle: _excelUploaded
-                        ? 'credentials.csv — 80 records • ${columns.length} fields'
+                    subtitle: _pickedFile != null
+                        ? '${_pickedFile!.name} • ${columns.length} fields'
                         : 'Upload your records file',
                     leadingIcon: Icons.upload_file_rounded,
-                    uploaded: _excelUploaded,
+                    uploaded: _pickedFile != null,
                     onTap: () => _openUploadSheet(
                       title: 'Upload Excel / CSV',
                       description:
@@ -413,9 +460,11 @@ class _BulkUploadPageState extends State<BulkUploadPage> {
                 child: TMZButton(
                   label: 'Confirm & Upload',
                   icon: Icons.arrow_forward_rounded,
+                  isLoading: _isUploading,
                   onPressed:
-                      (_excelUploaded &&
-                          _batchNameController.text.trim().isNotEmpty)
+                      (_pickedFile != null &&
+                          _batchNameController.text.trim().isNotEmpty &&
+                          !_isUploading)
                       ? _confirmAndCreateBatch
                       : null,
                 ),

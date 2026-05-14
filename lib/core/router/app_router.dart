@@ -29,6 +29,7 @@ import '../../features/skills/presentation/pages/skill_tree_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/batch_job_running_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/batch_tracking_detail_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/batch_created_success_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/batch_type_selection_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/bulk_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_detail_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_template_selector_page.dart';
@@ -40,12 +41,20 @@ import '../../features/orgs/verification_flow/presentation/pages/map_credential_
 import '../../features/orgs/verification_flow/presentation/pages/organisation_registration_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/otp_verification_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/pending_approval_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/product_batch_created_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/product_batch_setup_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/product_bulk_upload_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/product_sector_selector_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/user_document_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/verification_plan_setup_page.dart';
 import '../../features/scanner/presentation/pages/qr_scanner_page.dart';
 import '../../features/just_verifying/presentation/pages/public_verification_result_page.dart';
 import '../../features/admin/presentation/pages/super_admin_dashboard_page.dart';
 import '../../features/admin/presentation/pages/organisation_approval_detail_page.dart';
 import '../../features/admin/presentation/pages/batch_monitoring_detail_page.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../theme/app_typography.dart';
 
 class AppRouter {
   static const String splashPath = '/';
@@ -82,6 +91,7 @@ class AppRouter {
   static const String pendingApprovalPath = '/pending-approval';
 
   // Organisation bulk verification flow
+  static const String batchTypeSelectionPath = '/batch-type-selection';
   static const String verificationPlanSetupPath = '/verification-plan-setup';
   static const String credentialTemplateSelectorPath =
       '/credential-template-selector';
@@ -92,6 +102,11 @@ class AppRouter {
   static const String batchJobRunningPath = '/batch-job-running';
   static const String bulkUploadPath = '/bulk-upload';
   static const String batchCreatedSuccessPath = '/batch-created-success';
+  static const String productSectorSelectorPath = '/product-sector-selector';
+  static const String productBatchSetupPath = '/product-batch-setup';
+  static const String productBulkUploadPath = '/product-bulk-upload';
+  static const String productBatchCreatedPath = '/product-batch-created';
+  static const String userDocumentUploadPath = '/user-upload';
   static const String credentialsGeneratedPath = '/credentials-generated';
   static const String batchTrackingDetailPath = '/batch-tracking-detail';
   static const String individualRecordDetailPath = '/record-detail';
@@ -114,6 +129,53 @@ class AppRouter {
 
   static final GoRouter router = GoRouter(
     initialLocation: splashPath,
+    errorPageBuilder: (BuildContext context, GoRouterState state) {
+      final Object? error = state.error;
+      return _slideFadePage(
+        state: state,
+        child: Scaffold(
+          backgroundColor: AppColors.pageBg,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            title: const Text('Navigation Error'),
+          ),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.x4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Route not found', style: AppTypography.display2),
+                  const SizedBox(height: AppSpacing.x2),
+                  Text(
+                    'Location: ${state.uri}',
+                    style: AppTypography.body2.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x3),
+                  Text(
+                    error?.toString() ?? 'Unknown router error',
+                    style: AppTypography.body2.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
+                  ElevatedButton.icon(
+                    onPressed: () => context.go(dashboardPath),
+                    icon: const Icon(Icons.dashboard_rounded),
+                    label: const Text('Back to Dashboard'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
     redirect: (BuildContext context, GoRouterState state) async {
       final ProviderContainer container = ProviderScope.containerOf(context);
       final TokenStorage tokenStorage = container.read(tokenStorageProvider);
@@ -139,14 +201,18 @@ class AppRouter {
           state.matchedLocation.startsWith(organisationRegistrationPath) ||
           state.matchedLocation.startsWith(otpVerificationPath) ||
           state.matchedLocation.startsWith(pendingApprovalPath) ||
-          state.matchedLocation.startsWith(publicVerificationResultPath);
+          state.matchedLocation.startsWith(publicVerificationResultPath) ||
+          state.matchedLocation.startsWith(userDocumentUploadPath);
 
       if (!isAuthenticated && !isOnAuthPage) return loginPath;
 
       if (isAuthenticated &&
-          (state.matchedLocation == loginPath || state.matchedLocation == registerPath)) {
+          (state.matchedLocation == loginPath ||
+              state.matchedLocation == registerPath)) {
         final String loginType = (await tokenStorage.getLoginType()) ?? '';
-        return loginType == 'individual' ? individualIdentityPath : dashboardPath;
+        return loginType == 'individual'
+            ? individualIdentityPath
+            : dashboardPath;
       }
       return null;
     },
@@ -396,6 +462,48 @@ class AppRouter {
       ),
 
       // Organisation bulk verification flow
+      GoRoute(
+        path: batchTypeSelectionPath,
+        name: 'batch_type_selection',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const BatchTypeSelectionPage()),
+      ),
+      GoRoute(
+        path: productSectorSelectorPath,
+        name: 'product_sector_selector',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const ProductSectorSelectorPage(),
+            ),
+      ),
+      GoRoute(
+        path: productBatchSetupPath,
+        name: 'product_batch_setup',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const ProductBatchSetupPage()),
+      ),
+      GoRoute(
+        path: productBulkUploadPath,
+        name: 'product_bulk_upload',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const ProductBulkUploadPage()),
+      ),
+      GoRoute(
+        path: productBatchCreatedPath,
+        name: 'product_batch_created',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const ProductBatchCreatedPage(),
+            ),
+      ),
+      GoRoute(
+        path: userDocumentUploadPath,
+        name: 'user_document_upload',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const UserDocumentUploadPage()),
+      ),
       GoRoute(
         path: verificationPlanSetupPath,
         name: 'verification_plan_setup',

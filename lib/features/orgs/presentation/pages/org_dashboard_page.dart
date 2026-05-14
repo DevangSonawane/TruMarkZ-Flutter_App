@@ -22,15 +22,15 @@ class OrgDashboardPage extends ConsumerWidget {
     final profile = authAsync.value?.userProfile;
     final String displayName =
         profile?.organizationName?.trim().isNotEmpty == true
-            ? profile!.organizationName!.trim()
-            : (profile?.fullName?.trim().isNotEmpty == true
-                ? profile!.fullName!.trim()
-                : 'User');
+        ? profile!.organizationName!.trim()
+        : (profile?.fullName?.trim().isNotEmpty == true
+              ? profile!.fullName!.trim()
+              : 'User');
     final bool isVerified = profile?.isVerified == true;
     final String brn =
         profile?.businessRegistrationNumber?.trim().isNotEmpty == true
-            ? profile!.businessRegistrationNumber!.trim()
-            : '';
+        ? profile!.businessRegistrationNumber!.trim()
+        : '';
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -74,11 +74,11 @@ class OrgDashboardPage extends ConsumerWidget {
         ),
         children: <Widget>[
           _HeroGreetingCard(
-            name: displayName,
-            isVerified: isVerified,
-            registrationNumber: brn,
-            onTapSummary: () {},
-          )
+                name: displayName,
+                isVerified: isVerified,
+                registrationNumber: brn,
+                onTapSummary: () {},
+              )
               .animate()
               .fadeIn(duration: 220.ms)
               .slideY(
@@ -131,8 +131,7 @@ class OrgDashboardPage extends ConsumerWidget {
                   _QuickActionCard(
                     label: 'New Batch',
                     icon: Icons.drive_folder_upload_outlined,
-                    onTap: () =>
-                        context.push(AppRouter.verificationPlanSetupPath),
+                    onTap: () => context.go(AppRouter.batchTypeSelectionPath),
                   ),
                   _QuickActionCard(
                     label: 'Create Credentials',

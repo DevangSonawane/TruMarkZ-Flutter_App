@@ -68,7 +68,7 @@ class OrgShellPage extends StatelessWidget {
         floatingActionButton: FloatingActionButton(
           backgroundColor: AppColors.brandBlue,
           foregroundColor: Colors.white,
-          onPressed: () => context.push(AppRouter.verificationPlanSetupPath),
+          onPressed: () => context.push(AppRouter.batchTypeSelectionPath),
           child: const Icon(Icons.add_rounded, size: 30),
         ),
         bottomNavigationBar: TMZBottomNav(
