@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http_parser/http_parser.dart';
 
 import '../../../core/models/verification_models.dart';
 import '../../../core/network/api_client.dart';
@@ -21,11 +22,25 @@ class VerificationRepository {
     required Uint8List fileBytes,
     required String fileName,
   }) async {
+    final String safeName = fileName.trim().isEmpty ? 'upload.xlsx' : fileName;
+    final String ext = safeName.split('.').last.toLowerCase();
+    final MediaType contentType = switch (ext) {
+      'csv' => MediaType('text', 'csv'),
+      'xls' => MediaType('application', 'vnd.ms-excel'),
+      _ => MediaType(
+        'application',
+        'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ),
+    };
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName,
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
-      'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+      'file': MultipartFile.fromBytes(
+        fileBytes,
+        filename: safeName,
+        contentType: contentType,
+      ),
     });
     final Map<String, dynamic> res = await _api.verificationPostMultipart(
       '/verification/bulk-upload',

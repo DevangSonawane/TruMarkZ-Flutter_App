@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
@@ -11,6 +12,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
+import '../../../../../core/utils/spreadsheet_preview_util.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
@@ -32,11 +34,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   Set<String> _checks = <String>{'identity', 'address', 'criminal'};
 
   PickedFile? _pickedFile;
-  bool _excelUploaded = false;
-  bool _photosZipUploaded = false;
   bool _isUploading = false;
 
-  List<Map<String, String>> _previewRows = <Map<String, String>>[];
+  SpreadsheetPreview? _preview;
+  String? _previewError;
+  bool _parsingPreview = false;
 
   @override
   void initState() {
@@ -63,8 +65,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final List<String> initialColumns =
         _parseCsvList(qp['columns']) ?? _templateColumnsForChecks(_checks);
     _columnsController.text = initialColumns.join(',');
-
-    _previewRows = _buildSampleRows(initialColumns);
   }
 
   @override
@@ -115,54 +115,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return sorted;
   }
 
-  static List<Map<String, String>> _buildSampleRows(List<String> columns) {
-    final List<Map<String, String>> rows = <Map<String, String>>[];
-    final List<Map<String, String>> base = <Map<String, String>>[
-      <String, String>{
-        'full_name': 'Ravi Kumar',
-        'dob': '1997-06-12',
-        'id_number': 'ID-298172',
-        'phone': '+91 98XXXXXX21',
-        'email': 'ravi@org.com',
-        'address': 'Bengaluru, IN',
-        'city': 'Bengaluru',
-        'state': 'KA',
-        'pincode': '560001',
-      },
-      <String, String>{
-        'full_name': 'Asha Nair',
-        'dob': '1999-01-03',
-        'id_number': 'ID-772190',
-        'phone': '+91 97XXXXXX10',
-        'email': 'asha@org.com',
-        'address': 'Kochi, IN',
-        'city': 'Kochi',
-        'state': 'KL',
-        'pincode': '682001',
-      },
-      <String, String>{
-        'full_name': 'Mohit Singh',
-        'dob': '1996-11-21',
-        'id_number': 'ID-551902',
-        'phone': '+91 99XXXXXX32',
-        'email': 'mohit@org.com',
-        'address': 'Delhi, IN',
-        'city': 'Delhi',
-        'state': 'DL',
-        'pincode': '110001',
-      },
-    ];
-
-    for (final Map<String, String> b in base) {
-      final Map<String, String> row = <String, String>{};
-      for (final String c in columns) {
-        row[c] = b[c] ?? '—';
-      }
-      rows.add(row);
-    }
-    return rows;
-  }
-
   List<String> _columns() {
     return (_columnsController.text)
         .split(',')
@@ -186,7 +138,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   void _openUploadSheet({
     required String title,
     required String description,
-    required VoidCallback onUseSample,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -212,15 +163,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                 ),
                 const SizedBox(height: AppSpacing.x4),
                 TMZButton(
-                  label: 'Use Sample File (Demo Mode)',
-                  icon: Icons.auto_awesome_rounded,
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    onUseSample();
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
-                TMZButton(
                   label: 'Pick Excel File',
                   variant: TMZButtonVariant.secondary,
                   icon: Icons.folder_open_rounded,
@@ -230,11 +172,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                     if (!context.mounted) return;
                     if (picked == null) return;
                     Navigator.of(context).pop();
-                    setState(() {
-                      _pickedFile = picked;
-                      _excelUploaded = true;
-                      _previewRows = _buildSampleRows(_columns());
-                    });
+                    await _setPickedFile(picked);
                   },
                 ),
               ],
@@ -243,6 +181,33 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         );
       },
     );
+  }
+
+  Future<void> _setPickedFile(PickedFile picked) async {
+    setState(() {
+      _pickedFile = picked;
+      _parsingPreview = true;
+      _previewError = null;
+      _preview = null;
+    });
+
+    try {
+      final SpreadsheetPreview p = SpreadsheetPreviewUtil.parse(
+        bytes: picked.bytes,
+        extension: picked.extension,
+        maxColumns: 200,
+        maxRows: 10,
+      );
+      if (!mounted) return;
+      setState(() {
+        _preview = p;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _previewError = e.toString());
+    } finally {
+      if (mounted) setState(() => _parsingPreview = false);
+    }
   }
 
   void _confirmAndCreateBatch() {
@@ -299,12 +264,27 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
+    } on DioException catch (e) {
       if (!mounted) return;
+      debugPrint(
+        '[BulkUploadPage] DioException: type=${e.type} uri=${e.requestOptions.uri} '
+        'status=${e.response?.statusCode} data=${e.response?.data} message=${e.message}',
+      );
+      final Object? inner = e.error;
+      if (inner is ApiException) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(inner.message)));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Upload failed. Please try again.')),
+        );
+      }
+    } catch (e, st) {
+      if (!mounted) return;
+      debugPrint('[BulkUploadPage] bulk upload failed: $e\n$st');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
+        SnackBar(content: Text(e.toString())),
       );
     } finally {
       if (mounted) setState(() => _isUploading = false);
@@ -390,30 +370,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                     uploaded: _pickedFile != null,
                     onTap: () => _openUploadSheet(
                       title: 'Upload Excel / CSV',
-                      description:
-                          'Pick an Excel/CSV file. For now you can use sample data.',
-                      onUseSample: () {
-                        setState(() {
-                          _excelUploaded = true;
-                          _previewRows = _buildSampleRows(columns);
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x3),
-                  _UploadTile(
-                    title: 'Photos ZIP (Optional)',
-                    subtitle: _photosZipUploaded
-                        ? 'photos.zip — linked by id_number'
-                        : 'Upload photos ZIP for face photo fields',
-                    leadingIcon: Icons.photo_library_outlined,
-                    uploaded: _photosZipUploaded,
-                    onTap: () => _openUploadSheet(
-                      title: 'Upload Photos ZIP',
-                      description:
-                          'Upload a ZIP of photos named by a unique column (e.g. id_number).',
-                      onUseSample: () =>
-                          setState(() => _photosZipUploaded = true),
+                      description: 'Pick an Excel/CSV file to create the batch.',
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x4),
@@ -431,22 +388,40 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                   const SizedBox(height: AppSpacing.x4),
                   Text('Preview', style: AppTypography.heading2),
                   const SizedBox(height: AppSpacing.x2),
-                  if (!_excelUploaded)
-                    TMZCard(
-                      child: Text(
-                        'Upload an Excel/CSV file to see a preview table of entries.',
-                        style: AppTypography.body2.copyWith(
-                          color: scheme.onSurface.withAlpha(160),
-                        ),
-                      ),
-                    )
-                  else
-                    TMZCard(
-                      child: _PreviewTable(
-                        columns: columns,
-                        rows: _previewRows,
-                      ),
-                    ),
+                  TMZCard(
+                    child: _pickedFile == null
+                        ? Text(
+                            'Upload an Excel/CSV file to see a preview.',
+                            style: AppTypography.body2.copyWith(
+                              color: scheme.onSurface.withAlpha(160),
+                            ),
+                          )
+                        : _parsingPreview
+                        ? Row(
+                            children: <Widget>[
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              const SizedBox(width: AppSpacing.x2),
+                              Text(
+                                'Reading ${_pickedFile!.name}…',
+                                style: AppTypography.body2.copyWith(
+                                  color: scheme.onSurface.withAlpha(160),
+                                ),
+                              ),
+                            ],
+                          )
+                        : (_previewError != null)
+                        ? Text(
+                            'Unable to preview file: $_previewError',
+                            style: AppTypography.body2.copyWith(
+                              color: AppColors.error,
+                            ),
+                          )
+                        : _PreviewTable(preview: _preview),
+                  ),
                 ],
               ),
             ),
@@ -678,21 +653,34 @@ class _DashedBorderPainter extends CustomPainter {
 }
 
 class _PreviewTable extends StatelessWidget {
-  const _PreviewTable({required this.columns, required this.rows});
+  const _PreviewTable({required this.preview});
 
-  final List<String> columns;
-  final List<Map<String, String>> rows;
+  final SpreadsheetPreview? preview;
 
   @override
   Widget build(BuildContext context) {
+    final SpreadsheetPreview? p = preview;
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final List<Map<String, String>> limited = rows.take(5).toList();
+    if (p == null) {
+      return Text(
+        'No preview available.',
+        style: AppTypography.body2.copyWith(color: scheme.onSurface.withAlpha(160)),
+      );
+    }
 
+    if (p.columns.isEmpty) {
+      return Text(
+        'No rows found in ${p.sheetName}.',
+        style: AppTypography.body2.copyWith(color: scheme.onSurface.withAlpha(160)),
+      );
+    }
+
+    final List<String> displayColumns = p.columns.take(8).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Showing ${limited.length} of 80 records',
+          '${p.sheetName} • showing ${p.rows.length} of ${p.totalRows} rows',
           style: AppTypography.caption.copyWith(
             color: scheme.onSurface.withAlpha(150),
           ),
@@ -709,17 +697,16 @@ class _PreviewTable extends StatelessWidget {
               color: scheme.onSurface.withAlpha(160),
             ),
             columns: <DataColumn>[
-              for (final String c in columns.take(6))
-                DataColumn(label: Text(c)),
+              for (final String c in displayColumns) DataColumn(label: Text(c)),
             ],
             rows: <DataRow>[
-              for (final Map<String, String> row in limited)
+              for (final List<String> row in p.rows)
                 DataRow(
                   cells: <DataCell>[
-                    for (final String c in columns.take(6))
+                    for (int i = 0; i < displayColumns.length; i++)
                       DataCell(
                         Text(
-                          row[c] ?? '—',
+                          i < row.length ? row[i] : '',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

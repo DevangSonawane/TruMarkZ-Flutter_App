@@ -97,7 +97,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                 Text('Upload Product Data', style: AppTypography.heading1),
                 const SizedBox(height: AppSpacing.x2),
                 Text(
-                  'Pick an Excel file (.xlsx). For now you can use sample data.',
+                  'Pick an Excel/CSV file to create a batch.',
                   style: AppTypography.body2.copyWith(
                     color: Theme.of(
                       context,
@@ -105,27 +105,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.x4),
-                _SheetAction(
-                  icon: Icons.auto_awesome_rounded,
-                  label: 'Use Sample File (Demo Mode)',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    setState(() {
-                      _pickedFile = null;
-                      _headers = <String>[
-                        'product_name',
-                        'serial_number',
-                        'manufacture_date',
-                        'model_number',
-                        'warranty_months',
-                        'batch_code',
-                        'color',
-                        'description',
-                      ];
-                    });
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
                 _SheetAction(
                   icon: Icons.folder_open_rounded,
                   label: 'Pick Excel File',

@@ -9,6 +9,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
+import '../../../../../core/network/api_client.dart';
 import '../../../data/verification_repository.dart';
 
 class UserDocumentUploadPage extends ConsumerStatefulWidget {
@@ -74,11 +75,16 @@ class _UserDocumentUploadPageState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Photo uploaded successfully.')),
       );
-    } catch (e) {
+    } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
@@ -114,11 +120,16 @@ class _UserDocumentUploadPageState
           content: Text(res.message.isEmpty ? 'Uploaded.' : res.message),
         ),
       );
-    } catch (e) {
+    } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
     }
   }
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../router/app_router.dart';
@@ -27,10 +28,10 @@ class ApiClient {
       _dio = Dio(
         BaseOptions(
           baseUrl: 'https://trumarkz-api-54038467488.asia-south1.run.app',
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
+          connectTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+          sendTimeout: const Duration(seconds: 60),
           headers: <String, dynamic>{
-            Headers.contentTypeHeader: Headers.jsonContentType,
             Headers.acceptHeader: Headers.jsonContentType,
           },
         ),
@@ -38,8 +39,9 @@ class ApiClient {
       _verificationDio = Dio(
         BaseOptions(
           baseUrl: 'https://trumarkz-api.asynk.in',
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
+          connectTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 120),
+          sendTimeout: const Duration(seconds: 120),
           headers: <String, dynamic>{
             Headers.acceptHeader: Headers.jsonContentType,
           },
@@ -47,6 +49,30 @@ class ApiClient {
       ) {
     _configureDio(_dio);
     _configureDio(_verificationDio);
+
+    if (kDebugMode) {
+      // Keep this lightweight: multipart bodies can be huge.
+      _dio.interceptors.add(
+        LogInterceptor(
+          requestHeader: true,
+          requestBody: false,
+          responseHeader: false,
+          responseBody: false,
+          error: true,
+          logPrint: (Object o) => debugPrint(o.toString()),
+        ),
+      );
+      _verificationDio.interceptors.add(
+        LogInterceptor(
+          requestHeader: true,
+          requestBody: false,
+          responseHeader: false,
+          responseBody: false,
+          error: true,
+          logPrint: (Object o) => debugPrint(o.toString()),
+        ),
+      );
+    }
   }
 
   final Dio _dio;
@@ -69,7 +95,11 @@ class ApiClient {
 
   Future<Map<String, dynamic>> post(String path, {Object? data}) async {
     try {
-      final Response<dynamic> res = await _dio.post<dynamic>(path, data: data);
+      final Response<dynamic> res = await _dio.post<dynamic>(
+        path,
+        data: data,
+        options: Options(contentType: Headers.jsonContentType),
+      );
       return _asMap(res.data);
     } on DioException catch (e) {
       throw _toApiException(e);
@@ -105,7 +135,11 @@ class ApiClient {
   // For PATCH requests
   Future<Map<String, dynamic>> patch(String path, {Object? data}) async {
     try {
-      final Response<dynamic> res = await _dio.patch<dynamic>(path, data: data);
+      final Response<dynamic> res = await _dio.patch<dynamic>(
+        path,
+        data: data,
+        options: Options(contentType: Headers.jsonContentType),
+      );
       return _asMap(res.data);
     } on DioException catch (e) {
       throw _toApiException(e);
@@ -122,6 +156,14 @@ class ApiClient {
       final Response<dynamic> res = await _verificationDio.get<dynamic>(path);
       return _asMap(res.data);
     } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Response<dynamic> res = await _dio.get<dynamic>(path);
+          return _asMap(res.data);
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
       throw _toApiException(e);
     } catch (_) {
       throw const ApiException(
@@ -139,9 +181,22 @@ class ApiClient {
       final Response<dynamic> res = await _verificationDio.post<dynamic>(
         path,
         data: data,
+        options: Options(contentType: Headers.jsonContentType),
       );
       return _asMap(res.data);
     } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Response<dynamic> res = await _dio.post<dynamic>(
+            path,
+            data: data,
+            options: Options(contentType: Headers.jsonContentType),
+          );
+          return _asMap(res.data);
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
       throw _toApiException(e);
     } catch (_) {
       throw const ApiException(
@@ -159,9 +214,22 @@ class ApiClient {
       final Response<dynamic> res = await _verificationDio.patch<dynamic>(
         path,
         data: data,
+        options: Options(contentType: Headers.jsonContentType),
       );
       return _asMap(res.data);
     } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Response<dynamic> res = await _dio.patch<dynamic>(
+            path,
+            data: data,
+            options: Options(contentType: Headers.jsonContentType),
+          );
+          return _asMap(res.data);
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
       throw _toApiException(e);
     } catch (_) {
       throw const ApiException(
@@ -177,9 +245,10 @@ class ApiClient {
     bool skipAuth = false,
   }) async {
     try {
-      final Options? options = skipAuth
-          ? Options(extra: <String, dynamic>{'skipAuth': true})
-          : null;
+      final Options options = Options(
+        extra: skipAuth ? <String, dynamic>{'skipAuth': true} : null,
+        contentType: 'multipart/form-data',
+      );
       final Response<dynamic> res = await _verificationDio.post<dynamic>(
         path,
         data: formData,
@@ -187,6 +256,22 @@ class ApiClient {
       );
       return _asMap(res.data);
     } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Options retryOptions = Options(
+            extra: skipAuth ? <String, dynamic>{'skipAuth': true} : null,
+            contentType: 'multipart/form-data',
+          );
+          final Response<dynamic> res = await _dio.post<dynamic>(
+            path,
+            data: formData,
+            options: retryOptions,
+          );
+          return _asMap(res.data);
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
       throw _toApiException(e);
     } catch (_) {
       throw const ApiException(
@@ -194,6 +279,13 @@ class ApiClient {
         message: 'Something went wrong. Please try again.',
       );
     }
+  }
+
+  bool _shouldRetryOnPrimary(DioException e) {
+    // Custom domain sometimes fails due to DNS/cert/CORS issues; retry against
+    // the primary Cloud Run domain.
+    return e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.badCertificate;
   }
 
   Map<String, dynamic> _asMap(dynamic data) {
@@ -218,6 +310,12 @@ class ApiClient {
             },
         onError: (DioException err, ErrorInterceptorHandler handler) async {
           final int? statusCode = err.response?.statusCode;
+          if (kDebugMode) {
+            debugPrint(
+              '[ApiClient] error ${err.requestOptions.method} ${err.requestOptions.uri} '
+              'status=$statusCode type=${err.type} data=${err.response?.data}',
+            );
+          }
           if (statusCode == 401) {
             await _tokenStorage.clearAll();
             scheduleMicrotask(
@@ -229,7 +327,10 @@ class ApiClient {
 
           final String message =
               _extractErrorMessage(err) ??
-              'Something went wrong. Please try again.';
+              _fallbackMessageForType(err.type) ??
+              (statusCode != null
+                  ? 'Request failed ($statusCode). Please try again.'
+                  : 'Something went wrong. Please try again.');
           handler.reject(
             DioException(
               requestOptions: err.requestOptions,
@@ -250,8 +351,30 @@ class ApiClient {
     if (inner is ApiException) return inner;
     final int? statusCode = e.response?.statusCode;
     final String message =
-        _extractErrorMessage(e) ?? 'Something went wrong. Please try again.';
+        _extractErrorMessage(e) ??
+        _fallbackMessageForType(e.type) ??
+        (statusCode != null
+            ? 'Request failed ($statusCode). Please try again.'
+            : 'Something went wrong. Please try again.');
     return ApiException(statusCode: statusCode, message: message);
+  }
+
+  String? _fallbackMessageForType(DioExceptionType type) {
+    switch (type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'Request timed out. Please try again.';
+      case DioExceptionType.connectionError:
+        return 'Network error. Please check your connection and try again.';
+      case DioExceptionType.badCertificate:
+        return 'Secure connection failed. Please try again.';
+      case DioExceptionType.cancel:
+        return 'Request cancelled. Please try again.';
+      case DioExceptionType.badResponse:
+      case DioExceptionType.unknown:
+        return null;
+    }
   }
 
   String? _extractErrorMessage(DioException err) {

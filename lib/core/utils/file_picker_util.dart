@@ -20,7 +20,7 @@ class FilePickerUtil {
       final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         withData: true,
-        allowedExtensions: <String>['xlsx', 'xls'],
+        allowedExtensions: <String>['xlsx', 'csv'],
       );
       return _fromResult(result);
     } on MissingPluginException {
