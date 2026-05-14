@@ -29,8 +29,8 @@ class ApiClient {
         BaseOptions(
           baseUrl: 'https://trumarkz-api-54038467488.asia-south1.run.app',
           connectTimeout: const Duration(seconds: 60),
-          receiveTimeout: const Duration(seconds: 60),
-          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 120),
+          sendTimeout: const Duration(seconds: 120),
           headers: <String, dynamic>{
             Headers.acceptHeader: Headers.jsonContentType,
           },
@@ -38,7 +38,9 @@ class ApiClient {
       ),
       _verificationDio = Dio(
         BaseOptions(
-          baseUrl: 'https://trumarkz-api.asynk.in',
+          // Use the Cloud Run base as source-of-truth for verification APIs.
+          // The custom domain can fail intermittently (DNS/TLS) on some networks.
+          baseUrl: 'https://trumarkz-api-54038467488.asia-south1.run.app',
           connectTimeout: const Duration(seconds: 60),
           receiveTimeout: const Duration(seconds: 120),
           sendTimeout: const Duration(seconds: 120),
@@ -282,8 +284,8 @@ class ApiClient {
   }
 
   bool _shouldRetryOnPrimary(DioException e) {
-    // Custom domain sometimes fails due to DNS/cert/CORS issues; retry against
-    // the primary Cloud Run domain.
+    // Kept for backward-compat, but verification baseUrl already points to
+    // Cloud Run. Only retry on transient network layer errors.
     return e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.badCertificate;
   }
@@ -313,7 +315,7 @@ class ApiClient {
           if (kDebugMode) {
             debugPrint(
               '[ApiClient] error ${err.requestOptions.method} ${err.requestOptions.uri} '
-              'status=$statusCode type=${err.type} data=${err.response?.data}',
+              'status=$statusCode type=${err.type} message=${err.message} error=${err.error} data=${err.response?.data}',
             );
           }
           if (statusCode == 401) {
