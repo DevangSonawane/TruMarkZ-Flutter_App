@@ -11,9 +11,13 @@ enum _Industry {
   healthcare,
   education,
   manufacturing,
-  security,
-  agriculture,
-  products,
+  securityServices,
+  blueCollarWorkforce,
+  gigEconomyWorkers,
+  recruitmentStudents,
+  insuranceAgents,
+  agricultureWorkforce,
+  individualVerification,
   others,
 }
 
@@ -277,6 +281,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
         backgroundColor: AppColors.pageBg,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
+        centerTitle: true,
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => _goBack(context),
@@ -286,6 +291,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
           ),
         ),
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Image.asset('assets/icons/headers_app_icon.png', height: 20),
             const SizedBox(width: AppSpacing.x2),
@@ -327,16 +333,22 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
                   transitionBuilder: (Widget child, Animation<double> anim) {
-                    final Animation<Offset> offset = Tween<Offset>(
-                      begin: Offset(movingForward ? 0.08 : -0.08, 0),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut));
+                    final Animation<Offset> offset =
+                        Tween<Offset>(
+                          begin: Offset(movingForward ? 0.08 : -0.08, 0),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(parent: anim, curve: Curves.easeOut),
+                        );
                     return FadeTransition(
                       opacity: anim,
                       child: SlideTransition(position: offset, child: child),
                     );
                   },
-                  child: KeyedSubtree(key: ValueKey<int>(_stepIndex), child: content),
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(_stepIndex),
+                    child: content,
+                  ),
                 ),
               ),
             ),
@@ -430,7 +442,9 @@ class _MinimalStepDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double size = active ? 12 : 10;
-    final Color fill = completed ? AppColors.brandBlue : const Color(0xFFEFF3FF);
+    final Color fill = completed
+        ? AppColors.brandBlue
+        : const Color(0xFFEFF3FF);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
@@ -546,13 +560,49 @@ class _IndustryStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<(_Industry, String, IconData)> industries =
         <(_Industry, String, IconData)>[
-          (_Industry.transport, 'Transport', Icons.local_shipping_rounded),
+          (
+            _Industry.transport,
+            'Transport & Logistics',
+            Icons.local_shipping_rounded,
+          ),
           (_Industry.healthcare, 'Healthcare', Icons.medical_services_rounded),
           (_Industry.education, 'Education', Icons.school_rounded),
           (_Industry.manufacturing, 'Manufacturing', Icons.factory_rounded),
-          (_Industry.security, 'Security', Icons.shield_rounded),
-          (_Industry.agriculture, 'Agriculture', Icons.agriculture_rounded),
-          (_Industry.products, 'Products', Icons.inventory_2_rounded),
+          (
+            _Industry.securityServices,
+            'Security Services',
+            Icons.shield_rounded,
+          ),
+          (
+            _Industry.blueCollarWorkforce,
+            'Blue Collar Workforce',
+            Icons.engineering_rounded,
+          ),
+          (
+            _Industry.gigEconomyWorkers,
+            'Gig Economy Workers',
+            Icons.delivery_dining_rounded,
+          ),
+          (
+            _Industry.recruitmentStudents,
+            'Recruitment & Students',
+            Icons.school_outlined,
+          ),
+          (
+            _Industry.insuranceAgents,
+            'Insurance Agents',
+            Icons.health_and_safety_rounded,
+          ),
+          (
+            _Industry.agricultureWorkforce,
+            'Agriculture Workforce',
+            Icons.agriculture_rounded,
+          ),
+          (
+            _Industry.individualVerification,
+            'Individual Verification',
+            Icons.person_search_rounded,
+          ),
           (_Industry.others, 'Others', Icons.widgets_rounded),
         ];
 
@@ -638,38 +688,41 @@ class _IndustryCard extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.x5),
           child: Stack(
             children: <Widget>[
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.brandBlue.withAlpha(24)
-                          : const Color(0xFFEFF3FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      icon,
-                      color: selected
-                          ? AppColors.brandBlue
-                          : AppColors.brandBlue,
-                      size: 30,
-                    ),
+              Positioned.fill(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppColors.brandBlue.withAlpha(24)
+                              : const Color(0xFFEFF3FF),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(icon, color: AppColors.brandBlue, size: 30),
+                      ),
+                      const SizedBox(height: AppSpacing.x4),
+                      Text(
+                        label,
+                        style: AppTypography.body2.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: selected
+                              ? AppColors.brandBlue
+                              : AppColors.textPrimary,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Text(
-                    label,
-                    style: AppTypography.body2.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: selected
-                          ? AppColors.brandBlue
-                          : AppColors.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+                ),
               ),
               if (selected)
                 Positioned(
@@ -823,8 +876,12 @@ class _CheckTile extends StatelessWidget {
     final Color borderColor = selected
         ? AppColors.brandBlue.withAlpha(28)
         : Colors.transparent;
-    final Color statusFg = _isAutomatic ? AppColors.brandBlue : AppColors.textTertiary;
-    final Color statusBg = _isAutomatic ? const Color(0xFFD6E2FF) : const Color(0xFFF1F5F9);
+    final Color statusFg = _isAutomatic
+        ? AppColors.brandBlue
+        : AppColors.textTertiary;
+    final Color statusBg = _isAutomatic
+        ? const Color(0xFFD6E2FF)
+        : const Color(0xFFF1F5F9);
 
     return Material(
       color: Colors.white,

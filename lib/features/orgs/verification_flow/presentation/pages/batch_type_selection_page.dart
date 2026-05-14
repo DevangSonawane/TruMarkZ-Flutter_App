@@ -94,10 +94,10 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                     subtitle:
                         'Verify identities of individuals — workers, agents, drivers, students & more',
                     tags: const <String>[
-                      'Blue Collar',
-                      'Gig Workers',
+                      'Blue Collar Workforce',
+                      'Gig Economy',
                       'Insurance Agents',
-                      'Recruits',
+                      'Recruitment & Students',
                     ],
                     selected: _selected == _BatchType.human,
                     gradient: _primaryGradient,
@@ -118,8 +118,8 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                     tags: const <String>[
                       'Consumer Goods',
                       'Cosmetics',
-                      'Warranty Cards',
-                      'FMCG',
+                      'Electronics',
+                      'EV & Automotive',
                     ],
                     selected: _selected == _BatchType.product,
                     gradient: _primaryGradient,

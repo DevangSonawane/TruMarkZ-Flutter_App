@@ -45,55 +45,87 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
     final List<(_Sector, bool)> sectors = <(_Sector, bool)>[
       (
         const _Sector(
-          title: 'Consumer Goods & Warranty',
+          title: 'Consumer Goods',
           description:
-              'Digital warranty cards with component-level blockchain certificates',
+              'Digital certificates for everyday products and warranties',
           icon: Icons.inventory_rounded,
         ),
-        _selectedSector == 'Consumer Goods & Warranty',
+        _selectedSector == 'Consumer Goods',
       ),
       (
         const _Sector(
           title: 'Beauty & Cosmetics',
           description:
-              'Product authenticity certificates with lab reports as tappable icons',
+              'Authenticity certificates with lab reports and batch proofs',
           icon: Icons.spa_rounded,
         ),
         _selectedSector == 'Beauty & Cosmetics',
       ),
       (
         const _Sector(
-          title: 'Insurance',
+          title: 'Electronics & Appliances',
           description:
-              'Policy certificates & agent identity badges on blockchain',
-          icon: Icons.health_and_safety_rounded,
+              'Warranty + serial based certificates for devices and appliances',
+          icon: Icons.electrical_services_rounded,
         ),
-        _selectedSector == 'Insurance',
+        _selectedSector == 'Electronics & Appliances',
       ),
       (
         const _Sector(
-          title: 'Transport & Logistics',
-          description: 'Driver IDs with documents shareable via WhatsApp',
-          icon: Icons.local_shipping_rounded,
+          title: 'EV & Automotive',
+          description: 'Vehicle, battery, and component certificates on-chain',
+          icon: Icons.electric_car_rounded,
         ),
-        _selectedSector == 'Transport & Logistics',
+        _selectedSector == 'EV & Automotive',
       ),
       (
         const _Sector(
-          title: 'Verified Recruitment',
+          title: 'Insurance Policies',
+          description: 'Policy certificates and agent-issued proofs',
+          icon: Icons.policy_rounded,
+        ),
+        _selectedSector == 'Insurance Policies',
+      ),
+      (
+        const _Sector(
+          title: 'Healthcare Products',
           description:
-              'Student credential bundles with background & skill reports',
-          icon: Icons.school_rounded,
+              'Certificates for pharma, devices, and lab-linked proofs',
+          icon: Icons.medical_services_rounded,
         ),
-        _selectedSector == 'Verified Recruitment',
+        _selectedSector == 'Healthcare Products',
       ),
       (
         const _Sector(
-          title: 'Blue Collar Resources',
-          description: 'Maids, gig workers, home service staff identity cards',
-          icon: Icons.engineering_rounded,
+          title: 'Industrial Equipment',
+          description: 'Asset certificates for tools, machines, and parts',
+          icon: Icons.precision_manufacturing_rounded,
         ),
-        _selectedSector == 'Blue Collar Resources',
+        _selectedSector == 'Industrial Equipment',
+      ),
+      (
+        const _Sector(
+          title: 'Agriculture Products',
+          description: 'Origin and quality certificates for agri goods',
+          icon: Icons.agriculture_rounded,
+        ),
+        _selectedSector == 'Agriculture Products',
+      ),
+      (
+        const _Sector(
+          title: 'Luxury Products',
+          description: 'Anti-counterfeit certificates for premium goods',
+          icon: Icons.diamond_rounded,
+        ),
+        _selectedSector == 'Luxury Products',
+      ),
+      (
+        const _Sector(
+          title: 'Others',
+          description: 'Create a custom product certificate batch',
+          icon: Icons.widgets_rounded,
+        ),
+        _selectedSector == 'Others',
       ),
     ];
 

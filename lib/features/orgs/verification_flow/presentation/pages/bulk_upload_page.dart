@@ -318,7 +318,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Image.asset('assets/icons/headers_app_icon.png', height: 22),
             const SizedBox(width: AppSpacing.x2),
