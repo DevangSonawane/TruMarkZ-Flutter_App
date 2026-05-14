@@ -1,6 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 class PickedFile {
   const PickedFile({
@@ -16,29 +16,62 @@ class PickedFile {
 
 class FilePickerUtil {
   static Future<PickedFile?> pickExcel() async {
-    final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      withData: true,
-      allowedExtensions: <String>['xlsx', 'xls'],
-    );
-    return _fromResult(result);
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        withData: true,
+        allowedExtensions: <String>['xlsx', 'xls'],
+      );
+      return _fromResult(result);
+    } on MissingPluginException {
+      debugPrint(
+        '[FilePickerUtil] file_picker plugin not registered. '
+        'Do a full stop/re-run (not hot restart).',
+      );
+      return null;
+    } on PlatformException {
+      debugPrint('[FilePickerUtil] pickExcel failed (PlatformException).');
+      return null;
+    }
   }
 
   static Future<PickedFile?> pickImage() async {
-    final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    return _fromResult(result);
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      return _fromResult(result);
+    } on MissingPluginException {
+      debugPrint(
+        '[FilePickerUtil] file_picker plugin not registered. '
+        'Do a full stop/re-run (not hot restart).',
+      );
+      return null;
+    } on PlatformException {
+      debugPrint('[FilePickerUtil] pickImage failed (PlatformException).');
+      return null;
+    }
   }
 
   static Future<PickedFile?> pickDocument() async {
-    final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      withData: true,
-      allowedExtensions: <String>['pdf', 'png', 'jpg', 'jpeg', 'webp'],
-    );
-    return _fromResult(result);
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        withData: true,
+        allowedExtensions: <String>['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+      );
+      return _fromResult(result);
+    } on MissingPluginException {
+      debugPrint(
+        '[FilePickerUtil] file_picker plugin not registered. '
+        'Do a full stop/re-run (not hot restart).',
+      );
+      return null;
+    } on PlatformException {
+      debugPrint('[FilePickerUtil] pickDocument failed (PlatformException).');
+      return null;
+    }
   }
 
   static PickedFile? _fromResult(FilePickerResult? result) {

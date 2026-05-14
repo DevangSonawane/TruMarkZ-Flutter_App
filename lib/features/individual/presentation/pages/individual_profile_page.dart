@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,21 +8,64 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/file_picker_util.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 
-class IndividualProfilePage extends ConsumerWidget {
+class IndividualProfilePage extends ConsumerStatefulWidget {
   const IndividualProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<IndividualProfilePage> createState() =>
+      _IndividualProfilePageState();
+}
+
+class _IndividualProfilePageState extends ConsumerState<IndividualProfilePage> {
+  Uint8List? _profilePhotoBytes;
+  PickedFile? _idDocument;
+  PickedFile? _certificateDocument;
+
+  Future<void> _pickProfilePhoto() async {
+    final PickedFile? picked = await FilePickerUtil.pickImage();
+    if (!mounted) return;
+    if (picked == null) return;
+    setState(() => _profilePhotoBytes = picked.bytes);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Profile photo selected (sync coming soon).'),
+      ),
+    );
+  }
+
+  Future<void> _pickIdDocument() async {
+    final PickedFile? picked = await FilePickerUtil.pickDocument();
+    if (!mounted) return;
+    if (picked == null) return;
+    setState(() => _idDocument = picked);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Document selected (sync coming soon).')),
+    );
+  }
+
+  Future<void> _pickCertificateDocument() async {
+    final PickedFile? picked = await FilePickerUtil.pickDocument();
+    if (!mounted) return;
+    if (picked == null) return;
+    setState(() => _certificateDocument = picked);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Certificate selected (sync coming soon).')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     const Color pageSurface = Color(0xFFFAF8FF);
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final String displayName =
         authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
-            ? authAsync.value!.userProfile!.fullName!.trim()
-            : 'User';
+        ? authAsync.value!.userProfile!.fullName!.trim()
+        : 'User';
     return Scaffold(
       backgroundColor: pageSurface,
       body: CustomScrollView(
@@ -93,7 +137,18 @@ class IndividualProfilePage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
             sliver: SliverList(
               delegate: SliverChildListDelegate.fixed(<Widget>[
-                _ProfileHeaderCard(displayName: displayName),
+                _ProfileHeaderCard(
+                  displayName: displayName,
+                  photoBytes: _profilePhotoBytes,
+                  onPickPhoto: _pickProfilePhoto,
+                ),
+                const SizedBox(height: 24),
+                _DocumentsCard(
+                  idDocumentName: _idDocument?.name,
+                  certificateName: _certificateDocument?.name,
+                  onUploadId: _pickIdDocument,
+                  onUploadCertificate: _pickCertificateDocument,
+                ),
                 const SizedBox(height: 24),
                 const _SectionCard(
                   title: 'Education',
@@ -153,9 +208,15 @@ class IndividualProfilePage extends ConsumerWidget {
 }
 
 class _ProfileHeaderCard extends StatelessWidget {
-  const _ProfileHeaderCard({required this.displayName});
+  const _ProfileHeaderCard({
+    required this.displayName,
+    required this.photoBytes,
+    required this.onPickPhoto,
+  });
 
   final String displayName;
+  final Uint8List? photoBytes;
+  final VoidCallback onPickPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -196,11 +257,18 @@ class _ProfileHeaderCard extends StatelessWidget {
                   child: Container(
                     color: AppColors.blueTint,
                     alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.person_rounded,
-                      color: AppColors.brandBlue,
-                      size: 44,
-                    ),
+                    child: photoBytes == null
+                        ? const Icon(
+                            Icons.person_rounded,
+                            color: AppColors.brandBlue,
+                            size: 44,
+                          )
+                        : Image.memory(
+                            photoBytes!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
                   ),
                 ),
               ),
@@ -218,6 +286,34 @@ class _ProfileHeaderCard extends StatelessWidget {
                     Icons.verified,
                     size: 16,
                     color: Colors.white,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: -2,
+                bottom: -2,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: onPickPhoto,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFD6E2FF)),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0x142563EB),
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      size: 18,
+                      color: AppColors.brandBlue,
+                    ),
                   ),
                 ),
               ),
@@ -572,6 +668,156 @@ class _AddAchievementCard extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DocumentsCard extends StatelessWidget {
+  const _DocumentsCard({
+    required this.idDocumentName,
+    required this.certificateName,
+    required this.onUploadId,
+    required this.onUploadCertificate,
+  });
+
+  final String? idDocumentName;
+  final String? certificateName;
+  final VoidCallback onUploadId;
+  final VoidCallback onUploadCertificate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x142563EB),
+            blurRadius: 12,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Uploads',
+            style: AppTypography.heading2.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Add your photo and supporting documents.',
+            style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          _UploadTile(
+            title: 'ID Document',
+            subtitle: (idDocumentName ?? '').trim().isEmpty
+                ? 'Upload Aadhaar / PAN / Passport'
+                : idDocumentName!.trim(),
+            icon: Icons.badge_outlined,
+            uploaded: (idDocumentName ?? '').trim().isNotEmpty,
+            onTap: onUploadId,
+          ),
+          const SizedBox(height: 12),
+          _UploadTile(
+            title: 'Certificates',
+            subtitle: (certificateName ?? '').trim().isEmpty
+                ? 'Upload degree / certificate PDFs'
+                : certificateName!.trim(),
+            icon: Icons.workspace_premium_outlined,
+            uploaded: (certificateName ?? '').trim().isNotEmpty,
+            onTap: onUploadCertificate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadTile extends StatelessWidget {
+  const _UploadTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.uploaded,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool uploaded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color badgeColor = uploaded ? AppColors.success : AppColors.brandBlue;
+    final Color badgeBg = uploaded
+        ? AppColors.successBg
+        : AppColors.brandBlue.withAlpha(14);
+
+    return Material(
+      color: const Color(0xFFF8FAFF),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  uploaded ? Icons.check_circle_rounded : icon,
+                  color: badgeColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textTertiary,
               ),
             ],
           ),
