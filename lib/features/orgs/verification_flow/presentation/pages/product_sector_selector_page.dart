@@ -42,7 +42,7 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
         path: AppRouter.productServiceTypeSelectorPath,
         queryParameters: <String, String>{'sector': sector},
       );
-      context.push(uri.toString());
+      context.push(uri.toString(), extra: sector);
       return;
     }
     final Uri uri = Uri(

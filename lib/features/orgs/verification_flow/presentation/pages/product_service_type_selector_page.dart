@@ -36,8 +36,10 @@ class _ProductServiceTypeSelectorPageState
     super.didChangeDependencies();
     if (_didInit) return;
     _didInit = true;
-    _sector = (GoRouterState.of(context).uri.queryParameters['sector'] ?? '')
-        .trim();
+    final GoRouterState state = GoRouterState.of(context);
+    final Object? extra = state.extra;
+    final String? extraSector = extra is String ? extra : null;
+    _sector = (extraSector ?? state.uri.queryParameters['sector'] ?? '').trim();
   }
 
   void _goBack(BuildContext context) {
@@ -63,6 +65,7 @@ class _ProductServiceTypeSelectorPageState
   @override
   Widget build(BuildContext context) {
     final String title = _sector.trim().isEmpty ? 'Select Flow' : _sector;
+    final bool hasSector = _sector.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -97,6 +100,19 @@ class _ProductServiceTypeSelectorPageState
                       color: AppColors.textSecondary,
                     ),
                   ),
+                  if (!hasSector) ...<Widget>[
+                    const SizedBox(height: AppSpacing.x3),
+                    TMZCard(
+                      padding: const EdgeInsets.all(AppSpacing.x4),
+                      child: Text(
+                        'Missing sector information. Please go back and select a sector again.',
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.x5),
                   _ServiceCard(
                     title: 'Product Verification',
@@ -105,9 +121,11 @@ class _ProductServiceTypeSelectorPageState
                     icon: Icons.verified_user_rounded,
                     selected: _selected == ProductServiceType.verification,
                     gradient: _primaryGradient,
-                    onTap: () => setState(
-                      () => _selected = ProductServiceType.verification,
-                    ),
+                    onTap: hasSector
+                        ? () => setState(
+                            () => _selected = ProductServiceType.verification,
+                          )
+                        : () {},
                   ),
                   const SizedBox(height: AppSpacing.x3),
                   _ServiceCard(
@@ -117,8 +135,11 @@ class _ProductServiceTypeSelectorPageState
                     icon: Icons.verified_outlined,
                     selected: _selected == ProductServiceType.warranty,
                     gradient: _primaryGradient,
-                    onTap: () =>
-                        setState(() => _selected = ProductServiceType.warranty),
+                    onTap: hasSector
+                        ? () => setState(
+                            () => _selected = ProductServiceType.warranty,
+                          )
+                        : () {},
                   ),
                 ],
               ),
@@ -136,7 +157,7 @@ class _ProductServiceTypeSelectorPageState
                   label: 'Continue',
                   icon: Icons.arrow_forward_rounded,
                   gradient: _primaryGradient,
-                  enabled: _selected != null,
+                  enabled: hasSector && _selected != null,
                   onPressed: () => _continue(context),
                 ),
               ),
@@ -174,65 +195,67 @@ class _ServiceCard extends StatelessWidget {
     return TMZCard(
       padding: EdgeInsets.zero,
       onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 110),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.fromBorderSide(borderSide),
-        ),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 10,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                gradient: gradient,
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(18),
+      child: SizedBox(
+        height: 120,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.fromBorderSide(borderSide),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Container(
+                width: 10,
+                decoration: BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(18),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.x4),
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.brandBlue.withAlpha(20),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: AppColors.brandBlue),
-            ),
-            const SizedBox(width: AppSpacing.x3),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  0,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
+              const SizedBox(width: AppSpacing.x4),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.brandBlue.withAlpha(20),
+                  shape: BoxShape.circle,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      style: AppTypography.heading1.copyWith(
-                        fontWeight: FontWeight.w900,
+                child: Icon(icon, color: AppColors.brandBlue),
+              ),
+              const SizedBox(width: AppSpacing.x3),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    0,
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: AppTypography.heading1.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.25,
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.25,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
