@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 
 enum ProductServiceType { verification, warranty }
@@ -55,11 +56,71 @@ class _ProductServiceTypeSelectorPageState
     final ProductServiceType? selected = _selected;
     if (selected == null) return;
 
-    final Uri uri = Uri(
-      path: AppRouter.productBatchSetupPath,
-      queryParameters: <String, String>{'mode': selected.name},
+    _openProductUploadTypeSheet(context, mode: selected.name);
+  }
+
+  void _openProductUploadTypeSheet(BuildContext context, {required String mode}) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        final String title = mode == 'warranty'
+            ? 'Warranty'
+            : 'Product Verification';
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.x4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: AppTypography.heading1),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  'Choose how you want to add products for this batch.',
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                TMZButton(
+                  label: 'Single Product',
+                  icon: Icons.add_box_rounded,
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    final Uri uri = Uri(
+                      path: AppRouter.singleProductUploadPath,
+                      queryParameters: <String, String>{
+                        'mode': mode,
+                        if (_sector.trim().isNotEmpty) 'sector': _sector.trim(),
+                      },
+                    );
+                    context.push(uri.toString(), extra: _sector);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TMZButton(
+                  label: 'Bulk Upload',
+                  icon: Icons.upload_file_rounded,
+                  variant: TMZButtonVariant.secondary,
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    final Uri uri = Uri(
+                      path: AppRouter.productBatchSetupPath,
+                      queryParameters: <String, String>{'mode': mode},
+                    );
+                    context.push(uri.toString(), extra: _sector);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.x2),
+              ],
+            ),
+          ),
+        );
+      },
     );
-    context.push(uri.toString(), extra: _sector);
   }
 
   @override

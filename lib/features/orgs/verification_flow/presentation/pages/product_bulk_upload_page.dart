@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
@@ -26,12 +28,13 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   String _sector = 'Consumer Goods & Warranty';
   String _batchName = 'New Product Batch';
-  String _templateLabel = 'Classic Card';
   String _mode = 'verification'; // 'verification' | 'warranty'
 
   PickedFile? _pickedFile;
   bool _creating = false;
   List<String> _headers = <String>[];
+  final TextEditingController _templateHeadersController =
+      TextEditingController();
 
   static const Color _deepBlue = AppColors.deepNavy;
 
@@ -70,10 +73,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     if (batch != null && batch.trim().isNotEmpty) {
       _batchName = batch.trim();
     }
-    final String? templateLabel = qp['templateLabel'];
-    if (templateLabel != null && templateLabel.trim().isNotEmpty) {
-      _templateLabel = templateLabel.trim();
-    }
 
     final String mode = (qp['mode'] ?? 'verification').trim().toLowerCase();
     if (mode == 'warranty' || mode == 'verification') {
@@ -81,9 +80,152 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _templateHeadersController.dispose();
+    super.dispose();
+  }
+
   void _downloadTemplate() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Download template coming soon.')),
+    final String suggested = _templateHeadersController.text.trim().isNotEmpty
+        ? _templateHeadersController.text.trim()
+        : 'product_name,serial_number,model';
+    _templateHeadersController.text = suggested;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (BuildContext ctx) {
+        final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(ctx);
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.x4,
+              AppSpacing.x4,
+              AppSpacing.x4,
+              AppSpacing.x4 + viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Download Template', style: AppTypography.heading1),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  'Enter column headers (comma-separated). The backend will generate an Excel template.',
+                  style: AppTypography.body2.copyWith(
+                    color: Theme.of(
+                      ctx,
+                    ).colorScheme.onSurface.withAlpha(160),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextField(
+                  controller: _templateHeadersController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: 'product_name, serial_number, model, ...',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final List<String> headers = _templateHeadersController
+                          .text
+                          .split(',')
+                          .map((String s) => s.trim())
+                          .where((String s) => s.isNotEmpty)
+                          .toList();
+                      if (headers.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter at least 1 header.'),
+                          ),
+                        );
+                        return;
+                      }
+                      try {
+                        final VerificationRepository repo = ref.read(
+                          verificationRepositoryProvider,
+                        );
+                        final String res = await repo.generateProductsTemplate(
+                          categoryId: _sector,
+                          headers: headers,
+                        );
+                        if (!ctx.mounted) return;
+                        Navigator.of(ctx).pop();
+
+                        final String out = res.trim();
+                        if (out.startsWith('http://') ||
+                            out.startsWith('https://')) {
+                          final Uri uri = Uri.parse(out);
+                          final bool ok = await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
+                          if (!mounted) return;
+                          if (!ok) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Could not open template link.'),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+
+                        if (out.isNotEmpty) {
+                          await Clipboard.setData(ClipboardData(text: out));
+                        }
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              out.isEmpty
+                                  ? 'Template generated.'
+                                  : 'Template generated (response copied).',
+                            ),
+                          ),
+                        );
+                      } on ApiException catch (e) {
+                        if (!ctx.mounted) return;
+                        ScaffoldMessenger.of(
+                          ctx,
+                        ).showSnackBar(SnackBar(content: Text(e.message)));
+                      } catch (_) {
+                        if (!ctx.mounted) return;
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Something went wrong. Please try again.',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Generate & Download'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -150,9 +292,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final String modeLabel = _mode == 'warranty'
           ? 'Warranty'
           : 'Verification';
-      final res = await repo.bulkUpload(
+      final res = await repo.bulkUploadProducts(
         batchName: _batchName,
         description: '$_sector • $modeLabel',
+        categoryId: _sector,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
@@ -162,7 +305,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         queryParameters: <String, String>{
           'sector': _sector,
           'batch': _batchName,
-          'template': _templateLabel,
           'records': res.totalUploaded.toString(),
           'skipped': res.totalSkipped.toString(),
           'batchId': res.batchId,
@@ -250,10 +392,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                             _SummaryPill(
                               icon: Icons.folder_rounded,
                               label: _batchName,
-                            ),
-                            _SummaryPill(
-                              icon: Icons.badge_outlined,
-                              label: _templateLabel,
                             ),
                           ],
                         ),

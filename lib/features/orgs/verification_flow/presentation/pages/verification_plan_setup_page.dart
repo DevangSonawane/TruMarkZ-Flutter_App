@@ -50,6 +50,8 @@ class VerificationPlanSetupPage extends StatefulWidget {
 }
 
 class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
+  bool _didInitFromRoute = false;
+  bool _singleFlow = false;
   int _stepIndex = 0;
   _Industry? _selectedIndustry;
   int _lastStepIndex = 0;
@@ -113,6 +115,20 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
     colors: <Color>[AppColors.brandBlue, _deepBlue],
   );
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitFromRoute) return;
+    _didInitFromRoute = true;
+    final String flow =
+        (GoRouterState.of(context).uri.queryParameters['flow'] ?? '')
+            .trim()
+            .toLowerCase();
+    _singleFlow = flow == 'single';
+  }
+
+  static const int _totalSteps = 4;
+
   void _goBack(BuildContext context) {
     if (_stepIndex == 0) {
       final GoRouter router = GoRouter.of(context);
@@ -159,6 +175,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
 
     // Finalize.
     final Map<String, String> qp = <String, String>{};
+    if (_singleFlow) qp['flow'] = 'single';
     if (_selectedIndustry != null) {
       qp['industry'] = _selectedIndustry!.name;
     }
@@ -182,9 +199,10 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
               '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
         )
         .join('&');
-    context.push(
-      qs.isEmpty ? AppRouter.bulkUploadPath : '${AppRouter.bulkUploadPath}?$qs',
-    );
+    final String target = _singleFlow
+        ? AppRouter.singleHumanUploadPath
+        : AppRouter.bulkUploadPath;
+    context.push(qs.isEmpty ? target : '$target?$qs');
   }
 
   int get _totalCostInr {
@@ -263,7 +281,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
 
     final String ctaLabel = switch (_stepIndex) {
       0 => 'Continue',
-      1 => 'Continue',
+      1 => _singleFlow ? 'Continue' : 'Continue',
       2 => 'Continue',
       _ => 'Upload',
     };
@@ -318,6 +336,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
               child: _CreateBatchStepper(
                 stepIndex: _stepIndex,
                 gradient: _primaryGradient,
+                totalSteps: _totalSteps,
               ),
             ),
             Expanded(
@@ -378,15 +397,20 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
 }
 
 class _CreateBatchStepper extends StatelessWidget {
-  const _CreateBatchStepper({required this.stepIndex, required this.gradient});
+  const _CreateBatchStepper({
+    required this.stepIndex,
+    required this.gradient,
+    this.totalSteps = 4,
+  });
 
   final int stepIndex;
   final Gradient gradient;
+  final int totalSteps;
 
   @override
   Widget build(BuildContext context) {
-    const int totalSteps = 4;
-    final double progress = stepIndex / (totalSteps - 1);
+    final int safeTotalSteps = totalSteps < 2 ? 2 : totalSteps;
+    final double progress = stepIndex / (safeTotalSteps - 1);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -412,13 +436,13 @@ class _CreateBatchStepper extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: <Widget>[
-              for (int i = 0; i < totalSteps; i++) ...<Widget>[
+              for (int i = 0; i < safeTotalSteps; i++) ...<Widget>[
                 _MinimalStepDot(
                   active: i == stepIndex,
                   completed: i < stepIndex,
                   gradient: gradient,
                 ),
-                if (i != totalSteps - 1) const Spacer(),
+                if (i != safeTotalSteps - 1) const Spacer(),
               ],
             ],
           ),

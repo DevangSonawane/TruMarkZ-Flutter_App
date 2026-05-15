@@ -8,8 +8,6 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../../../core/widgets/tmz_input.dart';
 
-enum _ProductTemplate { classicCard, circularBadge, reportSheet }
-
 enum _BlockchainVisibility { publicRegistry, privateRegistry }
 
 class ProductBatchSetupPage extends StatefulWidget {
@@ -28,7 +26,6 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _unitsController;
 
-  _ProductTemplate _selectedTemplate = _ProductTemplate.classicCard;
   _BlockchainVisibility _visibility = _BlockchainVisibility.publicRegistry;
 
   static const Color _deepBlue = AppColors.deepNavy;
@@ -91,25 +88,11 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   bool get _canContinue =>
       _batchNameController.text.trim().isNotEmpty && _units() > 0;
 
-  String _templateLabel(_ProductTemplate template) => switch (template) {
-    _ProductTemplate.classicCard => 'Classic Card',
-    _ProductTemplate.circularBadge => 'Circular Badge',
-    _ProductTemplate.reportSheet => 'Report Sheet',
-  };
-
-  String _templateId(_ProductTemplate template) => switch (template) {
-    _ProductTemplate.classicCard => 'classic_card',
-    _ProductTemplate.circularBadge => 'circular_badge',
-    _ProductTemplate.reportSheet => 'report_sheet',
-  };
-
   void _continue(BuildContext context) {
     if (!_canContinue) return;
 
     final Map<String, String> qp = <String, String>{
       'batch': _batchNameController.text.trim(),
-      'template': _templateId(_selectedTemplate),
-      'templateLabel': _templateLabel(_selectedTemplate),
       'units': _units().toString(),
       'visibility': _visibility.name,
       'mode': _mode,
@@ -233,55 +216,6 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x4),
-                  Text(
-                    'Certificate Template',
-                    style: AppTypography.heading2.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  SizedBox(
-                    height: 192,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: <Widget>[
-                        _TemplateCard(
-                          title: 'Classic Card',
-                          icon: Icons.badge_outlined,
-                          selected:
-                              _selectedTemplate == _ProductTemplate.classicCard,
-                          onTap: () => setState(
-                            () => _selectedTemplate =
-                                _ProductTemplate.classicCard,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.x3),
-                        _TemplateCard(
-                          title: 'Circular Badge',
-                          icon: Icons.account_circle_outlined,
-                          selected:
-                              _selectedTemplate ==
-                              _ProductTemplate.circularBadge,
-                          onTap: () => setState(
-                            () => _selectedTemplate =
-                                _ProductTemplate.circularBadge,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.x3),
-                        _TemplateCard(
-                          title: 'Report Sheet',
-                          icon: Icons.description_outlined,
-                          selected:
-                              _selectedTemplate == _ProductTemplate.reportSheet,
-                          onTap: () => setState(
-                            () => _selectedTemplate =
-                                _ProductTemplate.reportSheet,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
                   TMZInput(
                     label: 'Number of Units',
                     hint: 'e.g. 500',
@@ -302,8 +236,8 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
                     children: <Widget>[
                       Expanded(
                         child: _ChoiceChipCard(
-                          title: 'Public Registry',
-                          subtitle: 'Searchable by anyone',
+                          title: 'Public',
+                          subtitle: '',
                           icon: Icons.public_rounded,
                           selected:
                               _visibility ==
@@ -318,7 +252,7 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
                       Expanded(
                         child: _ChoiceChipCard(
                           title: 'Private',
-                          subtitle: 'Share by link only',
+                          subtitle: '',
                           icon: Icons.lock_rounded,
                           selected:
                               _visibility ==
@@ -359,104 +293,6 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   }
 }
 
-class _TemplateCard extends StatelessWidget {
-  const _TemplateCard({
-    required this.title,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final BorderSide borderSide = selected
-        ? const BorderSide(color: AppColors.brandBlue, width: 2)
-        : BorderSide(color: AppColors.border.withAlpha(120));
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          width: 150,
-          padding: const EdgeInsets.all(AppSpacing.x4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.fromBorderSide(borderSide),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(14),
-                blurRadius: 16,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: <Widget>[
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.brandBlue.withAlpha(18)
-                          : const Color(0xFFEFF3FF),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Icon(icon, color: AppColors.brandBlue, size: 34),
-                  ),
-                  const SizedBox(height: AppSpacing.x3),
-                  Text(
-                    title,
-                    style: AppTypography.body2.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: selected
-                          ? AppColors.brandBlue
-                          : AppColors.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-              if (selected)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[AppColors.brandBlue, Color(0xFF004AC6)],
-                      ),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ChoiceChipCard extends StatelessWidget {
   const _ChoiceChipCard({
     required this.title,
@@ -481,19 +317,20 @@ class _ChoiceChipCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.x4),
+          constraints: const BoxConstraints(minHeight: 68),
+          padding: const EdgeInsets.all(AppSpacing.x3),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: selected ? AppColors.brandBlue : AppColors.border,
-              width: selected ? 2 : 1.25,
+              width: 1.25,
             ),
           ),
           child: Row(
             children: <Widget>[
               Container(
-                width: 42,
-                height: 42,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: selected
                       ? AppColors.brandBlue.withAlpha(16)
@@ -517,22 +354,23 @@ class _ChoiceChipCard extends StatelessWidget {
                             : AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.1,
+                    if (subtitle.trim().isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.1,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
-              if (selected)
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: AppColors.brandBlue,
-                ),
+              Icon(
+                Icons.check_circle_rounded,
+                color: selected ? AppColors.brandBlue : Colors.transparent,
+              ),
             ],
           ),
         ),

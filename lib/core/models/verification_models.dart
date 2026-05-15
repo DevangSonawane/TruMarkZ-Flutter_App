@@ -331,6 +331,58 @@ class BulkUploadResponse {
   }
 }
 
+class SingleHumanUploadResponse {
+  const SingleHumanUploadResponse({
+    required this.message,
+    required this.entityId,
+    required this.entityType,
+    required this.inviteToken,
+    required this.inviteLink,
+  });
+
+  final String message;
+  final String entityId;
+  final String entityType;
+  final String inviteToken;
+  final String inviteLink;
+
+  factory SingleHumanUploadResponse.fromJson(Map<String, dynamic> json) {
+    return SingleHumanUploadResponse(
+      message: (json['message'] ?? '').toString(),
+      entityId: (json['entity_id'] ?? '').toString(),
+      entityType: (json['entity_type'] ?? '').toString(),
+      inviteToken: (json['invite_token'] ?? '').toString(),
+      inviteLink: (json['invite_link'] ?? '').toString(),
+    );
+  }
+}
+
+class SingleProductUploadResponse {
+  const SingleProductUploadResponse({
+    required this.message,
+    required this.entityId,
+    required this.entityType,
+    required this.inviteToken,
+    required this.inviteLink,
+  });
+
+  final String message;
+  final String entityId;
+  final String entityType;
+  final String inviteToken;
+  final String inviteLink;
+
+  factory SingleProductUploadResponse.fromJson(Map<String, dynamic> json) {
+    return SingleProductUploadResponse(
+      message: (json['message'] ?? '').toString(),
+      entityId: (json['entity_id'] ?? '').toString(),
+      entityType: (json['entity_type'] ?? '').toString(),
+      inviteToken: (json['invite_token'] ?? '').toString(),
+      inviteLink: (json['invite_link'] ?? '').toString(),
+    );
+  }
+}
+
 class GenerateCertificateResponse {
   const GenerateCertificateResponse({
     required this.message,

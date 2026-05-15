@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/tmz_button.dart';
 
 class ProductSectorSelectorPage extends StatefulWidget {
   const ProductSectorSelectorPage({super.key});
@@ -45,11 +46,7 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
       context.push(uri.toString(), extra: sector);
       return;
     }
-    final Uri uri = Uri(
-      path: AppRouter.productBatchSetupPath,
-      queryParameters: const <String, String>{'mode': 'verification'},
-    );
-    context.push(uri.toString(), extra: sector);
+    _openProductUploadTypeSheet(context, sector: sector, mode: 'verification');
   }
 
   static bool _needsServiceChoice(String sector) {
@@ -58,6 +55,71 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
       'Insurance Policies',
     };
     return !noWarranty.contains(sector.trim());
+  }
+
+  void _openProductUploadTypeSheet(
+    BuildContext context, {
+    required String sector,
+    required String mode,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.x4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Add Products', style: AppTypography.heading1),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  'Choose how you want to add products for verification.',
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                TMZButton(
+                  label: 'Single Product',
+                  icon: Icons.add_box_rounded,
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    final Uri uri = Uri(
+                      path: AppRouter.singleProductUploadPath,
+                      queryParameters: <String, String>{
+                        'mode': mode,
+                        'sector': sector,
+                      },
+                    );
+                    context.push(uri.toString(), extra: sector);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TMZButton(
+                  label: 'Bulk Upload',
+                  icon: Icons.upload_file_rounded,
+                  variant: TMZButtonVariant.secondary,
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    final Uri uri = Uri(
+                      path: AppRouter.productBatchSetupPath,
+                      queryParameters: <String, String>{'mode': mode},
+                    );
+                    context.push(uri.toString(), extra: sector);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.x2),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override

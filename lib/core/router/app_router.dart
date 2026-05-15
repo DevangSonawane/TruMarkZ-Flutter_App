@@ -46,6 +46,8 @@ import '../../features/orgs/verification_flow/presentation/pages/product_batch_s
 import '../../features/orgs/verification_flow/presentation/pages/product_bulk_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_sector_selector_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_service_type_selector_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/single_human_upload_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/single_product_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/user_document_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/verification_plan_setup_page.dart';
 import '../../features/scanner/presentation/pages/qr_scanner_page.dart';
@@ -94,6 +96,8 @@ class AppRouter {
   // Organisation bulk verification flow
   static const String batchTypeSelectionPath = '/batch-type-selection';
   static const String verificationPlanSetupPath = '/verification-plan-setup';
+  static const String singleHumanUploadPath = '/single-human-upload';
+  static const String singleProductUploadPath = '/single-product-upload';
   static const String credentialTemplateSelectorPath =
       '/credential-template-selector';
   static const String mapCredentialFieldsPath = '/map-credential-fields';
@@ -524,6 +528,18 @@ class AppRouter {
               state: state,
               child: const VerificationPlanSetupPage(),
             ),
+      ),
+      GoRoute(
+        path: singleHumanUploadPath,
+        name: 'single_human_upload',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const SingleHumanUploadPage()),
+      ),
+      GoRoute(
+        path: singleProductUploadPath,
+        name: 'single_product_upload',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const SingleProductUploadPage()),
       ),
       GoRoute(
         path: credentialTemplateSelectorPath,

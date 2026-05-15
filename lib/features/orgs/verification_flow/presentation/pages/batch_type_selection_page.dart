@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/tmz_button.dart';
 
 enum _BatchType { human, product }
 
@@ -39,11 +40,66 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
     final _BatchType? selected = _selected;
     if (selected == null) return;
 
-    final String target = switch (selected) {
-      _BatchType.human => AppRouter.verificationPlanSetupPath,
-      _BatchType.product => AppRouter.productSectorSelectorPath,
-    };
-    context.push(target);
+    switch (selected) {
+      case _BatchType.human:
+        _openHumanVerificationSheet(context);
+      case _BatchType.product:
+        context.push(AppRouter.productSectorSelectorPath);
+    }
+  }
+
+  void _openHumanVerificationSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext ctx) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.x4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Human Verification', style: AppTypography.heading1),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  'Choose how you want to add people for verification.',
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                TMZButton(
+                  label: 'Single Human Verification',
+                  icon: Icons.person_add_alt_1_rounded,
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    final Uri uri = Uri(
+                      path: AppRouter.verificationPlanSetupPath,
+                      queryParameters: const <String, String>{'flow': 'single'},
+                    );
+                    context.push(uri.toString());
+                  },
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TMZButton(
+                  label: 'Bulk Human Upload',
+                  icon: Icons.upload_file_rounded,
+                  variant: TMZButtonVariant.secondary,
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    context.push(AppRouter.verificationPlanSetupPath);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.x2),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override

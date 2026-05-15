@@ -208,6 +208,47 @@ class ApiClient {
     }
   }
 
+  Future<String> verificationPostFormUrlEncodedString(
+    String path, {
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final Options options = Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      );
+      final Response<dynamic> res = await _verificationDio.post<dynamic>(
+        path,
+        data: data,
+        options: options,
+      );
+      return _asString(res.data);
+    } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Options retryOptions = Options(
+            contentType: Headers.formUrlEncodedContentType,
+            responseType: ResponseType.plain,
+          );
+          final Response<dynamic> res = await _dio.post<dynamic>(
+            path,
+            data: data,
+            options: retryOptions,
+          );
+          return _asString(res.data);
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> verificationPatch(
     String path, {
     Object? data,
@@ -294,6 +335,19 @@ class ApiClient {
     if (data is Map<String, dynamic>) return data;
     if (data is Map) return Map<String, dynamic>.from(data);
     return <String, dynamic>{};
+  }
+
+  String _asString(dynamic data) {
+    if (data == null) return '';
+    if (data is String) {
+      final String raw = data.trim();
+      // Some backends return a JSON string (quoted) even with plain responseType.
+      if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
+        return raw.substring(1, raw.length - 1);
+      }
+      return raw;
+    }
+    return data.toString();
   }
 
   void _configureDio(Dio dio) {
