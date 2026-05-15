@@ -1,18 +1,21 @@
 import 'dart:ui';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart';
 
+import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
-import '../../../../../core/utils/spreadsheet_preview_util.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
@@ -35,17 +38,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   PickedFile? _pickedFile;
   bool _isUploading = false;
-
-  SpreadsheetPreview? _preview;
-  String? _previewError;
-  bool _parsingPreview = false;
+  bool _preflightChecking = false;
 
   @override
   void initState() {
     super.initState();
-    _batchNameController = TextEditingController(
-      text: 'Driver Verification Q1 — 80 records',
-    );
+    _batchNameController = TextEditingController();
     _columnsController = TextEditingController();
   }
 
@@ -135,10 +133,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     );
   }
 
-  void _openUploadSheet({
-    required String title,
-    required String description,
-  }) {
+  void _openUploadSheet({required String title, required String description}) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -184,30 +179,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   Future<void> _setPickedFile(PickedFile picked) async {
-    setState(() {
-      _pickedFile = picked;
-      _parsingPreview = true;
-      _previewError = null;
-      _preview = null;
-    });
-
-    try {
-      final SpreadsheetPreview p = SpreadsheetPreviewUtil.parse(
-        bytes: picked.bytes,
-        extension: picked.extension,
-        maxColumns: 200,
-        maxRows: 10,
-      );
-      if (!mounted) return;
-      setState(() {
-        _preview = p;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _previewError = e.toString());
-    } finally {
-      if (mounted) setState(() => _parsingPreview = false);
-    }
+    setState(() => _pickedFile = picked);
   }
 
   void _confirmAndCreateBatch() {
@@ -232,6 +204,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (_isUploading) return;
     final PickedFile? file = _pickedFile;
     if (file == null) return;
+
+    final bool ok = await _preflightPreventDuplicatePeople(file);
+    if (!ok) return;
 
     setState(() => _isUploading = true);
     try {
@@ -277,18 +252,157 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         ).showSnackBar(SnackBar(content: Text(inner.message)));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Upload failed. Please try again.')),
+          SnackBar(
+            content: Text(e.message ?? 'Upload failed. Please try again.'),
+          ),
         );
       }
     } catch (e, st) {
       if (!mounted) return;
       debugPrint('[BulkUploadPage] bulk upload failed: $e\n$st');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
+  }
+
+  Future<bool> _preflightPreventDuplicatePeople(PickedFile file) async {
+    if (_preflightChecking) return false;
+    setState(() => _preflightChecking = true);
+
+    try {
+      final _Identifiers fileIds = _Identifiers.fromFile(file);
+      if (fileIds.keys.isEmpty) {
+        // If we can't extract any identifiers, don't block uploads.
+        return true;
+      }
+
+      if (fileIds.duplicatesInFile.isNotEmpty) {
+        await _showBlockingDialog(
+          title: 'Duplicate rows found',
+          message:
+              'Your file contains duplicate people (same email/phone/etc). Please remove duplicates and try again.',
+          samples: fileIds.duplicatesInFile.take(6).toList(),
+        );
+        return false;
+      }
+
+      final Set<String> existing = await _fetchExistingIdentifierKeys();
+      final Set<String> overlap = fileIds.keys.intersection(existing);
+      if (overlap.isNotEmpty) {
+        await _showBlockingDialog(
+          title: 'People already exist',
+          message:
+              'Some people in this file already have verifications in your org. To avoid multiple human verifications for the same people, remove them from the file and re-upload.',
+          samples: overlap.take(6).toList(),
+        );
+        return false;
+      }
+
+      return true;
+    } catch (_) {
+      // If preflight fails, don't block uploads.
+      return true;
+    } finally {
+      if (mounted) setState(() => _preflightChecking = false);
+    }
+  }
+
+  Future<void> _showBlockingDialog({
+    required String title,
+    required String message,
+    required List<String> samples,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(message),
+              if (samples.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  'Examples:',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (final String s in samples)
+                  Text(
+                    '• $s',
+                    style: AppTypography.body2.copyWith(fontSize: 12),
+                  ),
+              ],
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<Set<String>> _fetchExistingIdentifierKeys() async {
+    final VerificationRepository repo = ref.read(
+      verificationRepositoryProvider,
+    );
+    final Set<String> out = <String>{};
+
+    int offset = 0;
+    const int limit = 500;
+    int guard = 0;
+
+    while (guard < 50) {
+      guard++;
+      final VerificationListResponse res = await repo.getAllVerifications(
+        limit: limit,
+        offset: offset,
+      );
+      for (final VerificationUser u in res.users) {
+        final String email = _normalizeEmail(u.email);
+        if (email.isNotEmpty) out.add('email:$email');
+        final String phone = _normalizePhone(u.phoneNumber);
+        if (phone.isNotEmpty) out.add('phone:$phone');
+        final String aadhar = _normalizeDigits(u.aadharNumber ?? '');
+        if (aadhar.isNotEmpty) out.add('aadhar:$aadhar');
+        final String pan = _normalizeAlphaNum(u.panNumber ?? '');
+        if (pan.isNotEmpty) out.add('pan:$pan');
+      }
+
+      offset += res.users.length;
+      if (res.users.isEmpty || offset >= res.total) break;
+    }
+    return out;
+  }
+
+  static String _normalizeEmail(String v) => v.trim().toLowerCase();
+
+  static String _normalizePhone(String v) {
+    final String digits = _normalizeDigits(v);
+    if (digits.isEmpty) return '';
+    // Keep last 10 digits for Indian phone numbers if longer.
+    return digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+  }
+
+  static String _normalizeDigits(String v) {
+    return v.replaceAll(RegExp(r'[^0-9]'), '').trim();
+  }
+
+  static String _normalizeAlphaNum(String v) {
+    return v.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').trim().toUpperCase();
   }
 
   @override
@@ -370,7 +484,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                     uploaded: _pickedFile != null,
                     onTap: () => _openUploadSheet(
                       title: 'Upload Excel / CSV',
-                      description: 'Pick an Excel/CSV file to create the batch.',
+                      description:
+                          'Pick an Excel/CSV file to create the batch.',
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x4),
@@ -384,43 +499,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                     ),
                     textInputAction: TextInputAction.done,
                     onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Text('Preview', style: AppTypography.heading2),
-                  const SizedBox(height: AppSpacing.x2),
-                  TMZCard(
-                    child: _pickedFile == null
-                        ? Text(
-                            'Upload an Excel/CSV file to see a preview.',
-                            style: AppTypography.body2.copyWith(
-                              color: scheme.onSurface.withAlpha(160),
-                            ),
-                          )
-                        : _parsingPreview
-                        ? Row(
-                            children: <Widget>[
-                              const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                              const SizedBox(width: AppSpacing.x2),
-                              Text(
-                                'Reading ${_pickedFile!.name}…',
-                                style: AppTypography.body2.copyWith(
-                                  color: scheme.onSurface.withAlpha(160),
-                                ),
-                              ),
-                            ],
-                          )
-                        : (_previewError != null)
-                        ? Text(
-                            'Unable to preview file: $_previewError',
-                            style: AppTypography.body2.copyWith(
-                              color: AppColors.error,
-                            ),
-                          )
-                        : _PreviewTable(preview: _preview),
                   ),
                 ],
               ),
@@ -441,7 +519,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                   onPressed:
                       (_pickedFile != null &&
                           _batchNameController.text.trim().isNotEmpty &&
-                          !_isUploading)
+                          !_isUploading &&
+                          !_preflightChecking)
                       ? _confirmAndCreateBatch
                       : null,
                 ),
@@ -452,6 +531,200 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       ),
     );
   }
+}
+
+class _Identifiers {
+  const _Identifiers({required this.keys, required this.duplicatesInFile});
+
+  final Set<String> keys;
+  final Set<String> duplicatesInFile;
+
+  static _Identifiers fromFile(PickedFile file) {
+    final String ext = file.extension.toLowerCase().replaceAll('.', '').trim();
+    if (ext == 'csv') {
+      return _fromCsv(file.bytes);
+    }
+    if (ext == 'xlsx') {
+      return _fromXlsx(file.bytes);
+    }
+    return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+  }
+
+  static _Identifiers _fromCsv(Uint8List bytes) {
+    final String raw = utf8.decode(bytes, allowMalformed: true);
+    final List<List<dynamic>> table = const CsvToListConverter(
+      shouldParseNumbers: false,
+    ).convert(raw);
+    if (table.isEmpty) {
+      return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+    }
+
+    int headerIndex = 0;
+    while (headerIndex < table.length && _isRowEmpty(table[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= table.length) {
+      return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+    }
+
+    final List<String> header = table[headerIndex]
+        .map((dynamic e) => (e?.toString() ?? '').trim())
+        .toList();
+    final Map<String, int> ix = _indexMap(header);
+    final _Accumulator acc = _Accumulator();
+
+    for (int i = headerIndex + 1; i < table.length; i++) {
+      final List<dynamic> row = table[i];
+      if (_isRowEmpty(row)) continue;
+      acc.addEmail(_rowValue(row, ix['email']));
+      acc.addPhone(_rowValue(row, ix['phone']));
+      acc.addAadhar(_rowValue(row, ix['aadhar']));
+      acc.addPan(_rowValue(row, ix['pan']));
+    }
+    return acc.toIdentifiers();
+  }
+
+  static _Identifiers _fromXlsx(Uint8List bytes) {
+    Excel excel;
+    try {
+      excel = Excel.decodeBytes(bytes);
+    } catch (_) {
+      return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+    }
+    final List<String> sheetNames = excel.tables.keys.toList();
+    if (sheetNames.isEmpty) {
+      return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+    }
+    final Sheet? sheet = excel.tables[sheetNames.first];
+    if (sheet == null) {
+      return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+    }
+    final List<List<Data?>> all = sheet.rows;
+    if (all.isEmpty) {
+      return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+    }
+
+    int headerIndex = 0;
+    while (headerIndex < all.length && _isExcelRowEmpty(all[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= all.length) {
+      return const _Identifiers(keys: <String>{}, duplicatesInFile: <String>{});
+    }
+
+    final List<String> header = all[headerIndex]
+        .map((Data? d) => (d?.value?.toString() ?? '').trim())
+        .toList();
+    final Map<String, int> ix = _indexMap(header);
+    final _Accumulator acc = _Accumulator();
+
+    for (int i = headerIndex + 1; i < all.length; i++) {
+      final List<Data?> row = all[i];
+      if (_isExcelRowEmpty(row)) continue;
+      acc.addEmail(_excelValue(row, ix['email']));
+      acc.addPhone(_excelValue(row, ix['phone']));
+      acc.addAadhar(_excelValue(row, ix['aadhar']));
+      acc.addPan(_excelValue(row, ix['pan']));
+    }
+    return acc.toIdentifiers();
+  }
+
+  static Map<String, int> _indexMap(List<String> header) {
+    final Map<String, int> out = <String, int>{};
+    for (int i = 0; i < header.length; i++) {
+      final String key = _normHeader(header[i]);
+      if (key.isEmpty) continue;
+      out[key] = i;
+    }
+
+    int? pick(List<String> keys) {
+      for (final String k in keys) {
+        final int? i = out[k];
+        if (i != null) return i;
+      }
+      return null;
+    }
+
+    return <String, int>{
+      'email': pick(<String>['email', 'email_id']) ?? -1,
+      'phone':
+          pick(<String>['phone', 'phone_number', 'mobile', 'mobile_number']) ??
+          -1,
+      'aadhar': pick(<String>['aadhar', 'aadhar_number', 'aadhaar']) ?? -1,
+      'pan': pick(<String>['pan', 'pan_number']) ?? -1,
+    };
+  }
+
+  static String _rowValue(List<dynamic> row, int? idx) {
+    if (idx == null || idx < 0 || idx >= row.length) return '';
+    return (row[idx]?.toString() ?? '').trim();
+  }
+
+  static String _excelValue(List<Data?> row, int? idx) {
+    if (idx == null || idx < 0 || idx >= row.length) return '';
+    return (row[idx]?.value?.toString() ?? '').trim();
+  }
+
+  static bool _isRowEmpty(List<dynamic> row) {
+    for (final dynamic v in row) {
+      final String s = (v?.toString() ?? '').trim();
+      if (s.isNotEmpty) return false;
+    }
+    return true;
+  }
+
+  static bool _isExcelRowEmpty(List<Data?> row) {
+    for (final Data? v in row) {
+      final String s = (v?.value?.toString() ?? '').trim();
+      if (s.isNotEmpty) return false;
+    }
+    return true;
+  }
+
+  static String _normHeader(String v) {
+    return v
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\\s+'), '_')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+  }
+}
+
+class _Accumulator {
+  final Set<String> _keys = <String>{};
+  final Set<String> _dups = <String>{};
+
+  void addEmail(String raw) {
+    final String email = _BulkUploadPageState._normalizeEmail(raw);
+    if (!email.contains('@')) return;
+    _add('email:$email');
+  }
+
+  void addPhone(String raw) {
+    final String phone = _BulkUploadPageState._normalizePhone(raw);
+    if (phone.length < 10) return;
+    _add('phone:$phone');
+  }
+
+  void addAadhar(String raw) {
+    final String digits = _BulkUploadPageState._normalizeDigits(raw);
+    if (digits.length < 12) return;
+    _add('aadhar:$digits');
+  }
+
+  void addPan(String raw) {
+    final String pan = _BulkUploadPageState._normalizeAlphaNum(raw);
+    if (pan.length != 10) return;
+    _add('pan:$pan');
+  }
+
+  void _add(String key) {
+    if (_keys.contains(key)) _dups.add(key);
+    _keys.add(key);
+  }
+
+  _Identifiers toIdentifiers() =>
+      _Identifiers(keys: _keys, duplicatesInFile: _dups);
 }
 
 class _UploadTile extends StatelessWidget {
@@ -649,74 +922,5 @@ class _DashedBorderPainter extends CustomPainter {
         oldDelegate.strokeWidth != strokeWidth ||
         oldDelegate.radius != radius ||
         oldDelegate.dash != dash;
-  }
-}
-
-class _PreviewTable extends StatelessWidget {
-  const _PreviewTable({required this.preview});
-
-  final SpreadsheetPreview? preview;
-
-  @override
-  Widget build(BuildContext context) {
-    final SpreadsheetPreview? p = preview;
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    if (p == null) {
-      return Text(
-        'No preview available.',
-        style: AppTypography.body2.copyWith(color: scheme.onSurface.withAlpha(160)),
-      );
-    }
-
-    if (p.columns.isEmpty) {
-      return Text(
-        'No rows found in ${p.sheetName}.',
-        style: AppTypography.body2.copyWith(color: scheme.onSurface.withAlpha(160)),
-      );
-    }
-
-    final List<String> displayColumns = p.columns.take(8).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          '${p.sheetName} • showing ${p.rows.length} of ${p.totalRows} rows',
-          style: AppTypography.caption.copyWith(
-            color: scheme.onSurface.withAlpha(150),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            headingTextStyle: AppTypography.caption.copyWith(
-              fontWeight: FontWeight.w800,
-              color: scheme.onSurface.withAlpha(180),
-            ),
-            dataTextStyle: AppTypography.caption.copyWith(
-              color: scheme.onSurface.withAlpha(160),
-            ),
-            columns: <DataColumn>[
-              for (final String c in displayColumns) DataColumn(label: Text(c)),
-            ],
-            rows: <DataRow>[
-              for (final List<String> row in p.rows)
-                DataRow(
-                  cells: <DataCell>[
-                    for (int i = 0; i < displayColumns.length; i++)
-                      DataCell(
-                        Text(
-                          i < row.length ? row[i] : '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 }

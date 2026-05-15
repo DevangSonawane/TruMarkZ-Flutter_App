@@ -27,6 +27,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   String _sector = 'Consumer Goods & Warranty';
   String _batchName = 'New Product Batch';
   String _templateLabel = 'Classic Card';
+  String _mode = 'verification'; // 'verification' | 'warranty'
 
   PickedFile? _pickedFile;
   bool _creating = false;
@@ -72,6 +73,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String? templateLabel = qp['templateLabel'];
     if (templateLabel != null && templateLabel.trim().isNotEmpty) {
       _templateLabel = templateLabel.trim();
+    }
+
+    final String mode = (qp['mode'] ?? 'verification').trim().toLowerCase();
+    if (mode == 'warranty' || mode == 'verification') {
+      _mode = mode;
     }
   }
 
@@ -141,9 +147,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
+      final String modeLabel = _mode == 'warranty'
+          ? 'Warranty'
+          : 'Verification';
       final res = await repo.bulkUpload(
         batchName: _batchName,
-        description: _sector,
+        description: '$_sector • $modeLabel',
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );

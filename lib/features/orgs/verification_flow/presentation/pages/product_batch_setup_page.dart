@@ -22,6 +22,7 @@ class ProductBatchSetupPage extends StatefulWidget {
 class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   bool _didInitFromRoute = false;
   String _sector = 'Consumer Goods & Warranty';
+  String _mode = 'verification'; // 'verification' | 'warranty'
 
   late final TextEditingController _batchNameController;
   late final TextEditingController _descriptionController;
@@ -51,6 +52,15 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
     super.didChangeDependencies();
     if (_didInitFromRoute) return;
     _didInitFromRoute = true;
+
+    final String mode =
+        (GoRouterState.of(context).uri.queryParameters['mode'] ??
+                'verification')
+            .trim()
+            .toLowerCase();
+    if (mode == 'warranty' || mode == 'verification') {
+      _mode = mode;
+    }
 
     final Object? extra = GoRouterState.of(context).extra;
     final String? sector = extra is String ? extra : null;
@@ -102,6 +112,7 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
       'templateLabel': _templateLabel(_selectedTemplate),
       'units': _units().toString(),
       'visibility': _visibility.name,
+      'mode': _mode,
       if (_descriptionController.text.trim().isNotEmpty)
         'desc': _descriptionController.text.trim(),
     };
@@ -115,6 +126,7 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final String modeLabel = _mode == 'warranty' ? 'Warranty' : 'Verification';
     return Scaffold(
       backgroundColor: AppColors.pageBg,
       appBar: AppBar(
@@ -161,7 +173,9 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
                   const SizedBox(height: AppSpacing.x5),
                   TMZInput(
                     label: 'Batch Name',
-                    hint: 'e.g. Warranty Cards — May 2026',
+                    hint: _mode == 'warranty'
+                        ? 'e.g. Warranty Cards — May 2026'
+                        : 'e.g. Verification Certificates — May 2026',
                     controller: _batchNameController,
                     onChanged: (_) => setState(() {}),
                     prefixIcon: Icons.folder_rounded,
@@ -200,7 +214,7 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
                               Align(
                                 alignment: Alignment.centerLeft,
                                 child: Chip(
-                                  label: Text(_sector),
+                                  label: Text('$_sector • $modeLabel'),
                                   backgroundColor: AppColors.brandBlue
                                       .withAlpha(14),
                                   labelStyle: AppTypography.body2.copyWith(

@@ -10,14 +10,34 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_badge.dart';
 import '../../../../core/widgets/tmz_card.dart';
+import '../../../../core/models/verification_models.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
+import '../../application/verification_list_notifier.dart';
 
-class OrgDashboardPage extends ConsumerWidget {
+class OrgDashboardPage extends ConsumerStatefulWidget {
   const OrgDashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrgDashboardPage> createState() => _OrgDashboardPageState();
+}
+
+class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
+  bool _didLoad = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoad) return;
+    _didLoad = true;
+    Future<void>.microtask(
+      () =>
+          ref.read(verificationListNotifierProvider.notifier).load(limit: 500),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final profile = authAsync.value?.userProfile;
     final String displayName =
@@ -31,6 +51,16 @@ class OrgDashboardPage extends ConsumerWidget {
         profile?.businessRegistrationNumber?.trim().isNotEmpty == true
         ? profile!.businessRegistrationNumber!.trim()
         : '';
+
+    final VerificationListState verificationState = ref.watch(
+      verificationListNotifierProvider,
+    );
+    final VerificationListResponse? verification =
+        verificationState.data.valueOrNull;
+    final _DashboardSummary summary = _DashboardSummary.fromVerification(
+      verification,
+    );
+    final int totalUsers = verification?.total ?? 0;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -87,7 +117,12 @@ class OrgDashboardPage extends ConsumerWidget {
                 curve: Curves.easeOutCubic,
               ),
           const SizedBox(height: AppSpacing.x4),
-          const _KpiScrollCards()
+          _KpiScrollCards(
+                isLoading: verificationState.data.isLoading,
+                totalUsers: totalUsers,
+                pendingVerifications: summary.pending,
+                verifiedUsers: summary.verified,
+              )
               .animate()
               .fadeIn(delay: 60.ms, duration: 220.ms)
               .slideY(
@@ -177,26 +212,63 @@ class OrgDashboardPage extends ConsumerWidget {
                 curve: Curves.easeOutCubic,
               ),
           const SizedBox(height: AppSpacing.x2),
-          _BatchTile(
-            title: 'Driver Onboarding Q1',
-            subtitle: '200 records',
-            status: _BatchStatus.complete,
-            onTap: () => context.push(AppRouter.batchTrackingDetailPath),
-          ),
-          const SizedBox(height: AppSpacing.x2),
-          _BatchTile(
-            title: 'Delivery Staff Batch 4',
-            subtitle: '85 records',
-            status: _BatchStatus.processing,
-            onTap: () => context.push(AppRouter.batchTrackingDetailPath),
-          ),
-          const SizedBox(height: AppSpacing.x2),
-          _BatchTile(
-            title: 'Security Personnel',
-            subtitle: '50 records',
-            status: _BatchStatus.alert,
-            onTap: () => context.push(AppRouter.batchTrackingDetailPath),
-          ),
+          if (verificationState.data.isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.x4),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (verificationState.data.hasError)
+            TMZCard(
+              padding: const EdgeInsets.all(AppSpacing.x4),
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.error_outline, color: AppColors.error),
+                  const SizedBox(width: AppSpacing.x3),
+                  Expanded(
+                    child: Text(
+                      'Unable to load recent batches',
+                      style: AppTypography.body2.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => ref
+                        .read(verificationListNotifierProvider.notifier)
+                        .load(limit: 500),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          else ...<Widget>[
+            for (final _DashboardBatchItem item
+                in summary.recentBatches) ...<Widget>[
+              _BatchTile(
+                title: item.title,
+                subtitle: '${item.recordCount} records',
+                status: item.status,
+                onTap: item.batchId.trim().isEmpty
+                    ? () => context.push(AppRouter.batchTrackingDetailPath)
+                    : () => context.push(
+                        '${AppRouter.batchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(item.batchId)}',
+                      ),
+              ),
+              const SizedBox(height: AppSpacing.x2),
+            ],
+            if (summary.recentBatches.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
+                child: Center(
+                  child: Text(
+                    'No batches yet.',
+                    style: AppTypography.body2.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -479,7 +551,17 @@ class _FrostedTile extends StatelessWidget {
 }
 
 class _KpiScrollCards extends StatelessWidget {
-  const _KpiScrollCards();
+  const _KpiScrollCards({
+    required this.isLoading,
+    required this.totalUsers,
+    required this.pendingVerifications,
+    required this.verifiedUsers,
+  });
+
+  final bool isLoading;
+  final int totalUsers;
+  final int pendingVerifications;
+  final int verifiedUsers;
 
   static const double _gap = AppSpacing.x3;
   static const double _minCardWidth = 140;
@@ -503,29 +585,170 @@ class _KpiScrollCards extends StatelessWidget {
               children: <Widget>[
                 SizedBox(
                   width: cardWidth,
-                  child: const _KpiStatCard(
-                    label: 'Total Verified',
-                    value: '1,240',
+                  child: _KpiStatCard(
+                    label: 'Total Users',
+                    value: isLoading ? '—' : totalUsers.toString(),
                   ),
                 ),
                 const SizedBox(width: _gap),
                 SizedBox(
                   width: cardWidth,
-                  child: const _KpiStatCard(
-                    label: 'Active Batches',
-                    value: '3',
+                  child: _KpiStatCard(
+                    label: 'Pending Verifications',
+                    value: isLoading ? '—' : pendingVerifications.toString(),
                   ),
                 ),
                 const SizedBox(width: _gap),
                 SizedBox(
                   width: cardWidth,
-                  child: const _KpiStatCard(label: 'Pending', value: '12'),
+                  child: _KpiStatCard(
+                    label: 'Verified',
+                    value: isLoading ? '—' : verifiedUsers.toString(),
+                  ),
                 ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _DashboardSummary {
+  const _DashboardSummary({
+    required this.pending,
+    required this.verified,
+    required this.failed,
+    required this.activeBatches,
+    required this.recentBatches,
+  });
+
+  final int pending;
+  final int verified;
+  final int failed;
+  final int activeBatches;
+  final List<_DashboardBatchItem> recentBatches;
+
+  static _DashboardSummary fromVerification(VerificationListResponse? data) {
+    if (data == null) {
+      return const _DashboardSummary(
+        pending: 0,
+        verified: 0,
+        failed: 0,
+        activeBatches: 0,
+        recentBatches: <_DashboardBatchItem>[],
+      );
+    }
+
+    final Map<String, _BatchAgg> byBatch = <String, _BatchAgg>{};
+    for (final VerificationUser u in data.users) {
+      final String batchId = u.batchId.trim();
+      final _BatchAgg agg = byBatch.putIfAbsent(
+        batchId,
+        () => _BatchAgg(batchId: batchId),
+      );
+      agg.count++;
+      agg.updatedAt = _maxIso(agg.updatedAt, u.updatedAt);
+
+      final String s = u.verificationStatus.trim();
+      if (s == 'failed') {
+        agg.failedCount++;
+      } else if (s == 'pending_verification' || s == 'pending') {
+        agg.pendingCount++;
+      } else if (s == 'verified') {
+        agg.verifiedCount++;
+      }
+    }
+
+    final List<_BatchAgg> recent =
+        byBatch.values.where((a) => a.batchId.isNotEmpty).toList()
+          ..sort((a, b) => _compareIsoDesc(a.updatedAt, b.updatedAt));
+
+    final List<_DashboardBatchItem> recentTiles = recent
+        .take(3)
+        .map(_DashboardBatchItem.fromAgg)
+        .toList();
+
+    final int active = byBatch.values
+        .where((a) => a.batchId.isNotEmpty)
+        .where((a) => a.pendingCount > 0)
+        .length;
+
+    return _DashboardSummary(
+      pending: data.pending,
+      verified: data.verified,
+      failed: data.failed,
+      activeBatches: active,
+      recentBatches: recentTiles,
+    );
+  }
+
+  static int _compareIsoDesc(String? a, String? b) {
+    final DateTime? da = _tryParseIso(a);
+    final DateTime? db = _tryParseIso(b);
+    if (da == null && db == null) return 0;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return db.compareTo(da);
+  }
+
+  static String? _maxIso(String? a, String? b) {
+    final DateTime? da = _tryParseIso(a);
+    final DateTime? db = _tryParseIso(b);
+    if (da == null) return b;
+    if (db == null) return a;
+    return db.isAfter(da) ? b : a;
+  }
+
+  static DateTime? _tryParseIso(String? s) {
+    if (s == null) return null;
+    final String t = s.trim();
+    if (t.isEmpty) return null;
+    return DateTime.tryParse(t);
+  }
+}
+
+class _BatchAgg {
+  _BatchAgg({required this.batchId});
+
+  final String batchId;
+  int count = 0;
+  int pendingCount = 0;
+  int verifiedCount = 0;
+  int failedCount = 0;
+  String? updatedAt;
+}
+
+class _DashboardBatchItem {
+  const _DashboardBatchItem({
+    required this.batchId,
+    required this.title,
+    required this.recordCount,
+    required this.status,
+  });
+
+  final String batchId;
+  final String title;
+  final int recordCount;
+  final _BatchStatus status;
+
+  factory _DashboardBatchItem.fromAgg(_BatchAgg agg) {
+    final String shortId = agg.batchId.length <= 10
+        ? agg.batchId
+        : agg.batchId.substring(0, 10);
+
+    final _BatchStatus status = agg.failedCount > 0
+        ? _BatchStatus.alert
+        : (agg.pendingCount > 0
+              ? _BatchStatus.processing
+              : _BatchStatus.complete);
+
+    return _DashboardBatchItem(
+      batchId: agg.batchId,
+      title: 'Batch $shortId',
+      recordCount: agg.count,
+      status: status,
     );
   }
 }
@@ -539,6 +762,7 @@ class _KpiStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 96,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -551,26 +775,38 @@ class _KpiStatCard extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(AppSpacing.x4),
+      padding: const EdgeInsets.all(AppSpacing.x3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           Text(
-            label.toUpperCase(),
-            style: AppTypography.caption.copyWith(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.body2.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
               color: AppColors.textSecondary,
-              letterSpacing: 1.2,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: AppTypography.display1.copyWith(
-              fontSize: 28,
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w300,
+          Expanded(
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.bottomLeft,
+                child: Text(
+                  value,
+                  style: AppTypography.display1.copyWith(
+                    fontSize: 28,
+                    height: 1.0,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w300,
+                  ),
+                ),
+              ),
             ),
           ),
         ],

@@ -37,7 +37,27 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
   void _continue(BuildContext context) {
     final String? sector = _selectedSector;
     if (sector == null) return;
-    context.push(AppRouter.productBatchSetupPath, extra: sector);
+    if (_needsServiceChoice(sector)) {
+      final Uri uri = Uri(
+        path: AppRouter.productServiceTypeSelectorPath,
+        queryParameters: <String, String>{'sector': sector},
+      );
+      context.push(uri.toString());
+      return;
+    }
+    final Uri uri = Uri(
+      path: AppRouter.productBatchSetupPath,
+      queryParameters: const <String, String>{'mode': 'verification'},
+    );
+    context.push(uri.toString(), extra: sector);
+  }
+
+  static bool _needsServiceChoice(String sector) {
+    const Set<String> noWarranty = <String>{
+      'Beauty & Cosmetics',
+      'Insurance Policies',
+    };
+    return !noWarranty.contains(sector.trim());
   }
 
   @override

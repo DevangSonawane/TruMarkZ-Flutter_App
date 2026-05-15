@@ -75,102 +75,6 @@ class _IndividualRecordDetailPageState
     }
   }
 
-  Future<void> _approve() async {
-    final VerificationUser? user = _data.valueOrNull;
-    if (user == null) return;
-    try {
-      final VerificationRepository repo = ref.read(
-        verificationRepositoryProvider,
-      );
-      await repo.updateVerificationStatus(userId: user.id, status: 'verified');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Approved successfully.')));
-      await _load();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _reject() async {
-    final VerificationUser? user = _data.valueOrNull;
-    if (user == null) return;
-
-    final TextEditingController controller = TextEditingController();
-    final String? reason = await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Reject Verification'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(hintText: 'Reason for rejection'),
-            maxLines: 3,
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(controller.text.trim()),
-              child: const Text('Reject'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (reason == null) return;
-    if (!mounted) return;
-    if (reason.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter a reason.')));
-      return;
-    }
-
-    try {
-      final VerificationRepository repo = ref.read(
-        verificationRepositoryProvider,
-      );
-      await repo.updateVerificationStatus(
-        userId: user.id,
-        status: 'failed',
-        reason: reason,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Rejected successfully.')));
-      await _load();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
-      );
-    }
-  }
-
   Future<void> _generateCertificate() async {
     final VerificationUser? user = _data.valueOrNull;
     if (user == null) return;
@@ -380,6 +284,7 @@ class _IndividualRecordDetailPageState
                             user.email,
                             style: AppTypography.body2.copyWith(
                               color: AppColors.textSecondary,
+                              fontSize: 12,
                             ),
                           ),
                         ],
@@ -431,48 +336,118 @@ class _IndividualRecordDetailPageState
                 Text('Documents', style: AppTypography.heading2),
                 const SizedBox(height: AppSpacing.x2),
                 if (user.documents.isEmpty)
-                  Text(
-                    'No documents uploaded.',
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
+                  TMZCard(
+                    padding: const EdgeInsets.all(AppSpacing.x4),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: style.bg,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            user.verificationStatus == 'failed'
+                                ? Icons.cancel_rounded
+                                : Icons.hourglass_bottom_rounded,
+                            color: style.fg,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.x3),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'No documents uploaded yet',
+                                style: AppTypography.body2.copyWith(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Status: ${statusLabel.toUpperCase()}',
+                                style: AppTypography.caption.copyWith(
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   )
                 else
                   for (final VerificationDocument d
                       in user.documents) ...<Widget>[
-                    _DocumentCard(
-                      doc: d,
-                      onView: d.documentUrl.trim().isEmpty
+                    TMZCard(
+                      padding: const EdgeInsets.all(AppSpacing.x4),
+                      onTap: d.documentUrl.trim().isEmpty
                           ? null
                           : () => _openUrl(d.documentUrl),
+                      child: Row(
+                        children: <Widget>[
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: const BoxDecoration(
+                              color: AppColors.blueTint,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.description_outlined,
+                              color: AppColors.brandBlue,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.x3),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  d.documentLabel.replaceAll('_', ' '),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.body2.copyWith(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'v${d.version} • ${_statusLabel(d.verificationStatus).toUpperCase()}',
+                                  style: AppTypography.caption.copyWith(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.x2),
+                          Icon(
+                            Icons.open_in_new_rounded,
+                            size: 18,
+                            color: d.documentUrl.trim().isEmpty
+                                ? AppColors.textTertiary
+                                : AppColors.brandBlue,
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.x2),
                   ],
                 const SizedBox(height: AppSpacing.x4),
-                Text('Actions', style: AppTypography.heading2),
-                const SizedBox(height: AppSpacing.x2),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: TMZButton(
-                        label: 'Approve',
-                        icon: Icons.check_rounded,
-                        onPressed: _approve,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.x3),
-                    Expanded(
-                      child: TMZButton(
-                        label: 'Reject',
-                        icon: Icons.close_rounded,
-                        variant: TMZButtonVariant.dangerGhost,
-                        onPressed: _reject,
-                      ),
-                    ),
-                  ],
-                ),
                 if (user.verificationStatus == 'verified') ...<Widget>[
-                  const SizedBox(height: AppSpacing.x3),
+                  Text('Certificate', style: AppTypography.heading2),
+                  const SizedBox(height: AppSpacing.x2),
                   TMZButton(
                     label: 'Generate Certificate',
                     icon: Icons.qr_code_rounded,
@@ -555,150 +530,9 @@ class _IndividualRecordDetailPageState
   }
 }
 
-class _DocumentCard extends StatelessWidget {
-  const _DocumentCard({required this.doc, required this.onView});
-
-  final VerificationDocument doc;
-  final VoidCallback? onView;
-
-  @override
-  Widget build(BuildContext context) {
-    final _DocStatusStyle style = _docStyle(doc.verificationStatus);
-
-    return TMZCard(
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: style.bg, shape: BoxShape.circle),
-            child: Icon(style.icon, color: style.fg),
-          ),
-          const SizedBox(width: AppSpacing.x3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  doc.documentLabel,
-                  style: AppTypography.body1.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: <Widget>[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: style.bg,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: style.fg.withAlpha(40)),
-                      ),
-                      child: Text(
-                        style.label.toUpperCase(),
-                        style: AppTypography.caption.copyWith(
-                          color: style.fg,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.7,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F6FF),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        'v${doc.version}',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if ((doc.verificationReason ?? '')
-                    .trim()
-                    .isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text(
-                    doc.verificationReason!,
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.25,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          TMZButton(
-            label: 'View',
-            fullWidth: false,
-            icon: Icons.open_in_new_rounded,
-            variant: TMZButtonVariant.secondary,
-            onPressed: onView,
-          ),
-        ],
-      ),
-    );
-  }
-
-  static _DocStatusStyle _docStyle(String raw) {
-    switch (raw) {
-      case 'verified':
-        return const _DocStatusStyle(
-          bg: AppColors.successBg,
-          fg: AppColors.success,
-          label: 'Verified',
-          icon: Icons.check_circle_rounded,
-        );
-      case 'failed':
-        return const _DocStatusStyle(
-          bg: AppColors.dangerBg,
-          fg: AppColors.error,
-          label: 'Failed',
-          icon: Icons.cancel_rounded,
-        );
-      default:
-        return const _DocStatusStyle(
-          bg: Color(0xFFFFFBEB),
-          fg: Color(0xFFF59E0B),
-          label: 'Pending',
-          icon: Icons.hourglass_bottom_rounded,
-        );
-    }
-  }
-}
-
 class _StatusStyle {
   const _StatusStyle({required this.bg, required this.fg});
 
   final Color bg;
   final Color fg;
-}
-
-class _DocStatusStyle {
-  const _DocStatusStyle({
-    required this.bg,
-    required this.fg,
-    required this.label,
-    required this.icon,
-  });
-
-  final Color bg;
-  final Color fg;
-  final String label;
-  final IconData icon;
 }

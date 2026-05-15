@@ -45,6 +45,7 @@ import '../../features/orgs/verification_flow/presentation/pages/product_batch_c
 import '../../features/orgs/verification_flow/presentation/pages/product_batch_setup_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_bulk_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_sector_selector_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/product_service_type_selector_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/user_document_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/verification_plan_setup_page.dart';
 import '../../features/scanner/presentation/pages/qr_scanner_page.dart';
@@ -103,6 +104,8 @@ class AppRouter {
   static const String bulkUploadPath = '/bulk-upload';
   static const String batchCreatedSuccessPath = '/batch-created-success';
   static const String productSectorSelectorPath = '/product-sector-selector';
+  static const String productServiceTypeSelectorPath =
+      '/product-service-type-selector';
   static const String productBatchSetupPath = '/product-batch-setup';
   static const String productBulkUploadPath = '/product-bulk-upload';
   static const String productBatchCreatedPath = '/product-batch-created';
@@ -475,6 +478,15 @@ class AppRouter {
             _slideFadePage(
               state: state,
               child: const ProductSectorSelectorPage(),
+            ),
+      ),
+      GoRoute(
+        path: productServiceTypeSelectorPath,
+        name: 'product_service_type_selector',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const ProductServiceTypeSelectorPage(),
             ),
       ),
       GoRoute(
