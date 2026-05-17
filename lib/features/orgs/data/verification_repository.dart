@@ -130,32 +130,16 @@ class VerificationRepository {
   Future<BulkUploadResponse> bulkUpload({
     required String batchName,
     String? description,
-    required Uint8List fileBytes,
-    required String fileName,
+    required List<Map<String, dynamic>> users,
   }) async {
-    final String safeName = fileName.trim().isEmpty ? 'upload.xlsx' : fileName;
-    final String ext = safeName.split('.').last.toLowerCase();
-    final MediaType contentType = switch (ext) {
-      'csv' => MediaType('text', 'csv'),
-      'xls' => MediaType('application', 'vnd.ms-excel'),
-      _ => MediaType(
-        'application',
-        'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      ),
-    };
-    final FormData formData = FormData.fromMap(<String, dynamic>{
-      'batch_name': batchName,
-      if (description != null && description.trim().isNotEmpty)
-        'description': description.trim(),
-      'file': MultipartFile.fromBytes(
-        fileBytes,
-        filename: safeName,
-        contentType: contentType,
-      ),
-    });
-    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+    final Map<String, dynamic> res = await _api.verificationPost(
       '/verification/bulk-upload',
-      formData,
+      data: <String, dynamic>{
+        'batch_name': batchName.trim(),
+        if (description != null && description.trim().isNotEmpty)
+          'description': description.trim(),
+        'users': users,
+      },
     );
     return BulkUploadResponse.fromJson(res);
   }

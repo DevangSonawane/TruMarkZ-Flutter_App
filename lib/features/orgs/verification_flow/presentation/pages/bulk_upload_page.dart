@@ -91,23 +91,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final Set<String> columns = <String>{
       'full_name',
       'dob',
-      'id_number',
-      'phone',
       'email',
-      'address',
+      'phone_number',
+      'aadhar_number',
+      'pan_number',
+      'address_line1',
+      'address_line2',
+      'address_line3',
+      'pincode',
+      'state',
+      'country',
     };
-
-    final Map<String, List<String>> perCheck = <String, List<String>>{
-      'identity': <String>['kyc_id', 'id_type'],
-      'address': <String>['pincode', 'city', 'state'],
-      'criminal': <String>['police_station', 'jurisdiction'],
-      'education': <String>['institute', 'course', 'graduation_year'],
-      'employment': <String>['employer', 'role', 'start_date'],
-    };
-
-    for (final String check in checks) {
-      columns.addAll(perCheck[check] ?? const <String>[]);
-    }
 
     final List<String> sorted = columns.toList()..sort();
     return sorted;
@@ -121,6 +115,303 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         .toSet()
         .toList()
       ..sort();
+  }
+
+  List<Map<String, dynamic>> _parseUsersFromPickedFile(PickedFile file) {
+    final String safeName = file.name.trim();
+    final String ext = safeName.contains('.')
+        ? safeName.split('.').last.toLowerCase()
+        : '';
+    debugPrint('[BulkUploadPage] Parsing file=$safeName ext=$ext');
+    final Uint8List bytes = file.bytes;
+    if (ext == 'csv') return _parseUsersFromCsv(bytes);
+
+    // XLSX files are ZIP containers (start with "PK"). If the extension says
+    // xlsx but content isn't a ZIP, it's usually a misnamed CSV export.
+    if (ext == 'xlsx' && !_looksLikeZip(bytes)) {
+      debugPrint(
+        '[BulkUploadPage] File extension is xlsx but content is not ZIP; trying CSV fallback.',
+      );
+      return _parseUsersFromCsv(bytes);
+    }
+
+    final List<Map<String, dynamic>> fromXlsx = _parseUsersFromXlsx(bytes);
+    if (fromXlsx.isNotEmpty) return fromXlsx;
+
+    return fromXlsx;
+  }
+
+  static bool _looksLikeZip(Uint8List bytes) {
+    if (bytes.length < 4) return false;
+    // ZIP local file header signature: 0x50 0x4B 0x03 0x04
+    return bytes[0] == 0x50 && bytes[1] == 0x4B;
+  }
+
+  List<Map<String, dynamic>> _parseUsersFromCsv(Uint8List bytes) {
+    final String text = utf8.decode(bytes, allowMalformed: true);
+    final List<List<dynamic>> table = const CsvToListConverter(
+      eol: '\n',
+      shouldParseNumbers: false,
+    ).convert(text);
+    if (table.isEmpty) return <Map<String, dynamic>>[];
+
+    int headerIndex = 0;
+    while (headerIndex < table.length && _Identifiers._isRowEmpty(table[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= table.length) return <Map<String, dynamic>>[];
+
+    final List<String> header = table[headerIndex]
+        .map((dynamic v) => (v?.toString() ?? '').trim())
+        .toList();
+    final Map<String, int> ix = _userIndexMap(header);
+
+    final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
+    List<dynamic>? firstNonEmptyRow;
+    for (int i = headerIndex + 1; i < table.length; i++) {
+      final List<dynamic> row = table[i];
+      if (_Identifiers._isRowEmpty(row)) continue;
+      firstNonEmptyRow ??= row;
+      final Map<String, dynamic>? user = _userFromRow(
+        valueAt: (String key) => _Identifiers._rowValue(row, ix[key]),
+      );
+      if (user != null) out.add(user);
+    }
+
+    if (out.isEmpty) {
+      debugPrint(
+        '[BulkUploadPage] CSV header(normalized)=${header.map(_Identifiers._normHeader).toList()}',
+      );
+      if (firstNonEmptyRow != null) {
+        final List<dynamic> row = firstNonEmptyRow;
+        final Map<String, String> sample = _sampleRequiredFields(
+          valueAt: (String key) =>
+              _Identifiers._rowValue(row, ix[key]),
+        );
+        debugPrint('[BulkUploadPage] CSV firstRow(sample)=$sample');
+      }
+    }
+    return out;
+  }
+
+  List<Map<String, dynamic>> _parseUsersFromXlsx(Uint8List bytes) {
+    Excel excel;
+    try {
+      excel = Excel.decodeBytes(bytes);
+    } catch (_) {
+      debugPrint(
+        '[BulkUploadPage] XLSX decodeBytes failed (not a valid xlsx or corrupted). bytes=${bytes.length}',
+      );
+      return <Map<String, dynamic>>[];
+    }
+    final List<String> sheetNames = excel.tables.keys.toList();
+    if (sheetNames.isEmpty) {
+      debugPrint(
+        '[BulkUploadPage] XLSX has no sheets. bytes=${bytes.length}',
+      );
+      return <Map<String, dynamic>>[];
+    }
+    final Sheet? sheet = excel.tables[sheetNames.first];
+    if (sheet == null) {
+      debugPrint(
+        '[BulkUploadPage] XLSX first sheet is null. first=${sheetNames.first}',
+      );
+      return <Map<String, dynamic>>[];
+    }
+
+    final List<List<Data?>> all = sheet.rows;
+    if (all.isEmpty) {
+      debugPrint(
+        '[BulkUploadPage] XLSX sheet has 0 rows. sheet=${sheetNames.first}',
+      );
+      return <Map<String, dynamic>>[];
+    }
+
+    int headerIndex = 0;
+    while (headerIndex < all.length && _Identifiers._isExcelRowEmpty(all[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= all.length) {
+      debugPrint(
+        '[BulkUploadPage] XLSX has no non-empty header row. rows=${all.length}',
+      );
+      return <Map<String, dynamic>>[];
+    }
+
+    final List<String> header = all[headerIndex]
+        .map((Data? d) => _excelCellToString(d).trim())
+        .toList();
+    final Map<String, int> ix = _userIndexMap(header);
+    _logLong('[BulkUploadPage] XLSX header(raw)=$header');
+    _logLong(
+      '[BulkUploadPage] XLSX header(normalized)=${header.map(_Identifiers._normHeader).toList()}',
+    );
+    _logLong(
+      '[BulkUploadPage] XLSX indexMap(full_name=${ix['full_name']} email=${ix['email']} phone_number=${ix['phone_number']} dob=${ix['dob']})',
+    );
+
+    final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
+    List<Data?>? firstNonEmptyRow;
+    for (int i = headerIndex + 1; i < all.length; i++) {
+      final List<Data?> row = all[i];
+      if (_Identifiers._isExcelRowEmpty(row)) continue;
+      firstNonEmptyRow ??= row;
+      final Map<String, dynamic>? user = _userFromRow(
+        valueAt: (String key) {
+          final int? idx = ix[key];
+          if (idx == null || idx < 0 || idx >= row.length) return '';
+          return _excelCellToString(row[idx]);
+        },
+      );
+      if (user != null) out.add(user);
+    }
+
+    if (out.isEmpty) {
+      debugPrint('[BulkUploadPage] XLSX parse produced 0 users');
+      if (firstNonEmptyRow != null) {
+        final List<Data?> row = firstNonEmptyRow;
+        final Map<String, String> sample = _sampleRequiredFields(
+          valueAt: (String key) {
+            final int? idx = ix[key];
+            if (idx == null || idx < 0 || idx >= row.length) {
+              return '';
+            }
+            return _excelCellToString(row[idx]);
+          },
+        );
+        debugPrint('[BulkUploadPage] XLSX firstRow(sample)=$sample');
+      }
+    }
+    return out;
+  }
+
+  static String _excelCellToString(Data? cell) {
+    final Object? v = cell?.value;
+    if (v == null) return '';
+    if (v is num) {
+      if (v.isNaN || v.isInfinite) return '';
+      // Avoid scientific notation for large integers (phone/aadhar/pincode).
+      final num rounded = v.round();
+      final bool isIntLike = (v - rounded).abs() < 1e-9;
+      if (isIntLike) return rounded.toInt().toString();
+      // Keep as-is for decimals (rare in our sheet).
+      return v.toString();
+    }
+    return v.toString().trim();
+  }
+
+  Map<String, int> _userIndexMap(List<String> header) {
+    final Map<String, int> normalized = <String, int>{};
+    for (int i = 0; i < header.length; i++) {
+      final String key = _Identifiers._normHeader(header[i]);
+      if (key.isEmpty) continue;
+      normalized[key] = i;
+    }
+
+    int? pick(List<String> keys) {
+      for (final String k in keys) {
+        final int? i = normalized[k];
+        if (i != null) return i;
+      }
+      return null;
+    }
+
+    int? pickWhere(bool Function(String) predicate) {
+      for (final MapEntry<String, int> e in normalized.entries) {
+        if (predicate(e.key)) return e.value;
+      }
+      return null;
+    }
+
+    return <String, int>{
+      'full_name':
+          pick(<String>['full_name', 'name', 'fullname']) ??
+          pickWhere((String k) => k.contains('full_name')) ??
+          pickWhere((String k) => k.contains('fullname')) ??
+          pickWhere((String k) => k.endsWith('_name') || k.startsWith('name_')) ??
+          -1,
+      'dob': pick(<String>['dob', 'date_of_birth']) ?? -1,
+      'phone_number':
+          pick(<String>['phone_number', 'phone', 'mobile', 'mobile_number']) ??
+          pickWhere((String k) => k.contains('phone')) ??
+          pickWhere((String k) => k.contains('mobile')) ??
+          -1,
+      'email':
+          pick(<String>['email', 'email_id']) ??
+          pickWhere((String k) => k.contains('email')) ??
+          -1,
+      'aadhar_number':
+          pick(<String>['aadhar_number', 'aadhar', 'aadhaar', 'aadhaar_number']) ??
+              -1,
+      'pan_number': pick(<String>['pan_number', 'pan']) ?? -1,
+      'address_line1':
+          pick(<String>['address_line1', 'address1', 'address']) ?? -1,
+      'address_line2': pick(<String>['address_line2', 'address2']) ?? -1,
+      'address_line3': pick(<String>['address_line3', 'address3']) ?? -1,
+      'pincode': pick(<String>['pincode', 'pin', 'zip', 'postal_code']) ?? -1,
+      'state': pick(<String>['state', 'province']) ?? -1,
+      'country': pick(<String>['country']) ?? -1,
+    };
+  }
+
+  static Map<String, String> _sampleRequiredFields({
+    required String Function(String) valueAt,
+  }) {
+    String maskEmail(String v) {
+      final String raw = v.trim();
+      final int at = raw.indexOf('@');
+      if (at <= 1) return raw.isEmpty ? '' : '***';
+      return '${raw[0]}***${raw.substring(at)}';
+    }
+
+    String maskPhone(String v) {
+      final String digits = _BulkUploadPageState._normalizeDigits(v);
+      if (digits.isEmpty) return '';
+      final String tail = digits.length <= 4 ? digits : digits.substring(digits.length - 4);
+      return '***$tail';
+    }
+
+    return <String, String>{
+      'full_name': valueAt('full_name').trim(),
+      'email': maskEmail(valueAt('email')),
+      'phone_number': maskPhone(valueAt('phone_number')),
+      'dob': valueAt('dob').trim(),
+    };
+  }
+
+  Map<String, dynamic>? _userFromRow({required String Function(String) valueAt}) {
+    final String fullName = valueAt('full_name').trim();
+    final String email = _normalizeEmail(valueAt('email'));
+    final String phone = _normalizePhone(valueAt('phone_number'));
+
+    if (fullName.isEmpty) return null;
+    if (email.isEmpty && phone.isEmpty) return null;
+
+    final String dob = valueAt('dob').trim();
+    final String aadhar = _normalizeDigits(valueAt('aadhar_number'));
+    final String pan = _normalizeAlphaNum(valueAt('pan_number'));
+
+    final String addressLine1 = valueAt('address_line1').trim();
+    final String addressLine2 = valueAt('address_line2').trim();
+    final String addressLine3 = valueAt('address_line3').trim();
+    final String pincode = _normalizeDigits(valueAt('pincode'));
+    final String state = valueAt('state').trim();
+    final String country = valueAt('country').trim();
+
+    return <String, dynamic>{
+      'full_name': fullName,
+      if (dob.isNotEmpty) 'dob': dob,
+      if (phone.isNotEmpty) 'phone_number': phone,
+      if (email.isNotEmpty) 'email': email,
+      if (aadhar.isNotEmpty) 'aadhar_number': aadhar,
+      if (pan.isNotEmpty) 'pan_number': pan,
+      if (addressLine1.isNotEmpty) 'address_line1': addressLine1,
+      if (addressLine2.isNotEmpty) 'address_line2': addressLine2,
+      if (addressLine3.isNotEmpty) 'address_line3': addressLine3,
+      if (pincode.isNotEmpty) 'pincode': pincode,
+      if (state.isNotEmpty) 'state': state,
+      if (country.isNotEmpty) 'country': country,
+    };
   }
 
   Future<void> _downloadTemplate() async {
@@ -179,11 +470,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   Future<void> _setPickedFile(PickedFile picked) async {
+    debugPrint(
+      '[BulkUploadPage] Picked file name=${picked.name} bytes=${picked.bytes.length}',
+    );
     setState(() => _pickedFile = picked);
   }
 
   void _confirmAndCreateBatch() {
     final List<String> columns = _columns();
+    debugPrint(
+      '[BulkUploadPage] Confirm tapped batch=${_batchNameController.text.trim()} picked=${_pickedFile?.name}',
+    );
     if (_batchNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a batch name.')),
@@ -213,11 +510,32 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
+      final List<Map<String, dynamic>> users = _parseUsersFromPickedFile(file);
+      if (users.isEmpty) {
+        debugPrint(
+          '[BulkUploadPage] No valid rows parsed. file=${file.name} bytes=${file.bytes.length} '
+          'expectedHeaders=${_columns().join(",")}',
+        );
+        if (!mounted) return;
+        final String ext = file.name.contains('.')
+            ? file.name.split('.').last.toLowerCase()
+            : '';
+        final bool looksZip = ext == 'xlsx' && _looksLikeZip(file.bytes);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              looksZip
+                  ? 'Could not read this Excel file. Please re-download it as “Microsoft Excel (.xlsx)” or upload a CSV.'
+                  : 'No valid rows found in the uploaded file.',
+            ),
+          ),
+        );
+        return;
+      }
       final res = await repo.bulkUpload(
         batchName: _batchNameController.text.trim(),
         description: null,
-        fileBytes: file.bytes,
-        fileName: file.name,
+        users: users,
       );
       if (!mounted) return;
       final Uri uri = Uri(
@@ -251,9 +569,21 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           context,
         ).showSnackBar(SnackBar(content: Text(inner.message)));
       } else {
+        final dynamic data = e.response?.data;
+        String? serverMessage;
+        if (data is String && data.trim().isNotEmpty) {
+          serverMessage = data.trim();
+        } else if (data is Map && data['message'] is String) {
+          final String m = (data['message'] as String).trim();
+          if (m.isNotEmpty) serverMessage = m;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message ?? 'Upload failed. Please try again.'),
+            content: Text(
+              serverMessage ??
+                  e.message ??
+                  'Upload failed. Please try again.',
+            ),
           ),
         );
       }
@@ -403,6 +733,19 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   static String _normalizeAlphaNum(String v) {
     return v.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').trim().toUpperCase();
+  }
+
+  void _logLong(String message) {
+    // debugPrint() can throttle long lines; chunk them to ensure visibility.
+    const int chunk = 800;
+    if (message.length <= chunk) {
+      debugPrint(message);
+      return;
+    }
+    for (int i = 0; i < message.length; i += chunk) {
+      final int end = (i + chunk < message.length) ? i + chunk : message.length;
+      debugPrint(message.substring(i, end));
+    }
   }
 
   @override
@@ -685,7 +1028,7 @@ class _Identifiers {
     return v
         .trim()
         .toLowerCase()
-        .replaceAll(RegExp(r'\\s+'), '_')
+        .replaceAll(RegExp(r'\s+'), '_')
         .replaceAll(RegExp(r'[^a-z0-9_]'), '');
   }
 }
