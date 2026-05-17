@@ -136,8 +136,8 @@ class VerificationRepository {
       '/verification/bulk-upload',
       data: <String, dynamic>{
         'batch_name': batchName.trim(),
-        if (description != null && description.trim().isNotEmpty)
-          'description': description.trim(),
+        // Keep parity with web frontend which always sends a string.
+        'description': description?.trim() ?? '',
         'users': users,
       },
     );

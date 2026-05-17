@@ -381,13 +381,14 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   Map<String, dynamic>? _userFromRow({required String Function(String) valueAt}) {
     final String fullName = valueAt('full_name').trim();
-    final String email = _normalizeEmail(valueAt('email'));
+    final String rawEmail = valueAt('email');
+    final String email = _looksLikeEmail(rawEmail) ? _normalizeEmail(rawEmail) : '';
     final String phone = _normalizePhone(valueAt('phone_number'));
 
     if (fullName.isEmpty) return null;
     if (email.isEmpty && phone.isEmpty) return null;
 
-    final String dob = valueAt('dob').trim();
+    final String? dob = _normalizeDob(valueAt('dob'));
     final String aadhar = _normalizeDigits(valueAt('aadhar_number'));
     final String pan = _normalizeAlphaNum(valueAt('pan_number'));
 
@@ -400,7 +401,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     return <String, dynamic>{
       'full_name': fullName,
-      if (dob.isNotEmpty) 'dob': dob,
+      if (dob case final String v) 'dob': v,
       if (phone.isNotEmpty) 'phone_number': phone,
       if (email.isNotEmpty) 'email': email,
       if (aadhar.isNotEmpty) 'aadhar_number': aadhar,
@@ -532,6 +533,21 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         );
         return;
       }
+      final int count = users.length;
+      final Map<String, dynamic> first = users.first;
+      final String sampleName = (first['full_name']?.toString() ?? '').trim();
+      final String sampleEmail = (first['email']?.toString() ?? '').trim();
+      final String samplePhone = (first['phone_number']?.toString() ?? '').trim();
+      final String maskedEmail = sampleEmail.isEmpty
+          ? ''
+          : _sampleRequiredFields(valueAt: (_) => sampleEmail)['email'] ?? '';
+      final String maskedPhone = samplePhone.isEmpty
+          ? ''
+          : _sampleRequiredFields(valueAt: (_) => samplePhone)['phone_number'] ??
+              '';
+      debugPrint(
+        '[BulkUploadPage] Uploading users=$count sample={full_name:$sampleName email:$maskedEmail phone:$maskedPhone dob:${first['dob']}}',
+      );
       final res = await repo.bulkUpload(
         batchName: _batchNameController.text.trim(),
         description: null,
@@ -622,13 +638,19 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       final Set<String> existing = await _fetchExistingIdentifierKeys();
       final Set<String> overlap = fileIds.keys.intersection(existing);
       if (overlap.isNotEmpty) {
-        await _showBlockingDialog(
-          title: 'People already exist',
+        // Don't hard-block: the backend already supports skipping duplicates and
+        // returns `skipped_users`. Blocking here can be confusing, especially
+        // if the previous attempt partially succeeded (e.g. server error after
+        // creating some records).
+        final bool proceed = await _confirmProceedDialog(
+          title: 'Some people may already exist',
           message:
-              'Some people in this file already have verifications in your org. To avoid multiple human verifications for the same people, remove them from the file and re-upload.',
+              'Some people in this file already have verifications in your org. If you continue, they may be skipped.',
           samples: overlap.take(6).toList(),
+          confirmLabel: 'Continue',
+          cancelLabel: 'Cancel',
         );
-        return false;
+        return proceed;
       }
 
       return true;
@@ -685,6 +707,58 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     );
   }
 
+  Future<bool> _confirmProceedDialog({
+    required String title,
+    required String message,
+    required List<String> samples,
+    required String confirmLabel,
+    required String cancelLabel,
+  }) async {
+    if (!mounted) return false;
+    final bool? res = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(message),
+              if (samples.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  'Examples:',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (final String s in samples)
+                  Text(
+                    '• $s',
+                    style: AppTypography.body2.copyWith(fontSize: 12),
+                  ),
+              ],
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(cancelLabel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(confirmLabel),
+            ),
+          ],
+        );
+      },
+    );
+    return res ?? false;
+  }
+
   Future<Set<String>> _fetchExistingIdentifierKeys() async {
     final VerificationRepository repo = ref.read(
       verificationRepositoryProvider,
@@ -719,6 +793,33 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   static String _normalizeEmail(String v) => v.trim().toLowerCase();
+
+  static bool _looksLikeEmail(String v) {
+    final String s = v.trim();
+    return s.contains('@') && s.contains('.');
+  }
+
+  static String? _normalizeDob(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return null;
+
+    final RegExp iso = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+    if (iso.hasMatch(v)) return v;
+
+    final RegExp dmy = RegExp(r'^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$');
+    final Match? m = dmy.firstMatch(v);
+    if (m == null) return null;
+    final int? dd = int.tryParse(m.group(1)!);
+    final int? mm = int.tryParse(m.group(2)!);
+    final int? yyyy = int.tryParse(m.group(3)!);
+    if (dd == null || mm == null || yyyy == null) return null;
+    if (yyyy < 1900 || yyyy > 2100) return null;
+    if (mm < 1 || mm > 12) return null;
+    if (dd < 1 || dd > 31) return null;
+    final String m2 = mm.toString().padLeft(2, '0');
+    final String d2 = dd.toString().padLeft(2, '0');
+    return '$yyyy-$m2-$d2';
+  }
 
   static String _normalizePhone(String v) {
     final String digits = _normalizeDigits(v);
