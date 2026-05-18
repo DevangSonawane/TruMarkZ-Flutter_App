@@ -117,6 +117,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       ..sort();
   }
 
+  // TODO: Remove once backend file parsing is fully relied upon everywhere.
+  // ignore: unused_element
   List<Map<String, dynamic>> _parseUsersFromPickedFile(PickedFile file) {
     final String safeName = file.name.trim();
     final String ext = safeName.contains('.')
@@ -511,47 +513,14 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final List<Map<String, dynamic>> users = _parseUsersFromPickedFile(file);
-      if (users.isEmpty) {
-        debugPrint(
-          '[BulkUploadPage] No valid rows parsed. file=${file.name} bytes=${file.bytes.length} '
-          'expectedHeaders=${_columns().join(",")}',
-        );
-        if (!mounted) return;
-        final String ext = file.name.contains('.')
-            ? file.name.split('.').last.toLowerCase()
-            : '';
-        final bool looksZip = ext == 'xlsx' && _looksLikeZip(file.bytes);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              looksZip
-                  ? 'Could not read this Excel file. Please re-download it as “Microsoft Excel (.xlsx)” or upload a CSV.'
-                  : 'No valid rows found in the uploaded file.',
-            ),
-          ),
-        );
-        return;
-      }
-      final int count = users.length;
-      final Map<String, dynamic> first = users.first;
-      final String sampleName = (first['full_name']?.toString() ?? '').trim();
-      final String sampleEmail = (first['email']?.toString() ?? '').trim();
-      final String samplePhone = (first['phone_number']?.toString() ?? '').trim();
-      final String maskedEmail = sampleEmail.isEmpty
-          ? ''
-          : _sampleRequiredFields(valueAt: (_) => sampleEmail)['email'] ?? '';
-      final String maskedPhone = samplePhone.isEmpty
-          ? ''
-          : _sampleRequiredFields(valueAt: (_) => samplePhone)['phone_number'] ??
-              '';
       debugPrint(
-        '[BulkUploadPage] Uploading users=$count sample={full_name:$sampleName email:$maskedEmail phone:$maskedPhone dob:${first['dob']}}',
+        '[BulkUploadPage] Uploading bulk file name=${file.name} bytes=${file.bytes.length}',
       );
       final res = await repo.bulkUpload(
         batchName: _batchNameController.text.trim(),
         description: null,
-        users: users,
+        fileBytes: file.bytes,
+        fileName: file.name,
       );
       if (!mounted) return;
       final Uri uri = Uri(
