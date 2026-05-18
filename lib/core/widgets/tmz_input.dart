@@ -73,7 +73,7 @@ class _TMZInputState extends State<TMZInput> {
         ? AppColors.error
         : _focused
         ? AppColors.brandBlue
-        : AppColors.border;
+        : Colors.transparent;
 
     Widget? suffixWidget = widget.suffix;
     if (suffixWidget == null && widget.obscureText) {
@@ -115,7 +115,7 @@ class _TMZInputState extends State<TMZInput> {
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: widget.enabled ? AppColors.cardSurface : AppColors.offWhite,
+            color: AppColors.offWhite,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor, width: hasError ? 1 : 1.25),
             // Keep a single visible border (no outer focus ring).

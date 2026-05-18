@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
@@ -32,153 +33,182 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0, -0.45),
-                    radius: 1.1,
-                    colors: <Color>[
-                      AppColors.blueTint,
-                      AppColors.pageBg,
-                      AppColors.cardSurface,
-                    ],
+      backgroundColor: AppColors.deepNavy,
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+        ),
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[AppColors.deepNavy, AppColors.brandBlue],
+                    ),
                   ),
                 ),
               ),
-            ),
-            Column(
-              children: <Widget>[
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged: (int i) => setState(() => _pageIndex = i),
-                    children: <Widget>[
-                      _OnboardingHero(
-                        badgeLabel: 'TRUMARKZ VERIFIED',
-                        title: 'Verify Anyone.\nAnything.',
-                        description:
-                            'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.',
-                      ),
-                      const _OnboardingHero(
-                        badgeLabel: 'INSTANT CHECKS',
-                        title: 'Scan & Verify\nin Seconds.',
-                        description:
-                            'Use QR scanning to validate credentials and\nsee proofs instantly.',
-                      ),
-                      const _OnboardingHero(
-                        badgeLabel: 'TRUSTED NETWORK',
-                        title: 'Built for\nTeams.',
-                        description:
-                            'Run bulk verification workflows and keep\ncompliance at 99.99%.',
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child:
-                  Container(
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.x6,
-                          AppSpacing.x6,
-                          AppSpacing.x6,
-                          AppSpacing.x6 + systemBottomInset,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.cardSurface,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(32),
+              Column(
+                children: <Widget>[
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 240 + systemBottomInset),
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onPageChanged: (int i) =>
+                            setState(() => _pageIndex = i),
+                        children: <Widget>[
+                          _OnboardingHero(
+                            badgeLabel: '',
+                            title: 'Verify Anyone.\nAnything.',
+                            description:
+                                'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.',
                           ),
-                          boxShadow: <BoxShadow>[
-                            BoxShadow(
-                              color: Colors.black.withAlpha(10),
-                              blurRadius: 24,
-                              offset: const Offset(0, -6),
+                          const _OnboardingHero(
+                            badgeLabel: 'INSTANT CHECKS',
+                            title: 'Scan & Verify\nin Seconds.',
+                            description:
+                                'Use QR scanning to validate credentials and\nsee proofs instantly.',
+                          ),
+                          const _OnboardingHero(
+                            badgeLabel: 'TRUSTED NETWORK',
+                            title: 'Built for\nTeams.',
+                            description:
+                                'Run bulk verification workflows and keep\ncompliance at 99.99%.',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child:
+                    Container(
+                          padding: EdgeInsets.fromLTRB(
+                            AppSpacing.x6,
+                            AppSpacing.x8,
+                            AppSpacing.x6,
+                            AppSpacing.x8 + systemBottomInset,
+                          ),
+                          constraints: const BoxConstraints(minHeight: 360),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardSurface,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(32),
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Text(
-                              _pageIndex == 0
-                                  ? 'Verify Anyone.\nAnything.'
-                                  : _pageIndex == 1
-                                  ? 'Scan & Verify\nin Seconds.'
-                                  : 'Built for\nTeams.',
-                              textAlign: TextAlign.center,
-                              style: AppTypography.display2.copyWith(
-                                color: AppColors.textPrimary,
-                                fontSize: 30,
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: Colors.black.withAlpha(10),
+                                blurRadius: 24,
+                                offset: const Offset(0, -6),
                               ),
-                            ),
-                            const SizedBox(height: AppSpacing.x3),
-                            Text(
-                              _pageIndex == 0
-                                  ? 'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.'
-                                  : _pageIndex == 1
-                                  ? 'Use QR scanning to validate credentials and\nsee proofs instantly.'
-                                  : 'Run bulk verification workflows and keep\ncompliance at 99.99%.',
-                              textAlign: TextAlign.center,
-                              style: AppTypography.body2.copyWith(
-                                color: AppColors.textSecondary,
-                                height: 1.35,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.x4),
-                            _DotsIndicator(index: _pageIndex, count: 3),
-                            const SizedBox(height: AppSpacing.x4),
-                            SizedBox(
-                              width: double.infinity,
-                              child: TMZButton(
-                                onPressed: () =>
-                                    context.go(AppRouter.roleSelectionPath),
-                                label: 'Get Started',
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.x4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: <Widget>[
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              if (_pageIndex == 0)
+                                RichText(
+                                  textAlign: TextAlign.center,
+                                  text: TextSpan(
+                                    style: AppTypography.display2.copyWith(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 30,
+                                    ),
+                                    children: <InlineSpan>[
+                                      const TextSpan(text: 'Verify Anyone.\n'),
+                                      TextSpan(
+                                        text: 'Anything.',
+                                        style: AppTypography.display2.copyWith(
+                                          fontSize: 30,
+                                          color: AppColors.brandBlue.withAlpha(
+                                            190,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
                                 Text(
-                                  'Already have an account? ',
-                                  style: AppTypography.body2.copyWith(
-                                    color: AppColors.textSecondary,
+                                  _pageIndex == 1
+                                      ? 'Scan & Verify\nin Seconds.'
+                                      : 'Built for\nTeams.',
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.display2.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 30,
                                   ),
                                 ),
-                                InkWell(
-                                  onTap: () =>
+                              const SizedBox(height: AppSpacing.x3),
+                              Text(
+                                _pageIndex == 0
+                                    ? 'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.'
+                                    : _pageIndex == 1
+                                    ? 'Use QR scanning to validate credentials and\nsee proofs instantly.'
+                                    : 'Run bulk verification workflows and keep\ncompliance at 99.99%.',
+                                textAlign: TextAlign.center,
+                                style: AppTypography.body2.copyWith(
+                                  color: AppColors.textSecondary,
+                                  height: 1.35,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              SizedBox(
+                                width: double.infinity,
+                                child: TMZButton(
+                                  onPressed: () =>
                                       context.go(AppRouter.roleSelectionPath),
-                                  child: Text(
-                                    'Sign In',
+                                  label: 'Get Started',
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: <Widget>[
+                                  Text(
+                                    'Already have an account? ',
                                     style: AppTypography.body2.copyWith(
-                                      color: scheme.primary,
-                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textSecondary,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                  InkWell(
+                                    onTap: () =>
+                                        context.go(AppRouter.roleSelectionPath),
+                                    child: Text(
+                                      'Sign In',
+                                      style: AppTypography.body2.copyWith(
+                                        color: scheme.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                        .animate()
+                        .fadeIn(delay: 100.ms, duration: 220.ms)
+                        .slideY(
+                          begin: 0.04,
+                          duration: 220.ms,
+                          curve: Curves.easeOutCubic,
                         ),
-                      )
-                      .animate()
-                      .fadeIn(delay: 100.ms, duration: 220.ms)
-                      .slideY(
-                        begin: 0.04,
-                        duration: 220.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -199,75 +229,66 @@ class _OnboardingHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-
-    return Column(
-      children: <Widget>[
-        const SizedBox(height: AppSpacing.x10),
-        SizedBox(
-          height: 240,
-          child: Stack(
-            alignment: Alignment.center,
-            children: <Widget>[
-              Container(
-                width: 160,
-                height: 160,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double availableHeight = constraints.maxHeight;
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: availableHeight * 0.3,
+                height: availableHeight * 0.3,
                 decoration: BoxDecoration(
                   color: scheme.primary.withAlpha(16),
                   shape: BoxShape.circle,
                 ),
               ),
-              Image.asset(
-                    'assets/icons/headers_app_icon.png',
-                    height: 92,
-                    fit: BoxFit.contain,
-                  )
-                  .animate()
-                  .fadeIn(duration: 250.ms)
-                  .scale(
-                    begin: const Offset(0.96, 0.96),
-                    end: const Offset(1, 1),
-                    duration: 250.ms,
-                  ),
-              Positioned(
-                left: 28,
-                child: const _FloatIcon(
-                  icon: Icons.check_circle_rounded,
-                  phase: 0.0,
-                ),
-              ),
-              Positioned(
-                top: 36,
-                right: 108,
-                child: const _FloatIcon(
-                  icon: Icons.verified_rounded,
-                  phase: 1.6,
-                ),
-              ),
-              Positioned(
-                right: 28,
-                child: const _FloatIcon(icon: Icons.lock_rounded, phase: 3.2),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.x4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          decoration: BoxDecoration(
-            color: scheme.primary.withAlpha(14),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: scheme.primary.withAlpha(22)),
-          ),
-          child: Text(
-            badgeLabel,
-            style: AppTypography.caption.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.6,
-              color: scheme.primary,
             ),
-          ),
-        ),
-      ],
+            Align(
+              alignment: Alignment.center,
+              child:
+                  Image.asset(
+                        'assets/icons/onboarding_screen-3.png',
+                        height: availableHeight * 0.65,
+                        fit: BoxFit.contain,
+                      )
+                      .animate()
+                      .fadeIn(duration: 250.ms)
+                      .scale(
+                        begin: const Offset(0.96, 0.96),
+                        end: const Offset(1, 1),
+                        duration: 250.ms,
+                      ),
+            ),
+            if (badgeLabel.trim().isNotEmpty)
+              Positioned(
+                bottom: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withAlpha(14),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: scheme.primary.withAlpha(22)),
+                  ),
+                  child: Text(
+                    badgeLabel,
+                    style: AppTypography.caption.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.6,
+                      color: scheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -335,33 +356,6 @@ class _FloatIconState extends State<_FloatIcon>
           child: Transform.rotate(angle: rot, child: tile),
         );
       },
-    );
-  }
-}
-
-class _DotsIndicator extends StatelessWidget {
-  const _DotsIndicator({required this.index, required this.count});
-
-  final int index;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List<Widget>.generate(count, (int i) {
-        final bool active = i == index;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: active ? 22 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: active ? AppColors.brandBlue : const Color(0xFFE2E8F0),
-            borderRadius: BorderRadius.circular(999),
-          ),
-        );
-      }),
     );
   }
 }
