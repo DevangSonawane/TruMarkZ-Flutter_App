@@ -45,16 +45,13 @@ class AuthRepository {
 
   Future<LoginResponse> loginWithGoogle({
     required String idToken,
-    required String expectedLoginType,
+    required String userType,
   }) async {
+    final String normalized =
+        userType.trim().toLowerCase() == 'individual' ? 'individual' : 'organization';
     final Map<String, dynamic> res = await _api.post(
-      '/auth/google',
-      data: <String, dynamic>{
-        'token': idToken,
-        // Backend may accept either of these keys depending on implementation.
-        'login_type': expectedLoginType,
-        'user_type': expectedLoginType,
-      },
+      '/auth/google?user_type=${Uri.encodeComponent(normalized)}',
+      data: <String, dynamic>{'token': idToken},
       skipAuth: true,
     );
     final LoginResponse parsed = LoginResponse.fromJson(res);
@@ -71,16 +68,6 @@ class AuthRepository {
         : loginTypeRaw == 'organization'
               ? 'organization'
               : loginTypeRaw;
-
-    final String expected = expectedLoginType.trim().toLowerCase();
-    if (expected == 'organization' && loginType != 'organization') {
-      await _tokenStorage.clearAll();
-      throw ApiException(
-        statusCode: 400,
-        message:
-            'This Google account is registered as an individual account. Please use Individual login or try another Google account for Organization signup.',
-      );
-    }
 
     await _tokenStorage.saveToken(parsed.accessToken);
     await _tokenStorage.saveUserId(parsed.userId);

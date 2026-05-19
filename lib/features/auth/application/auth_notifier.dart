@@ -136,7 +136,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   Future<void> loginWithGoogle({
     required String idToken,
-    required String expectedLoginType,
+    required String userType,
   }) async {
     state = AsyncData(
       (state.value ?? const AuthState()).copyWith(
@@ -147,7 +147,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     try {
       final LoginResponse login = await _repo.loginWithGoogle(
         idToken: idToken,
-        expectedLoginType: expectedLoginType,
+        userType: userType,
       );
       final UserProfile me = await _repo.getMe();
       final String loginType = login.loginType.trim().toLowerCase();
@@ -160,7 +160,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         ),
       );
 
-      if (loginType == 'organization') {
+      // Backend may return transitional values like "pending" for new accounts.
+      // Treat anything other than "individual" as organization flow.
+      if (loginType != 'individual') {
         if (login.requiresOnboarding) {
           AppRouter.router.go(AppRouter.orgOnboardingPath);
         } else {

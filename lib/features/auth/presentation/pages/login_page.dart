@@ -317,14 +317,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ),
                           onPressed: _isLoading
                               ? null
-                              : (!isOrg)
-                              ? () => ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Google sign-in is available for organization accounts only.',
-                                      ),
-                                    ),
-                                  )
                               : () async {
                                   final ScaffoldMessengerState messenger =
                                       ScaffoldMessenger.of(context);
@@ -350,7 +342,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                         .read(authNotifierProvider.notifier)
                                         .loginWithGoogle(
                                           idToken: idToken,
-                                          expectedLoginType: 'organization',
+                                          userType: isOrg
+                                              ? 'organization'
+                                              : 'individual',
                                         );
                                   } on ApiException catch (e) {
                                     if (!mounted) return;
