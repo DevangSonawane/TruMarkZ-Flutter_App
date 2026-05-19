@@ -10,6 +10,8 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/services/google_sign_in_service.dart';
+import '../../../../core/services/token_storage.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
 import '../../application/auth_notifier.dart';
@@ -315,14 +317,79 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ),
                           onPressed: _isLoading
                               ? null
-                              : () =>
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Google Sign-in coming soon',
-                                        ),
+                              : (!isOrg)
+                              ? () => ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Google sign-in is available for organization accounts only.',
                                       ),
                                     ),
+                                  )
+                              : () async {
+                                  final ScaffoldMessengerState messenger =
+                                      ScaffoldMessenger.of(context);
+                                  ({String? idToken, String? email}) googleResult =
+                                      (idToken: null, email: null);
+                                  setState(() => _isLoading = true);
+                                  try {
+                                    // If the user was previously logged in (e.g. as an individual),
+                                    // clear local session before starting a new org auth flow.
+                                    await ref.read(tokenStorageProvider).clearAll();
+
+                                    googleResult = await GoogleSignInService.signIn();
+                                    final String? idToken = googleResult.idToken;
+                                    if (idToken == null ||
+                                        idToken.trim().isEmpty) {
+                                      throw const ApiException(
+                                        statusCode: null,
+                                        message:
+                                            'Google sign-in was cancelled.',
+                                      );
+                                    }
+                                    await ref
+                                        .read(authNotifierProvider.notifier)
+                                        .loginWithGoogle(
+                                          idToken: idToken,
+                                          expectedLoginType: 'organization',
+                                        );
+                                  } on ApiException catch (e) {
+                                    if (!mounted) return;
+                                    final String msg = e.message.trim();
+                                    if (msg.toLowerCase().contains('email already registered') &&
+                                        msg.toLowerCase().contains('password')) {
+                                      final String? email = googleResult.email;
+                                      if (email != null && email.trim().isNotEmpty) {
+                                        _emailController.text = email.trim();
+                                      }
+                                      messenger.showSnackBar(
+                                        SnackBar(content: Text(msg)),
+                                      );
+                                    } else {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            msg.isEmpty
+                                                ? 'Google sign-in failed. Please try again.'
+                                                : msg,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  } catch (_) {
+                                    if (!mounted) return;
+                                    messenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Google sign-in failed. Please try again.',
+                                        ),
+                                      ),
+                                    );
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() => _isLoading = false);
+                                    }
+                                  }
+                                },
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[

@@ -7,8 +7,9 @@ import '../../../core/services/token_storage.dart';
 import '../data/auth_repository.dart';
 import 'auth_state.dart';
 
-final authNotifierProvider =
-    AsyncNotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);
+final authNotifierProvider = AsyncNotifierProvider<AuthNotifier, AuthState>(
+  AuthNotifier.new,
+);
 
 class AuthNotifier extends AsyncNotifier<AuthState> {
   late final AuthRepository _repo = ref.read(authRepositoryProvider);
@@ -38,54 +39,157 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<void> loginIndividual(String emailOrMobile, String password) async {
-    state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: true, errorMessage: null));
+    state = AsyncData(
+      (state.value ?? const AuthState()).copyWith(
+        isLoading: true,
+        errorMessage: null,
+      ),
+    );
     try {
-      final String userId = await _repo.loginIndividual(emailOrMobile: emailOrMobile, password: password);
+      final LoginResponse login = await _repo.loginIndividual(
+        emailOrMobile: emailOrMobile,
+        password: password,
+      );
       final UserProfile me = await _repo.getMe();
       state = AsyncData(
         AuthState(
           status: AuthStatus.authenticated,
-          userId: userId,
+          userId: login.userId,
           loginType: me.loginType,
           userProfile: me,
         ),
       );
       AppRouter.router.go(AppRouter.individualIdentityPath);
     } on ApiException catch (e) {
-      state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: false, errorMessage: e.message));
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: e.message,
+        ),
+      );
       rethrow;
     } catch (_) {
       const String msg = 'Something went wrong. Please try again.';
-      state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: false, errorMessage: msg));
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: msg,
+        ),
+      );
       throw const ApiException(statusCode: null, message: msg);
     } finally {
-      state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: false));
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(isLoading: false),
+      );
     }
   }
 
   Future<void> loginOrg(String emailOrMobile, String password) async {
-    state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: true, errorMessage: null));
+    state = AsyncData(
+      (state.value ?? const AuthState()).copyWith(
+        isLoading: true,
+        errorMessage: null,
+      ),
+    );
     try {
-      final String userId = await _repo.loginOrg(emailOrMobile: emailOrMobile, password: password);
+      final LoginResponse login = await _repo.loginOrg(
+        emailOrMobile: emailOrMobile,
+        password: password,
+      );
       final UserProfile me = await _repo.getMe();
       state = AsyncData(
         AuthState(
           status: AuthStatus.authenticated,
-          userId: userId,
+          userId: login.userId,
           loginType: me.loginType,
           userProfile: me,
         ),
       );
-      AppRouter.router.go(AppRouter.dashboardPath);
+      if (login.requiresOnboarding) {
+        AppRouter.router.go(AppRouter.orgOnboardingPath);
+      } else {
+        AppRouter.router.go(AppRouter.dashboardPath);
+      }
     } on ApiException catch (e) {
-      state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: false, errorMessage: e.message));
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: e.message,
+        ),
+      );
       rethrow;
     } catch (_) {
       const String msg = 'Something went wrong. Please try again.';
-      state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: false, errorMessage: msg));
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: msg,
+        ),
+      );
       throw const ApiException(statusCode: null, message: msg);
     } finally {
-      state = AsyncData((state.value ?? const AuthState()).copyWith(isLoading: false));
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(isLoading: false),
+      );
+    }
+  }
+
+  Future<void> loginWithGoogle({
+    required String idToken,
+    required String expectedLoginType,
+  }) async {
+    state = AsyncData(
+      (state.value ?? const AuthState()).copyWith(
+        isLoading: true,
+        errorMessage: null,
+      ),
+    );
+    try {
+      final LoginResponse login = await _repo.loginWithGoogle(
+        idToken: idToken,
+        expectedLoginType: expectedLoginType,
+      );
+      final UserProfile me = await _repo.getMe();
+      final String loginType = login.loginType.trim().toLowerCase();
+      state = AsyncData(
+        AuthState(
+          status: AuthStatus.authenticated,
+          userId: login.userId,
+          loginType: loginType,
+          userProfile: me,
+        ),
+      );
+
+      if (loginType == 'organization') {
+        if (login.requiresOnboarding) {
+          AppRouter.router.go(AppRouter.orgOnboardingPath);
+        } else {
+          AppRouter.router.go(AppRouter.dashboardPath);
+        }
+      } else {
+        AppRouter.router.go(AppRouter.individualIdentityPath);
+      }
+    } on ApiException catch (e) {
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: e.message,
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      const String msg = 'Something went wrong. Please try again.';
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: msg,
+        ),
+      );
+      throw const ApiException(statusCode: null, message: msg);
+    } finally {
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(isLoading: false),
+      );
     }
   }
 
@@ -100,9 +204,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
-  Future<bool> verifyOtp(String identifier, String code, String purpose) async {
+  Future<bool> verifyOtp(String email, String code) async {
     try {
-      await _repo.verifyOtp(identifier: identifier, otpCode: code, purpose: purpose);
+      await _repo.verifyOtp(email: email, otpCode: code);
       return true;
     } on ApiException {
       return false;

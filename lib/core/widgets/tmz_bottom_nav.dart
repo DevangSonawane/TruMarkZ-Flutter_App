@@ -36,29 +36,36 @@ class TMZBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    return Container(
-      decoration: const BoxDecoration(
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + safeBottom),
+      child: Material(
         color: AppColors.cardSurface,
-        border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
-      ),
-      padding: EdgeInsets.fromLTRB(10, 10, 10, 10 + safeBottom),
-      child: Row(
-        children: <Widget>[
-          for (int index = 0; index < items.length; index++) ...<Widget>[
-            Expanded(
-              child: _NavItem(
-                item: items[index],
-                active: index == currentIndex,
-                showLabel: showLabels,
-                onTap: () => onTap(index),
-              ),
-            ),
-            if (middleGapWidth != null &&
-                middleGapAfterIndex != null &&
-                index == middleGapAfterIndex)
-              SizedBox(width: middleGapWidth),
-          ],
-        ],
+        elevation: 18,
+        shadowColor: Colors.black.withAlpha(70),
+        shape: StadiumBorder(
+          side: BorderSide(color: AppColors.divider.withAlpha(150), width: 0.8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: <Widget>[
+              for (int index = 0; index < items.length; index++) ...<Widget>[
+                Expanded(
+                  child: _NavItem(
+                    item: items[index],
+                    active: index == currentIndex,
+                    showLabel: showLabels,
+                    onTap: () => onTap(index),
+                  ),
+                ),
+                if (middleGapWidth != null &&
+                    middleGapAfterIndex != null &&
+                    index == middleGapAfterIndex)
+                  SizedBox(width: middleGapWidth),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -93,7 +100,7 @@ class _NavItem extends StatelessWidget {
         splashColor: AppColors.brandBlue.withAlpha(0x0A),
         highlightColor: AppColors.brandBlue.withAlpha(0x06),
         child: SizedBox(
-          height: 56,
+          height: 54,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
@@ -117,7 +124,7 @@ class _NavItem extends StatelessWidget {
                 AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOut,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.robotoSlab(
                     fontSize: 10,
                     fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                     color: labelColor,

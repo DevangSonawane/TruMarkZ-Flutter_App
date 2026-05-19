@@ -95,12 +95,19 @@ class ApiClient {
     }
   }
 
-  Future<Map<String, dynamic>> post(String path, {Object? data}) async {
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Object? data,
+    bool skipAuth = false,
+  }) async {
     try {
       final Response<dynamic> res = await _dio.post<dynamic>(
         path,
         data: data,
-        options: Options(contentType: Headers.jsonContentType),
+        options: Options(
+          contentType: Headers.jsonContentType,
+          extra: <String, dynamic>{'skipAuth': skipAuth},
+        ),
       );
       return _asMap(res.data);
     } on DioException catch (e) {

@@ -7,6 +7,8 @@ import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/pages/role_selection_page.dart';
 import '../../features/auth/presentation/pages/forgot_password_page.dart';
 import '../../features/auth/presentation/pages/reset_password_page.dart';
+import '../../features/auth/presentation/pages/auth_callback_page.dart';
+import '../../features/auth/presentation/pages/auth_error_page.dart';
 import '../services/token_storage.dart';
 import '../../features/individual/presentation/pages/individual_dashboard_page.dart';
 import '../../features/individual/presentation/pages/individual_profile_page.dart';
@@ -41,6 +43,7 @@ import '../../features/orgs/verification_flow/presentation/pages/map_credential_
 import '../../features/orgs/verification_flow/presentation/pages/organisation_registration_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/otp_verification_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/pending_approval_page.dart';
+import '../../features/orgs/onboarding/presentation/pages/org_onboarding_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_batch_created_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_batch_setup_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_bulk_upload_page.dart';
@@ -67,6 +70,8 @@ class AppRouter {
   static const String registerPath = '/register';
   static const String forgotPasswordPath = '/forgot-password';
   static const String resetPasswordPath = '/reset-password';
+  static const String authCallbackPath = '/auth/callback';
+  static const String authErrorPath = '/auth/error';
 
   static const String dashboardPath = '/app/dashboard';
   static const String walletPath = '/app/wallet';
@@ -92,6 +97,7 @@ class AppRouter {
   static const String organisationRegistrationPath = '/org-registration';
   static const String otpVerificationPath = '/otp-verification';
   static const String pendingApprovalPath = '/pending-approval';
+  static const String orgOnboardingPath = '/org-onboarding';
 
   // Organisation bulk verification flow
   static const String batchTypeSelectionPath = '/batch-type-selection';
@@ -202,6 +208,8 @@ class AppRouter {
           state.matchedLocation.startsWith(registerPath) ||
           state.matchedLocation.startsWith(forgotPasswordPath) ||
           state.matchedLocation.startsWith(resetPasswordPath) ||
+          state.matchedLocation.startsWith(authCallbackPath) ||
+          state.matchedLocation.startsWith(authErrorPath) ||
           state.matchedLocation == splashPath ||
           state.matchedLocation.startsWith(onboardingPath) ||
           state.matchedLocation.startsWith(roleSelectionPath) ||
@@ -265,6 +273,24 @@ class AppRouter {
         name: 'reset_password',
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const ResetPasswordPage()),
+      ),
+      GoRoute(
+        path: authCallbackPath,
+        name: 'auth_callback',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: AuthCallbackPage(uri: state.uri),
+            ),
+      ),
+      GoRoute(
+        path: authErrorPath,
+        name: 'auth_error',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: AuthErrorPage(message: state.uri.queryParameters['message']),
+            ),
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) =>
@@ -467,6 +493,12 @@ class AppRouter {
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const PendingApprovalPage()),
       ),
+      GoRoute(
+        path: orgOnboardingPath,
+        name: 'org_onboarding',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const OrgOnboardingPage()),
+      ),
 
       // Organisation bulk verification flow
       GoRoute(
@@ -539,7 +571,10 @@ class AppRouter {
         path: singleProductUploadPath,
         name: 'single_product_upload',
         pageBuilder: (BuildContext context, GoRouterState state) =>
-            _slideFadePage(state: state, child: const SingleProductUploadPage()),
+            _slideFadePage(
+              state: state,
+              child: const SingleProductUploadPage(),
+            ),
       ),
       GoRoute(
         path: credentialTemplateSelectorPath,

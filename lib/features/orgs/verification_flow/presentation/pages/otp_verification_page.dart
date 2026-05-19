@@ -26,7 +26,8 @@ class OtpVerificationPage extends ConsumerStatefulWidget {
   const OtpVerificationPage({super.key});
 
   @override
-  ConsumerState<OtpVerificationPage> createState() => _OtpVerificationPageState();
+  ConsumerState<OtpVerificationPage> createState() =>
+      _OtpVerificationPageState();
 }
 
 class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
@@ -99,20 +100,24 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
     if (_isResending) return;
     setState(() => _isResending = true);
     try {
-      await ref.read(authRepositoryProvider).forgotPassword(email);
+      await ref.read(authRepositoryProvider).resendOtp(email: email);
       if (!mounted) return;
       setState(() => _secondsLeft = _OtpTokens.totalSeconds);
       _startCountdown();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New code sent')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('New code sent')));
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong. Please try again.')),
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isResending = false);
@@ -131,44 +136,38 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
     if (index > 0) FocusScope.of(context).previousFocus();
   }
 
-  Future<void> _onVerify(String email, String type) async {
+  Future<bool> _onVerify(String email) async {
     if (!_isComplete) {
       setState(() {
         _hasError = true;
         _shake += 1;
       });
-      return;
+      return false;
     }
-    if (_isVerifying) return;
-    final String otp = _controllers.map((TextEditingController c) => c.text).join();
+    if (_isVerifying) return false;
+    final String otp = _controllers
+        .map((TextEditingController c) => c.text)
+        .join();
     if (otp.trim().length != _OtpTokens.otpLength) {
       setState(() {
         _hasError = true;
         _shake += 1;
       });
-      return;
+      return false;
     }
 
     setState(() => _isVerifying = true);
     try {
-      await ref.read(authRepositoryProvider).verifyOtp(
-            identifier: email,
-            otpCode: otp,
-            purpose: 'registration',
-          );
-      if (!mounted) return;
-
-      if (type == 'organization') {
-        context.go(AppRouter.pendingApprovalPath);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Email verified! Please log in.')),
-        );
-        context.go('${AppRouter.loginPath}?verified=true');
-      }
+      await ref
+          .read(authRepositoryProvider)
+          .verifyOtp(email: email, otpCode: otp);
+      if (!mounted) return false;
+      return true;
     } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (!mounted) return false;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
       for (final TextEditingController c in _controllers) {
         c.clear();
       }
@@ -177,10 +176,13 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
         _hasError = true;
         _shake += 1;
       });
+      return false;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong. Please try again.')),
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
       );
       for (final TextEditingController c in _controllers) {
         c.clear();
@@ -190,6 +192,7 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
         _hasError = true;
         _shake += 1;
       });
+      return false;
     } finally {
       if (mounted) setState(() => _isVerifying = false);
     }
@@ -197,15 +200,18 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final String identifier =
         (qp['identifier'] ?? qp['email'] ?? '').trim().isNotEmpty
-            ? (qp['identifier'] ?? qp['email'])!.trim()
-            : 'admin@org.com';
+        ? (qp['identifier'] ?? qp['email'])!.trim()
+        : 'admin@org.com';
     final String type = (qp['type'] ?? 'organization').trim();
     final String after = (qp['after'] ?? '').trim();
-    final String displayIdentifier =
-        identifier.contains('@') ? _maskEmail(identifier) : identifier;
+    final String displayIdentifier = identifier.contains('@')
+        ? _maskEmail(identifier)
+        : identifier;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -302,19 +308,28 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                     if (_secondsLeft > 0)
                                       Center(
                                         child: AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 220),
-                                          transitionBuilder: (Widget child, Animation<double> anim) {
-                                            return FadeTransition(
-                                              opacity: anim,
-                                              child: SlideTransition(
-                                                position: Tween<Offset>(
-                                                  begin: const Offset(0, 0.2),
-                                                  end: Offset.zero,
-                                                ).animate(anim),
-                                                child: child,
-                                              ),
-                                            );
-                                          },
+                                          duration: const Duration(
+                                            milliseconds: 220,
+                                          ),
+                                          transitionBuilder:
+                                              (
+                                                Widget child,
+                                                Animation<double> anim,
+                                              ) {
+                                                return FadeTransition(
+                                                  opacity: anim,
+                                                  child: SlideTransition(
+                                                    position: Tween<Offset>(
+                                                      begin: const Offset(
+                                                        0,
+                                                        0.2,
+                                                      ),
+                                                      end: Offset.zero,
+                                                    ).animate(anim),
+                                                    child: child,
+                                                  ),
+                                                );
+                                              },
                                           child: Text(
                                             'Resend in ${_formatCountdown(_secondsLeft)}',
                                             key: ValueKey<int>(_secondsLeft),
@@ -351,16 +366,33 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                       onPressed: _isVerifying
                                           ? null
                                           : () async {
-                                              final ScaffoldMessengerState messenger =
-                                                  ScaffoldMessenger.of(context);
+                                              final ScaffoldMessengerState
+                                              messenger = ScaffoldMessenger.of(
+                                                context,
+                                              );
                                               final String encodedType =
                                                   Uri.encodeComponent(type);
-                                              await _onVerify(identifier, type);
+                                              final bool ok = await _onVerify(
+                                                identifier,
+                                              );
                                               if (!mounted) return;
-                                              if (after != 'login') return;
+                                              if (!ok) return;
 
-                                              final PendingLogin? pending =
-                                                  ref.read(pendingLoginProvider);
+                                              if (after != 'login') {
+                                                messenger.showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Email verified! Please log in.',
+                                                    ),
+                                                  ),
+                                                );
+                                                AppRouter.router.go(
+                                                  '${AppRouter.loginPath}?type=$encodedType&verified=true&force=true',
+                                                );
+                                                return;
+                                              }
+                                              final PendingLogin? pending = ref
+                                                  .read(pendingLoginProvider);
                                               if (pending == null) {
                                                 AppRouter.router.go(
                                                   '${AppRouter.loginPath}?type=$encodedType&force=true',
@@ -392,18 +424,20 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                                       );
                                                 }
                                                 ref
-                                                    .read(
-                                                      pendingLoginProvider
-                                                          .notifier,
-                                                    )
-                                                    .state = null;
+                                                        .read(
+                                                          pendingLoginProvider
+                                                              .notifier,
+                                                        )
+                                                        .state =
+                                                    null;
                                               } on ApiException catch (e) {
                                                 ref
-                                                    .read(
-                                                      pendingLoginProvider
-                                                          .notifier,
-                                                    )
-                                                    .state = null;
+                                                        .read(
+                                                          pendingLoginProvider
+                                                              .notifier,
+                                                        )
+                                                        .state =
+                                                    null;
                                                 messenger.showSnackBar(
                                                   SnackBar(
                                                     content: Text(e.message),
@@ -414,11 +448,12 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                                 );
                                               } catch (_) {
                                                 ref
-                                                    .read(
-                                                      pendingLoginProvider
-                                                          .notifier,
-                                                    )
-                                                    .state = null;
+                                                        .read(
+                                                          pendingLoginProvider
+                                                              .notifier,
+                                                        )
+                                                        .state =
+                                                    null;
                                                 messenger.showSnackBar(
                                                   const SnackBar(
                                                     content: Text(

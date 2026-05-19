@@ -63,6 +63,7 @@ class OrgShellPage extends StatelessWidget {
         context.go(AppRouter.dashboardPath);
       },
       child: Scaffold(
+        extendBody: true,
         body: child,
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
         floatingActionButton: FloatingActionButton(

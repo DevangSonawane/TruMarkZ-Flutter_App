@@ -16,6 +16,7 @@ class TMZInput extends StatefulWidget {
     this.errorText,
     this.onChanged,
     this.enabled = true,
+    this.backgroundColor,
   });
 
   final String label;
@@ -28,6 +29,7 @@ class TMZInput extends StatefulWidget {
   final String? errorText;
   final ValueChanged<String>? onChanged;
   final bool enabled;
+  final Color? backgroundColor;
 
   @override
   State<TMZInput> createState() => _TMZInputState();
@@ -102,7 +104,7 @@ class _TMZInputState extends State<TMZInput> {
         if (widget.label.trim().isNotEmpty) ...<Widget>[
           Text(
             widget.label.toUpperCase(),
-            style: GoogleFonts.inter(
+            style: GoogleFonts.robotoSlab(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               letterSpacing: 1.2,
@@ -115,7 +117,7 @@ class _TMZInputState extends State<TMZInput> {
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: AppColors.offWhite,
+            color: widget.backgroundColor ?? AppColors.offWhite,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor, width: hasError ? 1 : 1.25),
             // Keep a single visible border (no outer focus ring).
@@ -141,14 +143,14 @@ class _TMZInputState extends State<TMZInput> {
                     keyboardType: widget.keyboardType,
                     obscureText: _obscure,
                     onChanged: widget.onChanged,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.robotoSlab(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
                       color: AppColors.textPrimary,
                     ),
                     decoration: InputDecoration(
                       hintText: widget.hint,
-                      hintStyle: GoogleFonts.inter(
+                      hintStyle: GoogleFonts.robotoSlab(
                         fontSize: 14,
                         color: AppColors.textTertiary,
                       ),
@@ -185,7 +187,7 @@ class _TMZInputState extends State<TMZInput> {
           const SizedBox(height: 8),
           Text(
             widget.errorText!,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.robotoSlab(
               fontSize: 12,
               fontWeight: FontWeight.w400,
               color: AppColors.error,

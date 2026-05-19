@@ -97,7 +97,7 @@ class TMZBadge extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label.toUpperCase(),
-            style: GoogleFonts.inter(
+            style: GoogleFonts.robotoSlab(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.6,

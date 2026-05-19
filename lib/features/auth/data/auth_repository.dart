@@ -5,7 +5,10 @@ import '../../../core/network/api_client.dart';
 import '../../../core/services/token_storage.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(ref.read(apiClientProvider), ref.read(tokenStorageProvider));
+  return AuthRepository(
+    ref.read(apiClientProvider),
+    ref.read(tokenStorageProvider),
+  );
 });
 
 class AuthRepository {
@@ -14,7 +17,7 @@ class AuthRepository {
   final ApiClient _api;
   final TokenStorage _tokenStorage;
 
-  Future<String> loginIndividual({
+  Future<LoginResponse> loginIndividual({
     required String emailOrMobile,
     required String password,
     bool rememberMe = false,
@@ -27,7 +30,7 @@ class AuthRepository {
     );
   }
 
-  Future<String> loginOrg({
+  Future<LoginResponse> loginOrg({
     required String emailOrMobile,
     required String password,
     bool rememberMe = false,
@@ -40,7 +43,52 @@ class AuthRepository {
     );
   }
 
-  Future<String> _login({
+  Future<LoginResponse> loginWithGoogle({
+    required String idToken,
+    required String expectedLoginType,
+  }) async {
+    final Map<String, dynamic> res = await _api.post(
+      '/auth/google',
+      data: <String, dynamic>{
+        'token': idToken,
+        // Backend may accept either of these keys depending on implementation.
+        'login_type': expectedLoginType,
+        'user_type': expectedLoginType,
+      },
+      skipAuth: true,
+    );
+    final LoginResponse parsed = LoginResponse.fromJson(res);
+    if (parsed.accessToken.trim().isEmpty || parsed.userId.trim().isEmpty) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Unexpected response. Please try again.',
+      );
+    }
+
+    final String loginTypeRaw = parsed.loginType.trim().toLowerCase();
+    final String loginType = loginTypeRaw == 'individual'
+        ? 'individual'
+        : loginTypeRaw == 'organization'
+              ? 'organization'
+              : loginTypeRaw;
+
+    final String expected = expectedLoginType.trim().toLowerCase();
+    if (expected == 'organization' && loginType != 'organization') {
+      await _tokenStorage.clearAll();
+      throw ApiException(
+        statusCode: 400,
+        message:
+            'This Google account is registered as an individual account. Please use Individual login or try another Google account for Organization signup.',
+      );
+    }
+
+    await _tokenStorage.saveToken(parsed.accessToken);
+    await _tokenStorage.saveUserId(parsed.userId);
+    await _tokenStorage.saveLoginType(loginType);
+    return parsed;
+  }
+
+  Future<LoginResponse> _login({
     required String loginType,
     required String emailOrMobile,
     required String password,
@@ -50,21 +98,24 @@ class AuthRepository {
       '/auth/login',
       data: LoginRequest(
         loginType: loginType,
-        emailOrMobile: emailOrMobile,
+        email: emailOrMobile,
         password: password,
         rememberMe: rememberMe,
       ).toJson(),
     );
     final LoginResponse parsed = LoginResponse.fromJson(res);
     if (parsed.accessToken.trim().isEmpty || parsed.userId.trim().isEmpty) {
-      throw const ApiException(statusCode: null, message: 'Unexpected response. Please try again.');
+      throw const ApiException(
+        statusCode: null,
+        message: 'Unexpected response. Please try again.',
+      );
     }
     await _tokenStorage.saveToken(parsed.accessToken);
     await _tokenStorage.saveUserId(parsed.userId);
     // Treat the requested login type as source of truth for routing.
     // Some backends may return a generic/incorrect `login_type` field.
     await _tokenStorage.saveLoginType(loginType);
-    return parsed.userId;
+    return parsed;
   }
 
   Future<void> registerIndividual(RegisterIndividualRequest request) async {
@@ -82,31 +133,40 @@ class AuthRepository {
     }
   }
 
-  Future<void> registerOrg(RegisterOrgRequest request) async {
+  Future<void> signupOrganization(SignupOrganizationRequest request) async {
     final Map<String, dynamic> res = await _api.post(
-      '/auth/register/organization',
+      '/auth/signup/organization',
       data: request.toJson(),
     );
+    // API returns user_id at top-level per docs; accept either shape.
+    final String directUserId = (res['user_id'] ?? '').toString();
+    if (directUserId.trim().isNotEmpty) return;
     final dynamic data = res['data'];
-    if (data is Map) {
-      final String userId = (data['user_id'] ?? '').toString();
-      if (userId.trim().isNotEmpty) return;
-    }
+    final String nestedUserId = data is Map
+        ? (data['user_id'] ?? '').toString()
+        : '';
+    if (nestedUserId.trim().isNotEmpty) return;
   }
 
   Future<void> verifyOtp({
-    required String identifier,
+    required String email,
     required String otpCode,
-    required String purpose,
   }) async {
     await _api.post(
       '/auth/verify-otp',
-      data: OtpVerifyRequest(
-        identifier: identifier,
-        otpCode: otpCode,
-        purpose: purpose,
-      ).toJson(),
+      data: OtpVerifyRequest(email: email, otpCode: otpCode).toJson(),
     );
+  }
+
+  Future<void> resendOtp({required String email}) async {
+    await _api.post(
+      '/auth/resend-otp',
+      data: ResendOtpRequest(email: email).toJson(),
+    );
+  }
+
+  Future<void> completeOrgOnboarding(OrgOnboardingRequest request) async {
+    await _api.post('/auth/onboarding', data: request.toJson());
   }
 
   Future<String?> forgotPassword(String emailOrMobile) async {
@@ -115,11 +175,16 @@ class AuthRepository {
       data: <String, dynamic>{'email_or_mobile': emailOrMobile},
     );
     final dynamic data = res['data'];
-    final String token = data is Map ? (data['reset_token'] ?? '').toString() : '';
+    final String token = data is Map
+        ? (data['reset_token'] ?? '').toString()
+        : '';
     return token.trim().isEmpty ? null : token;
   }
 
-  Future<void> resetPassword({required String token, required String newPassword}) async {
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
     await _api.post(
       '/auth/reset-password',
       data: <String, dynamic>{'token': token, 'new_password': newPassword},
@@ -144,7 +209,10 @@ class AuthRepository {
     if (data is Map) {
       return AssignIndividualResult.fromJson(Map<String, dynamic>.from(data));
     }
-    throw const ApiException(statusCode: null, message: 'Unexpected response. Please try again.');
+    throw const ApiException(
+      statusCode: null,
+      message: 'Unexpected response. Please try again.',
+    );
   }
 
   Future<InviteIndividualResult> inviteIndividualToOrg({
@@ -159,7 +227,10 @@ class AuthRepository {
     if (data is Map) {
       return InviteIndividualResult.fromJson(Map<String, dynamic>.from(data));
     }
-    throw const ApiException(statusCode: null, message: 'Unexpected response. Please try again.');
+    throw const ApiException(
+      statusCode: null,
+      message: 'Unexpected response. Please try again.',
+    );
   }
 
   Future<List<AssignedIndividual>> getOrgIndividuals() async {
@@ -169,7 +240,10 @@ class AuthRepository {
     if (individuals is List) {
       return individuals
           .whereType<Map>()
-          .map((Map e) => AssignedIndividual.fromJson(Map<String, dynamic>.from(e)))
+          .map(
+            (Map e) =>
+                AssignedIndividual.fromJson(Map<String, dynamic>.from(e)),
+          )
           .toList();
     }
     return const <AssignedIndividual>[];

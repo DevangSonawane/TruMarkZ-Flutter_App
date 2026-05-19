@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,6 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/tmz_badge.dart';
 import '../../../../core/widgets/tmz_card.dart';
 import '../../../../core/models/verification_models.dart';
 import '../../../auth/application/auth_notifier.dart';
@@ -38,6 +38,10 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    // Space for the floating bottom nav pill so content isn't hidden behind it.
+    final double bottomScrollPadding = bottomInset + 148;
+
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final profile = authAsync.value?.userProfile;
     final String displayName =
@@ -63,50 +67,18 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     final int totalUsers = verification?.total ?? 0;
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        titleSpacing: 12,
-        title: Row(
-          children: <Widget>[
-            Image.asset(
-              'assets/icons/headers_app_icon.png',
-              height: 20,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(width: AppSpacing.x2),
-            Text(
-              'TruMarkZ',
-              style: AppTypography.heading2.copyWith(
-                color: AppColors.brandBlue,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () => context.push(AppRouter.notificationsPath),
-            icon: const Icon(Icons.notifications_none_rounded),
-          ),
-          const SizedBox(width: AppSpacing.x3),
-        ],
-      ),
+      backgroundColor: AppColors.cardSurface,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.x4,
-          AppSpacing.x3,
-          AppSpacing.x4,
-          AppSpacing.x8,
-        ),
+        padding: EdgeInsets.fromLTRB(0, 0, 0, bottomScrollPadding),
         children: <Widget>[
           _HeroGreetingCard(
                 name: displayName,
                 isVerified: isVerified,
                 registrationNumber: brn,
+                isLoading: verificationState.data.isLoading,
+                totalUsers: totalUsers,
+                pending: summary.pending,
+                verified: summary.verified,
                 onTapSummary: () {},
               )
               .animate()
@@ -116,149 +88,108 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                 duration: 220.ms,
                 curve: Curves.easeOutCubic,
               ),
+          const SizedBox(height: AppSpacing.x5),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+            child: const _SectionDividerTitle(text: 'QUICK ACTIONS')
+                .animate()
+                .fadeIn(delay: 120.ms, duration: 220.ms)
+                .slideY(
+                  begin: 0.04,
+                  duration: 220.ms,
+                  curve: Curves.easeOutCubic,
+                ),
+          ),
           const SizedBox(height: AppSpacing.x4),
-          _KpiScrollCards(
-                isLoading: verificationState.data.isLoading,
-                totalUsers: totalUsers,
-                pendingVerifications: summary.pending,
-                verifiedUsers: summary.verified,
-              )
-              .animate()
-              .fadeIn(delay: 60.ms, duration: 220.ms)
-              .slideY(
-                begin: 0.04,
-                duration: 220.ms,
-                curve: Curves.easeOutCubic,
-              ),
-          const SizedBox(height: AppSpacing.x6),
-          Row(
-                children: <Widget>[
-                  Text('Quick Actions', style: AppTypography.heading2),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {},
-                    child: Text(
-                      'View All',
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.brandBlue,
-                        fontWeight: FontWeight.w700,
-                      ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+            child:
+                Column(
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: _QuickActionPill(
+                                label: 'Batch',
+                                topAssetPath:
+                                    'assets/icons/dashbaord/3dicons-folder-new-dynamic-color.png',
+                                onTap: () => context.go(
+                                  AppRouter.batchTypeSelectionPath,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionPill(
+                                label: 'Reports',
+                                topAssetPath:
+                                    'assets/icons/dashbaord/3dicons-copy-dynamic-color.png',
+                                onTap: () =>
+                                    context.go(AppRouter.appReportsPath),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionPill(
+                                label: 'Registry',
+                                topAssetPath:
+                                    'assets/icons/dashbaord/3dicons-notebook-dynamic-gradient.png',
+                                onTap: () =>
+                                    context.go(AppRouter.appRegistryPath),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                    .animate()
+                    .fadeIn(delay: 120.ms, duration: 220.ms)
+                    .slideY(
+                      begin: 0.04,
+                      duration: 220.ms,
+                      curve: Curves.easeOutCubic,
                     ),
-                  ),
-                ],
-              )
-              .animate()
-              .fadeIn(delay: 120.ms, duration: 220.ms)
-              .slideY(
-                begin: 0.04,
-                duration: 220.ms,
-                curve: Curves.easeOutCubic,
-              ),
+          ),
           const SizedBox(height: AppSpacing.x3),
-          GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: AppSpacing.x3,
-                crossAxisSpacing: AppSpacing.x3,
-                childAspectRatio: 1.28,
-                children: <Widget>[
-                  _QuickActionCard(
-                    label: 'New Batch',
-                    icon: Icons.drive_folder_upload_outlined,
-                    onTap: () => context.go(AppRouter.batchTypeSelectionPath),
-                  ),
-                  _QuickActionCard(
-                    label: 'Create Credentials',
-                    icon: Icons.badge_outlined,
-                    onTap: () => context.go(AppRouter.walletPath),
-                  ),
-                  _QuickActionCard(
-                    label: 'View Reports',
-                    icon: Icons.description_outlined,
-                    onTap: () => context.go(AppRouter.appReportsPath),
-                  ),
-                  _QuickActionCard(
-                    label: 'Registry Search',
-                    icon: Icons.fact_check_outlined,
-                    onTap: () => context.go(AppRouter.appRegistryPath),
-                  ),
-                ],
-              )
-              .animate()
-              .fadeIn(delay: 120.ms, duration: 220.ms)
-              .slideY(
-                begin: 0.04,
-                duration: 220.ms,
-                curve: Curves.easeOutCubic,
-              ),
-          const SizedBox(height: AppSpacing.x6),
-          Row(
-                children: <Widget>[
-                  Text('Recent Batches', style: AppTypography.heading2),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: 'Filter',
-                    onPressed: () {},
-                    icon: const Icon(Icons.sort_rounded),
-                  ),
-                ],
-              )
-              .animate()
-              .fadeIn(delay: 180.ms, duration: 220.ms)
-              .slideY(
-                begin: 0.04,
-                duration: 220.ms,
-                curve: Curves.easeOutCubic,
-              ),
-          const SizedBox(height: AppSpacing.x2),
           if (verificationState.data.isLoading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.x4),
               child: Center(child: CircularProgressIndicator()),
             )
           else if (verificationState.data.hasError)
-            TMZCard(
-              padding: const EdgeInsets.all(AppSpacing.x4),
-              child: Row(
-                children: <Widget>[
-                  const Icon(Icons.error_outline, color: AppColors.error),
-                  const SizedBox(width: AppSpacing.x3),
-                  Expanded(
-                    child: Text(
-                      'Unable to load recent batches',
-                      style: AppTypography.body2.copyWith(
-                        fontWeight: FontWeight.w700,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+              child: TMZCard(
+                padding: const EdgeInsets.all(AppSpacing.x4),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(Icons.error_outline, color: AppColors.error),
+                    const SizedBox(width: AppSpacing.x3),
+                    Expanded(
+                      child: Text(
+                        'Unable to load recent batches',
+                        style: AppTypography.body2.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => ref
-                        .read(verificationListNotifierProvider.notifier)
-                        .load(limit: 500),
-                    child: const Text('Retry'),
-                  ),
-                ],
+                    TextButton(
+                      onPressed: () => ref
+                          .read(verificationListNotifierProvider.notifier)
+                          .load(limit: 500),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
             )
           else ...<Widget>[
-            for (final _DashboardBatchItem item
-                in summary.recentBatches) ...<Widget>[
-              _BatchTile(
-                title: item.title,
-                subtitle: '${item.recordCount} records',
-                status: item.status,
-                onTap: item.batchId.trim().isEmpty
-                    ? () => context.push(AppRouter.batchTrackingDetailPath)
-                    : () => context.push(
-                        '${AppRouter.batchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(item.batchId)}',
-                      ),
-              ),
-              const SizedBox(height: AppSpacing.x2),
-            ],
             if (summary.recentBatches.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.x4,
+                  vertical: AppSpacing.x4,
+                ),
                 child: Center(
                   child: Text(
                     'No batches yet.',
@@ -268,6 +199,26 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                   ),
                 ),
               ),
+            if (summary.recentBatches.isNotEmpty)
+              _BatchPeekCarousel(
+                    batches: summary.recentBatches,
+                    onTapBatch: (String batchId) {
+                      if (batchId.trim().isEmpty) {
+                        context.push(AppRouter.batchTrackingDetailPath);
+                        return;
+                      }
+                      context.push(
+                        '${AppRouter.batchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
+                      );
+                    },
+                  )
+                  .animate()
+                  .fadeIn(delay: 180.ms, duration: 220.ms)
+                  .slideY(
+                    begin: 0.04,
+                    duration: 220.ms,
+                    curve: Curves.easeOutCubic,
+                  ),
           ],
         ],
       ),
@@ -281,79 +232,201 @@ class _HeroGreetingCard extends StatelessWidget {
     required this.onTapSummary,
     required this.isVerified,
     required this.registrationNumber,
+    required this.isLoading,
+    required this.totalUsers,
+    required this.pending,
+    required this.verified,
   });
 
   final String name;
   final VoidCallback onTapSummary;
   final bool isVerified;
   final String registrationNumber;
+  final bool isLoading;
+  final int totalUsers;
+  final int pending;
+  final int verified;
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pills = <Widget>[
-      _HeroPill(label: isVerified ? 'Verified' : 'Pending'),
-      if (registrationNumber.trim().isNotEmpty)
-        _HeroPill(label: 'Reg: ${registrationNumber.trim()}'),
-    ];
+    final double topInset = MediaQuery.paddingOf(context).top;
+    final double heroHeight = (MediaQuery.sizeOf(context).height * 0.5).clamp(
+      300.0,
+      440.0,
+    );
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 170),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[AppColors.brandBlue, AppColors.deepNavy],
-          ),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: AppColors.brandBlue.withAlpha(80),
-              blurRadius: 22,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.x6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      'Good morning, $name 👋',
-                      style: AppTypography.heading1.copyWith(
-                        fontSize: 22,
-                        height: 1.1,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "Here's your verification summary.",
-                      style: AppTypography.body2.copyWith(
-                        fontSize: 13,
-                        color: Colors.white.withAlpha(191),
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x4),
-                    Wrap(
-                      spacing: AppSpacing.x2,
-                      runSpacing: AppSpacing.x2,
-                      children: pills,
-                    ),
-                  ],
-                ),
+    final String subtitle = registrationNumber.trim().isEmpty
+        ? 'BRN not available'
+        : 'BRN-${registrationNumber.trim()}';
+
+    return Stack(
+      children: <Widget>[
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            height: heroHeight,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[Color(0xFF0B2A55), Color(0xFF07162F)],
               ),
-              const SizedBox(width: AppSpacing.x4),
-              const _HeroIllustration(),
-            ],
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withAlpha(60),
+                  blurRadius: 28,
+                  offset: const Offset(0, 18),
+                ),
+              ],
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          Colors.black.withAlpha(70),
+                          Colors.black.withAlpha(10),
+                          Colors.black.withAlpha(110),
+                        ],
+                        stops: const <double>[0.0, 0.55, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+                IgnorePointer(
+                  child: Stack(
+                    children: <Widget>[
+                      Positioned(
+                        top: -80,
+                        right: -70,
+                        width: 220,
+                        height: 220,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: <Color>[
+                                const Color(0xFF1A6BFF).withAlpha(90),
+                                const Color(0xFF1A6BFF).withAlpha(0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: -90,
+                        left: -80,
+                        width: 240,
+                        height: 240,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: <Color>[
+                                const Color(0xFF22D3EE).withAlpha(50),
+                                const Color(0xFF22D3EE).withAlpha(0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Positioned(
+                  right: 14,
+                  bottom: 40,
+                  child: _HeroAccentGif(),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.x6,
+                    topInset + AppSpacing.x6,
+                    AppSpacing.x6,
+                    AppSpacing.x4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.heading1.copyWith(
+                                fontSize: 20,
+                                height: 1.05,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                          ),
+                          const _VerifiedStatusPill(),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.x3),
+                      const _HeroSearchBar(),
+                      const SizedBox(height: AppSpacing.x3),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body2.copyWith(
+                          fontSize: 13,
+                          color: Colors.white.withAlpha(130),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      Divider(color: Colors.white.withAlpha(35), height: 1),
+                      const SizedBox(height: AppSpacing.x3),
+                      _HeroKpiBar(
+                        isLoading: isLoading,
+                        totalUsers: totalUsers,
+                        pending: pending,
+                        verified: verified,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroAccentGif extends StatelessWidget {
+  const _HeroAccentGif();
+
+  static const String _assetPath = 'assets/icons/girl_on_computer.gif';
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Opacity(
+        opacity: 1.0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            width: 180,
+            height: 180,
+            child: Image.asset(
+              _assetPath,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
+            ),
           ),
         ),
       ),
@@ -361,256 +434,257 @@ class _HeroGreetingCard extends StatelessWidget {
   }
 }
 
-class _HeroPill extends StatelessWidget {
-  const _HeroPill({required this.label});
+// Compatibility shim: older hot-reload sessions may still have an Element for the
+// previous video-based hero background. Keeping this type prevents
+// `Lookup failed: _controller` errors during hot reload/unmount.
+class _HeroBackgroundVideo extends StatefulWidget {
+  const _HeroBackgroundVideo();
 
-  final String label;
+  @override
+  State<_HeroBackgroundVideo> createState() => _HeroBackgroundVideoState();
+}
+
+class _HeroBackgroundVideoState extends State<_HeroBackgroundVideo> {
+  // Intentionally unused: only here for hot-reload compatibility.
+  // ignore: unused_field
+  final Object? _controller = null;
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.expand();
+}
+
+class _HeroSearchBar extends StatefulWidget {
+  const _HeroSearchBar();
+
+  @override
+  State<_HeroSearchBar> createState() => _HeroSearchBarState();
+}
+
+class _HeroSearchBarState extends State<_HeroSearchBar> {
+  static const List<String> _hints = <String>[
+    'Search for batches',
+    'Search for users',
+    'Search in registry',
+  ];
+
+  Timer? _timer;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % _hints.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: Colors.white.withAlpha(51),
+            color: Colors.white.withAlpha(26),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withAlpha(26)),
+            border: Border.all(color: Colors.white.withAlpha(34)),
           ),
-          child: Text(
-            label,
-            style: AppTypography.caption.copyWith(
-              fontSize: 11,
-              color: Colors.white,
-              fontWeight: FontWeight.w300,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroIllustration extends StatelessWidget {
-  const _HeroIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget pulse =
-        Container(
-              decoration: BoxDecoration(
-                color: Colors.lightBlueAccent.withAlpha(36),
-                shape: BoxShape.circle,
-              ),
-            )
-            .animate(onPlay: (controller) => controller.repeat(reverse: true))
-            .scale(
-              begin: const Offset(0.92, 0.92),
-              end: const Offset(1.05, 1.05),
-              duration: 900.ms,
-              curve: Curves.easeInOut,
-            )
-            .fade(
-              begin: 0.45,
-              end: 0.9,
-              duration: 900.ms,
-              curve: Curves.easeInOut,
-            );
-
-    final Widget mainTile = Transform.rotate(
-      angle: 0.21,
-      child: _FrostedTile(
-        width: 96,
-        height: 96,
-        radius: 14,
-        borderAlpha: 77,
-        backgroundAlpha: 26,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            const Center(
-              child: Icon(
-                Icons.verified_user_rounded,
-                size: 52,
-                color: Colors.white,
-              ),
-            ),
-            Positioned(
-              top: -8,
-              right: -8,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withAlpha(18),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  size: 14,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    final Widget secondaryTile = Positioned(
-      bottom: -8,
-      left: -8,
-      child: Transform.rotate(
-        angle: -0.21,
-        child: _FrostedTile(
-          width: 64,
-          height: 64,
-          radius: 14,
-          borderAlpha: 51,
-          backgroundAlpha: 36,
-          child: const SizedBox.shrink(),
-        ),
-      ),
-    );
-
-    return SizedBox(
-          width: 128,
-          height: 128,
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
+          child: Row(
             children: <Widget>[
-              Positioned.fill(child: pulse),
-              secondaryTile,
-              mainTile,
-            ],
-          ),
-        )
-        .animate(onPlay: (controller) => controller.repeat(reverse: true))
-        .moveY(begin: 0, end: -6, duration: 1200.ms, curve: Curves.easeInOut)
-        .rotate(
-          begin: 0,
-          end: 0.01,
-          duration: 1200.ms,
-          curve: Curves.easeInOut,
-        );
-  }
-}
-
-class _FrostedTile extends StatelessWidget {
-  const _FrostedTile({
-    required this.width,
-    required this.height,
-    required this.radius,
-    required this.borderAlpha,
-    required this.backgroundAlpha,
-    required this.child,
-  });
-
-  final double width;
-  final double height;
-  final double radius;
-  final int borderAlpha;
-  final int backgroundAlpha;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(backgroundAlpha),
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: Colors.white.withAlpha(borderAlpha)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withAlpha(18),
-                blurRadius: 24,
-                offset: const Offset(0, 14),
+              Icon(Icons.search, size: 18, color: Colors.white.withAlpha(200)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (Widget child, Animation<double> anim) {
+                    final Animation<Offset> offset = Tween<Offset>(
+                      begin: const Offset(0, 0.6),
+                      end: Offset.zero,
+                    ).animate(anim);
+                    return ClipRect(
+                      child: SlideTransition(
+                        position: offset,
+                        child: FadeTransition(opacity: anim, child: child),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    _hints[_index],
+                    key: ValueKey<String>('h:$_index'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body2.copyWith(
+                      fontSize: 13,
+                      color: Colors.white.withAlpha(190),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-          child: child,
         ),
       ),
     );
   }
 }
 
-class _KpiScrollCards extends StatelessWidget {
-  const _KpiScrollCards({
+class _VerifiedStatusPill extends StatelessWidget {
+  const _VerifiedStatusPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.success.withAlpha(46),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.success.withAlpha(120), width: 0.8),
+      ),
+      child: Text(
+        'VERIFIED',
+        style: AppTypography.caption.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.6,
+          color: const Color(0xFFBBF7D0),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroKpiBar extends StatelessWidget {
+  const _HeroKpiBar({
     required this.isLoading,
     required this.totalUsers,
-    required this.pendingVerifications,
-    required this.verifiedUsers,
+    required this.pending,
+    required this.verified,
   });
 
   final bool isLoading;
   final int totalUsers;
-  final int pendingVerifications;
-  final int verifiedUsers;
-
-  static const double _gap = AppSpacing.x3;
-  static const double _minCardWidth = 140;
+  final int pending;
+  final int verified;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double available = constraints.maxWidth;
-        final double cardWidth = ((available - (_gap * 2)) / 3).clamp(
-          _minCardWidth,
-          double.infinity,
-        );
-
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.x2),
-            child: Row(
-              children: <Widget>[
-                SizedBox(
-                  width: cardWidth,
-                  child: _KpiStatCard(
-                    label: 'Total Users',
-                    value: isLoading ? '—' : totalUsers.toString(),
-                  ),
-                ),
-                const SizedBox(width: _gap),
-                SizedBox(
-                  width: cardWidth,
-                  child: _KpiStatCard(
-                    label: 'Pending Verifications',
-                    value: isLoading ? '—' : pendingVerifications.toString(),
-                  ),
-                ),
-                const SizedBox(width: _gap),
-                SizedBox(
-                  width: cardWidth,
-                  child: _KpiStatCard(
-                    label: 'Verified',
-                    value: isLoading ? '—' : verifiedUsers.toString(),
-                  ),
-                ),
-              ],
-            ),
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _HeroKpi(
+            value: isLoading ? null : totalUsers,
+            label: 'Total users',
+            valueColor: Colors.white,
           ),
-        );
-      },
+        ),
+        Container(width: 1, height: 44, color: Colors.white.withAlpha(38)),
+        Expanded(
+          child: _HeroKpi(
+            value: isLoading ? null : pending,
+            label: 'Pending',
+            valueColor: Colors.white,
+          ),
+        ),
+        Container(width: 1, height: 44, color: Colors.white.withAlpha(38)),
+        Expanded(
+          child: _HeroKpi(
+            value: isLoading ? null : verified,
+            label: 'Verified',
+            valueColor: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroKpi extends StatelessWidget {
+  const _HeroKpi({
+    required this.value,
+    required this.label,
+    required this.valueColor,
+  });
+
+  final int? value;
+  final String label;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle valueStyle = AppTypography.heading1.copyWith(
+      fontSize: 22,
+      height: 1.0,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.2,
+      color: value == null ? Colors.white.withAlpha(70) : valueColor,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(value == null ? '—' : _formatNumber(value!), style: valueStyle),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: AppTypography.body2.copyWith(
+            fontSize: 10,
+            color: Colors.white.withAlpha(110),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatNumber(int n) {
+    if (n < 1000) return n.toString();
+    final String s = n.toString();
+    final StringBuffer buf = StringBuffer();
+    final int rem = s.length % 3;
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (i - rem) % 3 == 0) buf.write(',');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+}
+
+class _SectionDividerTitle extends StatelessWidget {
+  const _SectionDividerTitle({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(child: Divider(color: AppColors.divider.withAlpha(120))),
+        const SizedBox(width: 10),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: AppTypography.caption.copyWith(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Divider(color: AppColors.divider.withAlpha(120))),
+      ],
     );
   }
 }
@@ -650,6 +724,7 @@ class _DashboardSummary {
       );
       agg.count++;
       agg.updatedAt = _maxIso(agg.updatedAt, u.updatedAt);
+      agg.isHumanVerification = agg.isHumanVerification || _isLikelyHuman(u);
 
       final String s = u.verificationStatus.trim();
       if (s == 'failed') {
@@ -666,7 +741,7 @@ class _DashboardSummary {
           ..sort((a, b) => _compareIsoDesc(a.updatedAt, b.updatedAt));
 
     final List<_DashboardBatchItem> recentTiles = recent
-        .take(3)
+        .take(8)
         .map(_DashboardBatchItem.fromAgg)
         .toList();
 
@@ -682,6 +757,17 @@ class _DashboardSummary {
       activeBatches: active,
       recentBatches: recentTiles,
     );
+  }
+
+  static bool _isLikelyHuman(VerificationUser u) {
+    if (u.fullName.trim().isNotEmpty) return true;
+    if (u.phoneNumber.trim().isNotEmpty) return true;
+    if (u.email.trim().isNotEmpty) return true;
+    if ((u.aadharNumber ?? '').trim().isNotEmpty) return true;
+    if ((u.panNumber ?? '').trim().isNotEmpty) return true;
+    if ((u.photoUrl ?? '').trim().isNotEmpty) return true;
+    if (u.documents.isNotEmpty) return true;
+    return false;
   }
 
   static int _compareIsoDesc(String? a, String? b) {
@@ -718,6 +804,7 @@ class _BatchAgg {
   int verifiedCount = 0;
   int failedCount = 0;
   String? updatedAt;
+  bool isHumanVerification = false;
 }
 
 class _DashboardBatchItem {
@@ -726,12 +813,16 @@ class _DashboardBatchItem {
     required this.title,
     required this.recordCount,
     required this.status,
+    required this.updatedAt,
+    required this.isHumanVerification,
   });
 
   final String batchId;
   final String title;
   final int recordCount;
   final _BatchStatus status;
+  final DateTime updatedAt;
+  final bool isHumanVerification;
 
   factory _DashboardBatchItem.fromAgg(_BatchAgg agg) {
     final String shortId = agg.batchId.length <= 10
@@ -749,181 +840,412 @@ class _DashboardBatchItem {
       title: 'Batch $shortId',
       recordCount: agg.count,
       status: status,
+      updatedAt:
+          _DashboardSummary._tryParseIso(agg.updatedAt) ?? DateTime.now(),
+      isHumanVerification: agg.isHumanVerification,
     );
   }
 }
 
-class _KpiStatCard extends StatelessWidget {
-  const _KpiStatCard({required this.label, required this.value});
+class _QuickActionPill extends StatelessWidget {
+  const _QuickActionPill({
+    required this.label,
+    required this.onTap,
+    this.topAssetPath,
+  });
 
   final String label;
-  final String value;
+  final VoidCallback onTap;
+  final String? topAssetPath;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 96,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEFF6FF)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.brandBlue.withAlpha(0x14),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(AppSpacing.x3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.body2.copyWith(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
+    final String? asset = topAssetPath?.trim();
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double cardWidth = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : 108;
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                Container(
+                  width: cardWidth,
+                  height: 70,
+                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.textSecondary.withAlpha(38),
+                    ),
+                  ),
+                  alignment: Alignment.bottomCenter,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.body2.copyWith(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      height: 1.05,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (asset != null && asset.isNotEmpty)
+                  Positioned(
+                    top: -12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Image.asset(
+                        asset,
+                        height: 56,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.bottomLeft,
+        );
+      },
+    );
+  }
+}
+
+typedef _BatchTapCallback = void Function(String batchId);
+
+class _BatchPeekCarousel extends StatefulWidget {
+  const _BatchPeekCarousel({required this.batches, required this.onTapBatch});
+
+  final List<_DashboardBatchItem> batches;
+  final _BatchTapCallback onTapBatch;
+
+  @override
+  State<_BatchPeekCarousel> createState() => _BatchPeekCarouselState();
+}
+
+class _BatchPeekCarouselState extends State<_BatchPeekCarousel> {
+  late final PageController _controller;
+  int _current = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController(viewportFraction: 0.78);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final batches = widget.batches;
+    if (batches.isEmpty) return const SizedBox.shrink();
+
+    final _DashboardBatchItem active =
+        batches[_current.clamp(0, batches.length - 1)];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+          child: const _SectionDividerTitle(text: 'RECENT BATCHES'),
+        ),
+        const SizedBox(height: AppSpacing.x1),
+        SizedBox(
+          height: 150,
+          child: PageView.builder(
+            controller: _controller,
+            clipBehavior: Clip.none,
+            itemCount: batches.length,
+            onPageChanged: (int i) => setState(() => _current = i),
+            itemBuilder: (BuildContext context, int i) {
+              final bool isActive = i == _current;
+              final _DashboardBatchItem batch = batches[i];
+              return AnimatedScale(
+                scale: isActive ? 1.0 : 0.95,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _BatchPeekCard(
+                    batch: batch,
+                    onTap: () => widget.onTapBatch(batch.batchId),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x1),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+          child: Column(
+            children: <Widget>[
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
                 child: Text(
-                  value,
-                  style: AppTypography.display1.copyWith(
-                    fontSize: 28,
-                    height: 1.0,
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w300,
+                  active.title,
+                  key: ValueKey<String>('t:${active.batchId}'),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body2.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ),
-            ),
+              const SizedBox(height: 6),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: Text(
+                  _buildSubtitle(active),
+                  key: ValueKey<String>('s:${active.batchId}'),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.x3),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List<Widget>.generate(batches.length, (int i) {
+                  final bool activeDot = i == _current;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    width: activeDot ? 18 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: activeDot
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary.withAlpha(64),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  );
+                }),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+
+  String _buildSubtitle(_DashboardBatchItem b) {
+    final String ago = _timeAgo(b.updatedAt);
+    final String status = switch (b.status) {
+      _BatchStatus.complete => 'verified',
+      _BatchStatus.processing => 'processing',
+      _BatchStatus.alert => 'needs review',
+    };
+    return '${b.recordCount} records $status · $ago';
+  }
+
+  String _timeAgo(DateTime dt) {
+    final Duration diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 }
 
-class _QuickActionCard extends StatelessWidget {
-  const _QuickActionCard({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
+class _BatchPeekCard extends StatelessWidget {
+  const _BatchPeekCard({required this.batch, required this.onTap});
 
-  final String label;
-  final IconData icon;
+  final _DashboardBatchItem batch;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return TMZCard(
+    final _BatchCardStyle style = _BatchCardStyle.fromStatus(batch.status);
+    return GestureDetector(
       onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.x5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: <Widget>[
           Container(
-            width: 40,
-            height: 40,
             decoration: BoxDecoration(
-              color: AppColors.blueTint,
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: style.bgGradient,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withAlpha(18), width: 0.5),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withAlpha(35),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: AppColors.brandBlue, size: 20),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          Expanded(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.body2.copyWith(
-                  fontSize: 13,
-                  height: 1.15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+            child: SizedBox(
+              height: 112,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  14,
+                  12,
+                  batch.isHumanVerification ? 64 : 14,
+                  12,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            batch.title,
+                            style: AppTypography.body2.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${batch.recordCount} records',
+                            style: AppTypography.caption.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white.withAlpha(200),
+                              letterSpacing: 0.1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _timeAgo(batch.updatedAt),
+                            style: AppTypography.caption.copyWith(
+                              fontSize: 11,
+                              color: Colors.white.withAlpha(140),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: style.accent.withAlpha(30),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: style.accent.withAlpha(70),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              style.label,
+                              style: AppTypography.caption.copyWith(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: style.accent,
+                                letterSpacing: 0.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
+          if (!batch.isHumanVerification)
+            Positioned(
+              right: -12,
+              top: -14,
+              child: Image.asset(
+                'assets/icons/dashbaord/3dicons-folder-new-dynamic-color.png',
+                height: 88,
+                fit: BoxFit.contain,
+              ),
+            )
+          else
+            Positioned(
+              right: -12,
+              top: -18,
+              child: Image.asset(
+                'assets/icons/dashbaord/3dicons-boy-dynamic-color.png',
+                height: 88,
+                fit: BoxFit.contain,
+              ),
+            ),
         ],
       ),
     );
   }
+
+  String _timeAgo(DateTime dt) {
+    final Duration diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+}
+
+class _BatchCardStyle {
+  const _BatchCardStyle({
+    required this.bgGradient,
+    required this.accent,
+    required this.icon,
+    required this.label,
+  });
+
+  final List<Color> bgGradient;
+  final Color accent;
+  final IconData icon;
+  final String label;
+
+  factory _BatchCardStyle.fromStatus(_BatchStatus s) => switch (s) {
+    _BatchStatus.complete => const _BatchCardStyle(
+      bgGradient: <Color>[Color(0xFF0A2A1A), Color(0xFF052E10)],
+      accent: Color(0xFF4ADE80),
+      icon: Icons.check_circle_outline_rounded,
+      label: 'Complete',
+    ),
+    _BatchStatus.processing => const _BatchCardStyle(
+      bgGradient: <Color>[Color(0xFF0A1A3A), Color(0xFF051028)],
+      accent: Color(0xFF4DAAFF),
+      icon: Icons.sync_rounded,
+      label: 'Processing',
+    ),
+    _BatchStatus.alert => const _BatchCardStyle(
+      bgGradient: <Color>[Color(0xFF2A1A0A), Color(0xFF1A0E04)],
+      accent: Color(0xFFFFB547),
+      icon: Icons.warning_amber_rounded,
+      label: 'Needs review',
+    ),
+  };
 }
 
 enum _BatchStatus { complete, processing, alert }
-
-class _BatchTile extends StatelessWidget {
-  const _BatchTile({
-    required this.title,
-    required this.subtitle,
-    required this.status,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final _BatchStatus status;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final TMZBadge badge = switch (status) {
-      _BatchStatus.complete => TMZBadge.complete(),
-      _BatchStatus.processing => TMZBadge.processing(),
-      _BatchStatus.alert => TMZBadge.alert(),
-    };
-
-    return TMZCard(
-      onTap: onTap,
-      padding: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.x4,
-          vertical: AppSpacing.x2,
-        ),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.offWhite,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.inventory_2_outlined,
-            color: AppColors.textTertiary,
-          ),
-        ),
-        title: Text(
-          title,
-          style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: AppTypography.caption.copyWith(
-            color: scheme.onSurface.withAlpha(150),
-          ),
-        ),
-        trailing: badge,
-      ),
-    );
-  }
-}

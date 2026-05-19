@@ -46,7 +46,8 @@ class AppTheme {
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.error),
       ),
-      hintStyle: GoogleFonts.inter(fontSize: 14, color: AppColors.textTertiary),
+      hintStyle:
+          GoogleFonts.robotoSlab(fontSize: 14, color: AppColors.textTertiary),
       prefixIconColor: AppColors.textTertiary,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(

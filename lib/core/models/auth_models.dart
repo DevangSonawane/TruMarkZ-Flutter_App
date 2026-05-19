@@ -1,22 +1,20 @@
 class LoginRequest {
   const LoginRequest({
     required this.loginType,
-    required this.emailOrMobile,
+    required this.email,
     required this.password,
     this.rememberMe = false,
   });
 
   final String loginType;
-  final String emailOrMobile;
+  final String email;
   final String password;
   final bool rememberMe;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'login_type': loginType,
-        'email_or_mobile': emailOrMobile,
-        'password': password,
-        'remember_me': rememberMe,
-      };
+    'email': email,
+    'password': password,
+  };
 }
 
 class LoginResponse {
@@ -25,19 +23,24 @@ class LoginResponse {
     required this.tokenType,
     required this.userId,
     required this.loginType,
+    required this.requiresOnboarding,
   });
 
   final String accessToken;
   final String tokenType;
   final String userId;
   final String loginType;
+  final bool requiresOnboarding;
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
+    final String inferredType = (json['login_type'] ?? json['user_type'] ?? '')
+        .toString();
     return LoginResponse(
       accessToken: (json['access_token'] ?? '').toString(),
       tokenType: (json['token_type'] ?? '').toString(),
       userId: (json['user_id'] ?? '').toString(),
-      loginType: (json['login_type'] ?? '').toString(),
+      loginType: inferredType,
+      requiresOnboarding: json['requires_onboarding'] == true,
     );
   }
 }
@@ -71,62 +74,75 @@ class RegisterIndividualRequest {
   }
 }
 
-class RegisterOrgRequest {
-  const RegisterOrgRequest({
-    required this.organizationName,
-    this.gstNumber,
-    this.businessRegistrationNumber,
-    this.address,
+class SignupOrganizationRequest {
+  const SignupOrganizationRequest({
+    required this.orgName,
     required this.email,
-    this.mobile,
+    required this.phoneNumber,
     required this.password,
   });
 
-  final String organizationName;
-  final String? gstNumber;
-  final String? businessRegistrationNumber;
-  final String? address;
+  final String orgName;
   final String email;
-  final String? mobile;
+  final String phoneNumber;
   final String password;
 
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = <String, dynamic>{
-      'organization_name': organizationName,
-      'email': email,
-      'mobile': mobile,
-      'password': password,
-    };
-    if (gstNumber != null && gstNumber!.trim().isNotEmpty) {
-      json['gst_number'] = gstNumber;
-    }
-    if (businessRegistrationNumber != null &&
-        businessRegistrationNumber!.trim().isNotEmpty) {
-      json['business_registration_number'] = businessRegistrationNumber;
-    }
-    if (address != null && address!.trim().isNotEmpty) {
-      json['address'] = address;
-    }
-    return json;
-  }
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'org_name': orgName,
+    'email': email,
+    'phone_number': phoneNumber,
+    'password': password,
+  };
 }
 
 class OtpVerifyRequest {
-  const OtpVerifyRequest({
-    required this.identifier,
-    required this.otpCode,
-    required this.purpose,
-  });
+  const OtpVerifyRequest({required this.email, required this.otpCode});
 
-  final String identifier;
+  final String email;
   final String otpCode;
-  final String purpose; // "registration" | "forgot_password"
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'identifier': identifier,
-        'otp_code': otpCode,
-        'purpose': purpose,
-      };
+    'email': email,
+    'otp_code': otpCode,
+  };
+}
+
+class ResendOtpRequest {
+  const ResendOtpRequest({required this.email});
+
+  final String email;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{'email': email};
+}
+
+class OrgOnboardingRequest {
+  const OrgOnboardingRequest({
+    required this.industryType,
+    required this.gstin,
+    required this.businessRegNumber,
+    required this.addressLine1,
+    required this.addressLine2,
+    required this.addressLine3,
+    required this.useCases,
+  });
+
+  final List<String> industryType;
+  final String gstin;
+  final String businessRegNumber;
+  final String addressLine1;
+  final String addressLine2;
+  final String addressLine3;
+  final Map<String, dynamic> useCases;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'industry_type': industryType,
+    'gstin': gstin,
+    'business_reg_number': businessRegNumber,
+    'address_line1': addressLine1,
+    'address_line2': addressLine2,
+    'address_line3': addressLine3,
+    'use_cases': useCases,
+  };
 }
 
 class UserProfile {
@@ -173,7 +189,8 @@ class UserProfile {
       mobile: json['mobile']?.toString(),
       organizationName: json['organization_name']?.toString(),
       gstNumber: json['gst_number']?.toString(),
-      businessRegistrationNumber: json['business_registration_number']?.toString(),
+      businessRegistrationNumber: json['business_registration_number']
+          ?.toString(),
       industry: json['industry']?.toString(),
       address: json['address']?.toString(),
       isActive: json['is_active'] == true,
@@ -191,8 +208,8 @@ class AssignIndividualRequest {
   final String individualEmailOrMobile;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'individual_email_or_mobile': individualEmailOrMobile,
-      };
+    'individual_email_or_mobile': individualEmailOrMobile,
+  };
 }
 
 class AssignIndividualResult {
@@ -219,9 +236,9 @@ class InviteIndividualRequest {
   final String? mobile;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'email': email,
-        'mobile': mobile,
-      };
+    'email': email,
+    'mobile': mobile,
+  };
 }
 
 class InviteIndividualResult {

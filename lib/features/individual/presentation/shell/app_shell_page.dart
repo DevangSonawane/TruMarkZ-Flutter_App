@@ -50,6 +50,7 @@ class IndividualShellPage extends StatelessWidget {
         context.go(AppRouter.individualIdentityPath);
       },
       child: Scaffold(
+        extendBody: true,
         body: child,
         bottomNavigationBar: TMZBottomNav(
           currentIndex: currentIndex,
