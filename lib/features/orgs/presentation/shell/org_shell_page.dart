@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/tmz_bottom_nav.dart';
+import '../../../../core/widgets/org_bottom_nav_pill.dart';
 
 class OrgShellPage extends StatelessWidget {
   const OrgShellPage({super.key, required this.child});
@@ -12,13 +11,13 @@ class OrgShellPage extends StatelessWidget {
 
   int _indexForLocation(String location) {
     final String path = Uri.parse(location).path;
-    if (path.startsWith(AppRouter.appBatchesPath)) return 1;
-    if (path.startsWith(AppRouter.appRegistryPath)) return 2;
+    if (path.startsWith(AppRouter.appBatchesPath)) return 1; // View All
+    if (path.startsWith(AppRouter.qrScannerPath)) return 3; // Scan QR
     if (path.startsWith(AppRouter.settingsPath) ||
         path.startsWith(AppRouter.notificationsPath)) {
-      return 3;
+      return 4; // Account
     }
-    return 0; // Home (Dashboard)
+    return 0; // Dashboard
   }
 
   void _onTap(BuildContext context, int index) {
@@ -27,13 +26,16 @@ class OrgShellPage extends StatelessWidget {
         context.go(AppRouter.dashboardPath);
         return;
       case 1:
-        context.go(AppRouter.appBatchesPath);
+        context.go(AppRouter.appBatchesPath); // View All
         return;
       case 2:
-        context.go(AppRouter.appRegistryPath);
+        context.push(AppRouter.batchTypeSelectionPath); // Start Batch
         return;
       case 3:
-        context.go(AppRouter.settingsPath);
+        context.go(AppRouter.qrScannerPath); // Scan QR
+        return;
+      case 4:
+        context.go(AppRouter.settingsPath); // Account
         return;
     }
   }
@@ -65,32 +67,33 @@ class OrgShellPage extends StatelessWidget {
       child: Scaffold(
         extendBody: true,
         body: child,
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: AppColors.brandBlue,
-          foregroundColor: Colors.white,
-          onPressed: () => context.push(AppRouter.batchTypeSelectionPath),
-          child: const Icon(Icons.add_rounded, size: 30),
-        ),
-        bottomNavigationBar: TMZBottomNav(
+        bottomNavigationBar: OrgBottomNavPill(
           currentIndex: currentIndex,
-          onTap: (int i) => _onTap(context, i),
-          showLabels: false,
-          middleGapAfterIndex: 1,
-          middleGapWidth: 72,
-          items: const <TMZBottomNavItem>[
-            TMZBottomNavItem(label: 'Home', icon: Icons.grid_view_rounded),
-            TMZBottomNavItem(
-              label: 'Batches',
-              icon: Icons.stacked_bar_chart_rounded,
+          items: <OrgBottomNavPillItem>[
+            OrgBottomNavPillItem(
+              label: 'Dashboard',
+              assetPath: 'assets/icons/dashbaord/dashboard.png',
+              onTap: () => _onTap(context, 0),
             ),
-            TMZBottomNavItem(
-              label: 'Registry',
-              icon: Icons.fact_check_outlined,
+            OrgBottomNavPillItem(
+              label: 'View All',
+              assetPath: 'assets/icons/dashbaord/view_all.png',
+              onTap: () => _onTap(context, 1),
             ),
-            TMZBottomNavItem(
-              label: 'Profile',
-              icon: Icons.manage_accounts_outlined,
+            OrgBottomNavPillItem(
+              label: 'Start Batch',
+              assetPath: 'assets/icons/dashbaord/start_batch.png',
+              onTap: () => _onTap(context, 2),
+            ),
+            OrgBottomNavPillItem(
+              label: 'Scan QR',
+              assetPath: 'assets/icons/dashbaord/scan_qr.png',
+              onTap: () => _onTap(context, 3),
+            ),
+            OrgBottomNavPillItem(
+              label: 'Account',
+              assetPath: 'assets/icons/dashbaord/profile_png_final.png',
+              onTap: () => _onTap(context, 4),
             ),
           ],
         ),
