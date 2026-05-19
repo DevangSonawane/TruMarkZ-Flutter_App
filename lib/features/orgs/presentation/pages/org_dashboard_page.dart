@@ -120,7 +120,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       curve: Curves.easeOutCubic,
                     ),
           ),
-          const SizedBox(height: AppSpacing.x4),
+          const SizedBox(height: AppSpacing.x6),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
             child:
@@ -159,7 +159,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                                 subtitle:
                                     'Create a New Process for Organization',
                                 topAssetPath:
-                                    'assets/icons/dashbaord/registry.png',
+                                    'assets/icons/dashbaord/registry_final.png',
                                 onTap: () =>
                                     context.go(AppRouter.appRegistryPath),
                               ),
@@ -176,7 +176,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       curve: Curves.easeOutCubic,
                     ),
           ),
-          const SizedBox(height: AppSpacing.x5),
+          const SizedBox(height: AppSpacing.x8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
             child: Align(
@@ -662,8 +662,7 @@ class _QuickActionPill extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(15),
         child: SizedBox(
-          width: 98,
-          height: 75,
+          height: 102,
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
@@ -681,7 +680,7 @@ class _QuickActionPill extends StatelessWidget {
                   ],
                 ),
                 alignment: Alignment.bottomCenter,
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                padding: const EdgeInsets.fromLTRB(14, 24, 14, 10),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
@@ -698,7 +697,7 @@ class _QuickActionPill extends StatelessWidget {
                         color: Colors.black,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 6),
                     Text(
                       subtitle,
                       textAlign: TextAlign.center,
@@ -717,14 +716,14 @@ class _QuickActionPill extends StatelessWidget {
               ),
               if (asset != null && asset.isNotEmpty)
                 Positioned(
-                  top: -18,
+                  top: -22,
                   left: 0,
                   right: 0,
                   child: Center(
                     child: Image.asset(
                       asset,
-                      width: 70,
-                      height: 70,
+                      width: 72,
+                      height: 72,
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -759,7 +758,7 @@ class _RecentBatchCard extends StatelessWidget {
         children: <Widget>[
           Container(
             width: 230,
-            height: 195,
+            height: 212,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(26),
@@ -780,12 +779,12 @@ class _RecentBatchCard extends StatelessWidget {
                     topRight: Radius.circular(26),
                   ),
                   child: Container(
-                    height: 76,
+                    height: 84,
                     color: navy,
                     child: Stack(
                       children: <Widget>[
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                          padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
@@ -840,7 +839,7 @@ class _RecentBatchCard extends StatelessWidget {
                 ),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
@@ -860,7 +859,7 @@ class _RecentBatchCard extends StatelessWidget {
                             _StatusPill(label: status.label, status: status),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         Row(
                           children: <Widget>[
                             Expanded(
@@ -878,7 +877,7 @@ class _RecentBatchCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         const _MiniProgressBar(value: 0.12),
                       ],
                     ),
