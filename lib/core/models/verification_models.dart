@@ -239,6 +239,53 @@ class VerificationListResponse {
   }
 }
 
+class VerificationCategory {
+  const VerificationCategory({
+    required this.id,
+    required this.categoryName,
+    required this.warrantySupport,
+    required this.description,
+  });
+
+  final String id;
+  final String categoryName;
+  final String warrantySupport;
+  final String description;
+
+  bool get supportsWarranty {
+    final String v = warrantySupport.trim().toLowerCase();
+    if (v.isEmpty) return false;
+    // Treat only explicit negatives as false; backend often sends
+    // strings like "enabled"/"available"/"supported".
+    const Set<String> falsey = <String>{
+      'false',
+      '0',
+      'no',
+      'none',
+      'unsupported',
+      'not_supported',
+      'disabled',
+      'disable',
+      'na',
+      'n/a',
+    };
+    return !falsey.contains(v);
+  }
+
+  factory VerificationCategory.fromJson(Map<String, dynamic> json) {
+    final dynamic rawWarranty = json['warranty_support'];
+    final String warranty = rawWarranty is bool
+        ? (rawWarranty ? 'true' : 'false')
+        : (rawWarranty ?? '').toString();
+    return VerificationCategory(
+      id: (json['id'] ?? '').toString(),
+      categoryName: (json['category_name'] ?? '').toString(),
+      warrantySupport: warranty,
+      description: (json['description'] ?? '').toString(),
+    );
+  }
+}
+
 class BulkUploadSuccessUser {
   const BulkUploadSuccessUser({
     required this.row,

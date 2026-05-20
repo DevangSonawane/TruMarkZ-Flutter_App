@@ -12,6 +12,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
+import '../../../../../core/utils/spreadsheet_preview_util.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
@@ -45,6 +46,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     end: Alignment.bottomRight,
     colors: <Color>[AppColors.brandBlue, _deepBlue],
   );
+
+  String _selectedCategoryName() => _sector.trim();
 
   void _goBack(BuildContext context) {
     final GoRouter router = GoRouter.of(context);
@@ -98,7 +101,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   void _downloadTemplate() {
     final String suggested = _templateHeadersController.text.trim().isNotEmpty
         ? _templateHeadersController.text.trim()
-        : 'product_name,serial_number,model';
+        : 'product_name,category,serial_number,model';
     _templateHeadersController.text = suggested;
 
     showModalBottomSheet<void>(
@@ -151,6 +154,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () async {
+                      String norm(String s) =>
+                          s.trim().toLowerCase().replaceAll(' ', '_');
                       final List<String> headers = _templateHeadersController
                           .text
                           .split(',')
@@ -161,6 +166,18 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                         ScaffoldMessenger.of(ctx).showSnackBar(
                           const SnackBar(
                             content: Text('Please enter at least 1 header.'),
+                          ),
+                        );
+                        return;
+                      }
+                      final Set<String> normalized = headers.map(norm).toSet();
+                      if (!normalized.contains('product_name') ||
+                          !normalized.contains('category')) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Template must include required columns: product_name, category',
+                            ),
                           ),
                         );
                         return;
@@ -291,6 +308,21 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       );
       return;
     }
+    final String? missing = _missingRequiredColumns(pickedFile);
+    if (missing != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(missing)));
+      return;
+    }
+    final String? categoryIssue = await _validateCategoryValues(pickedFile);
+    if (categoryIssue != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(categoryIssue)),
+      );
+      return;
+    }
     setState(() => _creating = true);
     try {
       final VerificationRepository repo = ref.read(
@@ -302,7 +334,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final res = await repo.bulkUploadProducts(
         batchName: _batchName,
         description: '$_sector • $modeLabel',
-        categoryId: _categoryId,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
@@ -320,7 +351,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           'batchId': res.batchId,
         },
       );
-      context.push(uri.toString());
+      context.push(uri.toString(), extra: res);
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -335,6 +366,93 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       );
     } finally {
       if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  String? _missingRequiredColumns(PickedFile file) {
+    String norm(String s) => s.trim().toLowerCase().replaceAll(' ', '_');
+    SpreadsheetPreview preview;
+    try {
+      preview = SpreadsheetPreviewUtil.parse(
+        bytes: file.bytes,
+        extension: file.extension,
+        maxColumns: 60,
+        maxRows: 1,
+      );
+    } on FormatException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Unable to read this file. Please upload a valid .xlsx or .csv.';
+    }
+
+    final Set<String> cols = preview.columns.map(norm).toSet();
+    final List<String> required = <String>['product_name', 'category'];
+    final List<String> missing = required
+        .where((r) => !cols.contains(r))
+        .toList();
+    if (missing.isEmpty) return null;
+    final String available = preview.columns.take(12).join(', ');
+    return 'Missing required columns: ${missing.join(', ')}. '
+        'Your file headers: $available';
+  }
+
+  Future<String?> _validateCategoryValues(PickedFile file) async {
+    String norm(String s) => s.trim().toLowerCase().replaceAll(' ', '_');
+    SpreadsheetPreview preview;
+    try {
+      preview = SpreadsheetPreviewUtil.parse(
+        bytes: file.bytes,
+        extension: file.extension,
+        maxColumns: 60,
+        maxRows: 25,
+      );
+    } on FormatException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Unable to read this file. Please upload a valid .xlsx or .csv.';
+    }
+
+    final int categoryIndex = preview.columns.indexWhere(
+      (String c) => norm(c) == 'category',
+    );
+    if (categoryIndex == -1) return null;
+
+    final Set<String> seen = <String>{};
+    for (final List<String> row in preview.rows) {
+      if (categoryIndex >= row.length) continue;
+      final String v = row[categoryIndex].trim();
+      if (v.isNotEmpty) seen.add(v);
+      if (seen.length >= 8) break;
+    }
+    if (seen.isEmpty) {
+      return 'Column "category" is empty. Use a valid category name from the Sector list (e.g. "${_selectedCategoryName()}").';
+    }
+
+    // Backend validates `category` by name (category_name), not by id.
+    // Use categories API to show accurate allowed values.
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final categories = await repo.getProductCategories();
+      final Set<String> allowed = categories
+          .map((c) => c.categoryName.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
+      final List<String> invalid = seen.where((v) => !allowed.contains(v)).toList();
+      if (invalid.isEmpty) return null;
+
+      final String selectedName = _selectedCategoryName();
+      final bool selectedIsAllowed =
+          selectedName.isNotEmpty && allowed.contains(selectedName);
+      final String sample = invalid.take(3).join(', ');
+      return 'Invalid category value(s) in your file: $sample. '
+          'The "category" column must match a Sector name exactly (from /verification/categories), '
+          '${selectedIsAllowed ? 'for this batch use "$selectedName".' : 'please pick a valid sector name.'}';
+    } catch (_) {
+      // If the categories API fails, don't block upload.
+      return null;
     }
   }
 
@@ -412,7 +530,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                   _InfoCard(
                     title: 'Excel Columns',
                     subtitle:
-                        'Required: product_name, serial_number, manufacture_date\nOptional: model_number, warranty_months, batch_code, color, description',
+                        'Required: product_name, category (must match the selected Sector name exactly)\nOptional: other columns will be stored as custom fields',
                     icon: Icons.info_outline_rounded,
                   ),
                   const SizedBox(height: AppSpacing.x4),

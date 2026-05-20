@@ -16,6 +16,35 @@ class VerificationRepository {
 
   final ApiClient _api;
 
+  Future<List<VerificationCategory>> getProductCategories() async {
+    final dynamic res = await _api.verificationGetAny(
+      '/verification/categories',
+    );
+    if (res is List) {
+      return res
+          .whereType<Map>()
+          .map(
+            (Map e) =>
+                VerificationCategory.fromJson(Map<String, dynamic>.from(e)),
+          )
+          .toList();
+    }
+    // Some backends wrap arrays in {data:[...]}.
+    if (res is Map) {
+      final dynamic data = res['data'] ?? res['categories'];
+      if (data is List) {
+        return data
+            .whereType<Map>()
+            .map(
+              (Map e) =>
+                  VerificationCategory.fromJson(Map<String, dynamic>.from(e)),
+            )
+            .toList();
+      }
+    }
+    return const <VerificationCategory>[];
+  }
+
   Future<SingleProductUploadResponse> uploadSingleProduct({
     required String categoryId,
     required String productName,
@@ -36,7 +65,6 @@ class VerificationRepository {
   Future<BulkUploadResponse> bulkUploadProducts({
     required String batchName,
     String? description,
-    required String categoryId,
     required Uint8List fileBytes,
     required String fileName,
   }) async {
@@ -52,7 +80,6 @@ class VerificationRepository {
     };
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
-      'category_id': categoryId.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
       'file': MultipartFile.fromBytes(

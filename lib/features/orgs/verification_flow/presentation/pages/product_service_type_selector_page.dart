@@ -22,6 +22,8 @@ class _ProductServiceTypeSelectorPageState
     extends State<ProductServiceTypeSelectorPage> {
   bool _didInit = false;
   String _sector = '';
+  String _categoryId = '';
+  bool _supportsWarranty = true;
   ProductServiceType? _selected;
 
   static const Color _deepBlue = AppColors.deepNavy;
@@ -41,6 +43,12 @@ class _ProductServiceTypeSelectorPageState
     final Object? extra = state.extra;
     final String? extraSector = extra is String ? extra : null;
     _sector = (extraSector ?? state.uri.queryParameters['sector'] ?? '').trim();
+    _categoryId = (state.uri.queryParameters['category_id'] ?? '').trim();
+    final String supports =
+        (state.uri.queryParameters['supports_warranty'] ?? '').trim();
+    if (supports.isNotEmpty) {
+      _supportsWarranty = supports.toLowerCase() == 'true';
+    }
   }
 
   void _goBack(BuildContext context) {
@@ -59,7 +67,10 @@ class _ProductServiceTypeSelectorPageState
     _openProductUploadTypeSheet(context, mode: selected.name);
   }
 
-  void _openProductUploadTypeSheet(BuildContext context, {required String mode}) {
+  void _openProductUploadTypeSheet(
+    BuildContext context, {
+    required String mode,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -95,6 +106,8 @@ class _ProductServiceTypeSelectorPageState
                       queryParameters: <String, String>{
                         'mode': mode,
                         if (_sector.trim().isNotEmpty) 'sector': _sector.trim(),
+                        if (_categoryId.trim().isNotEmpty)
+                          'category_id': _categoryId.trim(),
                       },
                     );
                     context.push(uri.toString(), extra: _sector);
@@ -109,7 +122,11 @@ class _ProductServiceTypeSelectorPageState
                     Navigator.of(ctx).pop();
                     final Uri uri = Uri(
                       path: AppRouter.productBatchSetupPath,
-                      queryParameters: <String, String>{'mode': mode},
+                      queryParameters: <String, String>{
+                        'mode': mode,
+                        if (_categoryId.trim().isNotEmpty)
+                          'category_id': _categoryId.trim(),
+                      },
                     );
                     context.push(uri.toString(), extra: _sector);
                   },
@@ -191,15 +208,18 @@ class _ProductServiceTypeSelectorPageState
                   const SizedBox(height: AppSpacing.x3),
                   _ServiceCard(
                     title: 'Warranty',
-                    subtitle:
-                        'Create warranty certificates linked to serial numbers.',
+                    subtitle: _supportsWarranty
+                        ? 'Create warranty certificates linked to serial numbers.'
+                        : 'Not supported for this category.',
                     icon: Icons.verified_outlined,
                     selected: _selected == ProductServiceType.warranty,
                     gradient: _primaryGradient,
                     onTap: hasSector
-                        ? () => setState(
-                            () => _selected = ProductServiceType.warranty,
-                          )
+                        ? (_supportsWarranty
+                              ? () => setState(
+                                  () => _selected = ProductServiceType.warranty,
+                                )
+                              : () {})
                         : () {},
                   ),
                 ],

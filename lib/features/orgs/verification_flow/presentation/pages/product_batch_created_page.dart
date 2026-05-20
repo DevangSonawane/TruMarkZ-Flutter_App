@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
@@ -46,6 +47,8 @@ class ProductBatchCreatedPage extends StatelessWidget {
     final int records = _tryParseInt(qp['records'], fallback: 120);
     final int skipped = _tryParseInt(qp['skipped'], fallback: 0);
     final String batchId = (qp['batchId'] ?? '').trim();
+    final Object? extra = GoRouterState.of(context).extra;
+    final BulkUploadResponse? report = extra is BulkUploadResponse ? extra : null;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -181,6 +184,72 @@ class ProductBatchCreatedPage extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (report != null &&
+                      (report.skippedUsers.isNotEmpty ||
+                          report.errors.isNotEmpty)) ...<Widget>[
+                    const SizedBox(height: AppSpacing.x4),
+                    TMZCard(
+                      padding: const EdgeInsets.all(AppSpacing.x4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text('Upload Report', style: AppTypography.heading2),
+                          const SizedBox(height: AppSpacing.x2),
+                          if (report.skippedUsers.isNotEmpty) ...<Widget>[
+                            Text(
+                              'Skipped (first ${report.skippedUsers.length > 5 ? 5 : report.skippedUsers.length})',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.textTertiary,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.x2),
+                            ...report.skippedUsers
+                                .take(5)
+                                .map(
+                                  (BulkUploadSkippedUser s) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: Text(
+                                      'Row ${s.row}: ${s.reason}',
+                                      style: AppTypography.body2.copyWith(
+                                        color: const Color(0xFFF59E0B),
+                                        height: 1.25,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                          ],
+                          if (report.errors.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: AppSpacing.x2),
+                            Text(
+                              'Errors (first ${report.errors.length > 5 ? 5 : report.errors.length})',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.textTertiary,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.x2),
+                            ...report.errors
+                                .take(5)
+                                .map(
+                                  (BulkUploadErrorRow e) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: Text(
+                                      'Row ${e.row} • ${e.field}: ${e.error}',
+                                      style: AppTypography.body2.copyWith(
+                                        color: AppColors.error,
+                                        height: 1.25,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

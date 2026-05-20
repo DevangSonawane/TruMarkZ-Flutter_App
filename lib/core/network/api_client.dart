@@ -59,7 +59,7 @@ class ApiClient {
           requestHeader: true,
           requestBody: false,
           responseHeader: false,
-          responseBody: false,
+          responseBody: true,
           error: true,
           logPrint: (Object o) => debugPrint(o.toString()),
         ),
@@ -69,7 +69,7 @@ class ApiClient {
           requestHeader: true,
           requestBody: false,
           responseHeader: false,
-          responseBody: false,
+          responseBody: true,
           error: true,
           logPrint: (Object o) => debugPrint(o.toString()),
         ),
@@ -169,6 +169,29 @@ class ApiClient {
         try {
           final Response<dynamic> res = await _dio.get<dynamic>(path);
           return _asMap(res.data);
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  // For endpoints that return a JSON array (or non-map JSON).
+  Future<dynamic> verificationGetAny(String path) async {
+    try {
+      final Response<dynamic> res = await _verificationDio.get<dynamic>(path);
+      return res.data;
+    } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Response<dynamic> res = await _dio.get<dynamic>(path);
+          return res.data;
         } on DioException catch (e2) {
           throw _toApiException(e2);
         }

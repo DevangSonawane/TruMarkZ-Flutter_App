@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_button.dart';
+import '../../../data/verification_repository.dart';
 
-class ProductSectorSelectorPage extends StatefulWidget {
+class ProductSectorSelectorPage extends ConsumerStatefulWidget {
   const ProductSectorSelectorPage({super.key});
 
   @override
-  State<ProductSectorSelectorPage> createState() =>
+  ConsumerState<ProductSectorSelectorPage> createState() =>
       _ProductSectorSelectorPageState();
 }
 
-class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
-  String? _selectedSector;
+class _ProductSectorSelectorPageState
+    extends ConsumerState<ProductSectorSelectorPage> {
+  VerificationCategory? _selectedCategory;
+  bool _loading = true;
+  String? _error;
+  List<VerificationCategory> _categories = const <VerificationCategory>[];
 
   static const Color _deepBlue = AppColors.deepNavy;
 
@@ -25,6 +32,34 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
     end: Alignment.bottomRight,
     colors: <Color>[AppColors.brandBlue, _deepBlue],
   );
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_loadCategories);
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final List<VerificationCategory> categories = await repo
+          .getProductCategories();
+      if (!mounted) return;
+      setState(() {
+        _categories = categories;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
 
   void _goBack(BuildContext context) {
     final GoRouter router = GoRouter.of(context);
@@ -36,197 +71,24 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
   }
 
   void _continue(BuildContext context) {
-    final String? sector = _selectedSector;
-    if (sector == null) return;
-    if (_needsServiceChoice(sector)) {
-      final Uri uri = Uri(
-        path: AppRouter.productServiceTypeSelectorPath,
-        queryParameters: <String, String>{'sector': sector},
-      );
-      context.push(uri.toString(), extra: sector);
-      return;
-    }
-    _openProductUploadTypeSheet(context, sector: sector, mode: 'verification');
-  }
-
-  static bool _needsServiceChoice(String sector) {
-    const Set<String> noWarranty = <String>{
-      'Beauty & Cosmetics',
-      'Insurance Policies',
-    };
-    return !noWarranty.contains(sector.trim());
-  }
-
-  void _openProductUploadTypeSheet(
-    BuildContext context, {
-    required String sector,
-    required String mode,
-  }) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext ctx) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Add Products', style: AppTypography.heading1),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  'Choose how you want to add products for verification.',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                TMZButton(
-                  label: 'Single Product',
-                  icon: Icons.add_box_rounded,
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    final String categoryId = _categoryIdFromSector(sector);
-                    final Uri uri = Uri(
-                      path: AppRouter.singleProductUploadPath,
-                      queryParameters: <String, String>{
-                        'mode': mode,
-                        'sector': sector,
-                        'category_id': categoryId,
-                      },
-                    );
-                    context.push(uri.toString(), extra: sector);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
-                TMZButton(
-                  label: 'Bulk Upload',
-                  icon: Icons.upload_file_rounded,
-                  variant: TMZButtonVariant.secondary,
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    final String categoryId = _categoryIdFromSector(sector);
-                    final Uri uri = Uri(
-                      path: AppRouter.productBatchSetupPath,
-                      queryParameters: <String, String>{
-                        'mode': mode,
-                        'category_id': categoryId,
-                      },
-                    );
-                    context.push(uri.toString(), extra: sector);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
-              ],
-            ),
-          ),
-        );
+    final VerificationCategory? category = _selectedCategory;
+    if (category == null) return;
+    final String sector = category.categoryName.trim();
+    final String categoryId = category.id.trim();
+    final Uri uri = Uri(
+      path: AppRouter.productServiceTypeSelectorPath,
+      queryParameters: <String, String>{
+        'sector': sector,
+        'category_id': categoryId,
+        'supports_warranty': category.supportsWarranty ? 'true' : 'false',
       },
     );
-  }
-
-  static String _categoryIdFromSector(String sector) {
-    // Best-effort slug for API `category_id`.
-    return sector
-        .trim()
-        .toLowerCase()
-        .replaceAll('&', 'and')
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .replaceAll(RegExp(r'^_+|_+$'), '');
+    context.push(uri.toString(), extra: sector);
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<(_Sector, bool)> sectors = <(_Sector, bool)>[
-      (
-        const _Sector(
-          title: 'Consumer Goods',
-          description:
-              'Digital certificates for everyday products and warranties',
-          icon: Icons.inventory_rounded,
-        ),
-        _selectedSector == 'Consumer Goods',
-      ),
-      (
-        const _Sector(
-          title: 'Beauty & Cosmetics',
-          description:
-              'Authenticity certificates with lab reports and batch proofs',
-          icon: Icons.spa_rounded,
-        ),
-        _selectedSector == 'Beauty & Cosmetics',
-      ),
-      (
-        const _Sector(
-          title: 'Electronics & Appliances',
-          description:
-              'Warranty + serial based certificates for devices and appliances',
-          icon: Icons.electrical_services_rounded,
-        ),
-        _selectedSector == 'Electronics & Appliances',
-      ),
-      (
-        const _Sector(
-          title: 'EV & Automotive',
-          description: 'Vehicle, battery, and component certificates on-chain',
-          icon: Icons.electric_car_rounded,
-        ),
-        _selectedSector == 'EV & Automotive',
-      ),
-      (
-        const _Sector(
-          title: 'Insurance Policies',
-          description: 'Policy certificates and agent-issued proofs',
-          icon: Icons.policy_rounded,
-        ),
-        _selectedSector == 'Insurance Policies',
-      ),
-      (
-        const _Sector(
-          title: 'Healthcare Products',
-          description:
-              'Certificates for pharma, devices, and lab-linked proofs',
-          icon: Icons.medical_services_rounded,
-        ),
-        _selectedSector == 'Healthcare Products',
-      ),
-      (
-        const _Sector(
-          title: 'Industrial Equipment',
-          description: 'Asset certificates for tools, machines, and parts',
-          icon: Icons.precision_manufacturing_rounded,
-        ),
-        _selectedSector == 'Industrial Equipment',
-      ),
-      (
-        const _Sector(
-          title: 'Agriculture Products',
-          description: 'Origin and quality certificates for agri goods',
-          icon: Icons.agriculture_rounded,
-        ),
-        _selectedSector == 'Agriculture Products',
-      ),
-      (
-        const _Sector(
-          title: 'Luxury Products',
-          description: 'Anti-counterfeit certificates for premium goods',
-          icon: Icons.diamond_rounded,
-        ),
-        _selectedSector == 'Luxury Products',
-      ),
-      (
-        const _Sector(
-          title: 'Others',
-          description: 'Create a custom product certificate batch',
-          icon: Icons.widgets_rounded,
-        ),
-        _selectedSector == 'Others',
-      ),
-    ];
+    final List<VerificationCategory> categories = _categories;
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -272,39 +134,76 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x5),
-                  LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final int columns = constraints.maxWidth >= 800
-                              ? 3
-                              : 2;
-                          return GridView.builder(
-                            itemCount: sectors.length,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  mainAxisSpacing: AppSpacing.x3,
-                                  crossAxisSpacing: AppSpacing.x3,
-                                  childAspectRatio: 1,
-                                ),
-                            itemBuilder: (BuildContext context, int index) {
-                              final (_Sector sector, bool selected) =
-                                  sectors[index];
-                              return _SectorCard(
-                                title: sector.title,
-                                description: sector.description,
-                                icon: sector.icon,
-                                selected: selected,
-                                onTap: () => setState(
-                                  () => _selectedSector = sector.title,
-                                ),
-                              );
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: AppSpacing.x6),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Column(
+                      children: <Widget>[
+                        Text(
+                          'Unable to load categories',
+                          style: AppTypography.body2.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.x2),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TMZButton(
+                            label: 'Retry',
+                            icon: Icons.refresh_rounded,
+                            variant: TMZButtonVariant.secondary,
+                            onPressed: () {
+                              setState(() {
+                                _loading = true;
+                                _error = null;
+                              });
+                              _loadCategories();
                             },
-                          );
-                        },
-                  ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    LayoutBuilder(
+                      builder:
+                          (BuildContext context, BoxConstraints constraints) {
+                            final int columns = constraints.maxWidth >= 800
+                                ? 3
+                                : 2;
+                            return GridView.builder(
+                              itemCount: categories.length,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: columns,
+                                    mainAxisSpacing: AppSpacing.x3,
+                                    crossAxisSpacing: AppSpacing.x3,
+                                    childAspectRatio: 1,
+                                  ),
+                              itemBuilder: (BuildContext context, int index) {
+                                final VerificationCategory cat =
+                                    categories[index];
+                                final bool selected =
+                                    _selectedCategory?.id == cat.id;
+                                return _SectorCard(
+                                  title: cat.categoryName,
+                                  description: cat.description,
+                                  icon: _iconForCategory(cat.categoryName),
+                                  selected: selected,
+                                  onTap: () {
+                                    setState(() => _selectedCategory = cat);
+                                    // Immediately move to the next step on tap.
+                                    _continue(context);
+                                  },
+                                );
+                              },
+                            );
+                          },
+                    ),
                 ],
               ),
             ),
@@ -321,7 +220,7 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
                   label: 'Continue',
                   icon: Icons.arrow_forward_rounded,
                   gradient: _primaryGradient,
-                  enabled: _selectedSector != null,
+                  enabled: _selectedCategory != null,
                   onPressed: () => _continue(context),
                 ),
               ),
@@ -333,16 +232,40 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
   }
 }
 
-class _Sector {
-  const _Sector({
-    required this.title,
-    required this.description,
-    required this.icon,
-  });
-
-  final String title;
-  final String description;
-  final IconData icon;
+IconData _iconForCategory(String name) {
+  final String n = name.trim().toLowerCase();
+  if (n.contains('agri') || n.contains('farm') || n.contains('crop')) {
+    return Icons.agriculture_rounded;
+  }
+  if (n.contains('beauty') || n.contains('cosmetic') || n.contains('spa')) {
+    return Icons.spa_rounded;
+  }
+  if (n.contains('consumer') || n.contains('goods') || n.contains('fmcg')) {
+    return Icons.shopping_bag_rounded;
+  }
+  if (n.contains('electronic') ||
+      n.contains('appliance') ||
+      n.contains('device')) {
+    return Icons.devices_other_rounded;
+  }
+  if (n.contains('auto') || n.contains('vehicle') || n.contains('ev')) {
+    return Icons.electric_car_rounded;
+  }
+  if (n.contains('health') || n.contains('pharma') || n.contains('medical')) {
+    return Icons.medical_services_rounded;
+  }
+  if (n.contains('insurance') || n.contains('policy')) {
+    return Icons.policy_rounded;
+  }
+  if (n.contains('luxury') || n.contains('jewel') || n.contains('diamond')) {
+    return Icons.diamond_rounded;
+  }
+  if (n.contains('industrial') ||
+      n.contains('equipment') ||
+      n.contains('machine')) {
+    return Icons.precision_manufacturing_rounded;
+  }
+  return Icons.inventory_rounded;
 }
 
 class _SectorCard extends StatelessWidget {
