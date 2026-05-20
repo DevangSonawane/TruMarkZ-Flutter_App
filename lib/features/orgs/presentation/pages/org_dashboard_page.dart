@@ -54,6 +54,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     // overflow upward, so the pills need extra headroom.
     const double kQuickActionOverflowPad = 16;
     const double kSectionGap = AppSpacing.x1 + kQuickActionOverflowPad;
+    const double kBetweenSectionsGap = kSectionGap + AppSpacing.x3;
     final double bottomScrollPadding =
         bottomInset + kBottomNavHeight + kNavPillMargin;
 
@@ -122,7 +123,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                   curve: Curves.easeOutCubic,
                 ),
           ),
-          const SizedBox(height: AppSpacing.x1),
+          const SizedBox(height: AppSpacing.x3),
           Padding(
             padding: const EdgeInsets.only(
               left: AppSpacing.x4,
@@ -179,7 +180,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       curve: Curves.easeOutCubic,
                     ),
           ),
-          const SizedBox(height: kSectionGap),
+          const SizedBox(height: kBetweenSectionsGap),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
             child: const _SectionLabel('Recent Batch Process'),

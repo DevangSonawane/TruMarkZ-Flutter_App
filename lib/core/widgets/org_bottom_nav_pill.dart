@@ -5,12 +5,12 @@ import '../theme/app_colors.dart';
 class OrgBottomNavPillItem {
   const OrgBottomNavPillItem({
     required this.label,
-    required this.assetPath,
+    required this.icon,
     required this.onTap,
   });
 
   final String label;
-  final String assetPath;
+  final IconData icon;
   final VoidCallback onTap;
 }
 
@@ -28,7 +28,7 @@ class OrgBottomNavPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 8 + safeBottom),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 1 + safeBottom),
       child: Material(
         color: Colors.white,
         elevation: 12,
@@ -66,6 +66,7 @@ class _OrgBottomNavPillItemView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double iconSize = 24;
+    final Color fg = active ? AppColors.brandBlue : _fg;
 
     return Material(
       color: Colors.transparent,
@@ -79,27 +80,17 @@ class _OrgBottomNavPillItemView extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Opacity(
-                opacity: active ? 1.0 : 1.0,
-                child: Image.asset(
-                  item.assetPath,
-                  width: iconSize,
-                  height: iconSize,
-                  fit: BoxFit.contain,
-                  color: _fg,
-                  colorBlendMode: BlendMode.srcIn,
-                ),
-              ),
+              Icon(item.icon, size: iconSize, color: fg),
               const SizedBox(height: 2),
               Text(
                 item.label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w400,
                   fontSize: 6,
                   height: 8 / 6,
-                  color: _fg,
+                  color: fg,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -72,27 +72,27 @@ class OrgShellPage extends StatelessWidget {
           items: <OrgBottomNavPillItem>[
             OrgBottomNavPillItem(
               label: 'Dashboard',
-              assetPath: 'assets/icons/dashbaord/dashboard.png',
+              icon: Icons.space_dashboard_outlined,
               onTap: () => _onTap(context, 0),
             ),
             OrgBottomNavPillItem(
               label: 'View All',
-              assetPath: 'assets/icons/dashbaord/view_all.png',
+              icon: Icons.grid_view_outlined,
               onTap: () => _onTap(context, 1),
             ),
             OrgBottomNavPillItem(
               label: 'Start Batch',
-              assetPath: 'assets/icons/dashbaord/start_batch.png',
+              icon: Icons.add_task_outlined,
               onTap: () => _onTap(context, 2),
             ),
             OrgBottomNavPillItem(
               label: 'Scan QR',
-              assetPath: 'assets/icons/dashbaord/scan_qr.png',
+              icon: Icons.qr_code_scanner,
               onTap: () => _onTap(context, 3),
             ),
             OrgBottomNavPillItem(
               label: 'Account',
-              assetPath: 'assets/icons/dashbaord/profile_png_final.png',
+              icon: Icons.person_outline,
               onTap: () => _onTap(context, 4),
             ),
           ],
