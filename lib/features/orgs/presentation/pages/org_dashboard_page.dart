@@ -28,10 +28,17 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     super.didChangeDependencies();
     if (_didLoad) return;
     _didLoad = true;
-    Future<void>.microtask(
-      () =>
-          ref.read(verificationListNotifierProvider.notifier).load(limit: 500),
-    );
+    // Defer heavier loading so above-the-fold content (header/banner/actions)
+    // can paint immediately.
+    Future<void>.microtask(() async {
+      final notifier = ref.read(verificationListNotifierProvider.notifier);
+      await notifier.load(limit: 20);
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        notifier.load(limit: 500);
+      });
+    });
   }
 
   @override
@@ -39,7 +46,16 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final double topInset = MediaQuery.paddingOf(context).top;
     // Space for the floating bottom nav pill so content isn't hidden behind it.
-    final double bottomScrollPadding = bottomInset + 148;
+    // Keep this a bit generous because the pill includes its own padding +
+    // elevation shadow, and the Scaffold uses extendBody=true.
+    const double kBottomNavHeight = 84.0;
+    const double kNavPillMargin = 20.0;
+    // Keep section-to-section spacing consistent. Note: quick-action icons
+    // overflow upward, so the pills need extra headroom.
+    const double kQuickActionOverflowPad = 16;
+    const double kSectionGap = AppSpacing.x1 + kQuickActionOverflowPad;
+    final double bottomScrollPadding =
+        bottomInset + kBottomNavHeight + kNavPillMargin;
 
     final VerificationListState verificationState = ref.watch(
       verificationListNotifierProvider,
@@ -97,32 +113,22 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
           const SizedBox(height: AppSpacing.x5),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-            child:
-                Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'QUICK ACTIONS',
-                        textAlign: TextAlign.left,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w500,
-                          fontSize: 8,
-                          height: 12 / 8,
-                          color: Color(0xFFBCBABA),
-                        ),
-                      ),
-                    )
-                    .animate()
-                    .fadeIn(delay: 120.ms, duration: 220.ms)
-                    .slideY(
-                      begin: 0.04,
-                      duration: 220.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
+            child: const _SectionLabel('Quick Actions')
+                .animate()
+                .fadeIn(delay: 120.ms, duration: 220.ms)
+                .slideY(
+                  begin: 0.04,
+                  duration: 220.ms,
+                  curve: Curves.easeOutCubic,
+                ),
           ),
-          const SizedBox(height: AppSpacing.x6),
+          const SizedBox(height: AppSpacing.x1),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.x4,
+              right: AppSpacing.x4,
+              top: kQuickActionOverflowPad, // absorb overflow (top: -22)
+            ),
             child:
                 Column(
                       children: <Widget>[
@@ -131,8 +137,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                             Expanded(
                               child: _QuickActionPill(
                                 label: 'NEW BATCH',
-                                subtitle:
-                                    'Create a New Process for Organization',
+                                subtitle: '',
                                 topAssetPath:
                                     'assets/icons/dashbaord/new_batch.png',
                                 onTap: () => context.go(
@@ -144,8 +149,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                             Expanded(
                               child: _QuickActionPill(
                                 label: 'REPORTS',
-                                subtitle:
-                                    'Create a New Process for Organization',
+                                subtitle: '',
                                 topAssetPath:
                                     'assets/icons/dashbaord/reports.png',
                                 onTap: () =>
@@ -156,8 +160,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                             Expanded(
                               child: _QuickActionPill(
                                 label: 'REGISTRY',
-                                subtitle:
-                                    'Create a New Process for Organization',
+                                subtitle: '',
                                 topAssetPath:
                                     'assets/icons/dashbaord/registry_final.png',
                                 onTap: () =>
@@ -176,24 +179,12 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       curve: Curves.easeOutCubic,
                     ),
           ),
-          const SizedBox(height: AppSpacing.x8),
+          const SizedBox(height: kSectionGap),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Recent Batch Process',
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 8,
-                  height: 12 / 8,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFFBCBABA),
-                ),
-              ),
-            ),
+            child: const _SectionLabel('Recent Batch Process'),
           ),
-          const SizedBox(height: AppSpacing.x4),
+          const SizedBox(height: kSectionGap),
           if (verificationState.data.isLoading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.x4),
@@ -232,18 +223,19 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                 horizontal: AppSpacing.x4,
                 vertical: AppSpacing.x4,
               ),
-              child: Center(
-                child: Text(
-                  'No recent batch process.',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+              child: _DashboardEmptyState(
+                title: 'No batches yet',
+                message: 'Create your first batch to start processing records.',
+                ctaLabel: 'Create your first batch',
+                onCtaTap: () => context.go(AppRouter.batchTypeSelectionPath),
               ),
             )
           else
-            SizedBox(
-                  height: 212,
+            ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: 200,
+                    maxHeight: 220,
+                  ),
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.x4,
@@ -256,18 +248,25 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       final _DashboardBatchItem batch =
                           summary.recentBatches[index];
                       return _RecentBatchCard(
-                        batch: batch,
-                        onTap: () {
-                          final String batchId = batch.batchId;
-                          if (batchId.trim().isEmpty) {
-                            context.push(AppRouter.batchTrackingDetailPath);
-                            return;
-                          }
-                          context.push(
-                            '${AppRouter.batchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
+                            batch: batch,
+                            onTap: () {
+                              final String batchId = batch.batchId;
+                              if (batchId.trim().isEmpty) {
+                                context.push(AppRouter.batchTrackingDetailPath);
+                                return;
+                              }
+                              context.push(
+                                '${AppRouter.batchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
+                              );
+                            },
+                          )
+                          .animate()
+                          .fadeIn(delay: (80 + index * 60).ms, duration: 220.ms)
+                          .slideX(
+                            begin: 0.05,
+                            duration: 220.ms,
+                            curve: Curves.easeOutCubic,
                           );
-                        },
-                      );
                     },
                   ),
                 )
@@ -319,10 +318,8 @@ class _OrgDashboardBannerState extends State<_OrgDashboardBanner> {
   Timer? _timer;
   int _index = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController();
+  void _resetTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
       final int count = widget.assetPaths.length;
@@ -334,6 +331,13 @@ class _OrgDashboardBannerState extends State<_OrgDashboardBanner> {
         curve: Curves.easeOutCubic,
       );
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+    _resetTimer();
   }
 
   @override
@@ -357,11 +361,80 @@ class _OrgDashboardBannerState extends State<_OrgDashboardBanner> {
         child: PageView.builder(
           controller: _controller,
           itemCount: banners.length,
-          onPageChanged: (int i) => _index = i,
+          onPageChanged: (int i) {
+            _index = i;
+            _resetTimer();
+          },
           itemBuilder: (BuildContext context, int index) {
             return Image.asset(banners[index], fit: BoxFit.cover);
           },
         ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontFamily: 'Poppins',
+        fontWeight: FontWeight.w500,
+        fontSize: 9,
+        letterSpacing: 0.8,
+        color: Color(0xFFBCBABA),
+      ),
+    );
+  }
+}
+
+class _DashboardEmptyState extends StatelessWidget {
+  const _DashboardEmptyState({
+    required this.title,
+    required this.message,
+    required this.ctaLabel,
+    required this.onCtaTap,
+  });
+
+  final String title;
+  final String message;
+  final String ctaLabel;
+  final VoidCallback onCtaTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(
+            Icons.inbox_outlined,
+            size: 40,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          Text(
+            title,
+            style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            message,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          TextButton(onPressed: onCtaTap, child: Text(ctaLabel)),
+        ],
       ),
     );
   }
@@ -605,6 +678,8 @@ class _DashboardBatchItem {
     required this.batchId,
     required this.title,
     required this.recordCount,
+    required this.verifiedCount,
+    required this.progressFraction,
     required this.status,
     required this.updatedAt,
     required this.isHumanVerification,
@@ -613,6 +688,8 @@ class _DashboardBatchItem {
   final String batchId;
   final String title;
   final int recordCount;
+  final int verifiedCount;
+  final double progressFraction;
   final _BatchStatus status;
   final DateTime updatedAt;
   final bool isHumanVerification;
@@ -628,10 +705,16 @@ class _DashboardBatchItem {
               ? _BatchStatus.processing
               : _BatchStatus.complete);
 
+    final double progress = agg.count > 0
+        ? (agg.verifiedCount / agg.count).clamp(0.0, 1.0)
+        : 0.0;
+
     return _DashboardBatchItem(
       batchId: agg.batchId,
       title: 'Batch $shortId',
       recordCount: agg.count,
+      verifiedCount: agg.verifiedCount,
+      progressFraction: progress,
       status: status,
       updatedAt:
           _DashboardSummary._tryParseIso(agg.updatedAt) ?? DateTime.now(),
@@ -648,6 +731,11 @@ class _QuickActionPill extends StatelessWidget {
     this.topAssetPath,
   });
 
+  static const double _pillHeight = 76;
+  static const double _pillRadius = 12;
+  static const double _iconSize = 52;
+  static const double _iconTop = -14;
+
   final String label;
   final String subtitle;
   final VoidCallback onTap;
@@ -656,79 +744,86 @@ class _QuickActionPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String? asset = topAssetPath?.trim();
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(15),
-        child: SizedBox(
-          height: 102,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEFEFE),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: const Color(0xFFF5F5F5)),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x40B8B8B8),
-                      blurRadius: 4,
-                      offset: Offset(2, 2),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.bottomCenter,
-                padding: const EdgeInsets.fromLTRB(14, 24, 14, 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 10,
-                        height: 15 / 10,
-                        color: Colors.black,
+    final String subtitleText = subtitle.trim();
+    return Semantics(
+      label: label,
+      hint: subtitleText.isEmpty ? null : subtitleText,
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(_pillRadius),
+          child: SizedBox(
+            height: _pillHeight,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEFEFE),
+                    borderRadius: BorderRadius.circular(_pillRadius),
+                    border: Border.all(color: const Color(0xFFF5F5F5)),
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x40B8B8B8),
+                        blurRadius: 4,
+                        offset: Offset(2, 2),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w500,
-                        fontSize: 4,
-                        height: 6 / 4,
-                        color: Color(0xFFBCBABA),
+                    ],
+                  ),
+                  alignment: Alignment.bottomCenter,
+                  padding: const EdgeInsets.fromLTRB(10, 16, 10, 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 9,
+                          height: 12 / 9,
+                          color: Colors.black,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              if (asset != null && asset.isNotEmpty)
-                Positioned(
-                  top: -22,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Image.asset(
-                      asset,
-                      width: 72,
-                      height: 72,
-                      fit: BoxFit.contain,
-                    ),
+                      const SizedBox(height: 2),
+                      if (subtitleText.isNotEmpty)
+                        Text(
+                          subtitleText,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 9,
+                            height: 1.25,
+                            color: Color(0xFFBCBABA),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
+                if (asset != null && asset.isNotEmpty)
+                  Positioned(
+                    top: _iconTop,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Image.asset(
+                        asset,
+                        width: _iconSize,
+                        height: _iconSize,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -742,151 +837,156 @@ class _RecentBatchCard extends StatelessWidget {
   final _DashboardBatchItem batch;
   final VoidCallback onTap;
 
+  static const double _cardRadius = 18;
   static const String _humanAsset =
-      'assets/icons/dashbaord/human_verficaition.png';
+      'assets/icons/dashbaord/human_vericiation_final.png';
 
   @override
   Widget build(BuildContext context) {
     final _RecentStatus status = _RecentStatus.fromBatch(batch.status);
     const String typeAsset = _humanAsset;
     const Color navy = Color(0xFF0E2D64);
+    const double kHeaderIconSize = 72;
+    const double kHeaderIconRightInset = 12;
+    const double kHeaderIconTopInset = 6;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: <Widget>[
-          Container(
-            width: 230,
-            height: 212,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(color: const Color(0xFFF5F5F5), width: 2),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withAlpha(10),
-                  blurRadius: 10,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Column(
-              children: <Widget>[
-                ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(26),
-                    topRight: Radius.circular(26),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(_cardRadius),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Container(
+              width: 230,
+              height: 212,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(_cardRadius),
+                border: Border.all(color: const Color(0xFFF5F5F5), width: 2),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withAlpha(10),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
                   ),
-                  child: Container(
-                    height: 84,
-                    color: navy,
-                    child: Stack(
-                      children: <Widget>[
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                ],
+              ),
+              child: Column(
+                children: <Widget>[
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(_cardRadius),
+                      topRight: Radius.circular(_cardRadius),
+                    ),
+                    child: Container(
+                      height: 84,
+                      color: navy,
+                      child: Stack(
+                        children: <Widget>[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              16,
+                              18,
+                              16 + kHeaderIconSize + 12,
+                              8,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        batch.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 13,
+                                          height: 16 / 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Positioned(
+                            right: kHeaderIconRightInset,
+                            top: kHeaderIconTopInset,
+                            child: _HeaderIllustration(
+                              iconAsset: typeAsset,
+                              tint: Colors.white.withAlpha(230),
+                              size: kHeaderIconSize,
+                            ),
+                          ),
+                          Positioned(
+                            left: 14,
+                            bottom: 18,
+                            child: _ViewDetailsButton(onTap: onTap),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              const Text(
+                                'Current Status',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 11,
+                                  height: 14 / 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF292727),
+                                ),
+                              ),
+                              const Spacer(),
+                              _StatusPill(label: status.label, status: status),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
                             children: <Widget>[
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      batch.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 13,
-                                        height: 16 / 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'This is the first project created by the team asynk for verification',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 7,
-                                        height: 10 / 7,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.white.withAlpha(180),
-                                      ),
-                                    ),
-                                  ],
+                                child: _BigStatCard(
+                                  value: '${batch.recordCount}',
+                                  label: 'Total Entries',
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              _HeaderIllustration(
-                                iconAsset: typeAsset,
-                                tint: Colors.white.withAlpha(230),
+                              Expanded(
+                                child: _BigStatCard(
+                                  value: _compactTime(batch.updatedAt),
+                                  label: 'Time Remaining',
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        Positioned(
-                          left: 12,
-                          bottom: 8,
-                          child: _ViewDetailsButton(onTap: onTap),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          _MiniProgressBar(value: batch.progressFraction),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            const Text(
-                              'Current Status',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                height: 14 / 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF292727),
-                              ),
-                            ),
-                            const Spacer(),
-                            _StatusPill(label: status.label, status: status),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: _BigStatCard(
-                                value: '${batch.recordCount}',
-                                label: 'Total Entries',
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _BigStatCard(
-                                value: _compactTime(batch.updatedAt),
-                                label: 'Time Remaining',
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        const _MiniProgressBar(value: 0.12),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -915,13 +1015,13 @@ class _ViewDetailsButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           child: Text(
             'View Details',
             style: TextStyle(
               fontFamily: 'Poppins',
-              fontSize: 8,
-              height: 10 / 8,
+              fontSize: 7,
+              height: 9 / 7,
               fontWeight: FontWeight.w500,
               color: Color(0xFF292727),
             ),
@@ -941,7 +1041,7 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: status.pillBg,
         borderRadius: BorderRadius.circular(999),
@@ -950,8 +1050,8 @@ class _StatusPill extends StatelessWidget {
         label,
         style: TextStyle(
           fontFamily: 'Poppins',
-          fontSize: 8,
-          height: 10 / 8,
+          fontSize: 7,
+          height: 9 / 7,
           fontWeight: FontWeight.w600,
           color: status.textColor,
         ),
@@ -972,7 +1072,7 @@ class _BigStatCard extends StatelessWidget {
       height: 56,
       decoration: BoxDecoration(
         color: const Color(0xFFF0F0F0),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(10),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Column(
@@ -1010,16 +1110,21 @@ class _BigStatCard extends StatelessWidget {
 }
 
 class _HeaderIllustration extends StatelessWidget {
-  const _HeaderIllustration({required this.iconAsset, required this.tint});
+  const _HeaderIllustration({
+    required this.iconAsset,
+    required this.tint,
+    this.size = 76,
+  });
 
   final String iconAsset;
   final Color tint;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 54,
-      height: 54,
+      width: size,
+      height: size,
       child: Image.asset(iconAsset, fit: BoxFit.contain),
     );
   }

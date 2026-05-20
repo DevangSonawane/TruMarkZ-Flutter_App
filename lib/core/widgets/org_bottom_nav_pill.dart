@@ -28,16 +28,16 @@ class OrgBottomNavPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + safeBottom),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 8 + safeBottom),
       child: Material(
         color: Colors.white,
-        elevation: 18,
+        elevation: 12,
         shadowColor: Colors.black.withAlpha(60),
         shape: StadiumBorder(
           side: BorderSide(color: AppColors.divider.withAlpha(120), width: 0.8),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             children: <Widget>[
               for (int i = 0; i < items.length; i++)
@@ -65,17 +65,17 @@ class _OrgBottomNavPillItemView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double iconSize = 28;
+    const double iconSize = 24;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         splashColor: Colors.black.withAlpha(8),
         highlightColor: Colors.black.withAlpha(4),
         child: SizedBox(
-          height: 62,
+          height: 52,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
@@ -90,15 +90,15 @@ class _OrgBottomNavPillItemView extends StatelessWidget {
                   colorBlendMode: BlendMode.srcIn,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 item.label,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w400,
-                  fontSize: 7,
-                  height: 10 / 7,
+                  fontSize: 6,
+                  height: 8 / 6,
                   color: _fg,
                 ),
                 maxLines: 1,
