@@ -20,6 +20,7 @@ class ProductBatchSetupPage extends StatefulWidget {
 class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   bool _didInitFromRoute = false;
   String _sector = 'Consumer Goods & Warranty';
+  String _categoryId = '';
   String _mode = 'verification'; // 'verification' | 'warranty'
 
   late final TextEditingController _batchNameController;
@@ -64,6 +65,15 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
     if (sector != null && sector.trim().isNotEmpty) {
       _sector = sector.trim();
     }
+
+    final String? categoryId = GoRouterState.of(
+      context,
+    ).uri.queryParameters['category_id'];
+    if (categoryId != null && categoryId.trim().isNotEmpty) {
+      _categoryId = categoryId.trim();
+    } else {
+      _categoryId = _sector;
+    }
   }
 
   @override
@@ -96,6 +106,7 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
       'units': _units().toString(),
       'visibility': _visibility.name,
       'mode': _mode,
+      'category_id': _categoryId.trim(),
       if (_descriptionController.text.trim().isNotEmpty)
         'desc': _descriptionController.text.trim(),
     };

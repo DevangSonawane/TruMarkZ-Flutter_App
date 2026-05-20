@@ -89,11 +89,13 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
                   icon: Icons.add_box_rounded,
                   onPressed: () {
                     Navigator.of(ctx).pop();
+                    final String categoryId = _categoryIdFromSector(sector);
                     final Uri uri = Uri(
                       path: AppRouter.singleProductUploadPath,
                       queryParameters: <String, String>{
                         'mode': mode,
                         'sector': sector,
+                        'category_id': categoryId,
                       },
                     );
                     context.push(uri.toString(), extra: sector);
@@ -106,9 +108,13 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
                   variant: TMZButtonVariant.secondary,
                   onPressed: () {
                     Navigator.of(ctx).pop();
+                    final String categoryId = _categoryIdFromSector(sector);
                     final Uri uri = Uri(
                       path: AppRouter.productBatchSetupPath,
-                      queryParameters: <String, String>{'mode': mode},
+                      queryParameters: <String, String>{
+                        'mode': mode,
+                        'category_id': categoryId,
+                      },
                     );
                     context.push(uri.toString(), extra: sector);
                   },
@@ -120,6 +126,17 @@ class _ProductSectorSelectorPageState extends State<ProductSectorSelectorPage> {
         );
       },
     );
+  }
+
+  static String _categoryIdFromSector(String sector) {
+    // Best-effort slug for API `category_id`.
+    return sector
+        .trim()
+        .toLowerCase()
+        .replaceAll('&', 'and')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
   }
 
   @override

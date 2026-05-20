@@ -1,13 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
+import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
@@ -45,8 +43,8 @@ class _SingleProductUploadPageState
     final Object? extra = state.extra;
     final String? extraSector = extra is String ? extra : null;
     _sector = (extraSector ?? state.uri.queryParameters['sector'] ?? '').trim();
-    _categoryId.text =
-        (state.uri.queryParameters['category_id'] ?? _sector).trim();
+    _categoryId.text = (state.uri.queryParameters['category_id'] ?? _sector)
+        .trim();
 
     final String mode = (state.uri.queryParameters['mode'] ?? 'verification')
         .trim()
@@ -77,101 +75,12 @@ class _SingleProductUploadPageState
     throw const FormatException('custom_fields must be a JSON object.');
   }
 
-  Future<void> _copy(String text, {required String label}) async {
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$label copied.')));
-  }
-
-  Future<void> _showSuccessSheet(SingleProductUploadResponse res) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (BuildContext ctx) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Invite Created', style: AppTypography.heading1),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  res.message.isEmpty
-                      ? 'Share the invite link to upload documents/images.'
-                      : res.message,
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                _KeyValueRow(label: 'Entity ID', value: res.entityId),
-                const SizedBox(height: AppSpacing.x2),
-                _KeyValueRow(label: 'Entity Type', value: res.entityType),
-                const SizedBox(height: AppSpacing.x2),
-                _KeyValueRow(label: 'Invite Token', value: res.inviteToken),
-                const SizedBox(height: AppSpacing.x2),
-                _KeyValueRow(label: 'Invite Link', value: res.inviteLink),
-                const SizedBox(height: AppSpacing.x4),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: TMZButton(
-                        label: 'Copy Link',
-                        icon: Icons.copy_rounded,
-                        onPressed: res.inviteLink.trim().isEmpty
-                            ? null
-                            : () => _copy(res.inviteLink, label: 'Invite link'),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.x2),
-                    Expanded(
-                      child: TMZButton(
-                        label: 'Open Link',
-                        icon: Icons.open_in_new_rounded,
-                        variant: TMZButtonVariant.secondary,
-                        onPressed: res.inviteLink.trim().isEmpty
-                            ? null
-                            : () async {
-                                final Uri uri = Uri.parse(res.inviteLink);
-                                if (!await launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                )) {
-                                  if (ctx.mounted) {
-                                    ScaffoldMessenger.of(ctx).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Could not open link.'),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.x2),
-                SizedBox(
-                  width: double.infinity,
-                  child: TMZButton(
-                    label: 'Done',
-                    variant: TMZButtonVariant.ghost,
-                    onPressed: () => Navigator.of(ctx).pop(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+  void _goToInviteSuccess() {
+    final Uri uri = Uri(
+      path: AppRouter.inviteCreatedSuccessPath,
+      queryParameters: const <String, String>{},
     );
+    context.push(uri.toString());
   }
 
   Future<void> _submit() async {
@@ -184,7 +93,7 @@ class _SingleProductUploadPageState
     try {
       final Map<String, dynamic>? customFields = _parseCustomFields();
       final repo = ref.read(verificationRepositoryProvider);
-      final SingleProductUploadResponse res = await repo.uploadSingleProduct(
+      await repo.uploadSingleProduct(
         categoryId: _categoryId.text,
         productName: _productName.text,
         customFields: <String, dynamic>{
@@ -194,7 +103,7 @@ class _SingleProductUploadPageState
         },
       );
       if (!mounted) return;
-      await _showSuccessSheet(res);
+      _goToInviteSuccess();
     } on FormatException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -208,7 +117,9 @@ class _SingleProductUploadPageState
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong. Please try again.')),
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -297,44 +208,6 @@ class _SingleProductUploadPageState
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KeyValueRow extends StatelessWidget {
-  const _KeyValueRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.x3),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              label,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            SelectableText(
-              value.isEmpty ? '-' : value,
-              style: AppTypography.body2.copyWith(height: 1.25),
-            ),
-          ],
         ),
       ),
     );

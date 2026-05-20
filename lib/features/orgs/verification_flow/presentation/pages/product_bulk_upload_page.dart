@@ -14,6 +14,7 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
+import '../../../../../core/services/batch_name_store.dart';
 
 class ProductBulkUploadPage extends ConsumerStatefulWidget {
   const ProductBulkUploadPage({super.key});
@@ -27,6 +28,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   bool _didInitFromRoute = false;
 
   String _sector = 'Consumer Goods & Warranty';
+  String _categoryId = '';
   String _batchName = 'New Product Batch';
   String _mode = 'verification'; // 'verification' | 'warranty'
 
@@ -68,6 +70,13 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final Map<String, String> qp = GoRouterState.of(
       context,
     ).uri.queryParameters;
+
+    final String? categoryId = qp['category_id'];
+    if (categoryId != null && categoryId.trim().isNotEmpty) {
+      _categoryId = categoryId.trim();
+    } else {
+      _categoryId = _sector;
+    }
 
     final String? batch = qp['batch'];
     if (batch != null && batch.trim().isNotEmpty) {
@@ -116,9 +125,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                 Text(
                   'Enter column headers (comma-separated). The backend will generate an Excel template.',
                   style: AppTypography.body2.copyWith(
-                    color: Theme.of(
-                      ctx,
-                    ).colorScheme.onSurface.withAlpha(160),
+                    color: Theme.of(ctx).colorScheme.onSurface.withAlpha(160),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.x3),
@@ -163,7 +170,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                           verificationRepositoryProvider,
                         );
                         final String res = await repo.generateProductsTemplate(
-                          categoryId: _sector,
+                          categoryId: _categoryId,
                           headers: headers,
                         );
                         if (!ctx.mounted) return;
@@ -295,10 +302,13 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final res = await repo.bulkUploadProducts(
         batchName: _batchName,
         description: '$_sector • $modeLabel',
-        categoryId: _sector,
+        categoryId: _categoryId,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
+      await ref
+          .read(batchNameStoreProvider.notifier)
+          .setBatchName(res.batchId, _batchName);
       if (!mounted) return;
       final Uri uri = Uri(
         path: AppRouter.productBatchCreatedPath,

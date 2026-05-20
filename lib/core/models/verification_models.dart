@@ -48,6 +48,7 @@ class VerificationUser {
   const VerificationUser({
     required this.id,
     required this.batchId,
+    required this.batchName,
     required this.orgId,
     required this.fullName,
     required this.dob,
@@ -74,6 +75,7 @@ class VerificationUser {
 
   final String id;
   final String batchId;
+  final String batchName;
   final String orgId;
   final String fullName;
   final String? dob;
@@ -99,6 +101,39 @@ class VerificationUser {
   final List<VerificationDocument> documents;
 
   factory VerificationUser.fromJson(Map<String, dynamic> json) {
+    String readString(dynamic v) => (v ?? '').toString();
+
+    String readBatchName(Map<String, dynamic> json) {
+      // Backend payloads vary; accept common keys and nested objects.
+      final String direct = readString(json['batch_name']).trim().isNotEmpty
+          ? readString(json['batch_name'])
+          : (readString(json['batchName']).trim().isNotEmpty
+                ? readString(json['batchName'])
+                : (readString(json['batch_title']).trim().isNotEmpty
+                      ? readString(json['batch_title'])
+                      : (readString(json['batchTitle']).trim().isNotEmpty
+                            ? readString(json['batchTitle'])
+                            : '')));
+      if (direct.trim().isNotEmpty) return direct.trim();
+
+      final dynamic batchObj = json['batch'];
+      if (batchObj is String && batchObj.trim().isNotEmpty) {
+        return batchObj.trim();
+      }
+      if (batchObj is Map) {
+        final Map<String, dynamic> batch = Map<String, dynamic>.from(batchObj);
+        final String nested = readString(batch['name']).trim().isNotEmpty
+            ? readString(batch['name'])
+            : (readString(batch['batch_name']).trim().isNotEmpty
+                  ? readString(batch['batch_name'])
+                  : (readString(batch['title']).trim().isNotEmpty
+                        ? readString(batch['title'])
+                        : ''));
+        if (nested.trim().isNotEmpty) return nested.trim();
+      }
+      return '';
+    }
+
     final dynamic docsRaw = json['documents'];
     final List<VerificationDocument> docs = docsRaw is List
         ? docsRaw
@@ -111,13 +146,14 @@ class VerificationUser {
         : const <VerificationDocument>[];
 
     return VerificationUser(
-      id: (json['id'] ?? '').toString(),
-      batchId: (json['batch_id'] ?? '').toString(),
-      orgId: (json['org_id'] ?? '').toString(),
-      fullName: (json['full_name'] ?? '').toString(),
+      id: readString(json['id']),
+      batchId: readString(json['batch_id']),
+      batchName: readBatchName(json),
+      orgId: readString(json['org_id']),
+      fullName: readString(json['full_name']),
       dob: json['dob']?.toString(),
-      phoneNumber: (json['phone_number'] ?? '').toString(),
-      email: (json['email'] ?? '').toString(),
+      phoneNumber: readString(json['phone_number']),
+      email: readString(json['email']),
       aadharNumber: json['aadhar_number']?.toString(),
       panNumber: json['pan_number']?.toString(),
       addressLine1: json['address_line1']?.toString(),
@@ -126,14 +162,14 @@ class VerificationUser {
       pincode: json['pincode']?.toString(),
       state: json['state']?.toString(),
       country: json['country']?.toString(),
-      verificationStatus: (json['verification_status'] ?? '').toString(),
+      verificationStatus: readString(json['verification_status']),
       verificationReason: json['verification_reason']?.toString(),
       verifiedAt: json['verified_at']?.toString(),
       photoUrl: json['photo_url']?.toString(),
-      storagePath: (json['storage_path'] ?? '').toString(),
+      storagePath: readString(json['storage_path']),
       inviteAccepted: json['invite_accepted'] == true,
-      createdAt: (json['created_at'] ?? '').toString(),
-      updatedAt: (json['updated_at'] ?? '').toString(),
+      createdAt: readString(json['created_at']),
+      updatedAt: readString(json['updated_at']),
       documents: docs,
     );
   }
@@ -141,6 +177,7 @@ class VerificationUser {
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
     'batch_id': batchId,
+    'batch_name': batchName,
     'org_id': orgId,
     'full_name': fullName,
     'dob': dob,

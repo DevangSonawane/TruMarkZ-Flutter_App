@@ -19,6 +19,7 @@ import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
+import '../../../../../core/services/batch_name_store.dart';
 
 class BulkUploadPage extends ConsumerStatefulWidget {
   const BulkUploadPage({super.key});
@@ -158,7 +159,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (table.isEmpty) return <Map<String, dynamic>>[];
 
     int headerIndex = 0;
-    while (headerIndex < table.length && _Identifiers._isRowEmpty(table[headerIndex])) {
+    while (headerIndex < table.length &&
+        _Identifiers._isRowEmpty(table[headerIndex])) {
       headerIndex += 1;
     }
     if (headerIndex >= table.length) return <Map<String, dynamic>>[];
@@ -187,8 +189,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (firstNonEmptyRow != null) {
         final List<dynamic> row = firstNonEmptyRow;
         final Map<String, String> sample = _sampleRequiredFields(
-          valueAt: (String key) =>
-              _Identifiers._rowValue(row, ix[key]),
+          valueAt: (String key) => _Identifiers._rowValue(row, ix[key]),
         );
         debugPrint('[BulkUploadPage] CSV firstRow(sample)=$sample');
       }
@@ -208,9 +209,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     }
     final List<String> sheetNames = excel.tables.keys.toList();
     if (sheetNames.isEmpty) {
-      debugPrint(
-        '[BulkUploadPage] XLSX has no sheets. bytes=${bytes.length}',
-      );
+      debugPrint('[BulkUploadPage] XLSX has no sheets. bytes=${bytes.length}');
       return <Map<String, dynamic>>[];
     }
     final Sheet? sheet = excel.tables[sheetNames.first];
@@ -230,7 +229,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     }
 
     int headerIndex = 0;
-    while (headerIndex < all.length && _Identifiers._isExcelRowEmpty(all[headerIndex])) {
+    while (headerIndex < all.length &&
+        _Identifiers._isExcelRowEmpty(all[headerIndex])) {
       headerIndex += 1;
     }
     if (headerIndex >= all.length) {
@@ -330,7 +330,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           pick(<String>['full_name', 'name', 'fullname']) ??
           pickWhere((String k) => k.contains('full_name')) ??
           pickWhere((String k) => k.contains('fullname')) ??
-          pickWhere((String k) => k.endsWith('_name') || k.startsWith('name_')) ??
+          pickWhere(
+            (String k) => k.endsWith('_name') || k.startsWith('name_'),
+          ) ??
           -1,
       'dob': pick(<String>['dob', 'date_of_birth']) ?? -1,
       'phone_number':
@@ -343,8 +345,13 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           pickWhere((String k) => k.contains('email')) ??
           -1,
       'aadhar_number':
-          pick(<String>['aadhar_number', 'aadhar', 'aadhaar', 'aadhaar_number']) ??
-              -1,
+          pick(<String>[
+            'aadhar_number',
+            'aadhar',
+            'aadhaar',
+            'aadhaar_number',
+          ]) ??
+          -1,
       'pan_number': pick(<String>['pan_number', 'pan']) ?? -1,
       'address_line1':
           pick(<String>['address_line1', 'address1', 'address']) ?? -1,
@@ -369,7 +376,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     String maskPhone(String v) {
       final String digits = _BulkUploadPageState._normalizeDigits(v);
       if (digits.isEmpty) return '';
-      final String tail = digits.length <= 4 ? digits : digits.substring(digits.length - 4);
+      final String tail = digits.length <= 4
+          ? digits
+          : digits.substring(digits.length - 4);
       return '***$tail';
     }
 
@@ -381,10 +390,14 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     };
   }
 
-  Map<String, dynamic>? _userFromRow({required String Function(String) valueAt}) {
+  Map<String, dynamic>? _userFromRow({
+    required String Function(String) valueAt,
+  }) {
     final String fullName = valueAt('full_name').trim();
     final String rawEmail = valueAt('email');
-    final String email = _looksLikeEmail(rawEmail) ? _normalizeEmail(rawEmail) : '';
+    final String email = _looksLikeEmail(rawEmail)
+        ? _normalizeEmail(rawEmail)
+        : '';
     final String phone = _normalizePhone(valueAt('phone_number'));
 
     if (fullName.isEmpty) return null;
@@ -522,6 +535,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         fileBytes: file.bytes,
         fileName: file.name,
       );
+      final String batchName = _batchNameController.text.trim();
+      await ref
+          .read(batchNameStoreProvider.notifier)
+          .setBatchName(res.batchId, batchName);
       if (!mounted) return;
       final Uri uri = Uri(
         path: AppRouter.batchCreatedSuccessPath,
@@ -565,9 +582,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              serverMessage ??
-                  e.message ??
-                  'Upload failed. Please try again.',
+              serverMessage ?? e.message ?? 'Upload failed. Please try again.',
             ),
           ),
         );

@@ -51,7 +51,7 @@ class VerificationRepository {
       ),
     };
     final FormData formData = FormData.fromMap(<String, dynamic>{
-      'batch_name': batchName,
+      'batch_name': batchName.trim(),
       'category_id': categoryId.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
@@ -76,11 +76,13 @@ class VerificationRepository {
         .map((String h) => h.trim())
         .where((String h) => h.isNotEmpty)
         .toList();
+    final String headersCsv = cleanHeaders.join(',');
     final String template = await _api.verificationPostFormUrlEncodedString(
       '/verification/products/template',
       data: <String, dynamic>{
         'category_id': categoryId.trim(),
-        'headers': cleanHeaders,
+        // Backend expects a string in x-www-form-urlencoded.
+        'headers': headersCsv,
       },
     );
     return template.trim();

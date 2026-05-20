@@ -51,6 +51,7 @@ import '../../features/orgs/verification_flow/presentation/pages/product_sector_
 import '../../features/orgs/verification_flow/presentation/pages/product_service_type_selector_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/single_human_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/single_product_upload_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/invite_created_success_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/user_document_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/verification_plan_setup_page.dart';
 import '../../features/scanner/presentation/pages/qr_scanner_page.dart';
@@ -104,6 +105,7 @@ class AppRouter {
   static const String verificationPlanSetupPath = '/verification-plan-setup';
   static const String singleHumanUploadPath = '/single-human-upload';
   static const String singleProductUploadPath = '/single-product-upload';
+  static const String inviteCreatedSuccessPath = '/invite-created-success';
   static const String credentialTemplateSelectorPath =
       '/credential-template-selector';
   static const String mapCredentialFieldsPath = '/map-credential-fields';
@@ -289,7 +291,9 @@ class AppRouter {
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(
               state: state,
-              child: AuthErrorPage(message: state.uri.queryParameters['message']),
+              child: AuthErrorPage(
+                message: state.uri.queryParameters['message'],
+              ),
             ),
       ),
       ShellRoute(
@@ -574,6 +578,15 @@ class AppRouter {
             _slideFadePage(
               state: state,
               child: const SingleProductUploadPage(),
+            ),
+      ),
+      GoRoute(
+        path: inviteCreatedSuccessPath,
+        name: 'invite_created_success',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const InviteCreatedSuccessPage(),
             ),
       ),
       GoRoute(

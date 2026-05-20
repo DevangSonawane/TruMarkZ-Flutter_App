@@ -11,6 +11,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_card.dart';
 import '../../../../core/models/verification_models.dart';
+import '../../../../core/services/batch_name_store.dart';
 import '../../application/verification_list_notifier.dart';
 
 class OrgDashboardPage extends ConsumerStatefulWidget {
@@ -63,8 +64,12 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     );
     final VerificationListResponse? verification =
         verificationState.data.valueOrNull;
+    final Map<String, String> savedBatchNames = ref.watch(
+      batchNameStoreProvider,
+    );
     final _DashboardSummary summary = _DashboardSummary.fromVerification(
       verification,
+      savedBatchNames: savedBatchNames,
     );
 
     return Scaffold(
@@ -571,7 +576,10 @@ class _DashboardSummary {
   final int activeBatches;
   final List<_DashboardBatchItem> recentBatches;
 
-  static _DashboardSummary fromVerification(VerificationListResponse? data) {
+  static _DashboardSummary fromVerification(
+    VerificationListResponse? data, {
+    Map<String, String> savedBatchNames = const <String, String>{},
+  }) {
     if (data == null) {
       return const _DashboardSummary(
         pending: 0,
@@ -592,6 +600,9 @@ class _DashboardSummary {
       agg.count++;
       agg.updatedAt = _maxIso(agg.updatedAt, u.updatedAt);
       agg.isHumanVerification = agg.isHumanVerification || _isLikelyHuman(u);
+      if (agg.batchName.trim().isEmpty && u.batchName.trim().isNotEmpty) {
+        agg.batchName = u.batchName.trim();
+      }
 
       final String s = u.verificationStatus.trim();
       if (s == 'failed') {
@@ -606,6 +617,14 @@ class _DashboardSummary {
     final List<_BatchAgg> recent =
         byBatch.values.where((a) => a.batchId.isNotEmpty).toList()
           ..sort((a, b) => _compareIsoDesc(a.updatedAt, b.updatedAt));
+
+    for (final _BatchAgg agg in recent) {
+      if (agg.batchName.trim().isNotEmpty) continue;
+      final String? stored = savedBatchNames[agg.batchId];
+      if (stored != null && stored.trim().isNotEmpty) {
+        agg.batchName = stored.trim();
+      }
+    }
 
     final List<_DashboardBatchItem> recentTiles = recent
         .take(8)
@@ -666,6 +685,7 @@ class _BatchAgg {
   _BatchAgg({required this.batchId});
 
   final String batchId;
+  String batchName = '';
   int count = 0;
   int pendingCount = 0;
   int verifiedCount = 0;
@@ -712,7 +732,9 @@ class _DashboardBatchItem {
 
     return _DashboardBatchItem(
       batchId: agg.batchId,
-      title: 'Batch $shortId',
+      title: agg.batchName.trim().isNotEmpty
+          ? agg.batchName.trim()
+          : 'Batch $shortId',
       recordCount: agg.count,
       verifiedCount: agg.verifiedCount,
       progressFraction: progress,
