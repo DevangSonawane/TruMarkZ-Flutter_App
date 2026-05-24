@@ -1,17 +1,18 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
+import 'dart:math' as math;
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/tmz_card.dart';
 import '../../../../core/models/verification_models.dart';
 import '../../../../core/services/batch_name_store.dart';
+import '../../../../core/widgets/tmz_card.dart';
+import '../../../auth/application/auth_notifier.dart';
+import '../../../auth/application/auth_state.dart';
 import '../../application/verification_list_notifier.dart';
 
 class OrgDashboardPage extends ConsumerStatefulWidget {
@@ -29,8 +30,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     super.didChangeDependencies();
     if (_didLoad) return;
     _didLoad = true;
-    // Defer heavier loading so above-the-fold content (header/banner/actions)
-    // can paint immediately.
+
     Future<void>.microtask(() async {
       final notifier = ref.read(verificationListNotifierProvider.notifier);
       await notifier.load(limit: 20);
@@ -44,21 +44,11 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final double topInset = MediaQuery.paddingOf(context).top;
-    // Space for the floating bottom nav pill so content isn't hidden behind it.
-    // Keep this a bit generous because the pill includes its own padding +
-    // elevation shadow, and the Scaffold uses extendBody=true.
-    const double kBottomNavHeight = 84.0;
-    const double kNavPillMargin = 20.0;
-    // Keep section-to-section spacing consistent. Note: quick-action icons
-    // overflow upward, so the pills need extra headroom.
-    const double kQuickActionOverflowPad = 16;
-    const double kSectionGap = AppSpacing.x1 + kQuickActionOverflowPad;
-    const double kBetweenSectionsGap = kSectionGap + AppSpacing.x3;
-    final double bottomScrollPadding =
-        bottomInset + kBottomNavHeight + kNavPillMargin;
-
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final String displayName =
+        authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
+        ? authAsync.value!.userProfile!.fullName!.trim()
+        : 'User';
     final VerificationListState verificationState = ref.watch(
       verificationListNotifierProvider,
     );
@@ -72,493 +62,1000 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
       savedBatchNames: savedBatchNames,
     );
 
+    final double safeTop = MediaQuery.paddingOf(context).top;
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final double screenWidth = MediaQuery.sizeOf(context).width;
+    const double figmaWidth = 402;
+    final double sideInset = math.max(0, (screenWidth - figmaWidth) / 2);
+    const double navHeight = 71.016;
+    final double headerTop = safeTop; // Figma y=44 includes status bar
+    final double welcomeTop = safeTop + 54; // 98 - 44
+    final double drawerTop = safeTop + 111; // 155 - 44
+    final double bgTop = safeTop + 211; // 255 - 44
+    final double topSectionHeight = safeTop + 375; // 419 - 44
+
     return Scaffold(
-      backgroundColor: AppColors.cardSurface,
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(0, 0, 0, bottomScrollPadding),
+      backgroundColor: AppColors.brandBlue,
+      body: Stack(
         children: <Widget>[
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.x4,
-              topInset + AppSpacing.x4,
-              AppSpacing.x4,
-              0,
-            ),
-            child:
-                const _OrgDashboardHeader(
-                      location: 'Kandivali',
-                      description: "Lorem Ipsum has been the industry's...",
-                      avatarAssetPath: 'assets/icons/dashbaord/profile.png',
-                    )
-                    .animate()
-                    .fadeIn(delay: 80.ms, duration: 220.ms)
-                    .slideY(
-                      begin: 0.04,
-                      duration: 220.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
-          ),
-          const SizedBox(height: AppSpacing.x4),
-          Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-                child: const _OrgDashboardBanner(
-                  assetPaths: <String>[
-                    'assets/icons/dashbaord/ChatGPT Image May 19, 2026, 06_12_44 PM.png',
-                    'assets/icons/dashbaord/ChatGPT Image May 19, 2026, 06_15_23 PM.png',
-                    'assets/icons/dashbaord/ChatGPT Image May 19, 2026, 06_16_42 PM.png',
-                  ],
-                ),
-              )
-              .animate()
-              .fadeIn(duration: 220.ms)
-              .slideY(
-                begin: 0.04,
-                duration: 220.ms,
-                curve: Curves.easeOutCubic,
-              ),
-          const SizedBox(height: AppSpacing.x5),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-            child: const _SectionLabel('Quick Actions')
-                .animate()
-                .fadeIn(delay: 120.ms, duration: 220.ms)
-                .slideY(
-                  begin: 0.04,
-                  duration: 220.ms,
-                  curve: Curves.easeOutCubic,
-                ),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.x4,
-              right: AppSpacing.x4,
-              top: kQuickActionOverflowPad, // absorb overflow (top: -22)
-            ),
-            child:
-                Column(
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: _QuickActionPill(
-                                label: 'NEW BATCH',
-                                subtitle: '',
-                                topAssetPath:
-                                    'assets/icons/dashbaord/new_batch.png',
-                                onTap: () => context.go(
-                                  AppRouter.batchTypeSelectionPath,
-                                ),
-                              ),
+          const Positioned.fill(child: ColoredBox(color: AppColors.brandBlue)),
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: <Widget>[
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: topSectionHeight,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: bgTop,
+                        bottom: 0,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: AppColors.pageBg,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _QuickActionPill(
-                                label: 'REPORTS',
-                                subtitle: '',
-                                topAssetPath:
-                                    'assets/icons/dashbaord/reports.png',
-                                onTap: () =>
-                                    context.go(AppRouter.appReportsPath),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _QuickActionPill(
-                                label: 'REGISTRY',
-                                subtitle: '',
-                                topAssetPath:
-                                    'assets/icons/dashbaord/registry_final.png',
-                                onTap: () =>
-                                    context.go(AppRouter.appRegistryPath),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    )
-                    .animate()
-                    .fadeIn(delay: 120.ms, duration: 220.ms)
-                    .slideY(
-                      begin: 0.04,
-                      duration: 220.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
-          ),
-          const SizedBox(height: kBetweenSectionsGap),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-            child: const _SectionLabel('Recent Batch Process'),
-          ),
-          const SizedBox(height: kSectionGap),
-          if (verificationState.data.isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.x4),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (verificationState.data.hasError)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-              child: TMZCard(
-                padding: const EdgeInsets.all(AppSpacing.x4),
-                child: Row(
-                  children: <Widget>[
-                    const Icon(Icons.error_outline, color: AppColors.error),
-                    const SizedBox(width: AppSpacing.x3),
-                    Expanded(
-                      child: Text(
-                        'Unable to load recent batches',
-                        style: AppTypography.body2.copyWith(
-                          fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () => ref
-                          .read(verificationListNotifierProvider.notifier)
-                          .load(limit: 500),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else if (summary.recentBatches.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.x4,
-                vertical: AppSpacing.x4,
-              ),
-              child: _DashboardEmptyState(
-                title: 'No batches yet',
-                message: 'Create your first batch to start processing records.',
-                ctaLabel: 'Create your first batch',
-                onCtaTap: () => context.go(AppRouter.batchTypeSelectionPath),
-              ),
-            )
-          else
-            ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minHeight: 200,
-                    maxHeight: 220,
-                  ),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.x4,
-                    ),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: summary.recentBatches.length.clamp(0, 10),
-                    separatorBuilder: (BuildContext context, int index) =>
-                        const SizedBox(width: 12),
-                    itemBuilder: (BuildContext context, int index) {
-                      final _DashboardBatchItem batch =
-                          summary.recentBatches[index];
-                      return _RecentBatchCard(
-                            batch: batch,
-                            onTap: () {
-                              final String batchId = batch.batchId;
-                              if (batchId.trim().isEmpty) {
-                                context.push(AppRouter.batchTrackingDetailPath);
-                                return;
-                              }
-                              context.push(
-                                '${AppRouter.batchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
-                              );
-                            },
-                          )
-                          .animate()
-                          .fadeIn(delay: (80 + index * 60).ms, duration: 220.ms)
-                          .slideX(
-                            begin: 0.05,
-                            duration: 220.ms,
-                            curve: Curves.easeOutCubic,
-                          );
-                    },
-                  ),
-                )
-                .animate()
-                .fadeIn(delay: 180.ms, duration: 220.ms)
-                .slideY(
-                  begin: 0.04,
-                  duration: 220.ms,
-                  curve: Curves.easeOutCubic,
-                ),
-          const SizedBox(height: AppSpacing.x5),
-          Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: SizedBox(
-                    height: 120,
-                    child: Image.asset(
-                      'assets/icons/dashbaord/quick_scan.png',
-                      fit: BoxFit.cover,
-                    ),
+                      Positioned(
+                        left: sideInset + 16,
+                        right: sideInset + 16,
+                        top: headerTop,
+                        height: 40,
+                        child: _HomeHeader(
+                          locationLine1: 'Kandivali, Mumbai',
+                          locationLine2: 'Asynk Pvt Ltd',
+                          avatarAssetPath: 'assets/icons/dashbaord/profile.png',
+                          onAlertsTap: () =>
+                              context.go(AppRouter.notificationsPath),
+                          onProfileTap: () =>
+                              context.go(AppRouter.settingsPath),
+                        ),
+                      ),
+                      Positioned(
+                        left: sideInset + 26,
+                        top: welcomeTop,
+                        child: _WelcomeMessage(
+                          greeting: 'Welcome back,',
+                          name: displayName,
+                        ),
+                      ),
+                      Positioned(
+                        left: sideInset + 16,
+                        right: sideInset + 16,
+                        top: drawerTop,
+                        child: _HomeDrawerCard(
+                          summary: summary,
+                          onTapNewBatch: () =>
+                              context.go(AppRouter.batchTypeSelectionPath),
+                          onTapScanQr: () =>
+                              context.go(AppRouter.qrScannerPath),
+                          onTapReports: () =>
+                              context.go(AppRouter.appReportsPath),
+                          onTapRegistry: () =>
+                              context.go(AppRouter.appRegistryPath),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              )
-              .animate()
-              .fadeIn(delay: 160.ms, duration: 220.ms)
-              .slideY(
-                begin: 0.04,
-                duration: 220.ms,
-                curve: Curves.easeOutCubic,
               ),
+              SliverToBoxAdapter(
+                child: Container(
+                  color: AppColors.pageBg,
+                  padding: EdgeInsets.fromLTRB(
+                    sideInset + 16,
+                    0,
+                    sideInset + 16,
+                    0,
+                  ),
+                  child: const _SectionTitle('RECENT BATCH PROCESS'),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Container(
+                  color: AppColors.pageBg,
+                  padding: EdgeInsets.fromLTRB(
+                    sideInset + 16,
+                    12,
+                    sideInset + 16,
+                    0,
+                  ),
+                  child: _RecentSectionBody(
+                    verificationState: verificationState,
+                    summary: summary,
+                    onTapBatch: (String batchId) => context.push(
+                      AppRouter.appBatchTrackingDetailPath,
+                      extra: batchId,
+                    ),
+                    onRetry: () => ref
+                        .read(verificationListNotifierProvider.notifier)
+                        .load(limit: 500),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Container(
+                  color: AppColors.pageBg,
+                  height: navHeight + safeBottom + 140,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _OrgDashboardBanner extends StatefulWidget {
-  const _OrgDashboardBanner({required this.assetPaths});
+class _RecentSectionBody extends StatelessWidget {
+  const _RecentSectionBody({
+    required this.verificationState,
+    required this.summary,
+    required this.onTapBatch,
+    required this.onRetry,
+  });
 
-  final List<String> assetPaths;
-
-  @override
-  State<_OrgDashboardBanner> createState() => _OrgDashboardBannerState();
-}
-
-class _OrgDashboardBannerState extends State<_OrgDashboardBanner> {
-  late final PageController _controller;
-  Timer? _timer;
-  int _index = 0;
-
-  void _resetTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted) return;
-      final int count = widget.assetPaths.length;
-      if (count <= 1) return;
-      _index = (_index + 1) % count;
-      _controller.animateToPage(
-        _index,
-        duration: const Duration(milliseconds: 380),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController();
-    _resetTimer();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
+  final VerificationListState verificationState;
+  final _DashboardSummary summary;
+  final ValueChanged<String> onTapBatch;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final List<String> banners = widget.assetPaths
-        .where((e) => e.trim().isNotEmpty)
-        .toList(growable: false);
-    if (banners.isEmpty) return const SizedBox.shrink();
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: SizedBox(
-        height: 223,
-        child: PageView.builder(
-          controller: _controller,
-          itemCount: banners.length,
-          onPageChanged: (int i) {
-            _index = i;
-            _resetTimer();
-          },
-          itemBuilder: (BuildContext context, int index) {
-            return Image.asset(banners[index], fit: BoxFit.cover);
-          },
+    if (verificationState.data.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.x4),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (verificationState.data.hasError) {
+      return TMZCard(
+        padding: const EdgeInsets.all(AppSpacing.x4),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.error_outline, color: AppColors.error),
+            const SizedBox(width: AppSpacing.x3),
+            const Expanded(
+              child: Text(
+                'Unable to load recent batches',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ),
-      ),
+      );
+    }
+    return _RecentBatchList(batches: summary.recentBatches, onTap: onTapBatch);
+  }
+}
+
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({
+    required this.locationLine1,
+    required this.locationLine2,
+    required this.avatarAssetPath,
+    this.onAlertsTap,
+    this.onProfileTap,
+  });
+
+  final String locationLine1;
+  final String locationLine2;
+  final String avatarAssetPath;
+  final VoidCallback? onAlertsTap;
+  final VoidCallback? onProfileTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              SvgPicture.asset(
+                'assets/icons/figma/header_location.svg',
+                width: 24,
+                height: 24,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 123,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      locationLine1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        height: 17.5 / 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      locationLine2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        height: 16.5 / 11,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.03,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 2),
+              SizedBox(
+                width: 14.125,
+                height: 35,
+                child: Align(
+                  alignment: const Alignment(0, -0.15),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: SvgPicture.asset(
+                      'assets/icons/figma/header_chevron.svg',
+                      width: 10.125,
+                      height: 10.125,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        IconButton(
+          onPressed: onAlertsTap,
+          icon: SvgPicture.asset(
+            'assets/icons/figma/header_bell.svg',
+            width: 24,
+            height: 24,
+            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          ),
+        ),
+        GestureDetector(
+          onTap: onProfileTap,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(9999),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+              ),
+              child: ClipOval(
+                child: Image.asset(avatarAssetPath, fit: BoxFit.cover),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
+class _WelcomeMessage extends StatelessWidget {
+  const _WelcomeMessage({required this.greeting, required this.name});
 
+  final String greeting;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          greeting,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 12.2571,
+            height: 18.3857 / 12.2571,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.0359,
+            color: Colors.white,
+          ),
+        ),
+        Text(
+          name,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 22.2857,
+            height: 19.5 / 22.2857,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
   final String text;
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      text.toUpperCase(),
+      text,
       style: const TextStyle(
-        fontFamily: 'Poppins',
-        fontWeight: FontWeight.w500,
-        fontSize: 9,
-        letterSpacing: 0.8,
-        color: Color(0xFFBCBABA),
+        fontFamily: 'Inter',
+        fontSize: 12,
+        height: 17.75 / 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1.18,
+        color: Color(0xFF323232),
       ),
     );
   }
 }
 
-class _DashboardEmptyState extends StatelessWidget {
-  const _DashboardEmptyState({
-    required this.title,
-    required this.message,
-    required this.ctaLabel,
-    required this.onCtaTap,
+class _HomeDrawerCard extends StatelessWidget {
+  const _HomeDrawerCard({
+    required this.summary,
+    required this.onTapNewBatch,
+    required this.onTapScanQr,
+    required this.onTapReports,
+    required this.onTapRegistry,
   });
 
-  final String title;
-  final String message;
-  final String ctaLabel;
-  final VoidCallback onCtaTap;
+  final _DashboardSummary summary;
+  final VoidCallback onTapNewBatch;
+  final VoidCallback onTapScanQr;
+  final VoidCallback onTapReports;
+  final VoidCallback onTapRegistry;
+
+  static const Color _metricTrack = Color(0xFF323232);
+  static const Color _metricGreen = Color(0xFF00DDA3);
+  static const Color _metricOrange = Color(0xFFF59E0B);
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    final int verified = summary.verified;
+    final int pending = summary.pending;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: const Color(0xFF9CA3AF).withValues(alpha: 0.25),
+            blurRadius: 4,
+            offset: const Offset(4, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(15, 26.64, 16, 23.48),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          const Icon(
-            Icons.inbox_outlined,
-            size: 40,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          Text(
-            title,
-            style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.x2),
-          Text(
-            message,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textSecondary,
+          SizedBox(
+            width: 313.2232,
+            height: 63.7505,
+            child: Stack(
+              children: <Widget>[
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  width: 145.3504,
+                  child: _MetricTile(
+                    label: 'Verified',
+                    value: verified,
+                    indicatorColor: _metricGreen,
+                    trackColor: _metricTrack,
+                    fraction: 0.7719299258572772,
+                  ),
+                ),
+                Positioned(
+                  left: 145.3504 + 22.1644,
+                  top: 0,
+                  width: 145.7084,
+                  child: _MetricTile(
+                    label: 'Pending',
+                    value: pending,
+                    indicatorColor: _metricOrange,
+                    trackColor: _metricTrack,
+                    fraction: 0.32631579555143664,
+                  ),
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.x2),
-          TextButton(onPressed: onCtaTap, child: Text(ctaLabel)),
+          const SizedBox(height: 31),
+          // Figma quick actions row is a fixed 339.1047px layout. Scale it down
+          // only when needed so it never clips on smaller devices, while
+          // remaining pixel-perfect at the 402px Figma width.
+          Align(
+            alignment: Alignment.topLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 339.1047,
+                height: 87.1341,
+                child: Stack(
+                  children: <Widget>[
+                    Positioned(
+                      left: 13.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'New Batch',
+                        svgAssetPath: 'assets/icons/figma/qa_new_batch.svg',
+                        iconSize: 36.66,
+                        onTap: onTapNewBatch,
+                      ),
+                    ),
+                    Positioned(
+                      left: 97.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'Scan QR',
+                        svgAssetPath: 'assets/icons/figma/qa_scan_qr.svg',
+                        iconSize: 25.662,
+                        onTap: onTapScanQr,
+                      ),
+                    ),
+                    Positioned(
+                      left: 181.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'Reports',
+                        svgAssetPath: 'assets/icons/figma/qa_reports.svg',
+                        iconSize: 25.662,
+                        onTap: onTapReports,
+                      ),
+                    ),
+                    Positioned(
+                      left: 265.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'Registry',
+                        svgAssetPath: 'assets/icons/figma/qa_registry.svg',
+                        iconSize: 25.662,
+                        onTap: onTapRegistry,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _OrgDashboardHeader extends StatelessWidget {
-  const _OrgDashboardHeader({
-    required this.location,
-    required this.description,
-    required this.avatarAssetPath,
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.trackColor,
+    required this.indicatorColor,
+    required this.fraction,
   });
 
-  final String location;
-  final String description;
-  final String avatarAssetPath;
+  final String label;
+  final int value;
+  final Color trackColor;
+  final Color indicatorColor;
+  final double fraction;
 
   @override
   Widget build(BuildContext context) {
-    const Color iconColor = Color(0xFF161616);
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        InkWell(
-          onTap: () {},
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Icon(Icons.location_on, size: 26, color: iconColor),
-                const SizedBox(width: 10),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      location,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w500,
-                        fontSize: 16,
-                        height: 20 / 16,
-                        color: Colors.black,
-                      ),
-                    ),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        fontSize: 7,
-                        height: 9 / 7,
-                        color: Color(0xFF888787),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 24,
-                  color: iconColor,
-                ),
-              ],
-            ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14.2800,
+            height: 17.2821 / 14.2800,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF323232),
           ),
         ),
-        const Spacer(),
-        _AvatarBadge(assetPath: avatarAssetPath),
+        Text(
+          _formatMetricValue(value),
+          style: const TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: 24.4801,
+            height: 28.6876 / 24.4801,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0B0F19),
+          ),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double w = constraints.maxWidth;
+            return Stack(
+              children: <Widget>[
+                Container(
+                  height: 6.12,
+                  width: w,
+                  decoration: BoxDecoration(
+                    color: trackColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(11.22),
+                  ),
+                ),
+                Container(
+                  height: 6.12,
+                  width: (w * fraction).clamp(0, w),
+                  decoration: BoxDecoration(
+                    color: indicatorColor.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(11.22),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
 }
 
-class _AvatarBadge extends StatelessWidget {
-  const _AvatarBadge({required this.assetPath});
+String _formatMetricValue(int value) {
+  // Figma shows full comma-grouped numbers (e.g. 15,615) rather than compact K/M.
+  final int v = value.abs();
+  final String s = v.toString();
+  final String withCommas = s.replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+    (Match m) => '${m[1]},',
+  );
+  return value < 0 ? '-$withCommas' : withCommas;
+}
 
-  final String assetPath;
+class _QuickActionCircle extends StatelessWidget {
+  const _QuickActionCircle({
+    required this.label,
+    required this.svgAssetPath,
+    required this.onTap,
+    required this.iconSize,
+  });
+
+  final String label;
+  final String svgAssetPath;
+  final VoidCallback onTap;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: SizedBox(
-        width: 54,
-        height: 54,
-        child: Image.asset(assetPath, fit: BoxFit.cover),
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: SizedBox(
+          width: 60,
+          height: 87.13,
+          child: Column(
+            children: <Widget>[
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.brandBlue,
+                  borderRadius: BorderRadius.circular(50),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: AppColors.brandBlue.withValues(alpha: 0.2),
+                      offset: const Offset(0, 4.5671),
+                      blurRadius: 6.8506,
+                      spreadRadius: -4.5671,
+                    ),
+                    BoxShadow(
+                      color: AppColors.brandBlue.withValues(alpha: 0.2),
+                      offset: const Offset(0, 11.4177),
+                      blurRadius: 17.1265,
+                      spreadRadius: -3.4253,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: SvgPicture.asset(
+                    svgAssetPath,
+                    width: iconSize,
+                    height: iconSize,
+                    colorFilter: const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 9.1341),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 10.9946,
+                  height: 17.1265 / 10.9946,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _SectionDividerTitle extends StatelessWidget {
-  const _SectionDividerTitle({required this.text});
+class _RecentBatchList extends StatelessWidget {
+  const _RecentBatchList({required this.batches, required this.onTap});
 
-  final String text;
+  final List<_DashboardBatchItem> batches;
+  final ValueChanged<String> onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final List<_DashboardBatchItem> tiles = batches.isEmpty
+        ? <_DashboardBatchItem>[
+            _DashboardBatchItem(
+              batchId: 'TR-98421',
+              title: 'IN-North Logistics',
+              recordCount: 4500,
+              verifiedCount: 3402,
+              progressFraction: 0.74,
+              status: _BatchStatus.processing,
+              updatedAt: DateTime.now().subtract(const Duration(days: 2)),
+              isHumanVerification: true,
+            ),
+            _DashboardBatchItem(
+              batchId: 'TR-98421',
+              title: 'IN-North Logistics',
+              recordCount: 840,
+              verifiedCount: 840,
+              progressFraction: 1,
+              status: _BatchStatus.complete,
+              updatedAt: DateTime.now().subtract(const Duration(days: 4)),
+              isHumanVerification: true,
+            ),
+            _DashboardBatchItem(
+              batchId: 'TR-98421',
+              title: 'IN-North Logistics',
+              recordCount: 840,
+              verifiedCount: 840,
+              progressFraction: 1,
+              status: _BatchStatus.complete,
+              updatedAt: DateTime.now().subtract(const Duration(days: 4)),
+              isHumanVerification: true,
+            ),
+          ]
+        : batches;
+
+    return Column(
       children: <Widget>[
-        Expanded(child: Divider(color: AppColors.divider.withAlpha(120))),
-        const SizedBox(width: 10),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: AppTypography.caption.copyWith(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.2,
-            color: AppColors.textSecondary,
+        for (int i = 0; i < tiles.length; i++) ...<Widget>[
+          _RecentBatchCard(
+            batch: tiles[i],
+            onTap: () => onTap(tiles[i].batchId),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Divider(color: AppColors.divider.withAlpha(120))),
+          if (i != tiles.length - 1) const SizedBox(height: 12),
+        ],
       ],
     );
   }
+}
+
+class _RecentBatchCard extends StatelessWidget {
+  const _RecentBatchCard({required this.batch, required this.onTap});
+
+  final _DashboardBatchItem batch;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final String badgeText = switch (batch.status) {
+      _BatchStatus.processing => 'PROCESSING',
+      _BatchStatus.complete => 'VERIFIED',
+      _BatchStatus.alert => 'ALERT',
+    };
+    final Color badgeFg = switch (batch.status) {
+      _BatchStatus.processing => AppColors.brandBlue,
+      _BatchStatus.complete => AppColors.success,
+      _BatchStatus.alert => AppColors.danger,
+    };
+    final Color badgeBg = switch (batch.status) {
+      _BatchStatus.processing => AppColors.badgePendingBg,
+      _BatchStatus.complete => AppColors.badgeValidBg,
+      _BatchStatus.alert => AppColors.badgeRevokedBg,
+    };
+
+    final int processed = batch.verifiedCount.clamp(0, batch.recordCount);
+    final int total = batch.recordCount.clamp(1, 1 << 31);
+    final int pct = (batch.progressFraction * 100).round().clamp(0, 100);
+    final bool isProcessing = batch.status == _BatchStatus.processing;
+    final String leftIcon = switch (batch.status) {
+      _BatchStatus.processing => 'assets/icons/figma/batch_icon_processing.svg',
+      _BatchStatus.complete => 'assets/icons/figma/batch_icon_verified.svg',
+      _BatchStatus.alert => 'assets/icons/figma/batch_icon_processing.svg',
+    };
+    final Color leftBg = switch (batch.status) {
+      _BatchStatus.processing => AppColors.brandBlue.withValues(alpha: 0.05),
+      _BatchStatus.complete => AppColors.success.withValues(alpha: 0.10),
+      _BatchStatus.alert => AppColors.danger.withValues(alpha: 0.08),
+    };
+
+    final Color borderColor = const Color(0xFFE2E8F0).withValues(alpha: 0.6);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: leftBg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: SvgPicture.asset(
+                      leftIcon,
+                      width: 20,
+                      height: 20,
+                      colorFilter: ColorFilter.mode(badgeFg, BlendMode.srcIn),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Batch ID: ${batch.batchId}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Rounded',
+                            fontSize: 14,
+                            height: 20 / 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0B0F19),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Registry: ${batch.title}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Rounded',
+                            fontSize: 11,
+                            height: 16.5 / 11,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: -0.01,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: badgeBg.withValues(
+                        alpha: batch.status == _BatchStatus.processing
+                            ? 0.10
+                            : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Rounded',
+                        fontSize: 10,
+                        height: 15 / 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.25,
+                        color: badgeFg,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      'Status: ${_statusLabel(batch.status)}',
+                      style: const TextStyle(
+                        fontFamily: 'SF Pro Rounded',
+                        fontSize: 11,
+                        height: 16.5 / 11,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.03,
+                        color: Color(0xFF0B0F19),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$pct%',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Rounded',
+                      fontSize: 11,
+                      height: 16.5 / 11,
+                      fontWeight: FontWeight.w700,
+                      color: badgeFg,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: batch.progressFraction.clamp(0, 1),
+                  minHeight: 6,
+                  backgroundColor: AppColors.divider.withValues(alpha: 0.35),
+                  valueColor: AlwaysStoppedAnimation<Color>(badgeFg),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (isProcessing)
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        '${_formatCompact(processed)} / ${_formatCompact(total)} processed',
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Rounded',
+                          fontSize: 10,
+                          height: 15 / 10,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.03,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        _timeAgo(batch.updatedAt),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Rounded',
+                          fontSize: 10,
+                          height: 15 / 10,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.06,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Text(
+                  'Created ${_formatCreatedDate(batch.updatedAt)} • ${_formatCompact(total)} records',
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Rounded',
+                    fontSize: 14,
+                    height: 20 / 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _statusLabel(_BatchStatus s) => switch (s) {
+    _BatchStatus.processing => 'Under Review',
+    _BatchStatus.complete => 'Completed',
+    _BatchStatus.alert => 'Needs Attention',
+  };
+}
+
+String _formatCreatedDate(DateTime dt) {
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final String dd = dt.day.toString().padLeft(2, '0');
+  return '$dd ${months[dt.month - 1]}';
+}
+
+String _formatCompact(int value) {
+  if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+  if (value >= 1000) {
+    return value.toString().replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+  }
+  return value.toString();
+}
+
+String _timeAgo(DateTime dt) {
+  final DateTime now = DateTime.now();
+  Duration diff = now.difference(dt);
+  if (diff.isNegative) diff = Duration.zero;
+
+  if (diff.inMinutes < 1) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+
+  final int weeks = (diff.inDays / 7).floor();
+  if (weeks < 4) return '${weeks}w ago';
+  final int months = (diff.inDays / 30).floor();
+  if (months < 12) return '${months}mo ago';
+  final int years = (diff.inDays / 365).floor();
+  return '${years}y ago';
 }
 
 class _DashboardSummary {
@@ -599,7 +1096,6 @@ class _DashboardSummary {
       );
       agg.count++;
       agg.updatedAt = _maxIso(agg.updatedAt, u.updatedAt);
-      agg.isHumanVerification = agg.isHumanVerification || _isLikelyHuman(u);
       if (agg.batchName.trim().isEmpty && u.batchName.trim().isNotEmpty) {
         agg.batchName = u.batchName.trim();
       }
@@ -645,17 +1141,6 @@ class _DashboardSummary {
     );
   }
 
-  static bool _isLikelyHuman(VerificationUser u) {
-    if (u.fullName.trim().isNotEmpty) return true;
-    if (u.phoneNumber.trim().isNotEmpty) return true;
-    if (u.email.trim().isNotEmpty) return true;
-    if ((u.aadharNumber ?? '').trim().isNotEmpty) return true;
-    if ((u.panNumber ?? '').trim().isNotEmpty) return true;
-    if ((u.photoUrl ?? '').trim().isNotEmpty) return true;
-    if (u.documents.isNotEmpty) return true;
-    return false;
-  }
-
   static int _compareIsoDesc(String? a, String? b) {
     final DateTime? da = _tryParseIso(a);
     final DateTime? db = _tryParseIso(b);
@@ -691,8 +1176,9 @@ class _BatchAgg {
   int verifiedCount = 0;
   int failedCount = 0;
   String? updatedAt;
-  bool isHumanVerification = false;
 }
+
+enum _BatchStatus { complete, processing, alert }
 
 class _DashboardBatchItem {
   const _DashboardBatchItem({
@@ -741,818 +1227,7 @@ class _DashboardBatchItem {
       status: status,
       updatedAt:
           _DashboardSummary._tryParseIso(agg.updatedAt) ?? DateTime.now(),
-      isHumanVerification: agg.isHumanVerification,
+      isHumanVerification: false,
     );
   }
 }
-
-class _QuickActionPill extends StatelessWidget {
-  const _QuickActionPill({
-    required this.label,
-    required this.subtitle,
-    required this.onTap,
-    this.topAssetPath,
-  });
-
-  static const double _pillHeight = 76;
-  static const double _pillRadius = 12;
-  static const double _iconSize = 52;
-  static const double _iconTop = -14;
-
-  final String label;
-  final String subtitle;
-  final VoidCallback onTap;
-  final String? topAssetPath;
-
-  @override
-  Widget build(BuildContext context) {
-    final String? asset = topAssetPath?.trim();
-    final String subtitleText = subtitle.trim();
-    return Semantics(
-      label: label,
-      hint: subtitleText.isEmpty ? null : subtitleText,
-      button: true,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(_pillRadius),
-          child: SizedBox(
-            height: _pillHeight,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: <Widget>[
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEFEFE),
-                    borderRadius: BorderRadius.circular(_pillRadius),
-                    border: Border.all(color: const Color(0xFFF5F5F5)),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x40B8B8B8),
-                        blurRadius: 4,
-                        offset: Offset(2, 2),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.bottomCenter,
-                  padding: const EdgeInsets.fromLTRB(10, 16, 10, 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 9,
-                          height: 12 / 9,
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      if (subtitleText.isNotEmpty)
-                        Text(
-                          subtitleText,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 9,
-                            height: 1.25,
-                            color: Color(0xFFBCBABA),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (asset != null && asset.isNotEmpty)
-                  Positioned(
-                    top: _iconTop,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Image.asset(
-                        asset,
-                        width: _iconSize,
-                        height: _iconSize,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RecentBatchCard extends StatelessWidget {
-  const _RecentBatchCard({required this.batch, required this.onTap});
-
-  final _DashboardBatchItem batch;
-  final VoidCallback onTap;
-
-  static const double _cardRadius = 18;
-  static const String _humanAsset =
-      'assets/icons/dashbaord/human_vericiation_final.png';
-
-  @override
-  Widget build(BuildContext context) {
-    final _RecentStatus status = _RecentStatus.fromBatch(batch.status);
-    const String typeAsset = _humanAsset;
-    const Color navy = Color(0xFF0E2D64);
-    const double kHeaderIconSize = 72;
-    const double kHeaderIconRightInset = 12;
-    const double kHeaderIconTopInset = 6;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(_cardRadius),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Container(
-              width: 230,
-              height: 212,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(_cardRadius),
-                border: Border.all(color: const Color(0xFFF5F5F5), width: 2),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withAlpha(10),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: <Widget>[
-                  ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(_cardRadius),
-                      topRight: Radius.circular(_cardRadius),
-                    ),
-                    child: Container(
-                      height: 84,
-                      color: navy,
-                      child: Stack(
-                        children: <Widget>[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              16,
-                              18,
-                              16 + kHeaderIconSize + 12,
-                              8,
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(
-                                        batch.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 13,
-                                          height: 16 / 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Positioned(
-                            right: kHeaderIconRightInset,
-                            top: kHeaderIconTopInset,
-                            child: _HeaderIllustration(
-                              iconAsset: typeAsset,
-                              tint: Colors.white.withAlpha(230),
-                              size: kHeaderIconSize,
-                            ),
-                          ),
-                          Positioned(
-                            left: 14,
-                            bottom: 18,
-                            child: _ViewDetailsButton(onTap: onTap),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              const Text(
-                                'Current Status',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 11,
-                                  height: 14 / 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF292727),
-                                ),
-                              ),
-                              const Spacer(),
-                              _StatusPill(label: status.label, status: status),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: _BigStatCard(
-                                  value: '${batch.recordCount}',
-                                  label: 'Total Entries',
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _BigStatCard(
-                                  value: _compactTime(batch.updatedAt),
-                                  label: 'Time Remaining',
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _MiniProgressBar(value: batch.progressFraction),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _compactTime(DateTime dt) {
-    final Duration diff = DateTime.now().difference(dt);
-    final int days = diff.inDays;
-    final int hours = diff.inHours.remainder(24);
-    if (days <= 0) return '${diff.inHours}h';
-    if (hours == 0) return '${days}d';
-    return '${days}d ${hours}hrs';
-  }
-}
-
-class _ViewDetailsButton extends StatelessWidget {
-  const _ViewDetailsButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: Text(
-            'View Details',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 7,
-              height: 9 / 7,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF292727),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label, required this.status});
-
-  final String label;
-  final _RecentStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(
-        color: status.pillBg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontSize: 7,
-          height: 9 / 7,
-          fontWeight: FontWeight.w600,
-          color: status.textColor,
-        ),
-      ),
-    );
-  }
-}
-
-class _BigStatCard extends StatelessWidget {
-  const _BigStatCard({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Text(
-            value,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              height: 20 / 16,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF212020),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 8,
-              height: 10 / 8,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF484444),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderIllustration extends StatelessWidget {
-  const _HeaderIllustration({
-    required this.iconAsset,
-    required this.tint,
-    this.size = 76,
-  });
-
-  final String iconAsset;
-  final Color tint;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Image.asset(iconAsset, fit: BoxFit.contain),
-    );
-  }
-}
-
-class _MiniProgressBar extends StatelessWidget {
-  const _MiniProgressBar({required this.value});
-
-  final double value;
-
-  @override
-  Widget build(BuildContext context) {
-    final double clamped = value.clamp(0.0, 1.0);
-    return SizedBox(
-      height: 12,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double trackWidth = constraints.maxWidth;
-            final double fillWidth = trackWidth * clamped;
-            return Stack(
-              alignment: Alignment.centerLeft,
-              children: <Widget>[
-                Align(
-                  alignment: Alignment.center,
-                  child: Container(
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: const Color(0x33787878),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                ),
-                Container(
-                  width: fillWidth,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0E2D64),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _RecentStatus {
-  const _RecentStatus({
-    required this.label,
-    required this.pillBg,
-    required this.textColor,
-  });
-
-  final String label;
-  final Color pillBg;
-  final Color textColor;
-
-  factory _RecentStatus.fromBatch(_BatchStatus s) => switch (s) {
-    _BatchStatus.processing => const _RecentStatus(
-      label: 'Under Review',
-      pillBg: Color(0xFFF1F1F1),
-      textColor: Color(0xFF292727),
-    ),
-    _BatchStatus.complete => const _RecentStatus(
-      label: 'Completed',
-      pillBg: Color(0xFF299E11),
-      textColor: Colors.white,
-    ),
-    _BatchStatus.alert => const _RecentStatus(
-      label: 'Rejected',
-      pillBg: Color(0xFFD73D09),
-      textColor: Colors.white,
-    ),
-  };
-}
-
-typedef _BatchTapCallback = void Function(String batchId);
-
-class _BatchPeekCarousel extends StatefulWidget {
-  const _BatchPeekCarousel({required this.batches, required this.onTapBatch});
-
-  final List<_DashboardBatchItem> batches;
-  final _BatchTapCallback onTapBatch;
-
-  @override
-  State<_BatchPeekCarousel> createState() => _BatchPeekCarouselState();
-}
-
-class _BatchPeekCarouselState extends State<_BatchPeekCarousel> {
-  late final PageController _controller;
-  int _current = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController(viewportFraction: 0.78);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final batches = widget.batches;
-    if (batches.isEmpty) return const SizedBox.shrink();
-
-    final _DashboardBatchItem active =
-        batches[_current.clamp(0, batches.length - 1)];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-          child: const _SectionDividerTitle(text: 'RECENT BATCHES'),
-        ),
-        const SizedBox(height: AppSpacing.x1),
-        SizedBox(
-          height: 150,
-          child: PageView.builder(
-            controller: _controller,
-            clipBehavior: Clip.none,
-            itemCount: batches.length,
-            onPageChanged: (int i) => setState(() => _current = i),
-            itemBuilder: (BuildContext context, int i) {
-              final bool isActive = i == _current;
-              final _DashboardBatchItem batch = batches[i];
-              return AnimatedScale(
-                scale: isActive ? 1.0 : 0.95,
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: _BatchPeekCard(
-                    batch: batch,
-                    onTap: () => widget.onTapBatch(batch.batchId),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.x1),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-          child: Column(
-            children: <Widget>[
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: Text(
-                  active.title,
-                  key: ValueKey<String>('t:${active.batchId}'),
-                  textAlign: TextAlign.center,
-                  style: AppTypography.body2.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: Text(
-                  _buildSubtitle(active),
-                  key: ValueKey<String>('s:${active.batchId}'),
-                  textAlign: TextAlign.center,
-                  style: AppTypography.caption.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List<Widget>.generate(batches.length, (int i) {
-                  final bool activeDot = i == _current;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                    width: activeDot ? 18 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: activeDot
-                          ? AppColors.textPrimary
-                          : AppColors.textSecondary.withAlpha(64),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  );
-                }),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _buildSubtitle(_DashboardBatchItem b) {
-    final String ago = _timeAgo(b.updatedAt);
-    final String status = switch (b.status) {
-      _BatchStatus.complete => 'verified',
-      _BatchStatus.processing => 'processing',
-      _BatchStatus.alert => 'needs review',
-    };
-    return '${b.recordCount} records $status · $ago';
-  }
-
-  String _timeAgo(DateTime dt) {
-    final Duration diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-}
-
-class _BatchPeekCard extends StatelessWidget {
-  const _BatchPeekCard({required this.batch, required this.onTap});
-
-  final _DashboardBatchItem batch;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final _BatchCardStyle style = _BatchCardStyle.fromStatus(batch.status);
-    return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: <Widget>[
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: style.bgGradient,
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withAlpha(18), width: 0.5),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withAlpha(35),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: SizedBox(
-              height: 112,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  14,
-                  12,
-                  batch.isHumanVerification ? 64 : 14,
-                  12,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            batch.title,
-                            style: AppTypography.body2.copyWith(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: -0.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${batch.recordCount} records',
-                            style: AppTypography.caption.copyWith(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white.withAlpha(200),
-                              letterSpacing: 0.1,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _timeAgo(batch.updatedAt),
-                            style: AppTypography.caption.copyWith(
-                              fontSize: 11,
-                              color: Colors.white.withAlpha(140),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: style.accent.withAlpha(30),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: style.accent.withAlpha(70),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Text(
-                              style.label,
-                              style: AppTypography.caption.copyWith(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: style.accent,
-                                letterSpacing: 0.35,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          if (!batch.isHumanVerification)
-            Positioned(
-              right: -12,
-              top: -14,
-              child: Image.asset(
-                'assets/icons/dashbaord/3dicons-folder-new-dynamic-color.png',
-                height: 88,
-                fit: BoxFit.contain,
-              ),
-            )
-          else
-            Positioned(
-              right: -12,
-              top: -18,
-              child: Image.asset(
-                'assets/icons/dashbaord/3dicons-boy-dynamic-color.png',
-                height: 88,
-                fit: BoxFit.contain,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _timeAgo(DateTime dt) {
-    final Duration diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-}
-
-class _BatchCardStyle {
-  const _BatchCardStyle({
-    required this.bgGradient,
-    required this.accent,
-    required this.icon,
-    required this.label,
-  });
-
-  final List<Color> bgGradient;
-  final Color accent;
-  final IconData icon;
-  final String label;
-
-  factory _BatchCardStyle.fromStatus(_BatchStatus s) => switch (s) {
-    _BatchStatus.complete => const _BatchCardStyle(
-      bgGradient: <Color>[Color(0xFF0A2A1A), Color(0xFF052E10)],
-      accent: Color(0xFF4ADE80),
-      icon: Icons.check_circle_outline_rounded,
-      label: 'Complete',
-    ),
-    _BatchStatus.processing => const _BatchCardStyle(
-      bgGradient: <Color>[Color(0xFF0A1A3A), Color(0xFF051028)],
-      accent: Color(0xFF4DAAFF),
-      icon: Icons.sync_rounded,
-      label: 'Processing',
-    ),
-    _BatchStatus.alert => const _BatchCardStyle(
-      bgGradient: <Color>[Color(0xFF2A1A0A), Color(0xFF1A0E04)],
-      accent: Color(0xFFFFB547),
-      icon: Icons.warning_amber_rounded,
-      label: 'Needs review',
-    ),
-  };
-}
-
-enum _BatchStatus { complete, processing, alert }

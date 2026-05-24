@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
-import '../../../../core/widgets/org_bottom_nav_pill.dart';
+import '../../../../core/widgets/org_bottom_nav_bar.dart';
 
 class OrgShellPage extends StatelessWidget {
   const OrgShellPage({super.key, required this.child});
@@ -12,7 +12,7 @@ class OrgShellPage extends StatelessWidget {
   int _indexForLocation(String location) {
     final String path = Uri.parse(location).path;
     if (path.startsWith(AppRouter.appBatchesPath)) return 1; // View All
-    if (path.startsWith(AppRouter.qrScannerPath)) return 3; // Scan QR
+    if (path.startsWith(AppRouter.qrScannerPath)) return 2; // Scan
     if (path.startsWith(AppRouter.settingsPath) ||
         path.startsWith(AppRouter.notificationsPath)) {
       return 4; // Account
@@ -29,10 +29,10 @@ class OrgShellPage extends StatelessWidget {
         context.go(AppRouter.appBatchesPath); // View All
         return;
       case 2:
-        context.push(AppRouter.batchTypeSelectionPath); // Start Batch
+        context.go(AppRouter.qrScannerPath); // Scan
         return;
       case 3:
-        context.go(AppRouter.qrScannerPath); // Scan QR
+        context.push(AppRouter.batchTypeSelectionPath); // New Batch
         return;
       case 4:
         context.go(AppRouter.settingsPath); // Account
@@ -67,32 +67,38 @@ class OrgShellPage extends StatelessWidget {
       child: Scaffold(
         extendBody: true,
         body: child,
-        bottomNavigationBar: OrgBottomNavPill(
+        bottomNavigationBar: OrgBottomNavBar(
           currentIndex: currentIndex,
-          items: <OrgBottomNavPillItem>[
-            OrgBottomNavPillItem(
-              label: 'Dashboard',
-              icon: Icons.space_dashboard_outlined,
+          items: <OrgBottomNavBarItem>[
+            OrgBottomNavBarItem(
+              label: 'Home',
+              svgAssetPath: 'assets/icons/figma/nav_home.svg',
+              letterSpacing: 0.0156,
               onTap: () => _onTap(context, 0),
             ),
-            OrgBottomNavPillItem(
-              label: 'View All',
-              icon: Icons.grid_view_outlined,
+            OrgBottomNavBarItem(
+              label: 'All Batches',
+              svgAssetPath: 'assets/icons/figma/nav_batches.svg',
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.0078,
               onTap: () => _onTap(context, 1),
             ),
-            OrgBottomNavPillItem(
-              label: 'Start Batch',
-              icon: Icons.add_task_outlined,
+            OrgBottomNavBarItem(
+              label: 'Scan',
+              svgAssetPath: 'assets/icons/figma/nav_scan.svg',
+              showLabel: false,
               onTap: () => _onTap(context, 2),
             ),
-            OrgBottomNavPillItem(
-              label: 'Scan QR',
-              icon: Icons.qr_code_scanner,
+            OrgBottomNavBarItem(
+              label: 'New Batch',
+              svgAssetPath: 'assets/icons/figma/nav_new_batch.svg',
+              letterSpacing: 0,
               onTap: () => _onTap(context, 3),
             ),
-            OrgBottomNavPillItem(
+            OrgBottomNavBarItem(
               label: 'Account',
-              icon: Icons.person_outline,
+              svgAssetPath: 'assets/icons/figma/nav_account.svg',
+              letterSpacing: 0.0391,
               onTap: () => _onTap(context, 4),
             ),
           ],
