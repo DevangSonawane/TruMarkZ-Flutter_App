@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -35,86 +33,72 @@ class OrgBottomNavBar extends StatelessWidget {
 
   static const Color _inactive = Color(0xFF9CA3AF);
   static const double _barHeight = 71.016;
-  static const double _blur = 12.864;
 
   @override
   Widget build(BuildContext context) {
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: _blur, sigmaY: _blur),
-        child: Container(
-          height: _barHeight + safeBottom,
-          padding: EdgeInsets.only(bottom: safeBottom),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.8),
-            border: Border.all(color: const Color(0xFFF3F4F6), width: 1.07),
+    return Container(
+      height: _barHeight + safeBottom,
+      padding: EdgeInsets.only(bottom: safeBottom),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFF3F4F6), width: 1.07),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
           ),
-          // Figma bar width is 402px. Use FittedBox so layout never overflows
-          // on smaller devices, while keeping pixel-perfect positions inside.
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.bottomCenter,
-            child: SizedBox(
-              width: 402,
-              height: _barHeight,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: <Widget>[
-                  Positioned(
-                    left: 12.2712,
-                    top: 12.864,
-                    width: 68.608,
-                    height: 45.288,
-                    child: _NavItemView(
-                      item: items[0],
-                      active: currentIndex == 0,
-                    ),
-                  ),
-                  Positioned(
-                    left: 90.9561,
-                    top: 12.864,
-                    width: 71.0925,
-                    height: 45.288,
-                    child: _NavItemView(
-                      item: items[1],
-                      active: currentIndex == 1,
-                    ),
-                  ),
-                  Positioned(
-                    left: 172.1252,
-                    top: -1.88,
-                    width: 60.032,
-                    height: 60.032,
-                    child: _NavItemView(
-                      item: items[2],
-                      active: currentIndex == 2,
-                    ),
-                  ),
-                  Positioned(
-                    left: 242.2341,
-                    top: 12.864,
-                    width: 68.7456,
-                    height: 45.288,
-                    child: _NavItemView(
-                      item: items[3],
-                      active: currentIndex == 3,
-                    ),
-                  ),
-                  Positioned(
-                    left: 321.0565,
-                    top: 12.864,
-                    width: 68.608,
-                    height: 45.288,
-                    child: _NavItemView(
-                      item: items[4],
-                      active: currentIndex == 4,
-                    ),
-                  ),
-                ],
+        ],
+      ),
+      // Figma bar width is 402px. Use FittedBox so layout never overflows
+      // on smaller devices, while keeping pixel-perfect positions inside.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          width: 402,
+          height: _barHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Positioned(
+                left: 12.2712,
+                top: 12.864,
+                width: 68.608,
+                height: 45.288,
+                child: _NavItemView(item: items[0], active: currentIndex == 0),
               ),
-            ),
+              Positioned(
+                left: 90.9561,
+                top: 12.864,
+                width: 71.0925,
+                height: 45.288,
+                child: _NavItemView(item: items[1], active: currentIndex == 1),
+              ),
+              Positioned(
+                left: 172.1252,
+                top: -1.88,
+                width: 60.032,
+                height: 60.032,
+                child: _NavItemView(item: items[2], active: currentIndex == 2),
+              ),
+              Positioned(
+                left: 242.2341,
+                top: 12.864,
+                width: 68.7456,
+                height: 45.288,
+                child: _NavItemView(item: items[3], active: currentIndex == 3),
+              ),
+              Positioned(
+                left: 321.0565,
+                top: 12.864,
+                width: 68.608,
+                height: 45.288,
+                child: _NavItemView(item: items[4], active: currentIndex == 4),
+              ),
+            ],
           ),
         ),
       ),
@@ -173,6 +157,24 @@ class _NavItemView extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.brandBlue,
                     borderRadius: BorderRadius.circular(9999),
+                    border: Border.all(
+                      color: const Color(0xFFF7F9FC),
+                      width: 4.288,
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.brandBlue.withValues(alpha: 0.30),
+                        offset: const Offset(0, 4.288),
+                        blurRadius: 6.432,
+                        spreadRadius: -4.288,
+                      ),
+                      BoxShadow(
+                        color: AppColors.brandBlue.withValues(alpha: 0.30),
+                        offset: const Offset(0, 10.72),
+                        blurRadius: 16.08,
+                        spreadRadius: -3.216,
+                      ),
+                    ],
                   ),
                   alignment: Alignment.center,
                   child: SvgPicture.asset(

@@ -583,8 +583,8 @@ class _MetricTile extends StatelessWidget {
           _formatMetricValue(value),
           style: const TextStyle(
             fontFamily: 'Roboto',
-            fontSize: 24.4801,
-            height: 28.6876 / 24.4801,
+            fontSize: 20,
+            height: 24 / 20,
             fontWeight: FontWeight.w700,
             color: Color(0xFF0B0F19),
           ),
@@ -784,13 +784,37 @@ class _RecentBatchCard extends StatelessWidget {
     };
     final Color badgeFg = switch (batch.status) {
       _BatchStatus.processing => AppColors.brandBlue,
-      _BatchStatus.complete => AppColors.success,
+      _BatchStatus.complete => const Color(0xFF059669),
       _BatchStatus.alert => AppColors.danger,
     };
     final Color badgeBg = switch (batch.status) {
-      _BatchStatus.processing => AppColors.badgePendingBg,
-      _BatchStatus.complete => AppColors.badgeValidBg,
+      _BatchStatus.processing => AppColors.brandBlue.withValues(alpha: 0.10),
+      _BatchStatus.complete => const Color(0xFFECFDF5),
       _BatchStatus.alert => AppColors.badgeRevokedBg,
+    };
+    final double badgeRadius = switch (batch.status) {
+      _BatchStatus.processing => 4.0,
+      _BatchStatus.complete => 4.288000106811523,
+      _BatchStatus.alert => 4.0,
+    };
+    final EdgeInsets badgePadding = switch (batch.status) {
+      _BatchStatus.processing => const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
+      _BatchStatus.complete => const EdgeInsets.symmetric(
+        horizontal: 8.576000213623047,
+        vertical: 2.1440000534057617,
+      ),
+      _BatchStatus.alert => const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
+    };
+    final double badgeLetterSpacing = switch (batch.status) {
+      _BatchStatus.processing => -0.25,
+      _BatchStatus.complete => 0.1465625036507845,
+      _BatchStatus.alert => -0.25,
     };
 
     final int processed = batch.verifiedCount.clamp(0, batch.recordCount);
@@ -829,173 +853,183 @@ class _RecentBatchCard extends StatelessWidget {
             ],
           ),
           padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: <Widget>[
-              Row(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: leftBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    alignment: Alignment.center,
-                    child: SvgPicture.asset(
-                      leftIcon,
-                      width: 20,
-                      height: 20,
-                      colorFilter: ColorFilter.mode(badgeFg, BlendMode.srcIn),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Batch ID: ${batch.batchId}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'SF Pro Rounded',
-                            fontSize: 14,
-                            height: 20 / 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF0B0F19),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: leftBg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: SvgPicture.asset(
+                          leftIcon,
+                          width: 20,
+                          height: 20,
+                          colorFilter: ColorFilter.mode(
+                            badgeFg,
+                            BlendMode.srcIn,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Registry: ${batch.title}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 88),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Batch: ${batch.title}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'SF Pro Rounded',
+                                  fontSize: 14,
+                                  height: 20 / 14,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.013671875,
+                                  color: Color(0xFF0B0F19),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Batch ID: ${_truncateBatchId(batch.batchId)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'SF Pro Rounded',
+                                  fontSize: 11,
+                                  height: 16.5 / 11,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: -0.01,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'Status: ${_statusLabel(batch.status)}',
                           style: const TextStyle(
                             fontFamily: 'SF Pro Rounded',
                             fontSize: 11,
                             height: 16.5 / 11,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: -0.01,
-                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.03,
+                            color: Color(0xFF0B0F19),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$pct%',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Rounded',
+                          fontSize: 11,
+                          height: 16.5 / 11,
+                          fontWeight: FontWeight.w700,
+                          color: badgeFg,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: batch.progressFraction.clamp(0, 1),
+                      minHeight: 6,
+                      backgroundColor: AppColors.divider.withValues(
+                        alpha: 0.35,
+                      ),
+                      valueColor: AlwaysStoppedAnimation<Color>(badgeFg),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (isProcessing)
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '${_formatCompact(processed)} / ${_formatCompact(total)} processed',
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Rounded',
+                              fontSize: 10,
+                              height: 15 / 10,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.03,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            _timeAgo(batch.updatedAt),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Rounded',
+                              fontSize: 10,
+                              height: 15 / 10,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.06,
+                              color: Color(0xFF94A3B8),
+                            ),
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: badgeBg.withValues(
-                        alpha: batch.status == _BatchStatus.processing
-                            ? 0.10
-                            : 1,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Text(
-                      badgeText,
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Rounded',
-                        fontSize: 10,
-                        height: 15 / 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.25,
-                        color: badgeFg,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      'Status: ${_statusLabel(batch.status)}',
+                    )
+                  else
+                    Text(
+                      'Created ${_formatCreatedDate(batch.updatedAt)} • ${_formatCompact(total)} records',
                       style: const TextStyle(
                         fontFamily: 'SF Pro Rounded',
-                        fontSize: 11,
-                        height: 16.5 / 11,
+                        fontSize: 14,
+                        height: 20 / 14,
                         fontWeight: FontWeight.w500,
-                        letterSpacing: 0.03,
-                        color: Color(0xFF0B0F19),
+                        color: Color(0xFF94A3B8),
                       ),
                     ),
+                ],
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(badgeRadius),
                   ),
-                  Text(
-                    '$pct%',
+                  padding: badgePadding,
+                  child: Text(
+                    badgeText,
                     style: TextStyle(
                       fontFamily: 'SF Pro Rounded',
-                      fontSize: 11,
-                      height: 16.5 / 11,
+                      fontSize: 10,
+                      height: 15 / 10,
                       fontWeight: FontWeight.w700,
+                      letterSpacing: badgeLetterSpacing,
                       color: badgeFg,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: batch.progressFraction.clamp(0, 1),
-                  minHeight: 6,
-                  backgroundColor: AppColors.divider.withValues(alpha: 0.35),
-                  valueColor: AlwaysStoppedAnimation<Color>(badgeFg),
                 ),
               ),
-              const SizedBox(height: 10),
-              if (isProcessing)
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        '${_formatCompact(processed)} / ${_formatCompact(total)} processed',
-                        style: const TextStyle(
-                          fontFamily: 'SF Pro Rounded',
-                          fontSize: 10,
-                          height: 15 / 10,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.03,
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        _timeAgo(batch.updatedAt),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontFamily: 'SF Pro Rounded',
-                          fontSize: 10,
-                          height: 15 / 10,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.06,
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Text(
-                  'Created ${_formatCreatedDate(batch.updatedAt)} • ${_formatCompact(total)} records',
-                  style: const TextStyle(
-                    fontFamily: 'SF Pro Rounded',
-                    fontSize: 14,
-                    height: 20 / 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
             ],
           ),
         ),
@@ -1038,6 +1072,12 @@ String _formatCompact(int value) {
     );
   }
   return value.toString();
+}
+
+String _truncateBatchId(String id, {int keep = 14}) {
+  final String s = id.trim();
+  if (s.length <= keep) return s;
+  return '${s.substring(0, keep)}...';
 }
 
 String _timeAgo(DateTime dt) {
