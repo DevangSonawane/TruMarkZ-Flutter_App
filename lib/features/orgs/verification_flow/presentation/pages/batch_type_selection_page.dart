@@ -38,7 +38,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
 
     switch (selected) {
       case _BatchType.human:
-        context.push(AppRouter.verificationPlanSetupPath);
+        context.push(AppRouter.verificationChecksPath);
       case _BatchType.product:
         context.push(AppRouter.productSectorSelectorPath);
     }

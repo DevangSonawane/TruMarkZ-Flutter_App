@@ -55,6 +55,7 @@ import '../../features/orgs/verification_flow/presentation/pages/invite_created_
 import '../../features/orgs/verification_flow/presentation/pages/per_unit_cost_breakdown_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/user_document_upload_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/verification_plan_setup_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/verification_checks_page.dart';
 import '../../features/scanner/presentation/pages/qr_scanner_page.dart';
 import '../../features/just_verifying/presentation/pages/public_verification_result_page.dart';
 import '../../features/admin/presentation/pages/super_admin_dashboard_page.dart';
@@ -103,6 +104,7 @@ class AppRouter {
 
   // Organisation bulk verification flow
   static const String batchTypeSelectionPath = '/batch-type-selection';
+  static const String verificationChecksPath = '/verification-checks';
   static const String verificationPlanSetupPath = '/verification-plan-setup';
   static const String perUnitCostBreakdownPath = '/per-unit-cost-breakdown';
   static const String singleHumanUploadPath = '/single-human-upload';
@@ -512,6 +514,12 @@ class AppRouter {
         name: 'batch_type_selection',
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const BatchTypeSelectionPage()),
+      ),
+      GoRoute(
+        path: verificationChecksPath,
+        name: 'verification_checks',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const VerificationChecksPage()),
       ),
       GoRoute(
         path: productSectorSelectorPath,
