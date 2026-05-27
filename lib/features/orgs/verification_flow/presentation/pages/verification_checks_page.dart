@@ -1,22 +1,29 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../auth/application/auth_notifier.dart';
 
-class VerificationChecksPage extends StatefulWidget {
+class VerificationChecksPage extends ConsumerStatefulWidget {
   const VerificationChecksPage({super.key});
 
   @override
-  State<VerificationChecksPage> createState() => _VerificationChecksPageState();
+  ConsumerState<VerificationChecksPage> createState() =>
+      _VerificationChecksPageState();
 }
 
-class _VerificationChecksPageState extends State<VerificationChecksPage> {
+class _VerificationChecksPageState
+    extends ConsumerState<VerificationChecksPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
+
+  String? _lastRouteSignature;
+  String _industry = '';
 
   final List<_CheckItem> _items = const <_CheckItem>[
     _CheckItem(
@@ -62,6 +69,49 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
   ];
 
   final Set<String> _selected = <String>{'identity'};
+
+  static const List<String> _industryOptions = <String>[
+    'All',
+    'Transport',
+    'Healthcare',
+    'Education',
+    'Manufacturing',
+    'Security',
+    'Agriculture',
+    'Consumer Goods',
+    'Beauty & Cosmetics',
+    'Electronics & Appliances',
+    'EV & Automotive',
+    'Insurance Policies',
+    'Healthcare Products',
+    'Industrial Equipment',
+    'Agriculture Products',
+    'Luxury Products',
+    'Others',
+  ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final Uri uri = GoRouterState.of(context).uri;
+    final String signature = uri.query;
+    if (_lastRouteSignature == signature) return;
+    _lastRouteSignature = signature;
+
+    final Map<String, String> qp = uri.queryParameters;
+    final String fromRoute = (qp['industry'] ?? '').trim();
+    final String fromProfile =
+        (ref.read(authNotifierProvider).value?.userProfile?.industry ?? '')
+            .trim();
+
+    final String next = fromRoute.isNotEmpty
+        ? fromRoute
+        : _normalizeIndustry(fromProfile);
+
+    if (next != _industry) {
+      setState(() => _industry = next);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +162,20 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                             ),
                           ),
                           const Spacer(),
-                          _IndustryPill(scale: scale),
+                          _IndustryPill(
+                            scale: scale,
+                            label: _industry.trim().isEmpty
+                                ? 'Real Estate'
+                                : _industry.trim(),
+                            onTap: () async {
+                              final String? picked = await _pickIndustry(
+                                scale: scale,
+                                current: _industry.trim(),
+                              );
+                              if (!mounted || picked == null) return;
+                              setState(() => _industry = picked);
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -262,6 +325,9 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                                       ..sort();
                                     qp['checks'] = ids.join(',');
                                   }
+                                  if (_industry.trim().isNotEmpty) {
+                                    qp['industry'] = _industry.trim();
+                                  }
                                   final Uri uri = Uri(
                                     path: AppRouter.verificationPermissionsPath,
                                     queryParameters: qp,
@@ -283,64 +349,226 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
       ),
     );
   }
+
+  Future<String?> _pickIndustry({
+    required double scale,
+    required String current,
+  }) async {
+    double s(double v) => v * scale;
+    final String selected = current.trim();
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(16)),
+            side: BorderSide(color: const Color(0xFFE5E7EB), width: s(1)),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: s(480)),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Text(
+                        'Select Industry',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(16),
+                          fontWeight: FontWeight.w700,
+                          height: 24 / 16,
+                          color: const Color(0xFF111827),
+                        ),
+                      ),
+                      const Spacer(),
+                      InkResponse(
+                        onTap: () => Navigator.of(context).pop(),
+                        radius: s(18),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: s(20),
+                          color: const Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: s(10)),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _industryOptions.length,
+                      separatorBuilder: (BuildContext context, int index) =>
+                          Divider(height: s(1), color: const Color(0xFFF1F5F9)),
+                      itemBuilder: (BuildContext context, int index) {
+                        final String label = _industryOptions[index];
+                        final bool isSelected = label == selected;
+                        return InkWell(
+                          onTap: () => Navigator.of(context).pop(label),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              vertical: s(12),
+                              horizontal: s(2),
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                Container(
+                                  width: s(10),
+                                  height: s(10),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isSelected
+                                        ? AppColors.brandBlue
+                                        : const Color(0xFFE5E7EB),
+                                  ),
+                                ),
+                                SizedBox(width: s(12)),
+                                Expanded(
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: s(14),
+                                      fontWeight: FontWeight.w600,
+                                      height: 20 / 14,
+                                      color: isSelected
+                                          ? AppColors.brandBlue
+                                          : const Color(0xFF334155),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _normalizeIndustry(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return '';
+    if (v.toLowerCase() == 'all') return 'All';
+    if (v.toLowerCase() == 'both') return 'All';
+
+    // Backend may return JSON array-like strings for multi-select.
+    List<String> parts = <String>[];
+    if (v.startsWith('[') && v.endsWith(']')) {
+      final String inner = v.substring(1, v.length - 1);
+      parts = inner
+          .split(',')
+          .map((String s) => s.replaceAll('"', '').trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    } else if (v.contains(',')) {
+      parts = v
+          .split(',')
+          .map((String s) => s.trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+
+    if (parts.isNotEmpty) {
+      final Set<String> normalized = parts
+          .map((String e) => e.toLowerCase())
+          .toSet();
+      final Set<String> all = _industryOptions
+          .where((String e) => e != 'All')
+          .map((String e) => e.toLowerCase())
+          .toSet();
+      if (normalized.containsAll(all)) return 'All';
+      // If not all, keep the raw string for now (picker can refine).
+      return v;
+    }
+
+    return v;
+  }
 }
 
 class _IndustryPill extends StatelessWidget {
-  const _IndustryPill({required this.scale});
+  const _IndustryPill({
+    required this.scale,
+    required this.label,
+    required this.onTap,
+  });
 
   final double scale;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    return Container(
-      height: s(29),
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(s(10)),
-        border: Border.all(color: const Color(0xFFE0EFFE)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SvgPicture.asset(
-            'assets/icons/figma/checks_industry_building.svg',
-            width: s(12),
-            height: s(10),
-            colorFilter: const ColorFilter.mode(
-              AppColors.brandBlue,
-              BlendMode.srcIn,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(s(10)),
+      child: Container(
+        height: s(29),
+        padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F7FF),
+          borderRadius: BorderRadius.circular(s(10)),
+          border: Border.all(color: const Color(0xFFE0EFFE)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SvgPicture.asset(
+              'assets/icons/figma/checks_industry_building.svg',
+              width: s(12),
+              height: s(10),
+              colorFilter: const ColorFilter.mode(
+                AppColors.brandBlue,
+                BlendMode.srcIn,
+              ),
             ),
-          ),
-          SizedBox(width: s(8)),
-          Text(
-            'Real Estate',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.0644531),
-              height: 16.5 / 11,
-              color: AppColors.brandBlue,
+            SizedBox(width: s(8)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.0644531),
+                height: 16.5 / 11,
+                color: AppColors.brandBlue,
+              ),
             ),
-          ),
-          SizedBox(width: s(8)),
-          Container(width: s(1), height: s(12), color: const Color(0xFFE2E8F0)),
-          SizedBox(width: s(8)),
-          Text(
-            'EDIT',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(10),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.25),
-              height: 15 / 10,
-              color: AppColors.brandBlue,
+            SizedBox(width: s(8)),
+            Container(
+              width: s(1),
+              height: s(12),
+              color: const Color(0xFFE2E8F0),
             ),
-          ),
-        ],
+            SizedBox(width: s(8)),
+            Text(
+              'EDIT',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(10),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.25),
+                height: 15 / 10,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

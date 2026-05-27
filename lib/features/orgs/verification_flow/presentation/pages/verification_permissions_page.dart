@@ -230,12 +230,21 @@ class _VerificationPermissionsPageState
                                 scale: scale,
                                 onTap: () {
                                   final List<String> checks = _checksFromRoute;
+                                  final String industry =
+                                      (GoRouterState.of(context)
+                                                  .uri
+                                                  .queryParameters['industry'] ??
+                                              '')
+                                          .trim();
                                   final Map<String, String> qp =
                                       <String, String>{};
                                   if (checks.isNotEmpty) {
                                     qp['checks'] = checks.join(',');
                                   }
                                   qp['access'] = _mode.name;
+                                  if (industry.isNotEmpty) {
+                                    qp['industry'] = industry;
+                                  }
 
                                   final Uri uri = Uri(
                                     path: AppRouter.bulkUploadPath,

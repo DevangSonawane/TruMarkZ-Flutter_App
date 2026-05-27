@@ -160,11 +160,22 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                         s(9999),
                                       ),
                                       child: SizedBox(
+                                        width: double.infinity,
                                         height: s(4),
-                                        child: const DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            color: AppColors.brandBlue,
-                                          ),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: const <Widget>[
+                                            DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFFE5E7EB),
+                                              ),
+                                            ),
+                                            DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: AppColors.brandBlue,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),

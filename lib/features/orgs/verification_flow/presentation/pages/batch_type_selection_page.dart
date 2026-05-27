@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -48,214 +50,218 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
-      body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final double contentWidth = constraints.maxWidth < _referenceWidth
-              ? constraints.maxWidth
-              : _referenceWidth;
-          final double scale = contentWidth / _referenceWidth;
-          double s(double value) => value * scale;
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double contentWidth = constraints.maxWidth < _referenceWidth
+                ? constraints.maxWidth
+                : _referenceWidth;
+            final double scale = contentWidth / _referenceWidth;
+            double s(double value) => value * scale;
 
-          final EdgeInsets panelPadding = EdgeInsets.fromLTRB(
-            s(16),
-            s(32),
-            s(16),
-            0,
-          );
+            final EdgeInsets panelPadding = EdgeInsets.fromLTRB(
+              s(16),
+              s(32),
+              s(16),
+              0,
+            );
 
-          return Center(
-            child: SizedBox(
-              width: contentWidth,
-              height: constraints.maxHeight,
-              child: Column(
-                children: <Widget>[
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(s(16), s(44), s(16), 0),
-                    child: Row(
-                      children: <Widget>[
-                        InkResponse(
-                          onTap: () => _goBack(context),
-                          radius: s(22),
-                          child: SvgPicture.asset(
-                            'assets/icons/figma/new_batch_back.svg',
-                            width: s(24),
-                            height: s(24),
-                            colorFilter: const ColorFilter.mode(
-                              Colors.white,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: s(12)),
-                        Text(
-                          'New Batch',
-                          style: TextStyle(
-                            fontSize: s(21),
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: s(24)),
-                  Expanded(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: _panelBg,
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(s(20)),
-                        ),
-                      ),
-                      child: Column(
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
+                      child: Row(
                         children: <Widget>[
-                          Expanded(
-                            child: SingleChildScrollView(
-                              padding: panelPadding.copyWith(bottom: s(24)),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: s(4),
-                                    ),
-                                    child: Row(
-                                      children: <Widget>[
-                                        Text(
-                                          'STEP 1 OF 4',
-                                          style: TextStyle(
-                                            fontSize: s(10),
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: s(1),
-                                            color: AppColors.textTertiary,
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        Text(
-                                          '0%',
-                                          style: TextStyle(
-                                            fontSize: s(10),
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.brandBlue,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(height: s(8)),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(s(999)),
-                                    child: SizedBox(
-                                      height: s(4),
-                                      child: DecoratedBox(
-                                        decoration: const BoxDecoration(
-                                          color: AppColors.divider,
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: FractionallySizedBox(
-                                            widthFactor: 0,
-                                            child: DecoratedBox(
-                                              decoration: const BoxDecoration(
-                                                color: AppColors.brandBlue,
-                                              ),
-                                              child: SizedBox(height: s(4)),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(height: s(28)),
-                                  Text(
-                                    'Choose Batch Type',
-                                    style: TextStyle(
-                                      fontSize: s(24),
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: s(1.18),
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  SizedBox(height: s(12)),
-                                  Text(
-                                    'Select the type of verification you want to perform.',
-                                    style: TextStyle(
-                                      fontSize: s(12),
-                                      fontWeight: FontWeight.w500,
-                                      height: 1.4,
-                                      letterSpacing: s(1.18),
-                                      color: AppColors.textTertiary,
-                                    ),
-                                  ),
-                                  SizedBox(height: s(24)),
-                                  _FigmaBatchTypeCard(
-                                    scale: scale,
-                                    title: 'Human Verification',
-                                    subtitle:
-                                        'Verify identities of individuals - workers, agents, drivers, students & more',
-                                    svgAssetPath:
-                                        'assets/icons/figma/new_batch_human.svg',
-                                    tags: const <String>[
-                                      'Workforce',
-                                      'Gig Economy',
-                                      'Insurance',
-                                      'Recruitment',
-                                    ],
-                                    selected: _selected == _BatchType.human,
-                                    showLeftStrip:
-                                        _selected == _BatchType.human,
-                                    onTap: () => setState(
-                                      () => _selected = _BatchType.human,
-                                    ),
-                                  ),
-                                  SizedBox(height: s(16)),
-                                  _FigmaBatchTypeCard(
-                                    scale: scale,
-                                    title: 'Product Verification',
-                                    subtitle:
-                                        'Issue digital certificates for products stored on blockchain',
-                                    svgAssetPath:
-                                        'assets/icons/figma/new_batch_product.svg',
-                                    tags: const <String>[
-                                      'Consumer Goods',
-                                      'Cosmetics',
-                                      'Electronics',
-                                      'Automotive',
-                                    ],
-                                    selected: _selected == _BatchType.product,
-                                    showLeftStrip:
-                                        _selected == _BatchType.product,
-                                    onTap: () => setState(
-                                      () => _selected = _BatchType.product,
-                                    ),
-                                  ),
-                                  SizedBox(height: s(24)),
-                                ],
+                          InkResponse(
+                            onTap: () => _goBack(context),
+                            radius: s(22),
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_back.svg',
+                              width: s(24),
+                              height: s(24),
+                              colorFilter: const ColorFilter.mode(
+                                Colors.white,
+                                BlendMode.srcIn,
                               ),
                             ),
                           ),
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              s(16),
-                              s(12),
-                              s(16),
-                              s(16),
-                            ),
-                            child: _ContinueButton(
-                              scale: scale,
-                              enabled: _selected != null,
-                              onTap: () => _continue(context),
+                          SizedBox(width: s(12)),
+                          Text(
+                            'New Batch',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(21),
+                              fontWeight: FontWeight.w600,
+                              height: 19.5 / 21,
+                              color: Colors.white,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    SizedBox(height: s(24)),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _panelBg,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(s(20)),
+                          ),
+                        ),
+                        child: Column(
+                          children: <Widget>[
+                            Expanded(
+                              child: SingleChildScrollView(
+                                padding: panelPadding.copyWith(bottom: s(24)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(4),
+                                      ),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Text(
+                                            'STEP 1 OF 4',
+                                            style: TextStyle(
+                                              fontSize: s(10),
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: s(1),
+                                              color: AppColors.textTertiary,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            '0%',
+                                            style: TextStyle(
+                                              fontSize: s(10),
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.brandBlue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(height: s(8)),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                        s(999),
+                                      ),
+                                      child: SizedBox(
+                                        height: s(4),
+                                        child: DecoratedBox(
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.divider,
+                                          ),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: FractionallySizedBox(
+                                              widthFactor: 0,
+                                              child: DecoratedBox(
+                                                decoration: const BoxDecoration(
+                                                  color: AppColors.brandBlue,
+                                                ),
+                                                child: SizedBox(height: s(4)),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(28)),
+                                    Text(
+                                      'Choose Batch Type',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(24),
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: s(1.18),
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(12)),
+                                    Text(
+                                      'Select the type of verification you want to perform.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(12),
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.4,
+                                        letterSpacing: s(1.18),
+                                        color: AppColors.textTertiary,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    _FigmaBatchTypeCard(
+                                      scale: scale,
+                                      title: 'Human Verification',
+                                      subtitle:
+                                          'Verify identities of individuals - workers, agents, drivers, students & more',
+                                      svgAssetPath:
+                                          'assets/icons/figma/new_batch_human.svg',
+                                      tags: const <String>[
+                                        'Workforce',
+                                        'Gig Economy',
+                                        'Insurance',
+                                        'Recruitment',
+                                      ],
+                                      selected: _selected == _BatchType.human,
+                                      showLeftStrip:
+                                          _selected == _BatchType.human,
+                                      onTap: () => setState(
+                                        () => _selected = _BatchType.human,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(16)),
+                                    _FigmaBatchTypeCard(
+                                      scale: scale,
+                                      title: 'Product Verification',
+                                      subtitle:
+                                          'Issue digital certificates for products stored on blockchain',
+                                      svgAssetPath:
+                                          'assets/icons/figma/new_batch_product.svg',
+                                      tags: const <String>[
+                                        'Consumer Goods',
+                                        'Cosmetics',
+                                        'Electronics',
+                                        'Automotive',
+                                      ],
+                                      selected: _selected == _BatchType.product,
+                                      showLeftStrip:
+                                          _selected == _BatchType.product,
+                                      onTap: () => setState(
+                                        () => _selected = _BatchType.product,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(24)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            _BottomNav(
+                              scale: scale,
+                              child: _ContinueButton(
+                                scale: scale,
+                                enabled: _selected != null,
+                                onTap: () => _continue(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -495,14 +501,6 @@ class _ContinueButtonState extends State<_ContinueButton> {
           decoration: BoxDecoration(
             color: AppColors.brandBlue,
             borderRadius: BorderRadius.circular(s(16)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(51),
-                blurRadius: s(6),
-                spreadRadius: s(-4),
-                offset: Offset(0, s(4)),
-              ),
-            ],
           ),
           child: Material(
             color: Colors.transparent,
@@ -518,6 +516,39 @@ class _ContinueButtonState extends State<_ContinueButton> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
+            ),
+          ),
+          child: SafeArea(top: false, child: child),
         ),
       ),
     );

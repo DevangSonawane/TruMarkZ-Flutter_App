@@ -33,7 +33,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const Color _panelText = Color(0xFF3A3A3A);
 
-  bool _didInitFromRoute = false;
+  final GlobalKey _menuKey = GlobalKey();
+
+  String? _lastRouteSignature;
 
   late final TextEditingController _batchNameController;
   late final TextEditingController _columnsController;
@@ -55,19 +57,23 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didInitFromRoute) return;
-    _didInitFromRoute = true;
 
-    final Map<String, String> qp = GoRouterState.of(
-      context,
-    ).uri.queryParameters;
+    final Uri uri = GoRouterState.of(context).uri;
+    final String signature = uri.query;
+    if (_lastRouteSignature == signature) return;
+    _lastRouteSignature = signature;
 
-    _industry = (qp['industry'] ?? _industry).trim();
-    _checks = _parseCsvSet(qp['checks']) ?? _checks;
+    final Map<String, String> qp = uri.queryParameters;
+    final String nextIndustry = (qp['industry'] ?? _industry).trim();
+    final Set<String> nextChecks = _parseCsvSet(qp['checks']) ?? _checks;
+    final List<String> nextColumns =
+        _parseCsvList(qp['columns']) ?? _templateColumnsForChecks(nextChecks);
 
-    final List<String> initialColumns =
-        _parseCsvList(qp['columns']) ?? _templateColumnsForChecks(_checks);
-    _columnsController.text = initialColumns.join(',');
+    setState(() {
+      _industry = nextIndustry;
+      _checks = nextChecks;
+      _columnsController.text = nextColumns.join(',');
+    });
   }
 
   @override
@@ -867,7 +873,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                 child: Column(
                   children: <Widget>[
                     Padding(
-                      padding: EdgeInsets.fromLTRB(s(16), s(10), s(16), 0),
+                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
                       child: Row(
                         children: <Widget>[
                           InkResponse(
@@ -888,11 +894,16 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                             'Bulk Upload',
                             style: TextStyle(
                               fontFamily: 'Inter',
-                              fontSize: s(28),
+                              fontSize: s(21),
                               fontWeight: FontWeight.w600,
-                              height: 32 / 28,
+                              height: 19.5 / 21,
                               color: Colors.white,
                             ),
+                          ),
+                          const Spacer(),
+                          _IndustryPill(
+                            scale: scale,
+                            industryLabel: _prettyIndustry(_industry),
                           ),
                         ],
                       ),
@@ -974,11 +985,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                       ),
                                     ),
                                     SizedBox(height: s(24)),
-                                    _IndustryPill(
-                                      scale: scale,
-                                      industryLabel: _prettyIndustry(_industry),
-                                    ),
-                                    SizedBox(height: s(24)),
                                     Text(
                                       'BATCH NAME',
                                       style: TextStyle(
@@ -1026,7 +1032,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                           ),
                                         ),
                                         InkResponse(
-                                          onTap: () => _openMoreSheet(
+                                          key: _menuKey,
+                                          onTap: () => _openMoreMenu(
                                             scale: scale,
                                             columns: columns,
                                           ),
@@ -1140,6 +1147,28 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   static String _prettyIndustry(String raw) {
     final String v = raw.trim();
     if (v.isEmpty) return 'Real Estate';
+    final String lower = v.toLowerCase();
+    if (lower == 'all' || lower == 'both') return 'All';
+
+    // Handle serialized multi-select values like '["A","B"]' or 'A,B'.
+    if ((v.startsWith('[') && v.endsWith(']')) || v.contains(',')) {
+      List<String> parts;
+      if (v.startsWith('[') && v.endsWith(']')) {
+        parts = v
+            .substring(1, v.length - 1)
+            .split(',')
+            .map((String s) => s.replaceAll('"', '').trim())
+            .where((String s) => s.isNotEmpty)
+            .toList();
+      } else {
+        parts = v
+            .split(',')
+            .map((String s) => s.trim())
+            .where((String s) => s.isNotEmpty)
+            .toList();
+      }
+      if (parts.isNotEmpty && parts.length >= 10) return 'All';
+    }
     final List<String> parts = v
         .replaceAll(RegExp(r'[_-]+'), ' ')
         .split(' ')
@@ -1151,50 +1180,177 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return parts.map(cap).join(' ');
   }
 
-  Future<void> _openMoreSheet({
+  Future<void> _openMoreMenu({
+    required double scale,
+    required List<String> columns,
+  }) async {
+    final BuildContext? ctx = _menuKey.currentContext;
+    if (ctx == null) return;
+
+    final RenderBox button = ctx.findRenderObject()! as RenderBox;
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final Offset buttonTopLeft = button.localToGlobal(
+      Offset.zero,
+      ancestor: overlay,
+    );
+    final Offset buttonBottomRight = button.localToGlobal(
+      button.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(buttonTopLeft, buttonBottomRight),
+      Offset.zero & overlay.size,
+    );
+
+    final _MoreAction? picked = await showMenu<_MoreAction>(
+      context: context,
+      position: position.shift(Offset(0, button.size.height * 0.6)),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6 * scale),
+        side: BorderSide(color: const Color(0xFFE5E7EB), width: 1 * scale),
+      ),
+      items: <PopupMenuEntry<_MoreAction>>[
+        PopupMenuItem<_MoreAction>(
+          value: _MoreAction.downloadTemplate,
+          height: 40 * scale,
+          child: Center(
+            child: Text(
+              'Download Template',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w600,
+                height: 18 / 12,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<_MoreAction>(
+          value: _MoreAction.viewTemplateColumns,
+          height: 40 * scale,
+          child: Center(
+            child: Text(
+              'View Template Columns',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w600,
+                height: 18 / 12,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (!mounted || picked == null) return;
+
+    switch (picked) {
+      case _MoreAction.downloadTemplate:
+        await _downloadTemplate();
+      case _MoreAction.viewTemplateColumns:
+        await _showTemplateColumnsDialog(scale: scale, columns: columns);
+    }
+  }
+
+  Future<void> _showTemplateColumnsDialog({
     required double scale,
     required List<String> columns,
   }) async {
     double s(double v) => v * scale;
-    await showModalBottomSheet<void>(
+
+    await showDialog<void>(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
-        return SafeArea(
+        return Dialog(
+          insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(16)),
+            side: BorderSide(color: const Color(0xFFE5E7EB), width: s(1)),
+          ),
           child: Padding(
-            padding: EdgeInsets.fromLTRB(s(16), 0, s(16), s(16)),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(s(18)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  ListTile(
-                    leading: const Icon(Icons.download_rounded),
-                    title: const Text('Download template'),
-                    subtitle: Text('${columns.length} columns'),
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      await _downloadTemplate();
-                    },
+            padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Text(
+                      'Template Columns',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(16),
+                        fontWeight: FontWeight.w700,
+                        height: 24 / 16,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                    const Spacer(),
+                    InkResponse(
+                      onTap: () => Navigator.of(context).pop(),
+                      radius: s(18),
+                      child: SvgPicture.asset(
+                        'assets/icons/figma/bulk_close_x.svg',
+                        width: s(18),
+                        height: s(18),
+                        colorFilter: const ColorFilter.mode(
+                          Color(0xFF9CA3AF),
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: s(12)),
+                Wrap(
+                  spacing: s(8),
+                  runSpacing: s(8),
+                  children: <Widget>[
+                    for (final String c in columns)
+                      Container(
+                        padding: EdgeInsets.fromLTRB(s(10), s(6), s(10), s(6)),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEF3FF),
+                          borderRadius: BorderRadius.circular(s(999)),
+                        ),
+                        child: Text(
+                          c,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(12),
+                            fontWeight: FontWeight.w600,
+                            height: 16 / 12,
+                            color: AppColors.brandBlue,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(height: s(14)),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(13),
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.brandBlue,
+                      ),
+                    ),
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.upload_file_rounded),
-                    title: const Text('Select file'),
-                    subtitle: const Text('Excel / CSV'),
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      _openUploadSheet(
-                        title: 'Upload Excel / CSV',
-                        description:
-                            'Pick an Excel/CSV file to create the batch.',
-                      );
-                    },
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
@@ -1202,6 +1358,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     );
   }
 }
+
+enum _MoreAction { downloadTemplate, viewTemplateColumns }
 
 class _IndustryPill extends StatelessWidget {
   const _IndustryPill({required this.scale, required this.industryLabel});
@@ -1214,55 +1372,50 @@ class _IndustryPill extends StatelessWidget {
     double s(double v) => v * scale;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(s(12), s(10), s(12), s(10)),
+      height: s(29),
+      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F8FF),
-        borderRadius: BorderRadius.circular(s(12)),
-        border: Border.all(color: const Color(0xFFD7E7FF), width: s(1)),
+        color: const Color(0xFFF0F7FF),
+        borderRadius: BorderRadius.circular(s(10)),
+        border: Border.all(color: const Color(0xFFE0EFFE)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SvgPicture.asset(
             'assets/icons/figma/bulk_industry_building.svg',
-            width: s(18),
-            height: s(18),
+            width: s(12),
+            height: s(10),
             colorFilter: const ColorFilter.mode(
               AppColors.brandBlue,
               BlendMode.srcIn,
             ),
           ),
-          SizedBox(width: s(10)),
+          SizedBox(width: s(8)),
           Text(
             industryLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: s(14),
+              fontSize: s(11),
               fontWeight: FontWeight.w600,
-              height: 18 / 14,
+              letterSpacing: s(0.0644531),
+              height: 16.5 / 11,
               color: AppColors.brandBlue,
             ),
           ),
-          SizedBox(width: s(10)),
-          Text(
-            '|',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(14),
-              fontWeight: FontWeight.w600,
-              height: 18 / 14,
-              color: const Color(0xFFB6C4D6),
-            ),
-          ),
-          SizedBox(width: s(10)),
+          SizedBox(width: s(8)),
+          Container(width: s(1), height: s(12), color: const Color(0xFFE2E8F0)),
+          SizedBox(width: s(8)),
           Text(
             'EDIT',
             style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: s(14),
+              fontSize: s(10),
               fontWeight: FontWeight.w600,
-              letterSpacing: s(1.0),
-              height: 18 / 14,
+              letterSpacing: s(0.25),
+              height: 15 / 10,
               color: AppColors.brandBlue,
             ),
           ),
