@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../../../core/theme/app_spacing.dart';
-import '../../../../../core/theme/app_typography.dart';
-import '../../../../../core/widgets/tmz_button.dart';
 
 enum _BatchType { human, product }
 
@@ -17,15 +15,13 @@ class BatchTypeSelectionPage extends StatefulWidget {
 }
 
 class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
-  _BatchType? _selected;
+  _BatchType? _selected = _BatchType.human;
 
-  static const Color _deepBlue = AppColors.deepNavy;
-
-  LinearGradient get _primaryGradient => const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[AppColors.brandBlue, _deepBlue],
-  );
+  static const double _referenceWidth = 402;
+  static const Color _panelBg = Color(0xFFF7F9FC);
+  static const Color _cardBorder = Color(0xFFDBEAFE);
+  static const Color _chipBorder = Color(0xFFF3F4F6);
+  static const Color _chipBg = Color(0xFFF9FAFB);
 
   void _goBack(BuildContext context) {
     final GoRouter router = GoRouter.of(context);
@@ -42,333 +38,401 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
 
     switch (selected) {
       case _BatchType.human:
-        _openHumanVerificationSheet(context);
+        context.push(AppRouter.verificationPlanSetupPath);
       case _BatchType.product:
         context.push(AppRouter.productSectorSelectorPath);
     }
   }
 
-  void _openHumanVerificationSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext ctx) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Human Verification', style: AppTypography.heading1),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  'Choose how you want to add people for verification.',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                TMZButton(
-                  label: 'Single Human Verification',
-                  icon: Icons.person_add_alt_1_rounded,
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    final Uri uri = Uri(
-                      path: AppRouter.verificationPlanSetupPath,
-                      queryParameters: const <String, String>{'flow': 'single'},
-                    );
-                    context.push(uri.toString());
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
-                TMZButton(
-                  label: 'Bulk Human Upload',
-                  icon: Icons.upload_file_rounded,
-                  variant: TMZButtonVariant.secondary,
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    context.push(AppRouter.verificationPlanSetupPath);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: Row(
-          children: <Widget>[
-            Image.asset('assets/icons/headers_app_icon.png', height: 22),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('New Batch'),
-          ],
-        ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x3,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
+      backgroundColor: AppColors.brandBlue,
+      body: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double contentWidth = constraints.maxWidth < _referenceWidth
+              ? constraints.maxWidth
+              : _referenceWidth;
+          final double scale = contentWidth / _referenceWidth;
+          double s(double value) => value * scale;
+
+          final EdgeInsets panelPadding = EdgeInsets.fromLTRB(
+            s(16),
+            s(32),
+            s(16),
+            0,
+          );
+
+          return Center(
+            child: SizedBox(
+              width: contentWidth,
+              height: constraints.maxHeight,
+              child: Column(
                 children: <Widget>[
-                  Text('Choose Batch Type', style: AppTypography.display2),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Start a verification flow for people or products.',
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(s(16), s(44), s(16), 0),
+                    child: Row(
+                      children: <Widget>[
+                        InkResponse(
+                          onTap: () => _goBack(context),
+                          radius: s(22),
+                          child: SvgPicture.asset(
+                            'assets/icons/figma/new_batch_back.svg',
+                            width: s(24),
+                            height: s(24),
+                            colorFilter: const ColorFilter.mode(
+                              Colors.white,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: s(12)),
+                        Text(
+                          'New Batch',
+                          style: TextStyle(
+                            fontSize: s(21),
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.x5),
-                  _BatchTypeCard(
-                    icon: Icons.person_search_rounded,
-                    title: 'Human Verification',
-                    subtitle:
-                        'Verify identities of individuals — workers, agents, drivers, students & more',
-                    tags: const <String>[
-                      'Blue Collar Workforce',
-                      'Gig Economy',
-                      'Insurance Agents',
-                      'Recruitment & Students',
-                    ],
-                    selected: _selected == _BatchType.human,
-                    gradient: _primaryGradient,
-                    onTap: () {
-                      if (_selected == _BatchType.human) {
-                        _continue(context);
-                        return;
-                      }
-                      setState(() => _selected = _BatchType.human);
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  _BatchTypeCard(
-                    icon: Icons.inventory_2_rounded,
-                    title: 'Product Verification',
-                    subtitle:
-                        'Issue digital certificates for products stored on blockchain',
-                    tags: const <String>[
-                      'Consumer Goods',
-                      'Cosmetics',
-                      'Electronics',
-                      'EV & Automotive',
-                    ],
-                    selected: _selected == _BatchType.product,
-                    gradient: _primaryGradient,
-                    onTap: () {
-                      if (_selected == _BatchType.product) {
-                        _continue(context);
-                        return;
-                      }
-                      setState(() => _selected = _BatchType.product);
-                    },
+                  SizedBox(height: s(24)),
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: _panelBg,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(s(20)),
+                        ),
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: panelPadding.copyWith(bottom: s(24)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: s(4),
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        Text(
+                                          'STEP 1 OF 4',
+                                          style: TextStyle(
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: s(1),
+                                            color: AppColors.textTertiary,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '0%',
+                                          style: TextStyle(
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.brandBlue,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: s(8)),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(s(999)),
+                                    child: SizedBox(
+                                      height: s(4),
+                                      child: DecoratedBox(
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.divider,
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: FractionallySizedBox(
+                                            widthFactor: 0,
+                                            child: DecoratedBox(
+                                              decoration: const BoxDecoration(
+                                                color: AppColors.brandBlue,
+                                              ),
+                                              child: SizedBox(height: s(4)),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: s(28)),
+                                  Text(
+                                    'Choose Batch Type',
+                                    style: TextStyle(
+                                      fontSize: s(24),
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: s(1.18),
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  SizedBox(height: s(12)),
+                                  Text(
+                                    'Select the type of verification you want to perform.',
+                                    style: TextStyle(
+                                      fontSize: s(12),
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.4,
+                                      letterSpacing: s(1.18),
+                                      color: AppColors.textTertiary,
+                                    ),
+                                  ),
+                                  SizedBox(height: s(24)),
+                                  _FigmaBatchTypeCard(
+                                    scale: scale,
+                                    title: 'Human Verification',
+                                    subtitle:
+                                        'Verify identities of individuals - workers, agents, drivers, students & more',
+                                    svgAssetPath:
+                                        'assets/icons/figma/new_batch_human.svg',
+                                    tags: const <String>[
+                                      'Workforce',
+                                      'Gig Economy',
+                                      'Insurance',
+                                      'Recruitment',
+                                    ],
+                                    selected: _selected == _BatchType.human,
+                                    showLeftStrip:
+                                        _selected == _BatchType.human,
+                                    onTap: () => setState(
+                                      () => _selected = _BatchType.human,
+                                    ),
+                                  ),
+                                  SizedBox(height: s(16)),
+                                  _FigmaBatchTypeCard(
+                                    scale: scale,
+                                    title: 'Product Verification',
+                                    subtitle:
+                                        'Issue digital certificates for products stored on blockchain',
+                                    svgAssetPath:
+                                        'assets/icons/figma/new_batch_product.svg',
+                                    tags: const <String>[
+                                      'Consumer Goods',
+                                      'Cosmetics',
+                                      'Electronics',
+                                      'Automotive',
+                                    ],
+                                    selected: _selected == _BatchType.product,
+                                    showLeftStrip:
+                                        _selected == _BatchType.product,
+                                    onTap: () => setState(
+                                      () => _selected = _BatchType.product,
+                                    ),
+                                  ),
+                                  SizedBox(height: s(24)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              s(16),
+                              s(12),
+                              s(16),
+                              s(16),
+                            ),
+                            child: _ContinueButton(
+                              scale: scale,
+                              enabled: _selected != null,
+                              onTap: () => _continue(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: _GradientCtaButton(
-                  label: 'Continue',
-                  icon: Icons.arrow_forward_rounded,
-                  gradient: _primaryGradient,
-                  enabled: _selected != null,
-                  onPressed: () => _continue(context),
-                ),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-class _BatchTypeCard extends StatelessWidget {
-  const _BatchTypeCard({
-    required this.icon,
+class _FigmaBatchTypeCard extends StatelessWidget {
+  const _FigmaBatchTypeCard({
+    required this.scale,
+    required this.svgAssetPath,
     required this.title,
     required this.subtitle,
     required this.tags,
     required this.selected,
-    required this.gradient,
+    required this.showLeftStrip,
     required this.onTap,
   });
 
-  final IconData icon;
+  final double scale;
+  final String svgAssetPath;
   final String title;
   final String subtitle;
   final List<String> tags;
   final bool selected;
-  final Gradient gradient;
+  final bool showLeftStrip;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final BorderSide borderSide = selected
-        ? const BorderSide(color: AppColors.brandBlue, width: 2)
-        : BorderSide(color: Colors.transparent.withAlpha(0));
+    double s(double v) => v * scale;
+
+    final Color chipBg = selected
+        ? AppColors.brandBlue.withAlpha(26)
+        : _BatchTypeSelectionPageState._chipBg;
+    final Color chipBorder = selected
+        ? AppColors.brandBlue.withAlpha(102)
+        : _BatchTypeSelectionPageState._chipBorder;
+    final Color chipFg = selected
+        ? AppColors.brandBlue
+        : AppColors.textTertiary;
 
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(s(16)),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 180),
+          width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            border: Border.fromBorderSide(borderSide),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(s(16)),
+            border: Border.all(color: _BatchTypeSelectionPageState._cardBorder),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: AppColors.brandBlue.withAlpha(18),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
+                color: const Color(0xFF3B82F6).withAlpha(20),
+                blurRadius: s(20),
+                spreadRadius: s(-2),
+                offset: Offset(0, s(4)),
               ),
             ],
           ),
           child: Stack(
             children: <Widget>[
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Container(
-                      width: 10,
-                      decoration: BoxDecoration(
-                        gradient: gradient,
-                        borderRadius: const BorderRadius.horizontal(
-                          left: Radius.circular(22),
-                        ),
+              if (showLeftStrip)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: s(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandBlue,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(s(16)),
+                        bottomLeft: Radius.circular(s(16)),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.x4),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          0,
-                          AppSpacing.x4,
-                          AppSpacing.x4,
-                          AppSpacing.x4,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(
-                              children: <Widget>[
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.brandBlue.withAlpha(20),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(icon, color: AppColors.brandBlue),
-                                ),
-                                const SizedBox(width: AppSpacing.x3),
-                                Expanded(
-                                  child: Text(
-                                    title,
-                                    style: AppTypography.heading1.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                  ),
+                ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(s(24), s(24), s(24), s(24)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Container(
+                          width: s(48),
+                          height: s(48),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF6FF),
+                            borderRadius: BorderRadius.circular(s(12)),
+                            border: Border.all(
+                              color: _BatchTypeSelectionPageState._cardBorder,
                             ),
-                            const SizedBox(height: AppSpacing.x3),
-                            Text(
-                              subtitle,
-                              style: AppTypography.body2.copyWith(
-                                color: AppColors.textSecondary,
-                                height: 1.25,
+                          ),
+                          alignment: Alignment.center,
+                          child: SvgPicture.asset(
+                            svgAssetPath,
+                            width: s(30),
+                            height: s(30),
+                            colorFilter: selected
+                                ? const ColorFilter.mode(
+                                    AppColors.brandBlue,
+                                    BlendMode.srcIn,
+                                  )
+                                : null,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (selected)
+                          Container(
+                            width: s(24),
+                            height: s(24),
+                            decoration: BoxDecoration(
+                              color: AppColors.brandBlue,
+                              borderRadius: BorderRadius.circular(s(9999)),
+                            ),
+                            alignment: Alignment.center,
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_check.svg',
+                              width: s(10.5),
+                              height: s(7.5),
+                            ),
+                          ),
+                      ],
+                    ),
+                    SizedBox(height: s(16)),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: s(20),
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: s(12)),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w400,
+                        height: 1.4,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    SizedBox(height: s(16)),
+                    Wrap(
+                      spacing: s(7),
+                      runSpacing: s(6),
+                      children: <Widget>[
+                        for (final String tag in tags)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: s(12),
+                              vertical: s(6),
+                            ),
+                            decoration: BoxDecoration(
+                              color: chipBg,
+                              borderRadius: BorderRadius.circular(s(8)),
+                              border: Border.all(color: chipBorder),
+                            ),
+                            child: Text(
+                              tag.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: s(11),
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: s(0.55),
+                                height: 1.5,
+                                color: chipFg,
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.x3),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: <Widget>[
-                                for (final String tag in tags)
-                                  Chip(
-                                    label: Text(tag),
-                                    backgroundColor: AppColors.brandBlue
-                                        .withAlpha(14),
-                                    labelStyle: AppTypography.caption.copyWith(
-                                      color: AppColors.brandBlue,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                    side: BorderSide(
-                                      color: AppColors.brandBlue.withAlpha(20),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (selected)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      gradient: gradient,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: AppColors.brandBlue.withAlpha(30),
-                          blurRadius: 14,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -377,39 +441,47 @@ class _BatchTypeCard extends StatelessWidget {
   }
 }
 
-class _GradientCtaButton extends StatefulWidget {
-  const _GradientCtaButton({
-    required this.label,
-    required this.icon,
-    required this.gradient,
+class _ContinueButton extends StatefulWidget {
+  const _ContinueButton({
+    required this.scale,
     required this.enabled,
-    required this.onPressed,
+    required this.onTap,
   });
 
-  final String label;
-  final IconData icon;
-  final Gradient gradient;
+  final double scale;
   final bool enabled;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
 
   @override
-  State<_GradientCtaButton> createState() => _GradientCtaButtonState();
+  State<_ContinueButton> createState() => _ContinueButtonState();
 }
 
-class _GradientCtaButtonState extends State<_GradientCtaButton> {
+class _ContinueButtonState extends State<_ContinueButton> {
   bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
+    double s(double v) => v * widget.scale;
+
     final Widget content = Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
         Text(
-          widget.label,
-          style: AppTypography.button.copyWith(color: Colors.white),
+          'Continue',
+          style: TextStyle(
+            fontSize: s(18),
+            fontWeight: FontWeight.w700,
+            letterSpacing: s(0.035),
+            color: Colors.white,
+          ),
         ),
-        const SizedBox(width: 10),
-        Icon(widget.icon, color: Colors.white, size: 18),
+        SizedBox(width: s(10)),
+        SvgPicture.asset(
+          'assets/icons/figma/new_batch_continue_arrow.svg',
+          width: s(16),
+          height: s(16),
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+        ),
       ],
     );
 
@@ -417,25 +489,26 @@ class _GradientCtaButtonState extends State<_GradientCtaButton> {
       duration: const Duration(milliseconds: 150),
       opacity: widget.enabled ? 1 : 0.45,
       child: SizedBox(
-        height: 54,
+        height: s(60),
         width: double.infinity,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            gradient: widget.gradient,
-            borderRadius: BorderRadius.circular(999),
+            color: AppColors.brandBlue,
+            borderRadius: BorderRadius.circular(s(16)),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: AppColors.brandBlue.withAlpha(40),
-                blurRadius: 22,
-                offset: const Offset(0, 12),
+                color: AppColors.brandBlue.withAlpha(51),
+                blurRadius: s(6),
+                spreadRadius: s(-4),
+                offset: Offset(0, s(4)),
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: widget.enabled ? widget.onPressed : null,
+              borderRadius: BorderRadius.circular(s(16)),
+              onTap: widget.enabled ? widget.onTap : null,
               onHighlightChanged: (bool value) =>
                   setState(() => _isPressed = value),
               child: AnimatedScale(

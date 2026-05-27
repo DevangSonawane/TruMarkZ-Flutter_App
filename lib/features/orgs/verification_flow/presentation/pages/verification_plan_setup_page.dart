@@ -6,21 +6,6 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 
-enum _Industry {
-  transport,
-  healthcare,
-  education,
-  manufacturing,
-  securityServices,
-  blueCollarWorkforce,
-  gigEconomyWorkers,
-  recruitmentStudents,
-  insuranceAgents,
-  agricultureWorkforce,
-  individualVerification,
-  others,
-}
-
 enum _AccessType { publicSearchable, permissionBased }
 
 class _VerificationCheck {
@@ -53,7 +38,6 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
   bool _didInitFromRoute = false;
   bool _singleFlow = false;
   int _stepIndex = 0;
-  _Industry? _selectedIndustry;
   int _lastStepIndex = 0;
 
   late final List<_VerificationCheck> _checks = <_VerificationCheck>[
@@ -102,7 +86,6 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
       if (check.defaultSelected) check.id,
   };
 
-  bool _agreedToCosts = false;
   _AccessType _accessType = _AccessType.publicSearchable;
   bool _whatsAppConsent = true;
   bool _emailConsent = false;
@@ -127,7 +110,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
     _singleFlow = flow == 'single';
   }
 
-  static const int _totalSteps = 4;
+  static const int _totalSteps = 2;
 
   void _goBack(BuildContext context) {
     if (_stepIndex == 0) {
@@ -147,7 +130,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
 
   void _goNext(BuildContext context) {
     if (_stepIndex == 0) {
-      if (_selectedIndustry == null) return;
+      if (_selectedCheckIds.isEmpty) return;
       setState(() {
         _lastStepIndex = _stepIndex;
         _stepIndex = 1;
@@ -155,30 +138,9 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
       return;
     }
 
-    if (_stepIndex == 1) {
-      if (_selectedCheckIds.isEmpty) return;
-      setState(() {
-        _lastStepIndex = _stepIndex;
-        _stepIndex = 2;
-      });
-      return;
-    }
-
-    if (_stepIndex == 2) {
-      if (!_agreedToCosts) return;
-      setState(() {
-        _lastStepIndex = _stepIndex;
-        _stepIndex = 3;
-      });
-      return;
-    }
-
-    // Finalize.
+    // Finalize (after permissions).
     final Map<String, String> qp = <String, String>{};
     if (_singleFlow) qp['flow'] = 'single';
-    if (_selectedIndustry != null) {
-      qp['industry'] = _selectedIndustry!.name;
-    }
     if (_selectedCheckIds.isNotEmpty) {
       final List<String> sortedCheckIds = _selectedCheckIds.toList()..sort();
       qp['checks'] = sortedCheckIds.join(',');
@@ -205,22 +167,10 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
     context.push(qs.isEmpty ? target : '$target?$qs');
   }
 
-  int get _totalCostInr {
-    int total = 0;
-    for (final _VerificationCheck check in _checks) {
-      if (_selectedCheckIds.contains(check.id)) {
-        total += check.costInr;
-      }
-    }
-    return total;
-  }
-
   String _formatInr(int amount) => '₹$amount';
 
   String get _stepTitle => switch (_stepIndex) {
-    0 => 'Industry',
-    1 => 'Checks',
-    2 => 'Cost',
+    0 => 'Checks',
     _ => 'Permissions',
   };
 
@@ -230,11 +180,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
     final bool movingForward = _stepIndex >= _lastStepIndex;
 
     final Widget content = switch (_stepIndex) {
-      0 => _IndustryStep(
-        selectedIndustry: _selectedIndustry,
-        onSelect: (value) => setState(() => _selectedIndustry = value),
-      ),
-      1 => _ChecksStep(
+      0 => _ChecksStep(
         checks: _checks,
         selectedCheckIds: _selectedCheckIds,
         formatInr: _formatInr,
@@ -248,16 +194,6 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
           });
         },
       ),
-      2 => _CostStep(
-        checks: <_VerificationCheck>[
-          for (final _VerificationCheck check in _checks)
-            if (_selectedCheckIds.contains(check.id)) check,
-        ],
-        totalCostInr: _totalCostInr,
-        formatInr: _formatInr,
-        agreedToCosts: _agreedToCosts,
-        onAgreedChanged: (bool value) => setState(() => _agreedToCosts = value),
-      ),
       _ => _PermissionsStep(
         accessType: _accessType,
         whatsAppConsent: _whatsAppConsent,
@@ -270,9 +206,7 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
     };
 
     final bool canContinue = switch (_stepIndex) {
-      0 => _selectedIndustry != null,
-      1 => _selectedCheckIds.isNotEmpty,
-      2 => _agreedToCosts,
+      0 => _selectedCheckIds.isNotEmpty,
       _ =>
         _accessType == _AccessType.permissionBased
             ? (_whatsAppConsent || _emailConsent)
@@ -281,15 +215,11 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
 
     final String ctaLabel = switch (_stepIndex) {
       0 => 'Continue',
-      1 => _singleFlow ? 'Continue' : 'Continue',
-      2 => 'Continue',
-      _ => 'Upload',
+      _ => 'Bulk Upload',
     };
 
     final IconData ctaIcon = switch (_stepIndex) {
       0 => Icons.arrow_forward_rounded,
-      1 => Icons.arrow_forward_rounded,
-      2 => Icons.arrow_forward_rounded,
       _ => Icons.upload_file_rounded,
     };
 
@@ -574,210 +504,6 @@ class _FlowingProgressBar extends StatelessWidget {
   }
 }
 
-class _IndustryStep extends StatelessWidget {
-  const _IndustryStep({required this.selectedIndustry, required this.onSelect});
-
-  final _Industry? selectedIndustry;
-  final ValueChanged<_Industry> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<(_Industry, String, IconData)> industries =
-        <(_Industry, String, IconData)>[
-          (
-            _Industry.transport,
-            'Transport & Logistics',
-            Icons.local_shipping_rounded,
-          ),
-          (_Industry.healthcare, 'Healthcare', Icons.medical_services_rounded),
-          (_Industry.education, 'Education', Icons.school_rounded),
-          (_Industry.manufacturing, 'Manufacturing', Icons.factory_rounded),
-          (
-            _Industry.securityServices,
-            'Security Services',
-            Icons.shield_rounded,
-          ),
-          (
-            _Industry.blueCollarWorkforce,
-            'Blue Collar Workforce',
-            Icons.engineering_rounded,
-          ),
-          (
-            _Industry.gigEconomyWorkers,
-            'Gig Economy Workers',
-            Icons.delivery_dining_rounded,
-          ),
-          (
-            _Industry.recruitmentStudents,
-            'Recruitment & Students',
-            Icons.school_outlined,
-          ),
-          (
-            _Industry.insuranceAgents,
-            'Insurance Agents',
-            Icons.health_and_safety_rounded,
-          ),
-          (
-            _Industry.agricultureWorkforce,
-            'Agriculture Workforce',
-            Icons.agriculture_rounded,
-          ),
-          (
-            _Industry.individualVerification,
-            'Individual Verification',
-            Icons.person_search_rounded,
-          ),
-          (_Industry.others, 'Others', Icons.widgets_rounded),
-        ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text('Select Industry', style: AppTypography.display2),
-        const SizedBox(height: AppSpacing.x2),
-        Text(
-          'Choose the industry category that best fits this credential batch for optimized verification workflows.',
-          style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: AppSpacing.x5),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final int columns = constraints.maxWidth >= 800 ? 4 : 2;
-            return GridView.builder(
-              itemCount: industries.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                mainAxisSpacing: AppSpacing.x3,
-                crossAxisSpacing: AppSpacing.x3,
-                childAspectRatio: 1,
-              ),
-              itemBuilder: (BuildContext context, int index) {
-                final (_Industry id, String label, IconData icon) =
-                    industries[index];
-                final bool isSelected = selectedIndustry == id;
-                return _IndustryCard(
-                  label: label,
-                  icon: icon,
-                  selected: isSelected,
-                  onTap: () => onSelect(id),
-                );
-              },
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _IndustryCard extends StatelessWidget {
-  const _IndustryCard({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final BorderSide borderSide = selected
-        ? const BorderSide(color: AppColors.brandBlue, width: 2)
-        : BorderSide(color: Colors.transparent.withAlpha(0));
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.fromBorderSide(borderSide),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(18),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(AppSpacing.x5),
-          child: Stack(
-            children: <Widget>[
-              Positioned.fill(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? AppColors.brandBlue.withAlpha(24)
-                              : const Color(0xFFEFF3FF),
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(icon, color: AppColors.brandBlue, size: 30),
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      Text(
-                        label,
-                        style: AppTypography.body2.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: selected
-                              ? AppColors.brandBlue
-                              : AppColors.textPrimary,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (selected)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[AppColors.brandBlue, Color(0xFF004AC6)],
-                      ),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ChecksStep extends StatelessWidget {
   const _ChecksStep({
     required this.checks,
@@ -815,45 +541,6 @@ class _ChecksStep extends StatelessWidget {
               const SizedBox(height: AppSpacing.x3),
             ],
           ],
-        ),
-      ],
-    );
-  }
-}
-
-class _CostStep extends StatelessWidget {
-  const _CostStep({
-    required this.checks,
-    required this.totalCostInr,
-    required this.formatInr,
-    required this.agreedToCosts,
-    required this.onAgreedChanged,
-  });
-
-  final List<_VerificationCheck> checks;
-  final int totalCostInr;
-  final String Function(int) formatInr;
-  final bool agreedToCosts;
-  final ValueChanged<bool> onAgreedChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text('Per-unit Cost Breakdown', style: AppTypography.display2),
-        const SizedBox(height: AppSpacing.x2),
-        Text(
-          'Review the per-person pricing for your selected checks before continuing.',
-          style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: AppSpacing.x5),
-        _CostSummaryCard(
-          checks: checks,
-          totalCostInr: totalCostInr,
-          formatInr: formatInr,
-          agreedToCosts: agreedToCosts,
-          onAgreedChanged: onAgreedChanged,
         ),
       ],
     );
@@ -1023,170 +710,6 @@ class _CheckTile extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _CostSummaryCard extends StatelessWidget {
-  const _CostSummaryCard({
-    required this.checks,
-    required this.totalCostInr,
-    required this.formatInr,
-    required this.agreedToCosts,
-    required this.onAgreedChanged,
-  });
-
-  final List<_VerificationCheck> checks;
-  final int totalCostInr;
-  final String Function(int) formatInr;
-  final bool agreedToCosts;
-  final ValueChanged<bool> onAgreedChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.brandBlue.withAlpha(18),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(AppSpacing.x5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Icon(
-                Icons.receipt_long_rounded,
-                color: AppColors.brandBlue,
-              ),
-              const SizedBox(width: AppSpacing.x2),
-              Text(
-                'Cost Summary',
-                style: AppTypography.heading2.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.x4),
-          if (checks.isEmpty)
-            Text(
-              'Select at least one check to see the cost breakdown.',
-              style: AppTypography.body2.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            )
-          else ...<Widget>[
-            for (final _VerificationCheck check in checks) ...<Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      check.title,
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    formatInr(check.costInr),
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.x2),
-            ],
-            const SizedBox(height: AppSpacing.x2),
-            Container(height: 1, color: AppColors.divider),
-            const SizedBox(height: AppSpacing.x3),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'TOTAL PER UNIT',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        formatInr(totalCostInr),
-                        style: AppTypography.display2.copyWith(
-                          color: AppColors.brandBlue,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE7F0FF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${checks.length} Checks',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.brandBlue,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.x4),
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF3FF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFD9E3FF)),
-              ),
-              padding: const EdgeInsets.all(AppSpacing.x4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Checkbox.adaptive(
-                    value: agreedToCosts,
-                    onChanged: (bool? value) => onAgreedChanged(value ?? false),
-                    activeColor: AppColors.brandBlue,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  const SizedBox(width: AppSpacing.x1),
-                  Expanded(
-                    child: Text(
-                      'I agree to the per-unit cost breakdown and the terms of service for these verification checks.',
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }

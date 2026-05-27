@@ -492,7 +492,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     setState(() => _pickedFile = picked);
   }
 
-  void _confirmAndCreateBatch() {
+  Future<void> _confirmAndCreateBatch() async {
     final List<String> columns = _columns();
     debugPrint(
       '[BulkUploadPage] Confirm tapped batch=${_batchNameController.text.trim()} picked=${_pickedFile?.name}',
@@ -510,7 +510,14 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       return;
     }
 
-    _uploadAndNavigate(columns);
+    final Uri uri = Uri(
+      path: AppRouter.perUnitCostBreakdownPath,
+      queryParameters: <String, String>{'checks': _checks.join(',')},
+    );
+    final Object? res = await context.push(uri.toString());
+    if (res == true) {
+      await _uploadAndNavigate(columns);
+    }
   }
 
   Future<void> _uploadAndNavigate(List<String> columns) async {
@@ -949,7 +956,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           _batchNameController.text.trim().isNotEmpty &&
                           !_isUploading &&
                           !_preflightChecking)
-                      ? _confirmAndCreateBatch
+                      ? () => _confirmAndCreateBatch()
                       : null,
                 ),
               ),
