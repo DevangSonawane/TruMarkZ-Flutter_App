@@ -7,61 +7,33 @@ import 'package:go_router/go_router.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 
-class VerificationChecksPage extends StatefulWidget {
-  const VerificationChecksPage({super.key});
+class VerificationPermissionsPage extends StatefulWidget {
+  const VerificationPermissionsPage({super.key});
 
   @override
-  State<VerificationChecksPage> createState() => _VerificationChecksPageState();
+  State<VerificationPermissionsPage> createState() =>
+      _VerificationPermissionsPageState();
 }
 
-class _VerificationChecksPageState extends State<VerificationChecksPage> {
+class _VerificationPermissionsPageState
+    extends State<VerificationPermissionsPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
 
-  final List<_CheckItem> _items = const <_CheckItem>[
-    _CheckItem(
-      id: 'identity',
-      title: 'Identity Verification',
-      subtitle: 'PAN, Aadhar & Face Match',
-      mode: _CheckMode.auto,
-      costInr: 120,
-      svgIconPath: 'assets/icons/figma/checks_icon_identity.svg',
-    ),
-    _CheckItem(
-      id: 'address',
-      title: 'Address History',
-      subtitle: 'Physical site verification',
-      mode: _CheckMode.manual,
-      costInr: 240,
-      svgIconPath: 'assets/icons/figma/checks_icon_address.svg',
-    ),
-    _CheckItem(
-      id: 'criminal',
-      title: 'Criminal Record',
-      subtitle: 'Global/National database search',
-      mode: _CheckMode.auto,
-      costInr: 180,
-      svgIconPath: 'assets/icons/figma/checks_icon_criminal.svg',
-    ),
-    _CheckItem(
-      id: 'education',
-      title: 'Education Check',
-      subtitle: 'Highest qualification check',
-      mode: _CheckMode.manual,
-      costInr: 350,
-      svgIconPath: 'assets/icons/figma/checks_icon_education.svg',
-    ),
-    _CheckItem(
-      id: 'employment',
-      title: 'Employment History',
-      subtitle: 'Last 2 employers verification',
-      mode: _CheckMode.manual,
-      costInr: 420,
-      svgIconPath: 'assets/icons/figma/checks_icon_employment.svg',
-    ),
-  ];
+  _AccessMode _mode = _AccessMode.publicSearchable;
 
-  final Set<String> _selected = <String>{'identity'};
+  List<String> get _checksFromRoute {
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
+    final String raw = (qp['checks'] ?? '').trim();
+    if (raw.isEmpty) return const <String>[];
+    return raw
+        .split(',')
+        .map((String e) => e.trim())
+        .where((String e) => e.isNotEmpty)
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +48,13 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                 : _referenceWidth;
             final double scale = contentWidth / _referenceWidth;
             double s(double v) => v * scale;
+
+            final EdgeInsets panelPadding = EdgeInsets.fromLTRB(
+              s(16),
+              s(32),
+              s(16),
+              0,
+            );
 
             return Center(
               child: SizedBox(
@@ -102,7 +81,7 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                           ),
                           SizedBox(width: s(12)),
                           Text(
-                            'Checks',
+                            'Permissions',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: s(21),
@@ -111,8 +90,6 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                               color: Colors.white,
                             ),
                           ),
-                          const Spacer(),
-                          _IndustryPill(scale: scale),
                         ],
                       ),
                     ),
@@ -128,20 +105,15 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                         child: Column(
                           children: <Widget>[
                             Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  s(16),
-                                  s(32),
-                                  s(16),
-                                  0,
-                                ),
+                              child: SingleChildScrollView(
+                                padding: panelPadding.copyWith(bottom: s(24)),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 2 OF 4',
+                                          'STEP 3 OF 4',
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -153,7 +125,7 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                                         ),
                                         const Spacer(),
                                         Text(
-                                          '25%',
+                                          '50%',
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -181,7 +153,7 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                                             ),
                                             FractionallySizedBox(
                                               alignment: Alignment.centerLeft,
-                                              widthFactor: 0.25,
+                                              widthFactor: 0.5,
                                               child: const DecoratedBox(
                                                 decoration: BoxDecoration(
                                                   color: AppColors.brandBlue,
@@ -194,7 +166,7 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
-                                      'Select Verification Checks',
+                                      'Configure Permissions',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(24),
@@ -206,7 +178,7 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                                     ),
                                     SizedBox(height: s(12)),
                                     Text(
-                                      'Customize your verification flow by selecting the\nnecessary checks for your candidates.',
+                                      'Determine how verification data will be accessed and who\ncan view the finalized reports.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -217,35 +189,37 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                                       ),
                                     ),
                                     SizedBox(height: s(24)),
-                                    Expanded(
-                                      child: ListView.separated(
-                                        padding: EdgeInsets.only(bottom: s(16)),
-                                        itemBuilder:
-                                            (BuildContext context, int i) {
-                                              final _CheckItem item = _items[i];
-                                              final bool selected = _selected
-                                                  .contains(item.id);
-                                              return _CheckTile(
-                                                scale: scale,
-                                                item: item,
-                                                selected: selected,
-                                                onTap: () {
-                                                  setState(() {
-                                                    if (selected) {
-                                                      _selected.remove(item.id);
-                                                    } else {
-                                                      _selected.add(item.id);
-                                                    }
-                                                  });
-                                                },
-                                              );
-                                            },
-                                        separatorBuilder:
-                                            (BuildContext context, int i) =>
-                                                SizedBox(height: s(16)),
-                                        itemCount: _items.length,
-                                      ),
+                                    _PermissionCard(
+                                      scale: scale,
+                                      selected:
+                                          _mode == _AccessMode.publicSearchable,
+                                      title: 'Public Searchable',
+                                      subtitle:
+                                          'Results will be visible in the public registry\nfor instant verification by third parties.',
+                                      svgIconPath:
+                                          'assets/icons/figma/permissions_icon_public.svg',
+                                      onTap: () => setState(() {
+                                        _mode = _AccessMode.publicSearchable;
+                                      }),
                                     ),
+                                    SizedBox(height: s(16)),
+                                    _PermissionCard(
+                                      scale: scale,
+                                      selected:
+                                          _mode ==
+                                          _AccessMode.permissionBasedAccess,
+                                      title: 'Permission-Based Access',
+                                      subtitle:
+                                          'Requires explicit consent via WhatsApp or\nEmail from the individual before data\naccess.',
+                                      svgIconPath:
+                                          'assets/icons/figma/permissions_icon_permission.svg',
+                                      onTap: () => setState(() {
+                                        _mode =
+                                            _AccessMode.permissionBasedAccess;
+                                      }),
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    _InfoBox(scale: scale),
                                   ],
                                 ),
                               ),
@@ -255,15 +229,16 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
                               child: _BottomContinue(
                                 scale: scale,
                                 onTap: () {
+                                  final List<String> checks = _checksFromRoute;
                                   final Map<String, String> qp =
                                       <String, String>{};
-                                  if (_selected.isNotEmpty) {
-                                    final List<String> ids = _selected.toList()
-                                      ..sort();
-                                    qp['checks'] = ids.join(',');
+                                  if (checks.isNotEmpty) {
+                                    qp['checks'] = checks.join(',');
                                   }
+                                  qp['access'] = _mode.name;
+
                                   final Uri uri = Uri(
-                                    path: AppRouter.verificationPermissionsPath,
+                                    path: AppRouter.bulkUploadPath,
                                     queryParameters: qp,
                                   );
                                   context.push(uri.toString());
@@ -285,100 +260,32 @@ class _VerificationChecksPageState extends State<VerificationChecksPage> {
   }
 }
 
-class _IndustryPill extends StatelessWidget {
-  const _IndustryPill({required this.scale});
-
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return Container(
-      height: s(29),
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(s(10)),
-        border: Border.all(color: const Color(0xFFE0EFFE)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SvgPicture.asset(
-            'assets/icons/figma/checks_industry_building.svg',
-            width: s(12),
-            height: s(10),
-            colorFilter: const ColorFilter.mode(
-              AppColors.brandBlue,
-              BlendMode.srcIn,
-            ),
-          ),
-          SizedBox(width: s(8)),
-          Text(
-            'Real Estate',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.0644531),
-              height: 16.5 / 11,
-              color: AppColors.brandBlue,
-            ),
-          ),
-          SizedBox(width: s(8)),
-          Container(width: s(1), height: s(12), color: const Color(0xFFE2E8F0)),
-          SizedBox(width: s(8)),
-          Text(
-            'EDIT',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(10),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.25),
-              height: 15 / 10,
-              color: AppColors.brandBlue,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CheckTile extends StatelessWidget {
-  const _CheckTile({
+class _PermissionCard extends StatelessWidget {
+  const _PermissionCard({
     required this.scale,
-    required this.item,
     required this.selected,
+    required this.title,
+    required this.subtitle,
+    required this.svgIconPath,
     required this.onTap,
   });
 
   final double scale;
-  final _CheckItem item;
   final bool selected;
+  final String title;
+  final String subtitle;
+  final String svgIconPath;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    final Color cardBg = selected ? const Color(0xFFF0F7FF) : Colors.white;
-    final Color cardBorder = selected
+    final Color bg = Colors.white;
+    final Color border = selected
         ? AppColors.brandBlue
-        : const Color(0xFFF1F5F9);
+        : const Color(0xFFE2E8F0);
     final double borderWidth = selected ? s(2) : s(1);
-    final BoxShadow shadow = selected
-        ? const BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 2,
-            offset: Offset(0, 1),
-          )
-        : const BoxShadow(
-            color: Color(0x05000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          );
 
     return Material(
       color: Colors.transparent,
@@ -389,97 +296,66 @@ class _CheckTile extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.all(s(20)),
           decoration: BoxDecoration(
-            color: cardBg,
+            color: bg,
             borderRadius: BorderRadius.circular(s(16)),
-            border: Border.all(color: cardBorder, width: borderWidth),
-            boxShadow: <BoxShadow>[shadow],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Container(
-                width: s(48),
-                height: s(48),
-                decoration: BoxDecoration(
-                  color: selected ? Colors.white : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(s(12)),
-                  border: Border.all(
-                    color: selected
-                        ? const Color(0xFFE0EFFE)
-                        : const Color(0xFFF1F5F9),
-                  ),
-                  boxShadow: selected
-                      ? const <BoxShadow>[
-                          BoxShadow(
-                            color: Color(0x0D000000),
-                            blurRadius: 2,
-                            offset: Offset(0, 1),
-                          ),
-                        ]
-                      : const <BoxShadow>[],
-                ),
-                alignment: Alignment.center,
-                child: SvgPicture.asset(
-                  item.svgIconPath,
-                  width: s(22),
-                  height: s(18),
-                ),
+            border: Border.all(color: border, width: borderWidth),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x0D000000),
+                blurRadius: 2,
+                offset: Offset(0, 1),
               ),
-              SizedBox(width: s(16)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(16),
-                              fontWeight: FontWeight.w600,
-                              height: 24 / 16,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: s(12)),
-                        _ModePill(scale: scale, mode: item.mode),
-                      ],
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: s(48),
+                    height: s(48),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F7FF),
+                      borderRadius: BorderRadius.circular(s(12)),
+                      border: Border.all(color: const Color(0xFFE0EFFE)),
                     ),
-                    SizedBox(height: s(4)),
-                    Text(
-                      item.subtitle,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(12),
-                        fontWeight: FontWeight.w400,
-                        height: 15 / 12,
-                        color: const Color(0xFF64748B),
+                    alignment: Alignment.center,
+                    child: SvgPicture.asset(
+                      svgIconPath,
+                      width: s(22),
+                      height: s(22),
+                      colorFilter: const ColorFilter.mode(
+                        AppColors.brandBlue,
+                        BlendMode.srcIn,
                       ),
                     ),
-                  ],
+                  ),
+                  const Spacer(),
+                  _RadioIndicator(scale: scale, selected: selected),
+                ],
+              ),
+              SizedBox(height: s(16)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(16),
+                  fontWeight: FontWeight.w700,
+                  height: 24 / 16,
+                  color: const Color(0xFF0F172A),
                 ),
               ),
-              SizedBox(width: s(16)),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  _SelectIndicator(scale: scale, selected: selected),
-                  SizedBox(height: s(12)),
-                  Text(
-                    '₹${item.costInr}',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(14),
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: s(-0.1230469),
-                      height: 21 / 14,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
+              SizedBox(height: s(8)),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(14),
+                  fontWeight: FontWeight.w400,
+                  height: 21 / 14,
+                  color: const Color(0xFF64748B),
+                ),
               ),
             ],
           ),
@@ -489,43 +365,8 @@ class _CheckTile extends StatelessWidget {
   }
 }
 
-class _ModePill extends StatelessWidget {
-  const _ModePill({required this.scale, required this.mode});
-
-  final double scale;
-  final _CheckMode mode;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    final bool auto = mode == _CheckMode.auto;
-    final Color bg = auto ? AppColors.brandBlue : const Color(0xFFEFF3F7);
-    final Color fg = auto ? Colors.white : const Color(0xFF64748B);
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(6), vertical: s(2)),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(s(4)),
-      ),
-      child: Text(
-        auto ? 'AUTO' : 'MANUAL',
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: s(9),
-          fontWeight: FontWeight.w700,
-          letterSpacing: s(0.45),
-          height: 13.5 / 9,
-          color: fg,
-        ),
-      ),
-    );
-  }
-}
-
-class _SelectIndicator extends StatelessWidget {
-  const _SelectIndicator({required this.scale, required this.selected});
+class _RadioIndicator extends StatelessWidget {
+  const _RadioIndicator({required this.scale, required this.selected});
 
   final double scale;
   final bool selected;
@@ -541,12 +382,16 @@ class _SelectIndicator extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.brandBlue,
           borderRadius: BorderRadius.circular(s(9999)),
+          border: Border.all(color: AppColors.brandBlue, width: s(2)),
         ),
         alignment: Alignment.center,
-        child: SvgPicture.asset(
-          'assets/icons/figma/checks_checkmark.svg',
-          width: s(9),
-          height: s(7),
+        child: Container(
+          width: s(6),
+          height: s(6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(s(9999)),
+          ),
         ),
       );
     }
@@ -557,7 +402,64 @@ class _SelectIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(s(9999)),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: s(2)),
+        border: Border.all(color: const Color(0xFFCBD5E1), width: s(2)),
+      ),
+    );
+  }
+}
+
+class _InfoBox extends StatelessWidget {
+  const _InfoBox({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(s(16)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(s(12)),
+        border: Border.all(color: const Color(0xFFCBD5E1).withAlpha(204)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: s(16),
+            height: s(16),
+            decoration: BoxDecoration(
+              color: AppColors.brandBlue,
+              borderRadius: BorderRadius.circular(s(9999)),
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              'assets/icons/figma/permissions_icon_info.svg',
+              width: s(10),
+              height: s(10),
+              colorFilter: const ColorFilter.mode(
+                Colors.white,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+          SizedBox(width: s(8)),
+          Expanded(
+            child: Text(
+              'TruMarkZ uses cryptographic signing for every consent request. \nSelecting Permission-Based Access ensures GDPR and SOC2 compliance for sensitive professional data.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(14),
+                fontWeight: FontWeight.w400,
+                height: 21 / 14,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -665,22 +567,4 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-enum _CheckMode { auto, manual }
-
-class _CheckItem {
-  const _CheckItem({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.mode,
-    required this.costInr,
-    required this.svgIconPath,
-  });
-
-  final String id;
-  final String title;
-  final String subtitle;
-  final _CheckMode mode;
-  final int costInr;
-  final String svgIconPath;
-}
+enum _AccessMode { publicSearchable, permissionBasedAccess }

@@ -4,10 +4,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:csv/csv.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
@@ -17,7 +18,6 @@ import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/widgets/tmz_button.dart';
-import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
 
@@ -29,6 +29,10 @@ class BulkUploadPage extends ConsumerStatefulWidget {
 }
 
 class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
+  static const double _referenceWidth = 402;
+  static const Color _panelBg = Color(0xFFF7F9FC);
+  static const Color _panelText = Color(0xFF3A3A3A);
+
   bool _didInitFromRoute = false;
 
   late final TextEditingController _batchNameController;
@@ -842,129 +846,838 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final List<String> columns = _columns();
 
     return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Image.asset('assets/icons/headers_app_icon.png', height: 22),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('Bulk Upload'),
-          ],
-        ),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.x4),
-                children: <Widget>[
-                  Text('Upload CSV', style: AppTypography.display2),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Download a template based on your selected checks, upload your Excel/CSV and optional photos, then confirm the batch.',
-                    style: AppTypography.body2.copyWith(
-                      color: scheme.onSurface.withAlpha(160),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  TMZButton(
-                    label: 'Download Excel Template',
-                    icon: Icons.download_rounded,
-                    onPressed: _downloadTemplate,
-                  ),
-                  const SizedBox(height: AppSpacing.x3),
-                  TMZCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text('Template Columns', style: AppTypography.heading2),
-                        const SizedBox(height: AppSpacing.x2),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: <Widget>[
-                            for (final String c in columns)
-                              Chip(
-                                label: Text(c),
-                                backgroundColor: scheme.primary.withAlpha(18),
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double contentWidth = constraints.maxWidth < _referenceWidth
+                ? constraints.maxWidth
+                : _referenceWidth;
+            final double scale = contentWidth / _referenceWidth;
+            double s(double v) => v * scale;
+
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(10), s(16), 0),
+                      child: Row(
+                        children: <Widget>[
+                          InkResponse(
+                            onTap: () => context.pop(),
+                            radius: s(22),
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_back.svg',
+                              width: s(24),
+                              height: s(24),
+                              colorFilter: const ColorFilter.mode(
+                                Colors.white,
+                                BlendMode.srcIn,
                               ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.x3),
-                        Text(
-                          'Industry: ${_industry.toUpperCase()}  •  Checks: ${_checks.length}',
-                          style: AppTypography.caption.copyWith(
-                            color: scheme.onSurface.withAlpha(150),
-                            letterSpacing: 0.6,
+                            ),
+                          ),
+                          SizedBox(width: s(12)),
+                          Text(
+                            'Bulk Upload',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(28),
+                              fontWeight: FontWeight.w600,
+                              height: 32 / 28,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: s(18)),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _panelBg,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(s(20)),
                           ),
                         ),
-                      ],
+                        child: Column(
+                          children: <Widget>[
+                            Expanded(
+                              child: SingleChildScrollView(
+                                padding: EdgeInsets.fromLTRB(
+                                  s(16),
+                                  s(28),
+                                  s(16),
+                                  s(140),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Row(
+                                      children: <Widget>[
+                                        Text(
+                                          'STEP 4 OF 4',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: s(1),
+                                            height: 15 / 10,
+                                            color: const Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '75%',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            height: 15 / 10,
+                                            color: AppColors.brandBlue,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: s(8)),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                        s(9999),
+                                      ),
+                                      child: SizedBox(
+                                        height: s(4),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: <Widget>[
+                                            const DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFFE5E7EB),
+                                              ),
+                                            ),
+                                            FractionallySizedBox(
+                                              alignment: Alignment.centerLeft,
+                                              widthFactor: 0.8027,
+                                              child: const DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.brandBlue,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    _IndustryPill(
+                                      scale: scale,
+                                      industryLabel: _prettyIndustry(_industry),
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    Text(
+                                      'BATCH NAME',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(12),
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: s(1.1),
+                                        height: 18 / 12,
+                                        color: _panelText,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(12)),
+                                    _BatchNameField(
+                                      scale: scale,
+                                      controller: _batchNameController,
+                                      onChanged: () => setState(() {}),
+                                    ),
+                                    SizedBox(height: s(10)),
+                                    Text(
+                                      'Assign a unique name to easily track this upload later.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(11),
+                                        fontWeight: FontWeight.w500,
+                                        height: 16 / 11,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(26)),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            'Upload CSV',
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(32),
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: s(1.18),
+                                              height: 34 / 32,
+                                              color: _panelText,
+                                            ),
+                                          ),
+                                        ),
+                                        InkResponse(
+                                          onTap: () => _openMoreSheet(
+                                            scale: scale,
+                                            columns: columns,
+                                          ),
+                                          radius: s(22),
+                                          child: SvgPicture.asset(
+                                            'assets/icons/figma/bulk_upload_icon_more.svg',
+                                            width: s(22),
+                                            height: s(22),
+                                            colorFilter: const ColorFilter.mode(
+                                              AppColors.brandBlue,
+                                              BlendMode.srcIn,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: s(14)),
+                                    Text(
+                                      'Download template based on your selected checks.\nUpload your Excel/CSV, then Confirm the batch.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(12),
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: s(1.18),
+                                        height: 17.75 / 12,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(22)),
+                                    _DropZone(
+                                      scale: scale,
+                                      onTap: () => _openUploadSheet(
+                                        title: 'Upload Excel / CSV',
+                                        description:
+                                            'Pick an Excel/CSV file to create the batch.',
+                                      ),
+                                    ),
+                                    SizedBox(height: s(26)),
+                                    if (_pickedFile != null) ...<Widget>[
+                                      Text(
+                                        'SELECTED FILE',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(12),
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: s(1.1),
+                                          height: 18 / 12,
+                                          color: _panelText,
+                                        ),
+                                      ),
+                                      SizedBox(height: s(12)),
+                                      _SelectedFileCard(
+                                        scale: scale,
+                                        fileName: _pickedFile!.name,
+                                        fileSizeLabel: _formatBytes(
+                                          _pickedFile!.bytes.length,
+                                        ),
+                                        onRemove: () =>
+                                            setState(() => _pickedFile = null),
+                                      ),
+                                      SizedBox(height: s(28)),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                            _BottomNav(
+                              scale: scale,
+                              child: _UploadButton(
+                                scale: scale,
+                                isLoading: _isUploading,
+                                enabled:
+                                    _pickedFile != null &&
+                                    _batchNameController.text
+                                        .trim()
+                                        .isNotEmpty &&
+                                    !_isUploading &&
+                                    !_preflightChecking,
+                                onTap: () => _confirmAndCreateBatch(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const List<String> units = <String>['B', 'KB', 'MB', 'GB'];
+    double b = bytes.toDouble();
+    int unit = 0;
+    while (b >= 1024 && unit < units.length - 1) {
+      b /= 1024;
+      unit++;
+    }
+    final String value = b >= 10 || unit == 0
+        ? b.toStringAsFixed(0)
+        : b.toStringAsFixed(1);
+    return '$value ${units[unit]}';
+  }
+
+  static String _prettyIndustry(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return 'Real Estate';
+    final List<String> parts = v
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .split(' ')
+        .where((String p) => p.trim().isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'Real Estate';
+    String cap(String s) =>
+        s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
+    return parts.map(cap).join(' ');
+  }
+
+  Future<void> _openMoreSheet({
+    required double scale,
+    required List<String> columns,
+  }) async {
+    double s(double v) => v * scale;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(s(16), 0, s(16), s(16)),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(s(18)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  ListTile(
+                    leading: const Icon(Icons.download_rounded),
+                    title: const Text('Download template'),
+                    subtitle: Text('${columns.length} columns'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _downloadTemplate();
+                    },
                   ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Text('Uploads', style: AppTypography.heading2),
-                  const SizedBox(height: AppSpacing.x2),
-                  _UploadTile(
-                    title: 'Excel / CSV File',
-                    subtitle: _pickedFile != null
-                        ? '${_pickedFile!.name} • ${columns.length} fields'
-                        : 'Upload your records file',
-                    leadingIcon: Icons.upload_file_rounded,
-                    uploaded: _pickedFile != null,
-                    onTap: () => _openUploadSheet(
-                      title: 'Upload Excel / CSV',
-                      description:
-                          'Pick an Excel/CSV file to create the batch.',
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Text('Batch Name', style: AppTypography.heading2),
-                  const SizedBox(height: AppSpacing.x2),
-                  TextField(
-                    controller: _batchNameController,
-                    decoration: const InputDecoration(
-                      hintText: 'Driver Verification Q1 — 200 records',
-                      border: OutlineInputBorder(),
-                    ),
-                    textInputAction: TextInputAction.done,
-                    onChanged: (_) => setState(() {}),
+                  ListTile(
+                    leading: const Icon(Icons.upload_file_rounded),
+                    title: const Text('Select file'),
+                    subtitle: const Text('Excel / CSV'),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      _openUploadSheet(
+                        title: 'Upload Excel / CSV',
+                        description:
+                            'Pick an Excel/CSV file to create the batch.',
+                      );
+                    },
                   ),
                 ],
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: TMZButton(
-                  label: 'Confirm & Upload',
-                  icon: Icons.arrow_forward_rounded,
-                  isLoading: _isUploading,
-                  onPressed:
-                      (_pickedFile != null &&
-                          _batchNameController.text.trim().isNotEmpty &&
-                          !_isUploading &&
-                          !_preflightChecking)
-                      ? () => _confirmAndCreateBatch()
-                      : null,
-                ),
-              ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _IndustryPill extends StatelessWidget {
+  const _IndustryPill({required this.scale, required this.industryLabel});
+
+  final double scale;
+  final String industryLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(s(12), s(10), s(12), s(10)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F8FF),
+        borderRadius: BorderRadius.circular(s(12)),
+        border: Border.all(color: const Color(0xFFD7E7FF), width: s(1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SvgPicture.asset(
+            'assets/icons/figma/bulk_industry_building.svg',
+            width: s(18),
+            height: s(18),
+            colorFilter: const ColorFilter.mode(
+              AppColors.brandBlue,
+              BlendMode.srcIn,
             ),
-          ],
+          ),
+          SizedBox(width: s(10)),
+          Text(
+            industryLabel,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(14),
+              fontWeight: FontWeight.w600,
+              height: 18 / 14,
+              color: AppColors.brandBlue,
+            ),
+          ),
+          SizedBox(width: s(10)),
+          Text(
+            '|',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(14),
+              fontWeight: FontWeight.w600,
+              height: 18 / 14,
+              color: const Color(0xFFB6C4D6),
+            ),
+          ),
+          SizedBox(width: s(10)),
+          Text(
+            'EDIT',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(14),
+              fontWeight: FontWeight.w600,
+              letterSpacing: s(1.0),
+              height: 18 / 14,
+              color: AppColors.brandBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DropZone extends StatelessWidget {
+  const _DropZone({required this.scale, required this.onTap});
+
+  final double scale;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(s(20)),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.fromLTRB(s(16), s(26), s(16), s(26)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(s(20)),
+        ),
+        child: CustomPaint(
+          painter: _DashedRRectPainter(
+            radius: s(20),
+            strokeWidth: s(2),
+            dashLength: s(8),
+            gapLength: s(6),
+            color: const Color(0xFFBFD6FF),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(s(14), s(20), s(14), s(20)),
+            child: Column(
+              children: <Widget>[
+                Container(
+                  width: s(64),
+                  height: s(64),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(s(18)),
+                    border: Border.all(
+                      color: const Color(0xFFE6EAF2),
+                      width: s(1),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Colors.black.withAlpha(20),
+                        blurRadius: s(16),
+                        offset: Offset(0, s(6)),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: SvgPicture.asset(
+                    'assets/icons/figma/bulk_upload_icon_upload.svg',
+                    width: s(28),
+                    height: s(28),
+                    colorFilter: const ColorFilter.mode(
+                      AppColors.brandBlue,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ),
+                SizedBox(height: s(18)),
+                Text(
+                  'Tap to select your file',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(18),
+                    fontWeight: FontWeight.w700,
+                    height: 24 / 18,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: s(8)),
+                Text(
+                  'Upload your Excel or CSV file here',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(13),
+                    fontWeight: FontWeight.w500,
+                    height: 18 / 13,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
+  }
+}
+
+class _SelectedFileCard extends StatelessWidget {
+  const _SelectedFileCard({
+    required this.scale,
+    required this.fileName,
+    required this.fileSizeLabel,
+    required this.onRemove,
+  });
+
+  final double scale;
+  final String fileName;
+  final String fileSizeLabel;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(s(14), s(14), s(14), s(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(18)),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: s(1)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: s(48),
+            height: s(48),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(s(14)),
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              'assets/icons/figma/bulk_upload_icon_file_attach.svg',
+              width: s(26),
+              height: s(26),
+              colorFilter: const ColorFilter.mode(
+                Colors.black,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(16),
+                    fontWeight: FontWeight.w700,
+                    height: 20 / 16,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: s(4)),
+                Text(
+                  fileSizeLabel,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 12,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkResponse(
+            onTap: onRemove,
+            radius: s(20),
+            child: SvgPicture.asset(
+              'assets/icons/figma/bulk_close_x.svg',
+              width: s(18),
+              height: s(18),
+              colorFilter: const ColorFilter.mode(
+                Color(0xFF9CA3AF),
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BatchNameField extends StatelessWidget {
+  const _BatchNameField({
+    required this.scale,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final double scale;
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return TextField(
+      controller: controller,
+      onChanged: (_) => onChanged(),
+      decoration: InputDecoration(
+        hintText: 'Enter a batch name, Ex. Driver Verification Q1',
+        hintStyle: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: s(14),
+          fontWeight: FontWeight.w500,
+          height: 20 / 14,
+          color: const Color(0xFFC7D2E1),
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF7F9FC),
+        contentPadding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(s(18)),
+          borderSide: BorderSide(
+            color: const Color(0xFFCBD5E1).withAlpha(160),
+            width: s(1),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(s(18)),
+          borderSide: BorderSide(
+            color: const Color(0xFFCBD5E1).withAlpha(160),
+            width: s(1),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(s(18)),
+          borderSide: BorderSide(
+            color: AppColors.brandBlue.withAlpha(200),
+            width: s(1.2),
+          ),
+        ),
+      ),
+      style: TextStyle(
+        fontFamily: 'Inter',
+        fontSize: s(14),
+        fontWeight: FontWeight.w600,
+        height: 20 / 14,
+        color: const Color(0xFF111827),
+      ),
+      textInputAction: TextInputAction.done,
+    );
+  }
+}
+
+class _UploadButton extends StatelessWidget {
+  const _UploadButton({
+    required this.scale,
+    required this.isLoading,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final double scale;
+  final bool isLoading;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: enabled ? onTap : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.brandBlue,
+          disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white.withAlpha(180),
+          elevation: 0,
+          padding: EdgeInsets.symmetric(vertical: s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(20)),
+          ),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: s(20),
+                height: s(20),
+                child: CircularProgressIndicator(
+                  strokeWidth: s(2),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    'Upload',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(18),
+                      fontWeight: FontWeight.w700,
+                      height: 28 / 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: s(10)),
+                  SvgPicture.asset(
+                    'assets/icons/figma/new_batch_continue_arrow.svg',
+                    width: s(16),
+                    height: s(16),
+                    colorFilter: const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
+            ),
+          ),
+          child: SafeArea(top: false, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRRectPainter extends CustomPainter {
+  const _DashedRRectPainter({
+    required this.radius,
+    required this.strokeWidth,
+    required this.dashLength,
+    required this.gapLength,
+    required this.color,
+  });
+
+  final double radius;
+  final double strokeWidth;
+  final double dashLength;
+  final double gapLength;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect rect = Offset.zero & size;
+    final RRect rrect = RRect.fromRectAndRadius(
+      rect.deflate(strokeWidth / 2),
+      Radius.circular(radius),
+    );
+
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    final Path path = Path()..addRRect(rrect);
+    final PathMetrics metrics = path.computeMetrics();
+    for (final PathMetric metric in metrics) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final double next = distance + dashLength;
+        final Path extract = metric.extractPath(
+          distance,
+          next.clamp(0, metric.length),
+        );
+        canvas.drawPath(extract, paint);
+        distance = next + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRectPainter oldDelegate) {
+    return oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dashLength != dashLength ||
+        oldDelegate.gapLength != gapLength ||
+        oldDelegate.color != color;
   }
 }
 
@@ -1160,202 +1873,4 @@ class _Accumulator {
 
   _Identifiers toIdentifiers() =>
       _Identifiers(keys: _keys, duplicatesInFile: _dups);
-}
-
-class _UploadTile extends StatelessWidget {
-  const _UploadTile({
-    required this.title,
-    required this.subtitle,
-    required this.leadingIcon,
-    required this.uploaded,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData leadingIcon;
-  final bool uploaded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeOutCubic,
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.98, end: 1).animate(animation),
-            child: child,
-          ),
-        );
-      },
-      child: uploaded
-          ? TMZCard(
-              key: const ValueKey<String>('uploaded'),
-              onTap: onTap,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.x3,
-                vertical: AppSpacing.x3,
-              ),
-              child: Row(
-                children: <Widget>[
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.successBg,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.check_circle_rounded,
-                      color: AppColors.success,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.x3),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          title,
-                          style: AppTypography.body1.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: AppTypography.body2.copyWith(
-                            color: scheme.onSurface.withAlpha(160),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.textTertiary,
-                  ),
-                ],
-              ),
-            )
-          : TMZCard(
-              key: const ValueKey<String>('pending'),
-              onTap: onTap,
-              padding: EdgeInsets.zero,
-              child: CustomPaint(
-                painter: _DashedBorderPainter(
-                  color: AppColors.brandBlue.withAlpha(153),
-                  strokeWidth: 1.5,
-                  radius: 20,
-                  dash: const <double>[6, 4],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.x4),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: AppColors.brandBlue.withAlpha(16),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(leadingIcon, color: AppColors.brandBlue),
-                      ),
-                      const SizedBox(width: AppSpacing.x3),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              title,
-                              style: AppTypography.body1.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitle,
-                              style: AppTypography.body2.copyWith(
-                                color: scheme.onSurface.withAlpha(160),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.textTertiary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-    );
-  }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.radius,
-    required this.dash,
-  });
-
-  final Color color;
-  final double strokeWidth;
-  final double radius;
-  final List<double> dash;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-
-    final RRect rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Radius.circular(radius),
-    );
-
-    final Path path = Path()..addRRect(rrect);
-    final PathMetrics metrics = path.computeMetrics();
-
-    for (final PathMetric metric in metrics) {
-      double distance = 0;
-      int index = 0;
-      while (distance < metric.length) {
-        final double len = dash[index % dash.length];
-        final bool draw = index.isEven;
-        if (draw) {
-          final Path extract = metric.extractPath(
-            distance,
-            (distance + len).clamp(0, metric.length),
-          );
-          canvas.drawPath(extract, paint);
-        }
-        distance += len;
-        index += 1;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.radius != radius ||
-        oldDelegate.dash != dash;
-  }
 }
