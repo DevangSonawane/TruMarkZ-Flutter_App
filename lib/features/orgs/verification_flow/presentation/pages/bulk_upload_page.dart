@@ -522,7 +522,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     final Uri uri = Uri(
       path: AppRouter.certificatePreviewPath,
-      queryParameters: <String, String>{'checks': _checks.join(',')},
+      queryParameters: <String, String>{
+        'checks': _checks.join(','),
+        'industry': _industry,
+        'industry_label': _prettyIndustry(_industry),
+        'identity_type': 'Individual',
+      },
     );
     final Object? res = await context.push(uri.toString());
     if (res == true) {

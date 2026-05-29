@@ -101,6 +101,8 @@ flutter:
     - assets/icons/
     - assets/icons/dashbaord/
     - assets/icons/figma/
+    - assets/images/
+    - assets/images/figma/
     - assets/
 
   # An image asset can refer to one or more resolution-specific "variants", see

@@ -21,6 +21,25 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
   String? _checksParam(BuildContext context) =>
       GoRouterState.of(context).uri.queryParameters['checks'];
 
+  String _industryLabel(BuildContext context) {
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
+    final String label = (qp['industry_label'] ?? '').trim();
+    if (label.isNotEmpty) return label;
+    final String raw = (qp['industry'] ?? '').trim();
+    return raw.isEmpty ? '—' : raw;
+  }
+
+  String _identityTypeLabel(BuildContext context) {
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
+    final String label = (qp['identity_type'] ?? '').trim();
+    if (label.isNotEmpty) return label;
+    return '—';
+  }
+
   Future<void> _onContinue(BuildContext context) async {
     final String? checks = _checksParam(context);
     final Uri uri = Uri(
@@ -36,6 +55,9 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final String industryLabel = _industryLabel(context);
+    final String identityTypeLabel = _identityTypeLabel(context);
+
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -132,37 +154,7 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                       ),
                                     ),
                                     SizedBox(height: s(20)),
-                                    SizedBox(
-                                      height: s(180),
-                                      child: SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        physics: const BouncingScrollPhysics(),
-                                        child: Row(
-                                          children: <Widget>[
-                                            _CredentialPreviewCard(
-                                              scale: scale,
-                                              gradientA: const Color(
-                                                0xFF0F172A,
-                                              ),
-                                              gradientB: const Color(
-                                                0xFF334155,
-                                              ),
-                                            ),
-                                            SizedBox(width: s(20)),
-                                            _CredentialPreviewCard(
-                                              scale: scale,
-                                              gradientA: const Color(
-                                                0xFF5B2040,
-                                              ),
-                                              gradientB: const Color(
-                                                0xFF7C2D12,
-                                              ),
-                                              showQr: false,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                    _SwipeableCertificateCards(scale: scale),
                                     SizedBox(height: s(24)),
                                     Row(
                                       children: <Widget>[
@@ -170,7 +162,7 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                           child: _MiniInfoCard(
                                             scale: scale,
                                             label: 'INDUSTRY',
-                                            value: 'Real Estate',
+                                            value: industryLabel,
                                             icon: SvgPicture.asset(
                                               'assets/icons/figma/checks_industry_building.svg',
                                               width: s(14),
@@ -183,7 +175,7 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                           child: _MiniInfoCard(
                                             scale: scale,
                                             label: 'IDENTITY TYPE',
-                                            value: 'Individual',
+                                            value: identityTypeLabel,
                                             icon: SvgPicture.asset(
                                               'assets/icons/figma/new_batch_human.svg',
                                               width: s(14),
@@ -344,192 +336,60 @@ class _StepProgress extends StatelessWidget {
   }
 }
 
-class _CredentialPreviewCard extends StatelessWidget {
-  const _CredentialPreviewCard({
-    required this.scale,
-    required this.gradientA,
-    required this.gradientB,
-    this.showQr = true,
-  });
+class _SwipeableCertificateCards extends StatelessWidget {
+  const _SwipeableCertificateCards({required this.scale});
 
   final double scale;
-  final Color gradientA;
-  final Color gradientB;
-  final bool showQr;
+
+  static const double _leftImageAspectRatio = 1052 / 1495;
+  static const double _rightImageAspectRatio = 866 / 1230;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    return Container(
-      width: s(280),
-      height: s(180),
-      padding: EdgeInsets.all(s(20)),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(s(20)),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[gradientA, gradientB],
+    return SizedBox(
+      height: s(220),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: <Widget>[
+            ClipRRect(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(s(12)),
+                bottomLeft: Radius.circular(s(12)),
+              ),
+              child: SizedBox(
+                height: s(220),
+                child: AspectRatio(
+                  aspectRatio: _leftImageAspectRatio,
+                  child: Image.asset(
+                    'assets/images/ChatGPT Image May 29, 2026 at 01_16_20 PM.png',
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 0),
+            ClipRRect(
+              borderRadius: BorderRadius.only(
+                topRight: Radius.circular(s(12)),
+                bottomRight: Radius.circular(s(12)),
+              ),
+              child: SizedBox(
+                height: s(220),
+                child: AspectRatio(
+                  aspectRatio: _rightImageAspectRatio,
+                  child: Image.asset(
+                    'assets/images/certificate_preview_sample.png',
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        border: Border.all(color: Colors.white.withAlpha(26), width: 1),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 25,
-            spreadRadius: -5,
-            offset: Offset(0, 20),
-          ),
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 10,
-            spreadRadius: -6,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: s(48),
-                height: s(48),
-                decoration: BoxDecoration(
-                  color: const Color(0x80334155),
-                  borderRadius: BorderRadius.circular(s(8)),
-                  border: Border.all(
-                    color: Colors.white.withAlpha(51),
-                    width: 1,
-                  ),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Image.asset(
-                  'assets/images/figma/cert_preview_avatar.png',
-                  fit: BoxFit.cover,
-                ),
-              ),
-              SizedBox(width: s(12)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Minimalist ID',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(14),
-                        fontWeight: FontWeight.w600,
-                        height: 21 / 14,
-                        letterSpacing: 0.082,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: s(2)),
-                    Text(
-                      'GLOBAL REALTY',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(9),
-                        fontWeight: FontWeight.w400,
-                        height: 13.5 / 9,
-                        letterSpacing: 0.9,
-                        color: Colors.white.withAlpha(102),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: s(40),
-                height: s(40),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(20),
-                  borderRadius: BorderRadius.circular(s(10)),
-                  border: Border.all(
-                    color: Colors.white.withAlpha(51),
-                    width: 1,
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: showQr
-                    ? SvgPicture.asset(
-                        'assets/icons/figma/cert_preview_qr.svg',
-                        width: s(21),
-                        height: s(24),
-                      )
-                    : SvgPicture.asset(
-                        'assets/icons/figma/qa_scan_qr.svg',
-                        width: s(22),
-                        height: s(18),
-                        colorFilter: const ColorFilter.mode(
-                          Colors.white,
-                          BlendMode.srcIn,
-                        ),
-                      ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'VERIFIED AGENT',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(9),
-                        fontWeight: FontWeight.w600,
-                        height: 13.5 / 9,
-                        letterSpacing: 0.9,
-                        color: Colors.white.withAlpha(102),
-                      ),
-                    ),
-                    SizedBox(height: s(2)),
-                    Text(
-                      'Alex Sterling',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(16),
-                        fontWeight: FontWeight.w800,
-                        height: 24 / 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                height: s(22),
-                padding: EdgeInsets.symmetric(horizontal: s(12)),
-                decoration: BoxDecoration(
-                  color: const Color(0x802563EB),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: Colors.white.withAlpha(51),
-                    width: 1,
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'VERIFIED',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(10),
-                    fontWeight: FontWeight.w700,
-                    height: 14 / 10,
-                    letterSpacing: 0.6,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
