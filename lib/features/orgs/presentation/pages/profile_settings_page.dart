@@ -22,6 +22,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
+  static const double _orgBottomNavBarHeight = 71.016;
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +94,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                           s(16),
                           s(37),
                           s(16),
-                          s(24) + bottomInset,
+                          s(24) + bottomInset + _orgBottomNavBarHeight,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -206,66 +207,95 @@ class _OrgProfileHeader extends StatelessWidget {
           ),
         ],
         SizedBox(height: s(10)),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(4)),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(9999),
-            border: Border.all(color: AppColors.brandBlue, width: 1),
-          ),
-          child: Text(
-            isVerified ? 'Verified' : 'Pending',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.05859375,
-              height: 16 / 12,
-              color: AppColors.brandBlue,
-            ),
-          ),
-        ),
+        _VerificationPill(isVerified: isVerified),
         SizedBox(height: s(24)),
-        InkWell(
-          onTap: onEdit,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            height: s(60),
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: AppColors.brandBlue,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                SvgPicture.asset(
-                  'assets/icons/figma/account_edit_profile_icon.svg',
-                  width: s(24),
-                  height: s(24),
-                  colorFilter: const ColorFilter.mode(
-                    Colors.white,
-                    BlendMode.srcIn,
-                  ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(16),
+            child: Ink(
+              height: s(60),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.brandBlue,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    SvgPicture.asset(
+                      'assets/icons/figma/account_edit_profile_icon.svg',
+                      width: s(24),
+                      height: s(24),
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    SizedBox(width: s(12)),
+                    Text(
+                      'Edit Profile',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(18),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.03515625,
+                        height: 28 / 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: s(12)),
-                Text(
-                  'Edit Profile',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(18),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.03515625,
-                    height: 28 / 18,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _VerificationPill extends StatelessWidget {
+  const _VerificationPill({required this.isVerified});
+
+  final bool isVerified;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final Color bg = isVerified
+        ? const Color(0xFFECFDF5)
+        : const Color(0xFFEFF6FF);
+    final Color border = isVerified
+        ? const Color(0x3316A34A)
+        : const Color(0xFF2563EB);
+    final Color fg = isVerified
+        ? const Color(0xFF16A34A)
+        : const Color(0xFF2563EB);
+    final String text = isVerified ? 'Verified' : 'Pending';
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(4)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: s(12),
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.05859375,
+          height: 16 / 12,
+          color: fg,
+        ),
+      ),
     );
   }
 }
@@ -300,32 +330,34 @@ class _FigmaOrgAvatar extends StatelessWidget {
             height: s(62),
           ),
         ),
-        if (isVerified)
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: Container(
-              width: s(40),
-              height: s(40),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x40000000),
-                    blurRadius: 4,
-                    offset: Offset(0, 1),
-                  ),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: SvgPicture.asset(
-                'assets/icons/figma/org_avatar_verified_badge.svg',
-                width: s(24),
-                height: s(23),
-              ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: s(40),
+            height: s(40),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x40000000),
+                  blurRadius: 2,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              'assets/icons/figma/account_verified_rounded.svg',
+              width: s(23.33),
+              height: s(22.37),
+              colorFilter: isVerified
+                  ? null
+                  : const ColorFilter.mode(Color(0xFF2563EB), BlendMode.srcIn),
             ),
           ),
+        ),
       ],
     );
   }
@@ -341,42 +373,78 @@ class _LogoutCard extends StatelessWidget {
     final double scale = _FigmaScaleScope.of(context);
     double s(double v) => v * scale;
 
-    return InkWell(
-      onTap: onLogout,
-      borderRadius: BorderRadius.circular(s(16)),
-      child: Container(
-        height: s(60),
-        decoration: BoxDecoration(
-          color: const Color(0x0DEF4444),
-          borderRadius: BorderRadius.circular(s(16)),
-          border: Border.all(color: const Color(0x33EF4444), width: 2),
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/figma/account_logout_icon.svg',
-              width: s(24),
-              height: s(24),
-              colorFilter: const ColorFilter.mode(
-                Color(0xFFDC2626),
-                BlendMode.srcIn,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onLogout,
+        borderRadius: BorderRadius.circular(s(16)),
+        child: Ink(
+          height: s(60),
+          width: double.infinity,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(s(16))),
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0x00FFFFFF),
+                    borderRadius: BorderRadius.circular(s(16)),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x332563EB),
+                        blurRadius: s(15),
+                        spreadRadius: s(-3),
+                        offset: Offset(0, s(10)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            SizedBox(width: s(12)),
-            Text(
-              'Logout',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(18),
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.03515625,
-                height: 28 / 18,
-                color: Color(0xFFDC2626),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    // Equivalent to rgba(220, 38, 38, 0.05) over #F7F9FC.
+                    // Use a baked solid color so the button doesn't pick up any
+                    // underlying blue tint from what's behind it.
+                    color: const Color(0xFFF6EEF1),
+                    borderRadius: BorderRadius.circular(s(16)),
+                    border: Border.all(
+                      // Equivalent to rgba(220, 38, 38, 0.2) over #F7F9FC.
+                      color: const Color(0xFFF2CFD1),
+                      width: 2,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: s(16)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      SvgPicture.asset(
+                        'assets/icons/figma/account_logout_figma.svg',
+                        width: s(24),
+                        height: s(24),
+                      ),
+                      SizedBox(width: s(12)),
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(18),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.03515625,
+                          height: 28 / 18,
+                          color: Color(0xFFDC2626),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

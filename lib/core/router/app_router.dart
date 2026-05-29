@@ -33,6 +33,7 @@ import '../../features/orgs/verification_flow/presentation/pages/batch_tracking_
 import '../../features/orgs/verification_flow/presentation/pages/batch_created_success_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/batch_type_selection_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/bulk_upload_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/certificate_preview_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_detail_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_template_selector_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_preview_approval_page.dart';
@@ -108,6 +109,7 @@ class AppRouter {
   static const String verificationChecksPath = '/verification-checks';
   static const String verificationPermissionsPath = '/verification-permissions';
   static const String verificationPlanSetupPath = '/verification-plan-setup';
+  static const String certificatePreviewPath = '/certificate-preview';
   static const String perUnitCostBreakdownPath = '/per-unit-cost-breakdown';
   static const String singleHumanUploadPath = '/single-human-upload';
   static const String singleProductUploadPath = '/single-product-upload';
@@ -585,6 +587,12 @@ class AppRouter {
               state: state,
               child: const VerificationPlanSetupPage(),
             ),
+      ),
+      GoRoute(
+        path: certificatePreviewPath,
+        name: 'certificate_preview',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const CertificatePreviewPage()),
       ),
       GoRoute(
         path: perUnitCostBreakdownPath,
