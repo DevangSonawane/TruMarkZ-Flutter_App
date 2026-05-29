@@ -1,7 +1,6 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
@@ -9,120 +8,153 @@ import '../../../../core/models/auth_models.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
 
 class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
 
   @override
-  ConsumerState<ProfileSettingsPage> createState() => _ProfileSettingsPageState();
+  ConsumerState<ProfileSettingsPage> createState() =>
+      _ProfileSettingsPageState();
 }
 
 class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   bool _twoFaEnabled = true;
 
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.dashboardPath);
-    }
-  }
+  static const double _referenceWidth = 402;
+  static const Color _panelBg = Color(0xFFF7F9FC);
 
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final profile = authAsync.value?.userProfile;
-    final String displayName =
-        profile?.fullName?.trim().isNotEmpty == true
-            ? profile!.fullName!.trim()
-            : (profile?.organizationName?.trim().isNotEmpty == true
-                ? profile!.organizationName!.trim()
-                : 'User');
+    final String displayName = profile?.fullName?.trim().isNotEmpty == true
+        ? profile!.fullName!.trim()
+        : (profile?.organizationName?.trim().isNotEmpty == true
+              ? profile!.organizationName!.trim()
+              : 'User');
     final String email = profile?.email ?? '';
     final bool isVerified = profile?.isVerified == true;
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      body: CustomScrollView(
-        slivers: <Widget>[
-          SliverAppBar(
-            pinned: true,
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            toolbarHeight: 64,
-            titleSpacing: 8,
-            leading: IconButton(
-              onPressed: () => _goBack(context),
-              icon: const Icon(Icons.arrow_back_rounded),
-              color: AppColors.brandBlue,
-            ),
-            title: Text(
-              'Organisation Profile',
-              style: AppTypography.heading2.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            actions: <Widget>[],
-            flexibleSpace: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.90),
-                    border: const Border(
-                      bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1),
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double scale = (constraints.maxWidth / _referenceWidth).clamp(
+              0.0,
+              1.0,
+            );
+            double s(double v) => v * scale;
+
+            return _FigmaScaleScope(
+              scale: scale,
+              child: Column(
+                children: <Widget>[
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(s(16), s(12), s(16), s(12)),
+                    child: Row(
+                      children: <Widget>[
+                        Text(
+                          'Account',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(21),
+                            fontWeight: FontWeight.w600,
+                            height: 19.5 / 21,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const Spacer(),
+                        SvgPicture.asset(
+                          'assets/icons/figma/all_batches_bell.svg',
+                          width: s(24),
+                          height: s(24),
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                      ],
                     ),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x142563EB),
-                        blurRadius: 12,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
                   ),
-                ),
+                  SizedBox(height: s(16)),
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: _panelBg,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(s(20)),
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          s(16),
+                          s(37),
+                          s(16),
+                          s(24) + bottomInset,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            _OrgProfileHeader(
+                              onEdit: () {},
+                              displayName: displayName,
+                              email: email,
+                              isVerified: isVerified,
+                            ),
+                            SizedBox(height: s(24)),
+                            _GeneralInfoCard(profile: profile),
+                            SizedBox(height: s(24)),
+                            _SecurityPrivacyCard(
+                              twoFaEnabled: _twoFaEnabled,
+                              onTwoFaChanged: (bool v) =>
+                                  setState(() => _twoFaEnabled = v),
+                            ),
+                            SizedBox(height: s(24)),
+                            const _TeamAccessCard(),
+                            SizedBox(height: s(24)),
+                            _LogoutCard(
+                              onLogout: () async {
+                                await ref
+                                    .read(authNotifierProvider.notifier)
+                                    .logout();
+                                if (context.mounted) {
+                                  context.go(AppRouter.roleSelectionPath);
+                                }
+                              },
+                            ),
+                            SizedBox(height: s(24)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(20, 24, 20, 32 + bottomInset),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate.fixed(<Widget>[
-                _OrgProfileHeader(
-                  onEdit: () {},
-                  displayName: displayName,
-                  email: email,
-                  isVerified: isVerified,
-                ),
-                const SizedBox(height: 24),
-                _GeneralInfoCard(profile: profile),
-                const SizedBox(height: 24),
-                _SecurityPrivacyCard(
-                  twoFaEnabled: _twoFaEnabled,
-                  onTwoFaChanged: (bool v) => setState(() => _twoFaEnabled = v),
-                ),
-                const SizedBox(height: 24),
-                const _TeamAccessCard(),
-                const SizedBox(height: 24),
-                _LogoutCard(
-                  onLogout: () async {
-                    await ref.read(authNotifierProvider.notifier).logout();
-                    if (context.mounted) context.go(AppRouter.roleSelectionPath);
-                  },
-                ),
-                const SizedBox(height: 110),
-              ]),
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }
+}
+
+class _FigmaScaleScope extends InheritedWidget {
+  const _FigmaScaleScope({required this.scale, required super.child});
+
+  final double scale;
+
+  static double of(BuildContext context) {
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<_FigmaScaleScope>();
+    return scope?.scale ?? 1.0;
+  }
+
+  @override
+  bool updateShouldNotify(_FigmaScaleScope oldWidget) =>
+      oldWidget.scale != scale;
 }
 
 class _OrgProfileHeader extends StatelessWidget {
@@ -140,196 +172,161 @@ class _OrgProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
     return Column(
       children: <Widget>[
-        Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Container(
-              width: 96,
-              height: 96,
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.brandBlue, width: 2),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x142563EB),
-                    blurRadius: 12,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: Container(
-                  color: AppColors.blueTint,
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: AppColors.brandBlue,
-                    size: 44,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: -4,
-              bottom: -4,
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x1A0F172A),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.verified_rounded,
-                  color: AppColors.brandBlue,
-                  size: 20,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
+        _FigmaOrgAvatar(isVerified: isVerified, scale: scale),
+        SizedBox(height: s(14)),
         Text(
           displayName,
           textAlign: TextAlign.center,
-          style: AppTypography.display2.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 22,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(24),
+            fontWeight: FontWeight.w700,
+            height: 32 / 24,
+            color: Color(0xFF0F172A),
           ),
         ),
         if (email.trim().isNotEmpty) ...<Widget>[
-          const SizedBox(height: 6),
+          SizedBox(height: s(6)),
           Text(
             email,
             textAlign: TextAlign.center,
-            style: AppTypography.body2.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w700,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(14),
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0.02734375,
+              height: 20 / 14,
+              color: Color(0xFF64748B),
             ),
           ),
         ],
-        const SizedBox(height: 10),
+        SizedBox(height: s(10)),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(4)),
           decoration: BoxDecoration(
-            color: AppColors.blueTint,
-            borderRadius: BorderRadius.circular(999),
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(9999),
+            border: Border.all(color: AppColors.brandBlue, width: 1),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Icon(
-                Icons.shield_rounded,
-                size: 18,
-                color: AppColors.brandBlue,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isVerified ? 'Verified' : 'Pending',
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.brandBlue,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+          child: Text(
+            isVerified ? 'Verified' : 'Pending',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(12),
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.05859375,
+              height: 16 / 12,
+              color: AppColors.brandBlue,
+            ),
           ),
         ),
-        const SizedBox(height: 14),
-        _GradientPrimaryButton(label: 'Edit Public Profile', onPressed: onEdit),
+        SizedBox(height: s(24)),
+        InkWell(
+          onTap: onEdit,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: s(60),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppColors.brandBlue,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                SvgPicture.asset(
+                  'assets/icons/figma/account_edit_profile_icon.svg',
+                  width: s(24),
+                  height: s(24),
+                  colorFilter: const ColorFilter.mode(
+                    Colors.white,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                SizedBox(width: s(12)),
+                Text(
+                  'Edit Profile',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(18),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.03515625,
+                    height: 28 / 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _GradientPrimaryButton extends StatelessWidget {
-  const _GradientPrimaryButton({required this.label, required this.onPressed});
+class _FigmaOrgAvatar extends StatelessWidget {
+  const _FigmaOrgAvatar({required this.isVerified, required this.scale});
 
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onPressed,
-      child: Container(
-        height: 54,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[AppColors.brandBlue, Color(0xFF004AC6)],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x332563EB),
-              blurRadius: 18,
-              offset: Offset(0, 10),
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTypography.body1.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
+  final bool isVerified;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFEFF6FF)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x142563EB),
-            blurRadius: 12,
-            offset: Offset(0, 2),
+    double s(double v) => v * scale;
+    final double size = s(129);
+    final double borderWidth = s(4.03125);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF3FF),
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.brandBlue, width: borderWidth),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: AppTypography.heading2.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
+          alignment: Alignment.center,
+          child: SvgPicture.asset(
+            'assets/icons/figma/org_avatar_user_outline.svg',
+            width: s(62),
+            height: s(62),
+          ),
+        ),
+        if (isVerified)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: s(40),
+              height: s(40),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x40000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: SvgPicture.asset(
+                'assets/icons/figma/org_avatar_verified_badge.svg',
+                width: s(24),
+                height: s(23),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
+      ],
     );
   }
 }
@@ -341,92 +338,46 @@ class _LogoutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
-      title: 'Account',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(
-            'You will be returned to the login / signup screen.',
-            style: AppTypography.body2.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 14),
-          InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onLogout,
-            child: Container(
-              height: 52,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF1F2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFECACA)),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                'Log out',
-                style: AppTypography.body1.copyWith(
-                  color: const Color(0xFFB91C1C),
-                  fontWeight: FontWeight.w900,
-                ),
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return InkWell(
+      onTap: onLogout,
+      borderRadius: BorderRadius.circular(s(16)),
+      child: Container(
+        height: s(60),
+        decoration: BoxDecoration(
+          color: const Color(0x0DEF4444),
+          borderRadius: BorderRadius.circular(s(16)),
+          border: Border.all(color: const Color(0x33EF4444), width: 2),
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SvgPicture.asset(
+              'assets/icons/figma/account_logout_icon.svg',
+              width: s(24),
+              height: s(24),
+              colorFilter: const ColorFilter.mode(
+                Color(0xFFDC2626),
+                BlendMode.srcIn,
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecessedField extends StatelessWidget {
-  const _RecessedField({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x0D2563EB),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label.toUpperCase(),
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
+            SizedBox(width: s(12)),
+            Text(
+              'Logout',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(18),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.03515625,
+                height: 28 / 18,
+                color: Color(0xFFDC2626),
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: AppTypography.body1.copyWith(
-              fontWeight: FontWeight.w700,
-              color: valueColor ?? AppColors.textPrimary,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -439,67 +390,360 @@ class _GeneralInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String orgName =
-        profile?.organizationName?.trim().isNotEmpty == true
-            ? profile!.organizationName!.trim()
-            : (profile?.fullName?.trim().isNotEmpty == true
-                ? profile!.fullName!.trim()
-                : '—');
-    final String email =
-        profile?.email.trim().isNotEmpty == true ? profile!.email.trim() : '—';
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final String orgName = profile?.organizationName?.trim().isNotEmpty == true
+        ? profile!.organizationName!.trim()
+        : (profile?.fullName?.trim().isNotEmpty == true
+              ? profile!.fullName!.trim()
+              : '—');
+    final String email = profile?.email.trim().isNotEmpty == true
+        ? profile!.email.trim()
+        : '—';
     final String registrationNumber =
         profile?.businessRegistrationNumber?.trim().isNotEmpty == true
-            ? profile!.businessRegistrationNumber!.trim()
-            : '—';
-    final String industry =
-        profile?.industry?.trim().isNotEmpty == true
-            ? profile!.industry!.trim()
-            : '—';
-    final String address =
-        profile?.address?.trim().isNotEmpty == true
-            ? profile!.address!.trim()
-            : '—';
+        ? profile!.businessRegistrationNumber!.trim()
+        : '—';
+    final String industry = profile?.industry?.trim().isNotEmpty == true
+        ? profile!.industry!.trim()
+        : '—';
+    final String address = profile?.address?.trim().isNotEmpty == true
+        ? profile!.address!.trim()
+        : '—';
     final bool isActive = profile?.isActive == true;
 
-    return _SectionCard(
-      title: 'General Information',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _RecessedField(
-            label: 'Official Name',
-            value: orgName,
-          ),
-          const SizedBox(height: 16),
-          _RecessedField(
-            label: 'Official Email',
-            value: email,
-          ),
-          const SizedBox(height: 16),
-          _RecessedField(
-            label: 'Registration Number',
-            value: registrationNumber,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _RecessedField(label: 'Industry', value: industry),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Text(
+              'GENERAL INFORMATION',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(12),
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.1833819,
+                height: 17.7507286 / 12,
+                color: Color(0xFF323232),
               ),
-              SizedBox(width: 12),
-              Expanded(
-                child: _RecessedField(
-                  label: 'Status',
-                  value: isActive ? 'Active' : 'Inactive',
-                  valueColor: isActive ? AppColors.success : AppColors.textTertiary,
+            ),
+            const Spacer(),
+            if (isActive)
+              Container(
+                padding: EdgeInsets.fromLTRB(s(10), s(4), s(10), s(4)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(s(4)),
+                ),
+                child: Text(
+                  'Status: Active',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(10),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1171875,
+                    height: 15 / 10,
+                    color: Color(0xFF16A34A),
+                  ),
                 ),
               ),
-            ],
+          ],
+        ),
+        SizedBox(height: s(12)),
+        _FigmaInfoCard(
+          rows: <_InfoRow>[
+            _InfoRow(label: 'Official Name', value: orgName),
+            _InfoRow(label: 'Official Email', value: email),
+            _InfoRow(label: 'Registration Number', value: registrationNumber),
+            _InfoRow(
+              label: 'Industry',
+              value: industry,
+              leadingSvg: 'assets/icons/figma/account_icon_industry.svg',
+            ),
+            _InfoRow(
+              label: 'Head Office Address',
+              value: address,
+              leadingSvg: 'assets/icons/figma/account_icon_location.svg',
+            ),
+            const _InfoRow(
+              label: 'Website',
+              value: '—',
+              leadingSvg: 'assets/icons/figma/account_icon_globe.svg',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoRow {
+  const _InfoRow({required this.label, required this.value, this.leadingSvg});
+
+  final String label;
+  final String value;
+  final String? leadingSvg;
+}
+
+class _FigmaCard extends StatelessWidget {
+  const _FigmaCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(16)),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
           ),
-          const SizedBox(height: 16),
-          _RecessedField(
-            label: 'Head Office Address',
-            value: address,
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _FigmaInfoCard extends StatelessWidget {
+  const _FigmaInfoCard({required this.rows});
+
+  final List<_InfoRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FigmaCard(
+      child: Column(
+        children: <Widget>[
+          for (int i = 0; i < rows.length; i++) ...<Widget>[
+            _InfoRowTile(row: rows[i]),
+            if (i != rows.length - 1)
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRowTile extends StatelessWidget {
+  const _InfoRowTile({required this.row});
+
+  final _InfoRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final Widget labelValue = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Text(
+          row.label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w500,
+            height: 16 / 12,
+            color: Color(0xFF94A3B8),
+          ),
+        ),
+        Text(
+          row.value,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(14),
+            fontWeight: FontWeight.w600,
+            height: 20 / 14,
+            color: Color(0xFF323232),
+          ),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+      child: Row(
+        children: <Widget>[
+          if (row.leadingSvg != null) ...<Widget>[
+            Container(
+              width: s(40),
+              height: s(40),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(s(12)),
+              ),
+              alignment: Alignment.center,
+              child: SvgPicture.asset(
+                row.leadingSvg!,
+                width: s(16),
+                height: s(16),
+                colorFilter: const ColorFilter.mode(
+                  Color(0xFF94A3B8),
+                  BlendMode.srcIn,
+                ),
+              ),
+            ),
+            SizedBox(width: s(16)),
+          ],
+          Expanded(child: labelValue),
+        ],
+      ),
+    );
+  }
+}
+
+class _SecurityRow extends StatelessWidget {
+  const _SecurityRow({
+    required this.iconSvg,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
+
+  final String iconSvg;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: s(40),
+            height: s(40),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(s(12)),
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              iconSvg,
+              width: s(16),
+              height: s(16),
+              colorFilter: const ColorFilter.mode(
+                Color(0xFF94A3B8),
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+          SizedBox(width: s(16)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.013671875,
+                    height: 20 / 14,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                SizedBox(height: s(2)),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(11),
+                    fontWeight: FontWeight.w400,
+                    height: 16.5 / 11,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...<Widget>[trailing!],
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberLine extends StatelessWidget {
+  const _MemberLine({required this.name, required this.role});
+
+  final String name;
+  final String role;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(s(16), s(14), s(16), s(14)),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: s(36),
+            height: s(36),
+            decoration: const BoxDecoration(
+              color: Color(0xFFEFF6FF),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.person_rounded,
+              color: AppColors.brandBlue,
+              size: s(20),
+            ),
+          ),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w600,
+                    height: 20 / 14,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                SizedBox(height: s(2)),
+                Text(
+                  role,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 12,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.more_horiz_rounded,
+            size: s(24),
+            color: const Color(0xFF94A3B8),
           ),
         ],
       ),
@@ -518,162 +762,53 @@ class _SecurityPrivacyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
-      title: 'Security & Privacy',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _TwoFaRow(enabled: twoFaEnabled, onChanged: onTwoFaChanged),
-          const SizedBox(height: 14),
-          Text(
-            'Recent Verification Audits',
-            style: AppTypography.body2.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const _AuditRow(title: 'Annual Compliance', dateLabel: 'Dec 2023'),
-          const _Divider(),
-          const _AuditRow(title: 'KYB Re-validation', dateLabel: 'Feb 2024'),
-          const SizedBox(height: 10),
-          InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {},
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              alignment: Alignment.center,
-              child: Text(
-                'View Audit Log',
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.brandBlue,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
 
-class _TwoFaRow extends StatelessWidget {
-  const _TwoFaRow({required this.enabled, required this.onChanged});
-
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: <Widget>[
-          const Icon(Icons.security_rounded, color: AppColors.brandBlue),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              '2FA Protection',
-              style: AppTypography.body1.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          _PillToggle(value: enabled, onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillToggle extends StatelessWidget {
-  const _PillToggle({required this.value, required this.onChanged});
-
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        width: 52,
-        height: 28,
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: value ? AppColors.brandBlue : const Color(0xFFE7E7F3),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 20,
-            height: 20,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'SECURITY & PRIVACY',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1833819,
+            height: 17.7507286 / 12,
+            color: Color(0xFF323232),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AuditRow extends StatelessWidget {
-  const _AuditRow({required this.title, required this.dateLabel});
-
-  final String title;
-  final String dateLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: <Widget>[
-          const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
+        SizedBox(height: s(12)),
+        _FigmaCard(
+          child: Column(
+            children: <Widget>[
+              _SecurityRow(
+                iconSvg: 'assets/icons/figma/account_icon_shield.svg',
+                title: 'Two-Factor Auth',
+                subtitle: 'Required for all admins',
+                trailing: Transform.scale(
+                  scale: 0.9,
+                  child: Switch(
+                    value: twoFaEnabled,
+                    onChanged: onTwoFaChanged,
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: AppColors.brandBlue,
+                    inactiveThumbColor: Colors.white,
+                    inactiveTrackColor: const Color(0xFFE2E8F0),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  dateLabel,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              _SecurityRow(
+                iconSvg: 'assets/icons/figma/account_icon_audit_refresh.svg',
+                title: 'Audit Status',
+                subtitle: 'Last scanned 2 hours ago',
+              ),
+            ],
           ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.textTertiary,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -683,213 +818,72 @@ class _TeamAccessCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x142563EB),
-            blurRadius: 12,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  'Team & Access',
-                  style: AppTypography.heading2.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Invite'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.brandBlue,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  visualDensity: VisualDensity.compact,
-                  textStyle: AppTypography.body2.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const _MemberRow(
-            name: 'Alex Rivera',
-            role: 'Primary Admin',
-            imageUrl:
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuAGajBzQateu0dyzNoFk3m0MO_UB9FYk0iK7wpT6Kc8NOFaMck60mt44SA1OdKISyjUVcK2qOugLayp3SBwgSXak-1CEWP7dV8Nq0Rgl0wx71jNYpgCHG3m13OjRbEXC-gxSc-hHj51Ueyk2JMhmg9DXa2Yu6seNXksubfZ5rxaWzOPM-sPwSmj4dWrZtBJ0zBIcK2e_i8JRYxJXbmPkKdX-JzleBAxnjX-4zc6l53PGx2F7vPyqjsQCHBvRJJiCpxNbdI1nYnZvHs',
-            trailing: Icons.settings_rounded,
-          ),
-          const SizedBox(height: 16),
-          const _MemberRow(
-            name: 'Sarah Chen',
-            role: 'Security Officer',
-            imageUrl:
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuDtdMN9MsOhk87qSbN4_BHmKnH59sBQcUVNA26wCF1dnAhZGAS9kFZbschHKxeiJVQ3KYMBLJgTchfMi0rcR9iHi_57_nASiZP40okC0TYntOk0Y64X-5Md3QqRRcK7Yd7vdMSIUaOxbq8DXCKzXs3hJMsjKSAtWlG3FxCIxhmeHXpKsT57KzC-mKJwet1Gimg-8i_3hXnJMV2zgnAS91nOvNBM9ZUtVFVOiGsdd7MXtSgM8hq_yRacs4te8T9dCDDHMtPgxWogYFQ',
-            trailing: Icons.settings_rounded,
-          ),
-          const SizedBox(height: 16),
-          const _MemberRow(
-            name: 'Marcus Knight',
-            role: 'Pending 2FA',
-            imageUrl:
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuBav4Nqs3TTjHptGCGu7Kf_Pz2XNWBNQ2JDz8-ZYFBQkDHFh39702CocSq8GjmPyl3BCl2EAerqTWZMHqLF8HlBYMVNoDOnVVUQtmpIFczN9BKWu209YTspn_auFaiag1cT0aNfzRASaJ2MplgShzw-bAsGPOaAVUx1afvC-hBLPfvgHI_8vTW8-LtM6m9BoaU5Mk7pdFoSZCTOGP-jcMs714VnmouSpAL1Pd5Un3knEbxgeYThcgPtpgFafaFx5CDoo5FU_fLiwqg',
-            grayscale: true,
-            opacity: 0.6,
-            nameMuted: true,
-            roleIcon: Icons.pending_rounded,
-            roleIconColor: AppColors.warning,
-            roleColor: AppColors.warning,
-            trailing: Icons.mail_rounded,
-            trailingColor: Color(0xFFCBD5E1),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
 
-class _MemberRow extends StatelessWidget {
-  const _MemberRow({
-    required this.name,
-    required this.role,
-    required this.imageUrl,
-    required this.trailing,
-    this.trailingColor,
-    this.roleIcon,
-    this.roleIconColor,
-    this.roleColor,
-    this.grayscale = false,
-    this.opacity = 1,
-    this.nameMuted = false,
-  });
-
-  final String name;
-  final String role;
-  final String imageUrl;
-  final IconData trailing;
-  final Color? trailingColor;
-  final IconData? roleIcon;
-  final Color? roleIconColor;
-  final Color? roleColor;
-  final bool grayscale;
-  final double opacity;
-  final bool nameMuted;
-
-  static const List<double> _grayscaleMatrix = <double>[
-    0.2126,
-    0.7152,
-    0.0722,
-    0,
-    0,
-    0.2126,
-    0.7152,
-    0.0722,
-    0,
-    0,
-    0.2126,
-    0.7152,
-    0.0722,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    Widget avatar = Container(
-      width: 48,
-      height: 48,
-      decoration: const BoxDecoration(
-        color: AppColors.blueTint,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: const Icon(Icons.person_rounded, color: AppColors.brandBlue),
-    );
-    if (grayscale) {
-      avatar = ColorFiltered(
-        colorFilter: const ColorFilter.matrix(_grayscaleMatrix),
-        child: avatar,
-      );
-    }
-
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Opacity(opacity: opacity, child: avatar),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                name,
-                style: AppTypography.body1.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: nameMuted
-                      ? AppColors.textPrimary.withValues(alpha: 0.60)
-                      : AppColors.textPrimary,
+        Row(
+          children: <Widget>[
+            Text(
+              'TEAM MEMBERS',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(12),
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.1833819,
+                height: 17.7507286 / 12,
+                color: Color(0xFF323232),
+              ),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () {},
+              icon: Icon(Icons.add_rounded, size: s(16)),
+              label: Text('Invite'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.brandBlue,
+                visualDensity: VisualDensity.compact,
+                textStyle: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.05859375,
+                  height: 16 / 12,
                 ),
               ),
-              const SizedBox(height: 2),
-              if (roleIcon != null)
-                Row(
-                  children: <Widget>[
-                    Icon(roleIcon, size: 14, color: roleIconColor),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        role,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.caption.copyWith(
-                          color: roleColor ?? AppColors.textSecondary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Text(
-                  role,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+        SizedBox(height: s(12)),
+        _FigmaCard(
+          child: Column(
+            children: <Widget>[
+              const _MemberLine(
+                name: 'Alex Rivera',
+                role: 'Owner • Full Access',
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              const _MemberLine(name: 'Sarah Chen', role: 'Admin • Operations'),
+              SizedBox(height: s(10)),
+              Center(
+                child: Text(
+                  'View all 12 members',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
                     fontWeight: FontWeight.w600,
+                    height: 16 / 12,
+                    color: Color(0xFF64748B),
                   ),
                 ),
+              ),
+              SizedBox(height: s(10)),
             ],
           ),
         ),
-        Icon(trailing, color: trailingColor ?? AppColors.textTertiary),
       ],
     );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(height: 1, color: const Color(0xFFF8FAFC));
   }
 }
