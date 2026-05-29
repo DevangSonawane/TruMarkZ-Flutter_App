@@ -18,6 +18,8 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
 
+  int _selectedTemplateIndex = 0;
+
   String? _checksParam(BuildContext context) =>
       GoRouterState.of(context).uri.queryParameters['checks'];
 
@@ -121,72 +123,104 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                             Positioned.fill(
                               child: SingleChildScrollView(
                                 padding: EdgeInsets.fromLTRB(
-                                  s(16),
+                                  0,
                                   s(32),
-                                  s(16),
+                                  0,
                                   s(24) + s(85.728),
                                 ),
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: <Widget>[
-                                    _StepProgress(scale: scale),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(16),
+                                      ),
+                                      child: _StepProgress(scale: scale),
+                                    ),
                                     SizedBox(height: s(24)),
-                                    Text(
-                                      'Choose Identity Credential',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: s(22),
-                                        fontWeight: FontWeight.w800,
-                                        height: 26 / 22,
-                                        color: const Color(0xFF323232),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(16),
+                                      ),
+                                      child: Text(
+                                        'Choose Identity Credential',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(22),
+                                          fontWeight: FontWeight.w800,
+                                          height: 26 / 22,
+                                          color: const Color(0xFF323232),
+                                        ),
                                       ),
                                     ),
                                     SizedBox(height: s(8)),
-                                    Text(
-                                      'Select a secure visual template for your verified digital\nidentity.',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: s(12),
-                                        fontWeight: FontWeight.w400,
-                                        height: 18 / 12,
-                                        color: const Color(0xFF94A3B8),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(16),
+                                      ),
+                                      child: Text(
+                                        'Select a secure visual template for your verified digital\nidentity.',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(12),
+                                          fontWeight: FontWeight.w400,
+                                          height: 18 / 12,
+                                          color: const Color(0xFF94A3B8),
+                                        ),
                                       ),
                                     ),
                                     SizedBox(height: s(20)),
-                                    _SwipeableCertificateCards(scale: scale),
+                                    _SwipeableCertificateCards(
+                                      scale: scale,
+                                      selectedIndex: _selectedTemplateIndex,
+                                      onSelected: (int i) => setState(() {
+                                        _selectedTemplateIndex = i;
+                                      }),
+                                    ),
                                     SizedBox(height: s(24)),
-                                    Row(
-                                      children: <Widget>[
-                                        Expanded(
-                                          child: _MiniInfoCard(
-                                            scale: scale,
-                                            label: 'INDUSTRY',
-                                            value: industryLabel,
-                                            icon: SvgPicture.asset(
-                                              'assets/icons/figma/checks_industry_building.svg',
-                                              width: s(14),
-                                              height: s(12),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(16),
+                                      ),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Expanded(
+                                            child: _MiniInfoCard(
+                                              scale: scale,
+                                              label: 'INDUSTRY',
+                                              value: industryLabel,
+                                              icon: SvgPicture.asset(
+                                                'assets/icons/figma/checks_industry_building.svg',
+                                                width: s(14),
+                                                height: s(12),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        SizedBox(width: s(12)),
-                                        Expanded(
-                                          child: _MiniInfoCard(
-                                            scale: scale,
-                                            label: 'IDENTITY TYPE',
-                                            value: identityTypeLabel,
-                                            icon: SvgPicture.asset(
-                                              'assets/icons/figma/new_batch_human.svg',
-                                              width: s(14),
-                                              height: s(12),
+                                          SizedBox(width: s(12)),
+                                          Expanded(
+                                            child: _MiniInfoCard(
+                                              scale: scale,
+                                              label: 'IDENTITY TYPE',
+                                              value: identityTypeLabel,
+                                              icon: SvgPicture.asset(
+                                                'assets/icons/figma/new_batch_human.svg',
+                                                width: s(14),
+                                                height: s(12),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                     SizedBox(height: s(16)),
-                                    _ComplianceCard(scale: scale),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(16),
+                                      ),
+                                      child: _ComplianceCard(scale: scale),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -337,16 +371,19 @@ class _StepProgress extends StatelessWidget {
 }
 
 class _SwipeableCertificateCards extends StatelessWidget {
-  const _SwipeableCertificateCards({required this.scale});
+  const _SwipeableCertificateCards({
+    required this.scale,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final double scale;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
 
   static const List<({String asset, double aspectRatio})> _images =
       <({String asset, double aspectRatio})>[
-        (
-          asset: 'assets/images/ChatGPT Image May 29, 2026 at 01_16_20 PM.png',
-          aspectRatio: 1052 / 1495,
-        ),
+        (asset: 'assets/images/driver.png', aspectRatio: 1054 / 1492),
         (
           asset: 'assets/images/certificate_preview_sample.png',
           aspectRatio: 866 / 1230,
@@ -359,36 +396,83 @@ class _SwipeableCertificateCards extends StatelessWidget {
     double s(double v) => v * scale;
 
     final double h = s(220);
-    final Radius r = Radius.circular(s(12));
+    final double sidePadding = s(16);
+    final double gap = s(12);
+    final double radius = s(14);
 
     return SizedBox(
       height: h,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: List<Widget>.generate(_images.length, (int index) {
-            final bool isFirst = index == 0;
-            final bool isLast = index == _images.length - 1;
-            final BorderRadius br = BorderRadius.only(
-              topLeft: isFirst ? r : Radius.zero,
-              bottomLeft: isFirst ? r : Radius.zero,
-              topRight: isLast ? r : Radius.zero,
-              bottomRight: isLast ? r : Radius.zero,
-            );
-            final ({String asset, double aspectRatio}) item = _images[index];
-
-            return ClipRRect(
-              borderRadius: br,
-              child: SizedBox(
-                height: h,
-                child: AspectRatio(
-                  aspectRatio: item.aspectRatio,
-                  child: Image.asset(item.asset, fit: BoxFit.cover),
-                ),
-              ),
-            );
-          }),
+        child: DecoratedBox(
+          // Prevent underlying background from peeking through while swiping.
+          decoration: const BoxDecoration(color: Colors.white),
+          child: Row(
+            children: <Widget>[
+              SizedBox(width: sidePadding),
+              ...List<Widget>.generate(_images.length, (int index) {
+                final ({String asset, double aspectRatio}) item = _images[index];
+                final bool isSelected = index == selectedIndex;
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: index == _images.length - 1 ? sidePadding : gap,
+                  ),
+                  child: GestureDetector(
+                    onTap: () => onSelected(index),
+                    child: SizedBox(
+                      height: h,
+                      child: AspectRatio(
+                        aspectRatio: item.aspectRatio,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOut,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(radius),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.brandBlue
+                                  : const Color(0xFFE2E8F0),
+                              width: isSelected ? s(2) : s(1),
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(radius),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: <Widget>[
+                                Image.asset(item.asset, fit: BoxFit.cover),
+                                if (isSelected)
+                                  Positioned(
+                                    top: s(10),
+                                    right: s(10),
+                                    child: Container(
+                                      width: s(24),
+                                      height: s(24),
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.brandBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.check,
+                                          size: s(16),
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
         ),
       ),
     );
