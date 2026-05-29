@@ -341,54 +341,54 @@ class _SwipeableCertificateCards extends StatelessWidget {
 
   final double scale;
 
-  static const double _leftImageAspectRatio = 1052 / 1495;
-  static const double _rightImageAspectRatio = 866 / 1230;
+  static const List<({String asset, double aspectRatio})> _images =
+      <({String asset, double aspectRatio})>[
+        (
+          asset: 'assets/images/ChatGPT Image May 29, 2026 at 01_16_20 PM.png',
+          aspectRatio: 1052 / 1495,
+        ),
+        (
+          asset: 'assets/images/certificate_preview_sample.png',
+          aspectRatio: 866 / 1230,
+        ),
+        (asset: 'assets/images/warehouse.png', aspectRatio: 1054 / 1492),
+      ];
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
+    final double h = s(220);
+    final Radius r = Radius.circular(s(12));
+
     return SizedBox(
-      height: s(220),
+      height: h,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         child: Row(
-          children: <Widget>[
-            ClipRRect(
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(s(12)),
-                bottomLeft: Radius.circular(s(12)),
-              ),
+          children: List<Widget>.generate(_images.length, (int index) {
+            final bool isFirst = index == 0;
+            final bool isLast = index == _images.length - 1;
+            final BorderRadius br = BorderRadius.only(
+              topLeft: isFirst ? r : Radius.zero,
+              bottomLeft: isFirst ? r : Radius.zero,
+              topRight: isLast ? r : Radius.zero,
+              bottomRight: isLast ? r : Radius.zero,
+            );
+            final ({String asset, double aspectRatio}) item = _images[index];
+
+            return ClipRRect(
+              borderRadius: br,
               child: SizedBox(
-                height: s(220),
+                height: h,
                 child: AspectRatio(
-                  aspectRatio: _leftImageAspectRatio,
-                  child: Image.asset(
-                    'assets/images/ChatGPT Image May 29, 2026 at 01_16_20 PM.png',
-                    fit: BoxFit.cover,
-                  ),
+                  aspectRatio: item.aspectRatio,
+                  child: Image.asset(item.asset, fit: BoxFit.cover),
                 ),
               ),
-            ),
-            const SizedBox(width: 0),
-            ClipRRect(
-              borderRadius: BorderRadius.only(
-                topRight: Radius.circular(s(12)),
-                bottomRight: Radius.circular(s(12)),
-              ),
-              child: SizedBox(
-                height: s(220),
-                child: AspectRatio(
-                  aspectRatio: _rightImageAspectRatio,
-                  child: Image.asset(
-                    'assets/images/certificate_preview_sample.png',
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-          ],
+            );
+          }),
         ),
       ),
     );
