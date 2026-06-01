@@ -204,7 +204,7 @@ class _VerificationChecksPageState
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 2 OF 4',
+                                          'STEP 2 OF 6',
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),

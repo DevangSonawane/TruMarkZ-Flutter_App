@@ -938,7 +938,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 4 OF 4',
+                                          'STEP 4 OF 6',
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),

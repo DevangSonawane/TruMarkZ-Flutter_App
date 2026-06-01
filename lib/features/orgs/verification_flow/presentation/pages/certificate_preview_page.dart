@@ -412,7 +412,8 @@ class _SwipeableCertificateCards extends StatelessWidget {
             children: <Widget>[
               SizedBox(width: sidePadding),
               ...List<Widget>.generate(_images.length, (int index) {
-                final ({String asset, double aspectRatio}) item = _images[index];
+                final ({String asset, double aspectRatio}) item =
+                    _images[index];
                 final bool isSelected = index == selectedIndex;
                 return Padding(
                   padding: EdgeInsets.only(

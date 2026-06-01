@@ -128,20 +128,24 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                       child: Row(
                                         children: <Widget>[
                                           Text(
-                                            'STEP 1 OF 4',
+                                            'STEP 1 OF 6',
                                             style: TextStyle(
+                                              fontFamily: 'Inter',
                                               fontSize: s(10),
                                               fontWeight: FontWeight.w700,
                                               letterSpacing: s(1),
-                                              color: AppColors.textTertiary,
+                                              height: 15 / 10,
+                                              color: const Color(0xFF94A3B8),
                                             ),
                                           ),
                                           const Spacer(),
                                           Text(
                                             '0%',
                                             style: TextStyle(
+                                              fontFamily: 'Inter',
                                               fontSize: s(10),
                                               fontWeight: FontWeight.w700,
+                                              height: 15 / 10,
                                               color: AppColors.brandBlue,
                                             ),
                                           ),
@@ -182,7 +186,8 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                         fontSize: s(24),
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: s(1.18),
-                                        color: AppColors.textPrimary,
+                                        height: 17.7507286 / 24,
+                                        color: const Color(0xFF323232),
                                       ),
                                     ),
                                     SizedBox(height: s(12)),
@@ -192,9 +197,9 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
                                         fontWeight: FontWeight.w500,
-                                        height: 1.4,
                                         letterSpacing: s(1.18),
-                                        color: AppColors.textTertiary,
+                                        height: 17.7507286 / 12,
+                                        color: const Color(0xFF9CA3AF),
                                       ),
                                     ),
                                     SizedBox(height: s(24)),
@@ -203,6 +208,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                       title: 'Human Verification',
                                       subtitle:
                                           'Verify identities of individuals - workers, agents, drivers, students & more',
+                                      subtitleFontSize: 12,
                                       svgAssetPath:
                                           'assets/icons/figma/new_batch_human.svg',
                                       tags: const <String>[
@@ -224,6 +230,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                       title: 'Product Verification',
                                       subtitle:
                                           'Issue digital certificates for products stored on blockchain',
+                                      subtitleFontSize: 14,
                                       svgAssetPath:
                                           'assets/icons/figma/new_batch_product.svg',
                                       tags: const <String>[
@@ -273,6 +280,7 @@ class _FigmaBatchTypeCard extends StatelessWidget {
     required this.svgAssetPath,
     required this.title,
     required this.subtitle,
+    required this.subtitleFontSize,
     required this.tags,
     required this.selected,
     required this.showLeftStrip,
@@ -283,6 +291,7 @@ class _FigmaBatchTypeCard extends StatelessWidget {
   final String svgAssetPath;
   final String title;
   final String subtitle;
+  final double subtitleFontSize;
   final List<String> tags;
   final bool selected;
   final bool showLeftStrip;
@@ -392,19 +401,22 @@ class _FigmaBatchTypeCard extends StatelessWidget {
                     Text(
                       title,
                       style: TextStyle(
+                        fontFamily: 'Inter',
                         fontSize: s(20),
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        height: 28 / 20,
+                        color: const Color(0xFF111827),
                       ),
                     ),
                     SizedBox(height: s(12)),
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: s(14),
+                        fontFamily: 'Inter',
+                        fontSize: s(subtitleFontSize),
                         fontWeight: FontWeight.w400,
-                        height: 1.4,
-                        color: AppColors.textSecondary,
+                        height: 22.75 / subtitleFontSize,
+                        color: const Color(0xFF64748B),
                       ),
                     ),
                     SizedBox(height: s(16)),
@@ -426,6 +438,7 @@ class _FigmaBatchTypeCard extends StatelessWidget {
                             child: Text(
                               tag.toUpperCase(),
                               style: TextStyle(
+                                fontFamily: 'Inter',
                                 fontSize: s(11),
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: s(0.55),

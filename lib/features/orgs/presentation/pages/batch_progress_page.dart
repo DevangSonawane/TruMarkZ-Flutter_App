@@ -5,11 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import 'dart:math' as math;
 
-import '../../../../core/router/app_router.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
 import '../../../../core/models/verification_models.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/services/batch_name_store.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../application/verification_list_notifier.dart';
 
 class BatchProgressPage extends ConsumerStatefulWidget {
@@ -21,7 +20,6 @@ class BatchProgressPage extends ConsumerStatefulWidget {
 
 class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
   final TextEditingController _searchController = TextEditingController();
-  _BatchTab _tab = _BatchTab.all;
 
   @override
   void initState() {
@@ -61,1231 +59,609 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
             savedBatchNames: savedBatchNames,
           );
 
-    final int totalBatches = directory.length;
-    final int pending = data?.pending ?? 0;
-    final int verified = data?.verified ?? 0;
-    final int failed = data?.failed ?? 0;
-
     final String search = _searchController.text.trim().toLowerCase();
     final List<_BatchDirectoryItem> filtered = directory.where((
       _BatchDirectoryItem item,
     ) {
-      if (_tab != _BatchTab.all && _tab != _tabForItem(item)) return false;
       if (search.isEmpty) return true;
       return item.batchName.toLowerCase().contains(search) ||
           item.batchId.toLowerCase().contains(search) ||
-          item.createdLabel.toLowerCase().contains(search);
+          item.updatedLabel.toLowerCase().contains(search);
     }).toList();
 
-    final double safeTop = MediaQuery.paddingOf(context).top;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final double screenWidth = MediaQuery.sizeOf(context).width;
     final double contentWidth = math.min(screenWidth, refWidth);
-    final double scale = contentWidth / refWidth;
+    final double scale = (contentWidth / refWidth).clamp(0.0, 1.0);
     double s(double v) => v * scale;
-
-    // Figma positions are relative to a 44px status bar.
-    final double bgTop = safeTop + s(61); // 105 - 44
-    final double searchTop = safeTop + s(85); // 129 - 44
-    final double topSectionHeight = safeTop + s(419); // 463 - 44
-    final double pagePad = s(16);
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
-      body: Stack(
-        children: <Widget>[
-          const Positioned.fill(child: ColoredBox(color: AppColors.brandBlue)),
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: <Widget>[
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: topSectionHeight,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: <Widget>[
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        top: bgTop,
-                        bottom: 0,
-                        child: const DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Color(0xFFF7F9FC),
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(20),
-                              topRight: Radius.circular(20),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.topCenter,
-                        child: SizedBox(
-                          width: contentWidth,
-                          child: Stack(
-                            children: <Widget>[
-                              Positioned(
-                                left: pagePad,
-                                right: pagePad,
-                                top: safeTop,
-                                height: s(40),
-                                child: _AllBatchesHeader(
-                                  scale: scale,
-                                  title: 'All Batches',
-                                  avatarAssetPath:
-                                      'assets/icons/dashbaord/profile.png',
-                                  onAlertsTap: () =>
-                                      context.push(AppRouter.notificationsPath),
-                                  onProfileTap: () =>
-                                      context.push(AppRouter.settingsPath),
-                                ),
-                              ),
-                              Positioned(
-                                left: pagePad,
-                                right: pagePad,
-                                top: searchTop,
-                                child: _FigmaFilterContainer(
-                                  scale: scale,
-                                  searchController: _searchController,
-                                  selected: _tab,
-                                  onSelect: (_BatchTab t) =>
-                                      setState(() => _tab = t),
-                                  totalBatches: totalBatches,
-                                  pendingRecords: pending,
-                                  verifiedRecords: verified,
-                                  failedRecords: failed,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+      body: SafeArea(
+        bottom: false,
+        child: Center(
+          child: SizedBox(
+            width: contentWidth,
+            child: Column(
+              children: <Widget>[
+                Padding(
+                  padding: EdgeInsets.fromLTRB(s(16), s(12), s(16), s(12)),
+                  child: _Header(
+                    scale: scale,
+                    title: 'View All Certificates',
+                    onBack: () {
+                      if (context.canPop()) {
+                        context.pop();
+                        return;
+                      }
+                      context.go(AppRouter.dashboardPath);
+                    },
+                    onAlertsTap: () =>
+                        context.push(AppRouter.notificationsPath),
+                    onProfileTap: () => context.push(AppRouter.settingsPath),
                   ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: Container(
-                  color: const Color(0xFFF7F9FC),
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: contentWidth,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(pagePad, 0, pagePad, 0),
-                      child: _BatchDirectoryHeader(
-                        onTapSeeAll: () => setState(() {
-                          _tab = _BatchTab.all;
-                        }),
+                SizedBox(height: s(21)),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F9FC),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(s(20)),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Container(
-                  color: const Color(0xFFF7F9FC),
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: contentWidth,
-                    child: Padding(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(
-                        pagePad,
-                        s(11),
-                        pagePad,
-                        s(71.016) + safeBottom + s(140),
+                        s(16),
+                        s(32),
+                        s(16),
+                        s(24) + safeBottom + s(71.016),
                       ),
-                      child: _BatchesListBody(
-                        dataAsync: dataAsync,
-                        filtered: filtered,
-                        onRetry: () => ref
-                            .read(verificationListNotifierProvider.notifier)
-                            .load(limit: 500),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          _SearchRow(
+                            scale: scale,
+                            controller: _searchController,
+                            onFilterTap: () {},
+                          ),
+                          SizedBox(height: s(24)),
+                          if (dataAsync.isLoading)
+                            const Center(child: CircularProgressIndicator())
+                          else if (dataAsync.hasError)
+                            _ErrorCard(
+                              message: dataAsync.error.toString(),
+                              onRetry: () => ref
+                                  .read(
+                                    verificationListNotifierProvider.notifier,
+                                  )
+                                  .load(limit: 500),
+                            )
+                          else
+                            Column(
+                              children: <Widget>[
+                                for (
+                                  int i = 0;
+                                  i < filtered.length;
+                                  i++
+                                ) ...<Widget>[
+                                  _BatchCertificatesSection(
+                                    scale: scale,
+                                    item: filtered[i],
+                                    imagePair: _carouselPairForIndex(i),
+                                    onViewAll: () => context.push(
+                                      '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeComponent(filtered[i].batchId)}',
+                                    ),
+                                  ),
+                                  if (i != filtered.length - 1)
+                                    SizedBox(height: s(55)),
+                                ],
+                                if (filtered.isEmpty)
+                                  Padding(
+                                    padding: EdgeInsets.only(top: s(24)),
+                                    child: Text(
+                                      'No batches found',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(14),
+                                        fontWeight: FontWeight.w600,
+                                        height: 20 / 14,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
-}
 
-class _BatchesListBody extends StatelessWidget {
-  const _BatchesListBody({
-    required this.dataAsync,
-    required this.filtered,
-    required this.onRetry,
-  });
-
-  final AsyncValue<VerificationListResponse> dataAsync;
-  final List<_BatchDirectoryItem> filtered;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    if (dataAsync.isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 30),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (dataAsync.hasError) {
-      return _ErrorCard(message: dataAsync.error.toString(), onRetry: onRetry);
-    }
-    return Column(
-      children: <Widget>[
-        for (int i = 0; i < filtered.length; i++) ...<Widget>[
-          _BatchDirectoryCard(item: filtered[i]),
-          if (i != filtered.length - 1) const SizedBox(height: 11),
-        ],
-        if (filtered.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 20),
-            child: Center(
-              child: Text(
-                'No batches found',
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
+  static List<String> _carouselPairForIndex(int index) {
+    // Use Figma-exported certificate images to keep visuals pixel-perfect.
+    // Cycle through the pairs for long lists.
+    const List<List<String>> pairs = <List<String>>[
+      <String>[
+        'assets/images/figma/cert_card_1.png',
+        'assets/images/figma/cert_card_2.png',
       ],
-    );
+      <String>[
+        'assets/images/figma/cert_card_3.png',
+        'assets/images/figma/cert_card_4.png',
+      ],
+    ];
+    return pairs[index % pairs.length];
   }
 }
 
-class _AllBatchesHeader extends StatelessWidget {
-  const _AllBatchesHeader({
+class _Header extends StatelessWidget {
+  const _Header({
     required this.scale,
     required this.title,
-    required this.avatarAssetPath,
+    required this.onBack,
     this.onAlertsTap,
     this.onProfileTap,
   });
 
   final double scale;
   final String title;
-  final String avatarAssetPath;
+  final VoidCallback onBack;
   final VoidCallback? onAlertsTap;
   final VoidCallback? onProfileTap;
 
   @override
   Widget build(BuildContext context) {
-    // Responsive: scale all Figma coordinates from the 402px reference width.
     double s(double v) => v * scale;
 
-    return SizedBox(
-      width: 370 * scale,
-      height: 40 * scale,
-      child: Stack(
-        children: <Widget>[
-          Positioned(
-            left: 0,
-            top: s(10),
-            width: s(212.829),
-            height: s(20),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(21),
-                  height: 19.5 / 21,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: s(302),
-            top: s(8),
+    return Row(
+      children: <Widget>[
+        InkWell(
+          onTap: onBack,
+          borderRadius: BorderRadius.circular(s(12)),
+          child: SizedBox(
             width: s(24),
             height: s(24),
-            child: GestureDetector(
-              onTap: onAlertsTap,
-              behavior: HitTestBehavior.opaque,
-              child: SvgPicture.asset(
-                'assets/icons/figma/all_batches_bell.svg',
-                width: s(24),
-                height: s(24),
-              ),
-            ),
-          ),
-          Positioned(
-            left: s(338),
-            top: s(4),
-            width: s(32),
-            height: s(32),
-            child: GestureDetector(
-              onTap: onProfileTap,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(9999),
-                child: Container(
-                  width: s(32),
-                  height: s(32),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFFE2E8F0),
-                      width: s(1),
-                    ),
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(avatarAssetPath, fit: BoxFit.cover),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-enum _BatchTab { all, processing, verified, pending, failed }
-
-_BatchTab _tabForItem(_BatchDirectoryItem item) {
-  if (item.failedCount > 0) return _BatchTab.failed;
-  if (item.verifiedCount == item.records && item.records > 0) {
-    return _BatchTab.verified;
-  }
-  if (item.verifiedCount == 0 && item.pendingCount == item.records) {
-    return _BatchTab.pending;
-  }
-  return _BatchTab.processing;
-}
-
-class _FigmaSearchField extends StatelessWidget {
-  const _FigmaSearchField({required this.scale, required this.controller});
-
-  final double scale;
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    // Keep the search field height and inner spacing consistent with Figma,
-    // even on small screens (avoid the "thin pill" look).
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              offset: const Offset(0, 1),
-              blurRadius: 2,
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 14.5, 16, 14.5),
-        child: Row(
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/figma/all_batches_search.svg',
-              width: 16,
-              height: 16,
+            child: SvgPicture.asset(
+              'assets/icons/figma/certificates_back.svg',
+              width: s(24),
+              height: s(24),
               colorFilter: const ColorFilter.mode(
-                Color(0xFF9CA3AF),
+                Colors.white,
                 BlendMode.srcIn,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                maxLines: 1,
-                cursorColor: AppColors.brandBlue,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  height: 16.943182 / 14,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF0B0F19),
-                ),
-                decoration: const InputDecoration(
-                  isCollapsed: true,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  errorBorder: InputBorder.none,
-                  focusedErrorBorder: InputBorder.none,
-                  hintText: 'Search batch ID or date…',
-                  hintStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    height: 16.943182 / 14,
-                    fontWeight: FontWeight.w400,
-                    color: Color(0xFF9CA3AF),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _FigmaFilterContainer extends StatelessWidget {
-  const _FigmaFilterContainer({
-    required this.scale,
-    required this.searchController,
-    required this.selected,
-    required this.onSelect,
-    required this.totalBatches,
-    required this.pendingRecords,
-    required this.verifiedRecords,
-    required this.failedRecords,
-  });
-
-  final double scale;
-  final TextEditingController searchController;
-  final _BatchTab selected;
-  final ValueChanged<_BatchTab> onSelect;
-  final int totalBatches;
-  final int pendingRecords;
-  final int verifiedRecords;
-  final int failedRecords;
-
-  @override
-  Widget build(BuildContext context) {
-    // Responsive stack: keep vertical rhythm identical to Figma, but allow width
-    // to adapt to the screen.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        _FigmaSearchField(scale: scale, controller: searchController),
-        const SizedBox(height: 16),
-        _FigmaTabsRow(scale: scale, selected: selected, onSelect: onSelect),
-        const SizedBox(height: 16),
-        _FigmaStatsGrid(
-          scale: scale,
-          totalBatches: totalBatches,
-          pendingRecords: pendingRecords,
-          verifiedRecords: verifiedRecords,
-          failedRecords: failedRecords,
+        SizedBox(width: s(12)),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(20),
+              fontWeight: FontWeight.w600,
+              height: 19.5 / 20,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        SizedBox(width: s(12)),
+        GestureDetector(
+          onTap: onAlertsTap,
+          behavior: HitTestBehavior.opaque,
+          child: SvgPicture.asset(
+            'assets/icons/figma/all_batches_bell.svg',
+            width: s(24),
+            height: s(24),
+            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          ),
+        ),
+        SizedBox(width: s(12)),
+        GestureDetector(
+          onTap: onProfileTap,
+          child: Container(
+            width: s(32),
+            height: s(32),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Image.asset(
+              'assets/icons/dashbaord/profile.png',
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-class _FigmaTabsRow extends StatelessWidget {
-  const _FigmaTabsRow({
+class _SearchRow extends StatelessWidget {
+  const _SearchRow({
     required this.scale,
-    required this.selected,
-    required this.onSelect,
+    required this.controller,
+    required this.onFilterTap,
   });
 
   final double scale;
-  final _BatchTab selected;
-  final ValueChanged<_BatchTab> onSelect;
+  final TextEditingController controller;
+  final VoidCallback onFilterTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _SearchInput(scale: scale, controller: controller),
+        ),
+        SizedBox(width: s(12)),
+        InkWell(
+          onTap: onFilterTap,
+          borderRadius: BorderRadius.circular(s(16)),
+          child: Container(
+            width: s(48),
+            height: s(48),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(s(16)),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  offset: const Offset(0, 1),
+                  blurRadius: 2,
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              'assets/icons/figma/certificates_filter.svg',
+              width: s(16),
+              height: s(16),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SearchInput extends StatelessWidget {
+  const _SearchInput({required this.scale, required this.controller});
+
+  final double scale;
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
     return SizedBox(
-      width: 370 * scale,
-      height: 32 * scale,
-      child: Stack(
-        children: <Widget>[
-          Positioned(
-            left: 0,
-            top: 0,
-            child: _FigmaTabButton(
-              scale: scale,
-              label: 'All',
-              width: 44.73396301269531,
-              height: 29.830284118652344,
-              selected: selected == _BatchTab.all,
-              onTap: () => onSelect(_BatchTab.all),
+      height: s(48),
+      child: TextField(
+        controller: controller,
+        maxLines: 1,
+        cursorColor: AppColors.brandBlue,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: s(14),
+          fontWeight: FontWeight.w400,
+          height: 16.70703125 / 14,
+          color: const Color(0xFF0B0F19),
+        ),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.white,
+          isDense: true,
+          prefixIcon: Padding(
+            padding: EdgeInsets.only(left: s(16), right: s(14)),
+            child: SvgPicture.asset(
+              'assets/icons/figma/certificates_search.svg',
+              width: s(14),
+              height: s(14),
             ),
           ),
-          Positioned(
-            left: s(50.3427734375),
-            top: 0,
-            child: _FigmaTabButton(
-              scale: scale,
-              label: 'Processing',
-              width: 89.73396301269531,
-              height: 28.29358673095703,
-              selected: selected == _BatchTab.processing,
-              onTap: () => onSelect(_BatchTab.processing),
-            ),
+          prefixIconConstraints: BoxConstraints(
+            minWidth: s(44),
+            minHeight: s(48),
           ),
-          Positioned(
-            left: s(146.85516357421875),
-            top: 0,
-            child: _FigmaTabButton(
-              scale: scale,
-              label: 'Verified',
-              width: 71.71475219726562,
-              height: 28.29358673095703,
-              selected: selected == _BatchTab.verified,
-              onTap: () => onSelect(_BatchTab.verified),
-            ),
+          contentPadding: EdgeInsets.fromLTRB(s(0), s(15), s(16), s(16)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(s(16)),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
           ),
-          Positioned(
-            left: s(226.12457275390625),
-            top: 0,
-            child: _FigmaTabButton(
-              scale: scale,
-              label: 'Pending',
-              width: 74.73396301269531,
-              height: 28.29358673095703,
-              selected: selected == _BatchTab.pending,
-              onTap: () => onSelect(_BatchTab.pending),
-            ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(s(16)),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
           ),
-          Positioned(
-            left: s(307.18603515625),
-            top: 0,
-            child: _FigmaTabButton(
-              scale: scale,
-              label: 'Failed',
-              width: 62.73396301269531,
-              height: 28.29358673095703,
-              selected: selected == _BatchTab.failed,
-              onTap: () => onSelect(_BatchTab.failed),
-            ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(s(16)),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
           ),
-        ],
+          hintText: 'Search certificates...',
+          hintStyle: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(14),
+            fontWeight: FontWeight.w400,
+            height: 16.70703125 / 14,
+            color: const Color(0xFF94A3B8),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _FigmaTabButton extends StatelessWidget {
-  const _FigmaTabButton({
+class _BatchCertificatesSection extends StatelessWidget {
+  const _BatchCertificatesSection({
     required this.scale,
-    required this.label,
-    required this.width,
-    required this.height,
-    required this.selected,
-    required this.onTap,
+    required this.item,
+    required this.imagePair,
+    required this.onViewAll,
   });
 
   final double scale;
-  final String label;
-  final double width;
-  final double height;
-  final bool selected;
+  final _BatchDirectoryItem item;
+  final List<String> imagePair;
+  final VoidCallback onViewAll;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    final bool verified =
+        item.records > 0 && item.verifiedCount >= item.records;
+    final _BatchPillStyle pillStyle = verified
+        ? _BatchPillStyle.verified
+        : _BatchPillStyle.active;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    item.batchName.trim().isNotEmpty
+                        ? 'Batch: ${item.batchName.trim()}'
+                        : 'Batch #${_batchCodeFromId(item.batchId)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(20),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.1833819,
+                      height: 17.7507286 / 20,
+                      color: const Color(0xFF323232),
+                    ),
+                  ),
+                  SizedBox(height: s(6)),
+                  Text(
+                    item.updatedLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.1833819,
+                      height: 17.7507286 / 12,
+                      color: const Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Transform.translate(
+              offset: Offset(0, -s(4)),
+              child: _BatchStatusPill(scale: scale, style: pillStyle),
+            ),
+          ],
+        ),
+        SizedBox(height: s(14)),
+        SizedBox(
+          height: s(350),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: imagePair.length,
+            clipBehavior: Clip.none,
+            padding: EdgeInsets.fromLTRB(0, s(2), s(16), s(2)),
+            separatorBuilder: (BuildContext context, int index) =>
+                SizedBox(width: s(12)),
+            itemBuilder: (BuildContext context, int index) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(s(4.6872382)),
+                child: Image.asset(
+                  imagePair[index],
+                  width: s(235),
+                  height: s(350),
+                  fit: BoxFit.cover,
+                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: s(14)),
+        _DashedActionButton(scale: scale, onTap: onViewAll),
+      ],
+    );
+  }
+
+  static String _batchCodeFromId(String batchId) {
+    final String id = batchId;
+    final String compact = id
+        .replaceAll('-', '')
+        .replaceAll('_', '')
+        .toUpperCase();
+    if (compact.isEmpty) return '—';
+    if (compact.length <= 8) return compact;
+    return '${compact.substring(0, 7)}-${compact.substring(compact.length - 1)}';
+  }
+}
+
+enum _BatchPillStyle { active, verified }
+
+class _BatchStatusPill extends StatelessWidget {
+  const _BatchStatusPill({required this.scale, required this.style});
+
+  final double scale;
+  final _BatchPillStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    final bool isActive = style == _BatchPillStyle.active;
+    final Color bg = isActive
+        ? const Color(0xFFEFF6FF)
+        : const Color(0xFFDCFCE7);
+    final Color fg = isActive ? AppColors.brandBlue : const Color(0xFF16A34A);
+    final String label = isActive ? 'ACTIVE' : 'VERIFIED';
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(4)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(9999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: s(12),
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+          height: 16 / 12,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedActionButton extends StatelessWidget {
+  const _DashedActionButton({required this.scale, required this.onTap});
+
+  final double scale;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(s(12)),
-      child: Container(
-        width: s(width),
-        height: s(height),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.brandBlue : Colors.white,
-          borderRadius: BorderRadius.circular(s(12)),
-          border: Border.all(
-            color: selected ? AppColors.brandBlue : const Color(0xFFE5E7EB),
-            width: s(selected ? 1.7988859415054321 : 0.7683491706848145),
-          ),
+      borderRadius: BorderRadius.circular(s(24)),
+      child: CustomPaint(
+        painter: _DashedRRectPainter(
+          color: AppColors.brandBlue,
+          strokeWidth: 1,
+          dash: math.max(1, s(3)),
+          gap: math.max(1, s(2)),
+          radius: s(24),
         ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(10.756889343261719),
-            height: 15.366982460021973 / 10.756889343261719,
-            fontWeight: FontWeight.w600,
-            letterSpacing: label == 'All'
-                ? 0.21009549498558044
-                : label == 'Processing'
-                ? 0.04201909899711609
-                : label == 'Pending'
-                ? 0.06302864849567413
-                : label == 'Failed'
-                ? 0.05252387374639511
-                : 0,
-            color: selected ? Colors.white : const Color(0xFF4B5563),
+        child: Container(
+          height: s(56),
+          decoration: BoxDecoration(
+            color: const Color(0x80F1F5F9),
+            borderRadius: BorderRadius.circular(s(24)),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FigmaStatsGrid extends StatelessWidget {
-  const _FigmaStatsGrid({
-    required this.scale,
-    required this.totalBatches,
-    required this.pendingRecords,
-    required this.verifiedRecords,
-    required this.failedRecords,
-  });
-
-  final double scale;
-  final int totalBatches;
-  final int pendingRecords;
-  final int verifiedRecords;
-  final int failedRecords;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return SizedBox(
-      width: 370 * scale,
-      height: 198.48 * scale,
-      child: Stack(
-        children: <Widget>[
-          Positioned(
-            left: 0,
-            top: 0,
-            child: _FigmaStatCard(
-              scale: scale,
-              label: 'Total Batches',
-              value: totalBatches.toString(),
-              labelColor: AppColors.brandBlue,
-            ),
-          ),
-          Positioned(
-            left: s(191.47),
-            top: 0,
-            child: _FigmaStatCard(
-              scale: scale,
-              label: 'Pending',
-              value: pendingRecords.toString(),
-              labelColor: const Color(0xFFF59E0B),
-              labelLetterSpacing: 0.15169461071491241,
-            ),
-          ),
-          Positioned(
-            left: 0,
-            top: s(105.71),
-            child: _FigmaStatCard(
-              scale: scale,
-              label: 'Verified',
-              value: verifiedRecords.toString(),
-              labelColor: const Color(0xFF10B981),
-              labelLetterSpacing: 0.08848852291703224,
-            ),
-          ),
-          Positioned(
-            left: s(191.47),
-            top: s(105.71),
-            child: _FigmaStatCard(
-              scale: scale,
-              label: 'Failed',
-              value: failedRecords.toString(),
-              labelColor: const Color(0xFFEF4444),
-              labelLetterSpacing: 0.12641217559576035,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FigmaStatCard extends StatelessWidget {
-  const _FigmaStatCard({
-    required this.scale,
-    required this.label,
-    required this.value,
-    required this.labelColor,
-    this.labelLetterSpacing,
-  });
-
-  final double scale;
-  final String label;
-  final String value;
-  final Color labelColor;
-  final double? labelLetterSpacing;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return Container(
-      width: s(178.52769470214844),
-      height: s(91.83381652832031),
-      padding: EdgeInsets.all(s(17.259475708007812)),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(12.94460678100586)),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: s(1.0787172317504883),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.024),
-            offset: Offset(0, s(1.0787172317504883)),
-            blurRadius: s(2.1574344635009766),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            offset: Offset(0, s(1.0787172317504883)),
-            blurRadius: s(3.236151695251465),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textHeightBehavior: const TextHeightBehavior(
-              applyHeightToFirstAscent: false,
-              applyHeightToLastDescent: false,
-            ),
-            style: TextStyle(
-              fontFamily: 'SF Pro Rounded',
-              fontSize: s(12.94460678100586),
-              height: 17.259475708007812 / 12.94460678100586,
-              fontWeight: FontWeight.w500,
-              letterSpacing: labelLetterSpacing ?? -0.012641217559576035,
-              color: labelColor,
-            ),
-          ),
-          SizedBox(height: s(4.314868927001953)),
-          Text(
-            value,
-            textHeightBehavior: const TextHeightBehavior(
-              applyHeightToFirstAscent: false,
-              applyHeightToLastDescent: false,
-            ),
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(25.88921356201172),
-              height: 34.518951416015625 / 25.88921356201172,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0B0F19),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BatchDirectoryHeader extends StatelessWidget {
-  const _BatchDirectoryHeader({required this.onTapSeeAll});
-
-  final VoidCallback onTapSeeAll;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 29,
-      child: Row(
-        children: <Widget>[
-          const Expanded(
-            child: Text(
-              'BATCH DIRECTORY',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-                height: 17.750728607177734 / 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.1833819150924683,
-                color: Color(0xFF323232),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                'View All SDC',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(16),
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -0.0625,
+                  height: 24 / 16,
+                  color: AppColors.brandBlue,
+                ),
               ),
-            ),
-          ),
-          TextButton(
-            onPressed: onTapSeeAll,
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
-              foregroundColor: AppColors.brandBlue,
-            ),
-            child: const Text(
-              'See All',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 15.008000373840332,
-                height: 21.440000534057617 / 15.008000373840332,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.0586250014603138,
-                color: AppColors.brandBlue,
+              SizedBox(width: s(10)),
+              SvgPicture.asset(
+                'assets/icons/figma/view_all_arrow.svg',
+                width: s(14),
+                height: s(12),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-enum _BatchStatus { completed, processing, alert }
-
-class _BatchDirectoryItem {
-  const _BatchDirectoryItem({
-    required this.batchId,
-    required this.batchName,
-    required this.status,
-    required this.progress,
-    required this.records,
-    required this.verifiedCount,
-    required this.pendingCount,
-    required this.failedCount,
-    required this.createdLabel,
-    required this.createdAt,
-    this.alertMessage,
+class _DashedRRectPainter extends CustomPainter {
+  const _DashedRRectPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.dash,
+    required this.gap,
+    required this.radius,
   });
 
-  final String batchId;
-  final String batchName;
-  final _BatchStatus status;
-  final double progress;
-  final int records;
-  final int verifiedCount;
-  final int pendingCount;
-  final int failedCount;
-  final String createdLabel;
-  final DateTime? createdAt;
-  final String? alertMessage;
+  final Color color;
+  final double strokeWidth;
+  final double dash;
+  final double gap;
+  final double radius;
 
-  static List<_BatchDirectoryItem> fromUsers(
-    List<VerificationUser> users, {
-    Map<String, String> savedBatchNames = const <String, String>{},
-  }) {
-    final Map<String, List<VerificationUser>> groups =
-        <String, List<VerificationUser>>{};
-    for (final VerificationUser u in users) {
-      final String key = u.batchId.trim().isEmpty
-          ? 'unknown'
-          : u.batchId.trim();
-      (groups[key] ??= <VerificationUser>[]).add(u);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    final RRect rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final Path path = Path()..addRRect(rrect);
+    for (final metric in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final double len = math.min(dash, metric.length - distance);
+        canvas.drawPath(metric.extractPath(distance, distance + len), paint);
+        distance += dash + gap;
+      }
     }
-
-    final List<_BatchDirectoryItem> items = <_BatchDirectoryItem>[];
-    for (final MapEntry<String, List<VerificationUser>> e in groups.entries) {
-      final List<VerificationUser> groupUsers = e.value;
-      String groupBatchName = '';
-      int verified = 0;
-      int pending = 0;
-      int failed = 0;
-      DateTime? earliest;
-      for (final VerificationUser u in groupUsers) {
-        switch (u.verificationStatus) {
-          case 'verified':
-            verified += 1;
-          case 'failed':
-            failed += 1;
-          default:
-            pending += 1;
-        }
-        final DateTime? created = DateTime.tryParse(u.createdAt);
-        if (created != null) {
-          if (earliest == null || created.isBefore(earliest)) {
-            earliest = created;
-          }
-        }
-        if (groupBatchName.trim().isEmpty && u.batchName.trim().isNotEmpty) {
-          groupBatchName = u.batchName.trim();
-        }
-      }
-
-      final String? stored = savedBatchNames[e.key];
-      if (stored != null && stored.trim().isNotEmpty) {
-        groupBatchName = stored.trim();
-      }
-
-      if (groupBatchName.trim().isEmpty) {
-        final String shortId = e.key.length <= 10
-            ? e.key
-            : e.key.substring(0, 10);
-        groupBatchName = 'Batch $shortId';
-      }
-
-      final int total = groupUsers.length;
-      final double progress = total == 0 ? 0 : (verified / total);
-      final _BatchStatus status = failed > 0
-          ? _BatchStatus.alert
-          : (verified == total
-                ? _BatchStatus.completed
-                : _BatchStatus.processing);
-      final String createdLabel = _formatShortDate(earliest);
-      final String? alertMessage = failed > 0
-          ? '$failed record(s) failed verification'
-          : null;
-
-      items.add(
-        _BatchDirectoryItem(
-          batchId: e.key,
-          batchName: groupBatchName,
-          status: status,
-          progress: progress,
-          records: total,
-          verifiedCount: verified,
-          pendingCount: pending,
-          failedCount: failed,
-          createdLabel: createdLabel,
-          createdAt: earliest,
-          alertMessage: alertMessage,
-        ),
-      );
-    }
-    items.sort((a, b) {
-      final DateTime? da = a.createdAt;
-      final DateTime? db = b.createdAt;
-      if (da != null && db != null) return db.compareTo(da);
-      if (da != null) return -1;
-      if (db != null) return 1;
-      return b.createdLabel.compareTo(a.createdLabel);
-    });
-    return items;
   }
-
-  static String _formatShortDate(DateTime? dt) {
-    if (dt == null) return '—';
-    const List<String> months = <String>[
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]}';
-  }
-}
-
-class _BatchDirectoryCard extends StatelessWidget {
-  const _BatchDirectoryCard({required this.item});
-
-  final _BatchDirectoryItem item;
 
   @override
-  Widget build(BuildContext context) {
-    final String badgeText = switch (item.status) {
-      _BatchStatus.processing => 'Processing',
-      _BatchStatus.completed => 'Verified',
-      _BatchStatus.alert => 'Failed',
-    };
-
-    final Color badgeFg = switch (item.status) {
-      _BatchStatus.processing => AppColors.brandBlue,
-      _BatchStatus.completed => const Color(0xFF059669),
-      _BatchStatus.alert => AppColors.error,
-    };
-
-    final Color badgeBg = switch (item.status) {
-      _BatchStatus.processing => AppColors.brandBlue.withValues(alpha: 0.10),
-      _BatchStatus.completed => const Color(0xFFECFDF5),
-      _BatchStatus.alert => const Color(0xFFFEF2F2),
-    };
-
-    final double badgeRadius = switch (item.status) {
-      _BatchStatus.processing => 4.0,
-      _BatchStatus.completed => 4.288000106811523,
-      _BatchStatus.alert => 4.0,
-    };
-
-    final EdgeInsets badgePadding = switch (item.status) {
-      _BatchStatus.processing => const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
-      _BatchStatus.completed => const EdgeInsets.symmetric(
-        horizontal: 8.576000213623047,
-        vertical: 2.1440000534057617,
-      ),
-      _BatchStatus.alert => const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
-    };
-
-    final double badgeFontSize = switch (item.status) {
-      _BatchStatus.processing => 10,
-      _BatchStatus.completed => 10.720000267028809,
-      _BatchStatus.alert => 10,
-    };
-
-    final double badgeLineHeight = switch (item.status) {
-      _BatchStatus.processing => 15 / 10,
-      _BatchStatus.completed => 16.079999923706055 / 10.720000267028809,
-      _BatchStatus.alert => 15 / 10,
-    };
-
-    final double badgeLetterSpacing = switch (item.status) {
-      _BatchStatus.processing => -0.25,
-      _BatchStatus.completed => 0.1465625036507845,
-      _BatchStatus.alert => -0.25,
-    };
-
-    final String leftIcon = switch (item.status) {
-      _BatchStatus.processing => 'assets/icons/figma/batch_icon_processing.svg',
-      _BatchStatus.completed => 'assets/icons/figma/batch_icon_verified.svg',
-      _BatchStatus.alert => 'assets/icons/figma/batch_icon_processing.svg',
-    };
-
-    final Color leftBg = switch (item.status) {
-      _BatchStatus.processing => AppColors.brandBlue.withValues(alpha: 0.05),
-      _BatchStatus.completed => const Color(0xFF059669).withValues(alpha: 0.10),
-      _BatchStatus.alert => AppColors.error.withValues(alpha: 0.08),
-    };
-
-    final bool isProcessing = item.status == _BatchStatus.processing;
-    final int pct = (item.progress * 100).round().clamp(0, 100);
-    final Color borderColor = const Color(0xFFE2E8F0).withValues(alpha: 0.6);
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double localScale = (constraints.maxWidth / 370).clamp(0.0, 1.0);
-        double s(double v) => v * localScale;
-
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              context.push(
-                '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(item.batchId)}',
-              );
-            },
-            borderRadius: BorderRadius.circular(s(16)),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(s(16)),
-                border: Border.all(color: borderColor, width: s(1)),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: s(2),
-                    offset: Offset(0, s(1)),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.all(s(20)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Container(
-                        width: s(40),
-                        height: s(40),
-                        decoration: BoxDecoration(
-                          color: leftBg,
-                          borderRadius: BorderRadius.circular(s(12)),
-                        ),
-                        alignment: Alignment.center,
-                        child: SvgPicture.asset(
-                          leftIcon,
-                          width: s(20),
-                          height: s(20),
-                          colorFilter: ColorFilter.mode(
-                            badgeFg,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: s(12)),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'Batch: ${item.batchName}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Rounded',
-                                fontSize: s(14),
-                                height: 20 / 14,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.013671875,
-                                color: const Color(0xFF0B0F19),
-                              ),
-                            ),
-                            SizedBox(height: s(2)),
-                            Text(
-                              'Created ${item.createdLabel} • ${_formatInt(item.records)} records',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Rounded',
-                                fontSize: s(11),
-                                height: 16.5 / 11,
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: -0.01,
-                                color: const Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: badgeBg,
-                          borderRadius: BorderRadius.circular(s(badgeRadius)),
-                        ),
-                        padding: EdgeInsets.fromLTRB(
-                          s(badgePadding.left),
-                          s(badgePadding.top),
-                          s(badgePadding.right),
-                          s(badgePadding.bottom),
-                        ),
-                        child: Text(
-                          badgeText.toUpperCase(),
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Rounded',
-                            fontSize: s(badgeFontSize),
-                            height: badgeLineHeight,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: badgeLetterSpacing,
-                            color: badgeFg,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: s(10)),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          'Status: ${_statusLabel(item)}',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Rounded',
-                            fontSize: s(11),
-                            height: 16.5 / 11,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.03,
-                            color: const Color(0xFF0B0F19),
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '$pct%',
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Rounded',
-                          fontSize: s(11),
-                          height: 16.5 / 11,
-                          fontWeight: FontWeight.w700,
-                          color: badgeFg,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: s(10)),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(s(999)),
-                    child: LinearProgressIndicator(
-                      value: item.progress.clamp(0, 1),
-                      minHeight: s(6),
-                      backgroundColor: AppColors.divider.withValues(
-                        alpha: 0.35,
-                      ),
-                      valueColor: AlwaysStoppedAnimation<Color>(badgeFg),
-                    ),
-                  ),
-                  SizedBox(height: s(10)),
-                  if (isProcessing)
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            '${_formatInt(item.verifiedCount)} / ${_formatInt(item.records)} processed',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro Rounded',
-                              fontSize: s(10),
-                              height: 15 / 10,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.03,
-                              color: const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '2d 18hrs remaining',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Rounded',
-                            fontSize: s(10),
-                            height: 15 / 10,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.06,
-                            color: const Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    Text(
-                      'Created ${item.createdLabel} • ${_formatInt(item.records)} records',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Rounded',
-                        fontSize: s(14),
-                        height: 20 / 14,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF94A3B8),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+  bool shouldRepaint(covariant _DashedRRectPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dash != dash ||
+        oldDelegate.gap != gap ||
+        oldDelegate.radius != radius;
   }
-}
-
-String _statusLabel(_BatchDirectoryItem item) {
-  if (item.failedCount > 0) return 'Needs attention';
-  if (item.verifiedCount == item.records && item.records > 0) {
-    return 'Completed';
-  }
-  if (item.verifiedCount == 0 && item.pendingCount == item.records) {
-    return 'Pending review';
-  }
-  return 'Under Review';
-}
-
-String _formatInt(int v) {
-  final String s = v.toString();
-  final StringBuffer b = StringBuffer();
-  for (int i = 0; i < s.length; i++) {
-    final int remaining = s.length - i;
-    b.write(s[i]);
-    if (remaining > 1 && remaining % 3 == 1) b.write(',');
-  }
-  return b.toString();
 }
 
 class _ErrorCard extends StatelessWidget {
@@ -1301,34 +677,152 @@ class _ErrorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFEF2F2)),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            'Failed to load batches',
-            style: AppTypography.heading2.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
+          const Text(
+            'Failed to load',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              height: 20 / 14,
+              color: Color(0xFF0F172A),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             message,
-            style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              height: 16 / 12,
+              color: Color(0xFF64748B),
+            ),
           ),
           const SizedBox(height: 12),
-          TextButton.icon(
+          TextButton(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Retry'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.brandBlue),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.brandBlue,
+              textStyle: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 16 / 12,
+              ),
+            ),
+            child: const Text('Retry'),
           ),
         ],
       ),
     );
+  }
+}
+
+class _BatchDirectoryItem {
+  const _BatchDirectoryItem({
+    required this.batchId,
+    required this.batchName,
+    required this.updatedLabel,
+    required this.records,
+    required this.pendingCount,
+    required this.verifiedCount,
+    required this.failedCount,
+  });
+
+  final String batchId;
+  final String batchName;
+  final String updatedLabel;
+  final int records;
+  final int pendingCount;
+  final int verifiedCount;
+  final int failedCount;
+
+  static List<_BatchDirectoryItem> fromUsers(
+    List<VerificationUser> users, {
+    required Map<String, String> savedBatchNames,
+  }) {
+    final Map<String, List<VerificationUser>> byBatch =
+        <String, List<VerificationUser>>{};
+    for (final VerificationUser u in users) {
+      final String id = u.batchId.trim();
+      if (id.isEmpty) continue;
+      (byBatch[id] ??= <VerificationUser>[]).add(u);
+    }
+
+    final List<_BatchDirectoryItem> items = <_BatchDirectoryItem>[];
+    byBatch.forEach((String batchId, List<VerificationUser> batchUsers) {
+      int pending = 0;
+      int verified = 0;
+      int failed = 0;
+      DateTime? latest;
+      String batchNameFromApi = '';
+
+      for (final VerificationUser u in batchUsers) {
+        final String status = u.verificationStatus.toLowerCase();
+        if (status.contains('pending')) pending++;
+        if (status.contains('verified')) verified++;
+        if (status.contains('failed') || status.contains('rejected')) failed++;
+
+        if (batchNameFromApi.isEmpty && u.batchName.trim().isNotEmpty) {
+          batchNameFromApi = u.batchName.trim();
+        }
+
+        final DateTime? updatedAt = DateTime.tryParse(u.updatedAt);
+        final DateTime? createdAt = DateTime.tryParse(u.createdAt);
+        final DateTime? candidate = updatedAt ?? createdAt;
+        if (candidate != null &&
+            (latest == null || candidate.isAfter(latest))) {
+          latest = candidate;
+        }
+      }
+
+      final String updatedLabel = latest == null
+          ? 'Updated —'
+          : 'Updated ${_formatDate(latest)}';
+      final String batchName =
+          (savedBatchNames[batchId] ?? '').trim().isNotEmpty
+          ? (savedBatchNames[batchId] ?? '').trim()
+          : batchNameFromApi;
+
+      items.add(
+        _BatchDirectoryItem(
+          batchId: batchId,
+          batchName: batchName,
+          updatedLabel: updatedLabel,
+          records: batchUsers.length,
+          pendingCount: pending,
+          verifiedCount: verified,
+          failedCount: failed,
+        ),
+      );
+    });
+
+    items.sort((a, b) => b.updatedLabel.compareTo(a.updatedLabel));
+    return items;
+  }
+
+  static String _formatDate(DateTime dt) {
+    const List<String> months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final DateTime local = dt.toLocal();
+    final String m = months[local.month - 1];
+    return '$m ${local.day}, ${local.year}';
   }
 }

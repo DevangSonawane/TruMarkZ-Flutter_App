@@ -113,7 +113,7 @@ class _VerificationPermissionsPageState
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 3 OF 4',
+                                          'STEP 3 OF 6',
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
