@@ -42,7 +42,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
       case _BatchType.human:
         context.push(AppRouter.verificationChecksPath);
       case _BatchType.product:
-        context.push(AppRouter.productSectorSelectorPath);
+        context.push(AppRouter.productServiceTypeSelectorPath);
     }
   }
 
@@ -121,64 +121,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: s(4),
-                                      ),
-                                      child: Row(
-                                        children: <Widget>[
-                                          Text(
-                                            'STEP 1 OF 6',
-                                            style: TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: s(10),
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: s(1),
-                                              height: 15 / 10,
-                                              color: const Color(0xFF94A3B8),
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Text(
-                                            '0%',
-                                            style: TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: s(10),
-                                              fontWeight: FontWeight.w700,
-                                              height: 15 / 10,
-                                              color: AppColors.brandBlue,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(height: s(8)),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                        s(999),
-                                      ),
-                                      child: SizedBox(
-                                        height: s(4),
-                                        child: DecoratedBox(
-                                          decoration: const BoxDecoration(
-                                            color: AppColors.divider,
-                                          ),
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: FractionallySizedBox(
-                                              widthFactor: 0,
-                                              child: DecoratedBox(
-                                                decoration: const BoxDecoration(
-                                                  color: AppColors.brandBlue,
-                                                ),
-                                                child: SizedBox(height: s(4)),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(height: s(28)),
+                                    SizedBox(height: s(12)),
                                     Text(
                                       'Choose Batch Type',
                                       style: TextStyle(
@@ -190,7 +133,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                         color: const Color(0xFF323232),
                                       ),
                                     ),
-                                    SizedBox(height: s(12)),
+                                    SizedBox(height: s(16)),
                                     Text(
                                       'Select the type of verification you want to perform.',
                                       style: TextStyle(

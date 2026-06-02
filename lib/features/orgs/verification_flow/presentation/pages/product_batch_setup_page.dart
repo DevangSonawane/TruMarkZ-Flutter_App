@@ -1,11 +1,13 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
-import '../../../../../core/widgets/tmz_card.dart';
 import '../../../../../core/widgets/tmz_input.dart';
 
 enum _BlockchainVisibility { publicRegistry, privateRegistry }
@@ -28,14 +30,6 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   late final TextEditingController _unitsController;
 
   _BlockchainVisibility _visibility = _BlockchainVisibility.publicRegistry;
-
-  static const Color _deepBlue = AppColors.deepNavy;
-
-  LinearGradient get _primaryGradient => const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[AppColors.brandBlue, _deepBlue],
-  );
 
   @override
   void initState() {
@@ -122,182 +116,267 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   Widget build(BuildContext context) {
     final String modeLabel = _mode == 'warranty' ? 'Warranty' : 'Verification';
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('Product Details'),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x3,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                children: <Widget>[
-                  _ProductFlowStepper(
-                    stepIndex: 1,
-                    gradient: _primaryGradient,
-                    labels: const <String>[
-                      'Sector',
-                      'Product Details',
-                      'Upload',
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.x5),
-                  Text('Batch Metadata', style: AppTypography.display2),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Add batch details and select the certificate format.',
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            const double referenceWidth = 402;
+            final double contentWidth = constraints.maxWidth < referenceWidth
+                ? constraints.maxWidth
+                : referenceWidth;
+            final double scale = contentWidth / referenceWidth;
+            double s(double v) => v * scale;
+
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
+                      child: Row(
+                        children: <Widget>[
+                          InkResponse(
+                            onTap: () => _goBack(context),
+                            radius: s(22),
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_back.svg',
+                              width: s(24),
+                              height: s(24),
+                              colorFilter: const ColorFilter.mode(
+                                Colors.white,
+                                BlendMode.srcIn,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: s(12)),
+                          Text(
+                            'Product Details',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(21),
+                              fontWeight: FontWeight.w600,
+                              height: 19.5 / 21,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.x5),
-                  TMZInput(
-                    label: 'Batch Name',
-                    hint: _mode == 'warranty'
-                        ? 'e.g. Warranty Cards — May 2026'
-                        : 'e.g. Verification Certificates — May 2026',
-                    controller: _batchNameController,
-                    onChanged: (_) => setState(() {}),
-                    prefixIcon: Icons.folder_rounded,
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  _MultilineInput(
-                    label: 'Description (Optional)',
-                    hint: 'Short description (max 3 lines)',
-                    controller: _descriptionController,
-                    maxLines: 3,
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  TMZCard(
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Row(
-                      children: <Widget>[
-                        const Icon(
-                          Icons.category_rounded,
-                          color: AppColors.brandBlue,
-                        ),
-                        const SizedBox(width: AppSpacing.x3),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                'Product Category',
-                                style: AppTypography.caption.copyWith(
-                                  color: AppColors.textTertiary,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Chip(
-                                  label: Text('$_sector • $modeLabel'),
-                                  backgroundColor: AppColors.brandBlue
-                                      .withAlpha(14),
-                                  labelStyle: AppTypography.body2.copyWith(
-                                    color: AppColors.brandBlue,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                  side: BorderSide(
-                                    color: AppColors.brandBlue.withAlpha(24),
-                                  ),
-                                ),
-                              ),
-                            ],
+                    SizedBox(height: s(18)),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F9FC),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(s(20)),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  TMZInput(
-                    label: 'Number of Units',
-                    hint: 'e.g. 500',
-                    controller: _unitsController,
-                    keyboardType: TextInputType.number,
-                    prefixIcon: Icons.format_list_numbered_rounded,
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Text(
-                    'Blockchain Visibility',
-                    style: AppTypography.heading2.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: _ChoiceChipCard(
-                          title: 'Public',
-                          subtitle: '',
-                          icon: Icons.public_rounded,
-                          selected:
-                              _visibility ==
-                              _BlockchainVisibility.publicRegistry,
-                          onTap: () => setState(
-                            () => _visibility =
-                                _BlockchainVisibility.publicRegistry,
-                          ),
+                        child: Column(
+                          children: <Widget>[
+                            Expanded(
+                              child: ListView(
+                                padding: EdgeInsets.fromLTRB(
+                                  s(16),
+                                  s(28),
+                                  s(16),
+                                  s(140),
+                                ),
+                                children: <Widget>[
+                                  _ProductFlowStepper(
+                                    scale: scale,
+                                    stepIndex: 1,
+                                    totalSteps: 3,
+                                  ),
+                                  SizedBox(height: s(24)),
+                                  Text(
+                                    'Batch Metadata',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: s(32),
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: s(1.18),
+                                      height: 34 / 32,
+                                      color: const Color(0xFF3A3A3A),
+                                    ),
+                                  ),
+                                  SizedBox(height: s(14)),
+                                  Text(
+                                    'Add batch details and select the certificate format.',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: s(12),
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: s(1.18),
+                                      height: 17.75 / 12,
+                                      color: const Color(0xFF94A3B8),
+                                    ),
+                                  ),
+                                  SizedBox(height: s(24)),
+                                  TMZInput(
+                                    label: 'Batch Name',
+                                    hint: _mode == 'warranty'
+                                        ? 'e.g. Warranty Cards — May 2026'
+                                        : 'e.g. Verification Certificates — May 2026',
+                                    controller: _batchNameController,
+                                    onChanged: (_) => setState(() {}),
+                                    prefixIcon: Icons.folder_rounded,
+                                  ),
+                                  SizedBox(height: s(16)),
+                                  _MultilineInput(
+                                    label: 'Description (Optional)',
+                                    hint: 'Short description (max 3 lines)',
+                                    controller: _descriptionController,
+                                    maxLines: 3,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                  SizedBox(height: s(16)),
+                                  Container(
+                                    padding: EdgeInsets.all(s(16)),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(
+                                        s(18),
+                                      ),
+                                      border: Border.all(
+                                        color: const Color(
+                                          0xFFCBD5E1,
+                                        ).withAlpha(160),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.category_rounded,
+                                          color: AppColors.brandBlue,
+                                        ),
+                                        SizedBox(width: s(12)),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Text(
+                                                'Product Category',
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: s(12),
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: s(0.6),
+                                                  height: 18 / 12,
+                                                  color: AppColors.textTertiary,
+                                                ),
+                                              ),
+                                              SizedBox(height: s(8)),
+                                              Chip(
+                                                label: Text(
+                                                  '$_sector • $modeLabel',
+                                                ),
+                                                backgroundColor: AppColors
+                                                    .brandBlue
+                                                    .withAlpha(14),
+                                                labelStyle: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: s(12),
+                                                  fontWeight: FontWeight.w800,
+                                                  height: 16.5 / 12,
+                                                  color: AppColors.brandBlue,
+                                                ),
+                                                side: BorderSide(
+                                                  color: AppColors.brandBlue
+                                                      .withAlpha(24),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: s(16)),
+                                  TMZInput(
+                                    label: 'Number of Units',
+                                    hint: 'e.g. 500',
+                                    controller: _unitsController,
+                                    keyboardType: TextInputType.number,
+                                    prefixIcon:
+                                        Icons.format_list_numbered_rounded,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                  SizedBox(height: s(16)),
+                                  Text(
+                                    'Blockchain Visibility',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: s(12),
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: s(1.1),
+                                      height: 18 / 12,
+                                      color: const Color(0xFF3A3A3A),
+                                    ),
+                                  ),
+                                  SizedBox(height: s(12)),
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: _ChoiceChipCard(
+                                          title: 'Public',
+                                          subtitle: '',
+                                          icon: Icons.public_rounded,
+                                          selected:
+                                              _visibility ==
+                                              _BlockchainVisibility
+                                                  .publicRegistry,
+                                          onTap: () => setState(
+                                            () => _visibility =
+                                                _BlockchainVisibility
+                                                    .publicRegistry,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: s(12)),
+                                      Expanded(
+                                        child: _ChoiceChipCard(
+                                          title: 'Private',
+                                          subtitle: '',
+                                          icon: Icons.lock_rounded,
+                                          selected:
+                                              _visibility ==
+                                              _BlockchainVisibility
+                                                  .privateRegistry,
+                                          onTap: () => setState(
+                                            () => _visibility =
+                                                _BlockchainVisibility
+                                                    .privateRegistry,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _BottomNav(
+                              scale: scale,
+                              child: _GradientCtaButton(
+                                scale: scale,
+                                label: 'Continue',
+                                icon: Icons.arrow_forward_rounded,
+                                enabled: _canContinue,
+                                onPressed: () => _continue(context),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.x3),
-                      Expanded(
-                        child: _ChoiceChipCard(
-                          title: 'Private',
-                          subtitle: '',
-                          icon: Icons.lock_rounded,
-                          selected:
-                              _visibility ==
-                              _BlockchainVisibility.privateRegistry,
-                          onTap: () => setState(
-                            () => _visibility =
-                                _BlockchainVisibility.privateRegistry,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: _GradientCtaButton(
-                  label: 'Continue',
-                  icon: Icons.arrow_forward_rounded,
-                  gradient: _primaryGradient,
-                  enabled: _canContinue,
-                  onPressed: () => _continue(context),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -485,30 +564,32 @@ class _MultilineInputState extends State<_MultilineInput> {
 
 class _ProductFlowStepper extends StatelessWidget {
   const _ProductFlowStepper({
+    required this.scale,
     required this.stepIndex,
-    required this.gradient,
-    required this.labels,
+    required this.totalSteps,
   });
 
+  final double scale;
   final int stepIndex;
-  final Gradient gradient;
-  final List<String> labels;
+  final int totalSteps;
 
   @override
   Widget build(BuildContext context) {
-    const int totalSteps = 3;
+    double s(double v) => v * scale;
+    final int currentStep = stepIndex.clamp(0, totalSteps - 1) + 1;
+    final int progressPercent = ((currentStep / totalSteps) * 100).round();
     final double progress = stepIndex / (totalSteps - 1);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(s(16)),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: AppColors.brandBlue.withAlpha(14),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+            blurRadius: s(14),
+            offset: Offset(0, s(8)),
           ),
         ],
       ),
@@ -516,7 +597,7 @@ class _ProductFlowStepper extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SizedBox(
-            height: 8,
+            height: s(8),
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints c) {
                 final double width = c.maxWidth;
@@ -526,7 +607,7 @@ class _ProductFlowStepper extends StatelessWidget {
                       width: width,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(99),
+                        borderRadius: BorderRadius.circular(s(99)),
                       ),
                     ),
                     TweenAnimationBuilder<double>(
@@ -537,8 +618,15 @@ class _ProductFlowStepper extends StatelessWidget {
                         return Container(
                           width: width * t,
                           decoration: BoxDecoration(
-                            gradient: gradient,
-                            borderRadius: BorderRadius.circular(99),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: <Color>[
+                                AppColors.brandBlue,
+                                AppColors.deepNavy,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(s(99)),
                           ),
                         );
                       },
@@ -548,42 +636,31 @@ class _ProductFlowStepper extends StatelessWidget {
               },
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: s(10)),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              for (int i = 0; i < totalSteps; i++) ...<Widget>[
-                _MinimalStepDot(
-                  active: i == stepIndex,
-                  completed: i < stepIndex,
-                  gradient: gradient,
+              Text(
+                'STEP $currentStep OF $totalSteps',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: s(1),
+                  height: 15 / 10,
+                  color: const Color(0xFF94A3B8),
                 ),
-                if (i != totalSteps - 1) const Spacer(),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              for (int i = 0; i < labels.length; i++) ...<Widget>[
-                Expanded(
-                  child: Text(
-                    labels[i],
-                    textAlign: i == 0
-                        ? TextAlign.left
-                        : (i == labels.length - 1
-                              ? TextAlign.right
-                              : TextAlign.center),
-                    style: AppTypography.caption.copyWith(
-                      color: i == stepIndex
-                          ? AppColors.brandBlue
-                          : AppColors.textTertiary,
-                      fontWeight: i == stepIndex
-                          ? FontWeight.w800
-                          : FontWeight.w600,
-                    ),
-                  ),
+              ),
+              Text(
+                '$progressPercent%',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  height: 15 / 10,
+                  color: AppColors.brandBlue,
                 ),
-              ],
+              ),
             ],
           ),
         ],
@@ -592,114 +669,87 @@ class _ProductFlowStepper extends StatelessWidget {
   }
 }
 
-class _MinimalStepDot extends StatelessWidget {
-  const _MinimalStepDot({
-    required this.active,
-    required this.completed,
-    required this.gradient,
-  });
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.scale, required this.child});
 
-  final bool active;
-  final bool completed;
-  final Gradient gradient;
+  final double scale;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final double size = active ? 12 : 10;
-    final Color fill = completed
-        ? AppColors.brandBlue
-        : const Color(0xFFEFF3FF);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: active || completed ? gradient : null,
-        color: active || completed ? null : fill,
-        boxShadow: active
-            ? <BoxShadow>[
-                BoxShadow(
-                  color: AppColors.brandBlue.withAlpha(26),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : const <BoxShadow>[],
+    double s(double v) => v * scale;
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
+            ),
+          ),
+          child: SafeArea(top: false, child: child),
+        ),
       ),
     );
   }
 }
 
-class _GradientCtaButton extends StatefulWidget {
+class _GradientCtaButton extends StatelessWidget {
   const _GradientCtaButton({
+    required this.scale,
     required this.label,
     required this.icon,
-    required this.gradient,
     required this.enabled,
     required this.onPressed,
   });
 
+  final double scale;
   final String label;
   final IconData icon;
-  final Gradient gradient;
   final bool enabled;
   final VoidCallback onPressed;
 
   @override
-  State<_GradientCtaButton> createState() => _GradientCtaButtonState();
-}
-
-class _GradientCtaButtonState extends State<_GradientCtaButton> {
-  bool _isPressed = false;
-
-  @override
   Widget build(BuildContext context) {
-    final Widget content = Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        Text(
-          widget.label,
-          style: AppTypography.button.copyWith(color: Colors.white),
-        ),
-        const SizedBox(width: 10),
-        Icon(widget.icon, color: Colors.white, size: 18),
-      ],
-    );
-
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 150),
-      opacity: widget.enabled ? 1 : 0.45,
-      child: SizedBox(
-        height: 54,
-        width: double.infinity,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: widget.gradient,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(40),
-                blurRadius: 22,
-                offset: const Offset(0, 12),
-              ),
-            ],
+    double s(double v) => v * scale;
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: enabled ? onPressed : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.brandBlue,
+          disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white.withAlpha(180),
+          elevation: 0,
+          padding: EdgeInsets.symmetric(vertical: s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(20)),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: widget.enabled ? widget.onPressed : null,
-              onHighlightChanged: (bool value) =>
-                  setState(() => _isPressed = value),
-              child: AnimatedScale(
-                duration: const Duration(milliseconds: 90),
-                scale: _isPressed ? 0.985 : 1,
-                child: Center(child: content),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(18),
+                fontWeight: FontWeight.w700,
+                height: 28 / 18,
+                color: Colors.white,
               ),
             ),
-          ),
+            SizedBox(width: s(10)),
+            Icon(icon, color: Colors.white, size: s(18)),
+          ],
         ),
       ),
     );

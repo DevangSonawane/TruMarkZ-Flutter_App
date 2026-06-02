@@ -37,6 +37,13 @@ class _VerificationPermissionsPageState
 
   @override
   Widget build(BuildContext context) {
+    final Uri uri = GoRouterState.of(context).uri;
+    final Map<String, String> qp = uri.queryParameters;
+    final bool isProductFlow = (qp['flow'] ?? '').trim().toLowerCase() == 'product';
+    final String stepText = isProductFlow ? 'STEP 3 OF 4' : 'STEP 2 OF 6';
+    final String progressText = isProductFlow ? '75%' : '33%';
+    final double progressFactor = isProductFlow ? 0.75 : 0.3333;
+
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -113,7 +120,7 @@ class _VerificationPermissionsPageState
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 3 OF 6',
+                                          stepText,
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -125,7 +132,7 @@ class _VerificationPermissionsPageState
                                         ),
                                         const Spacer(),
                                         Text(
-                                          '50%',
+                                          progressText,
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -153,7 +160,7 @@ class _VerificationPermissionsPageState
                                             ),
                                             FractionallySizedBox(
                                               alignment: Alignment.centerLeft,
-                                              widthFactor: 0.5,
+                                              widthFactor: progressFactor,
                                               child: const DecoratedBox(
                                                 decoration: BoxDecoration(
                                                   color: AppColors.brandBlue,
@@ -230,27 +237,53 @@ class _VerificationPermissionsPageState
                                 scale: scale,
                                 onTap: () {
                                   final List<String> checks = _checksFromRoute;
-                                  final String industry =
-                                      (GoRouterState.of(context)
-                                                  .uri
-                                                  .queryParameters['industry'] ??
-                                              '')
-                                          .trim();
                                   final Map<String, String> qp =
+                                      GoRouterState.of(context)
+                                          .uri
+                                          .queryParameters;
+                                  final String industry =
+                                      (qp['industry'] ?? '').trim();
+                                  final bool isProductFlow =
+                                      (qp['flow'] ?? '')
+                                              .trim()
+                                              .toLowerCase() ==
+                                          'product';
+                                  final Map<String, String> nextQp =
                                       <String, String>{};
                                   if (checks.isNotEmpty) {
-                                    qp['checks'] = checks.join(',');
+                                    nextQp['checks'] = checks.join(',');
                                   }
-                                  qp['access'] = _mode.name;
+                                  nextQp['access'] = _mode.name;
                                   if (industry.isNotEmpty) {
-                                    qp['industry'] = industry;
+                                    nextQp['industry'] = industry;
+                                  }
+                                  if (isProductFlow) {
+                                    nextQp['flow'] = 'product';
+                                    final String mode =
+                                        (qp['mode'] ?? '').trim();
+                                    if (mode.isNotEmpty) {
+                                      nextQp['mode'] = mode;
+                                    }
+                                    final String categoryId =
+                                        (qp['category_id'] ?? '').trim();
+                                    if (categoryId.isNotEmpty) {
+                                      nextQp['category_id'] = categoryId;
+                                    }
+                                    final String supportsWarranty =
+                                        (qp['supports_warranty'] ?? '').trim();
+                                    if (supportsWarranty.isNotEmpty) {
+                                      nextQp['supports_warranty'] =
+                                          supportsWarranty;
+                                    }
                                   }
 
                                   final Uri uri = Uri(
-                                    path: AppRouter.bulkUploadPath,
-                                    queryParameters: qp,
+                                    path: isProductFlow
+                                        ? AppRouter.productBulkUploadPath
+                                        : AppRouter.bulkUploadPath,
+                                    queryParameters: nextQp,
                                   );
-                                  context.push(uri.toString());
+                                  context.push(uri.toString(), extra: industry);
                                 },
                               ),
                             ),

@@ -1,12 +1,11 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../../../core/theme/app_spacing.dart';
-import '../../../../../core/theme/app_typography.dart';
-import '../../../../../core/widgets/tmz_button.dart';
-import '../../../../../core/widgets/tmz_card.dart';
 
 enum ProductServiceType { verification, warranty }
 
@@ -25,14 +24,6 @@ class _ProductServiceTypeSelectorPageState
   String _categoryId = '';
   bool _supportsWarranty = true;
   ProductServiceType? _selected;
-
-  static const Color _deepBlue = AppColors.deepNavy;
-
-  LinearGradient get _primaryGradient => const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[AppColors.brandBlue, _deepBlue],
-  );
 
   @override
   void didChangeDependencies() {
@@ -63,187 +54,234 @@ class _ProductServiceTypeSelectorPageState
   void _continue(BuildContext context) {
     final ProductServiceType? selected = _selected;
     if (selected == null) return;
-
-    _openProductUploadTypeSheet(context, mode: selected.name);
-  }
-
-  void _openProductUploadTypeSheet(
-    BuildContext context, {
-    required String mode,
-  }) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext ctx) {
-        final String title = mode == 'warranty'
-            ? 'Warranty'
-            : 'Product Verification';
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(title, style: AppTypography.heading1),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  'Choose how you want to add products for this batch.',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                TMZButton(
-                  label: 'Single Product',
-                  icon: Icons.add_box_rounded,
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    final Uri uri = Uri(
-                      path: AppRouter.singleProductUploadPath,
-                      queryParameters: <String, String>{
-                        'mode': mode,
-                        if (_sector.trim().isNotEmpty) 'sector': _sector.trim(),
-                        if (_categoryId.trim().isNotEmpty)
-                          'category_id': _categoryId.trim(),
-                      },
-                    );
-                    context.push(uri.toString(), extra: _sector);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
-                TMZButton(
-                  label: 'Bulk Upload',
-                  icon: Icons.upload_file_rounded,
-                  variant: TMZButtonVariant.secondary,
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    final Uri uri = Uri(
-                      path: AppRouter.productBatchSetupPath,
-                      queryParameters: <String, String>{
-                        'mode': mode,
-                        if (_categoryId.trim().isNotEmpty)
-                          'category_id': _categoryId.trim(),
-                      },
-                    );
-                    context.push(uri.toString(), extra: _sector);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.x2),
-              ],
-            ),
-          ),
-        );
+    final Uri uri = Uri(
+      path: AppRouter.verificationChecksPath,
+      queryParameters: <String, String>{
+        'flow': 'product',
+        'mode': selected.name,
+        if (_sector.trim().isNotEmpty) 'industry': _sector.trim(),
+        if (_categoryId.trim().isNotEmpty) 'category_id': _categoryId.trim(),
+        if (_supportsWarranty) 'supports_warranty': 'true',
       },
     );
+    context.push(uri.toString(), extra: _sector);
   }
 
   @override
   Widget build(BuildContext context) {
-    final String title = _sector.trim().isEmpty ? 'Select Flow' : _sector;
-    final bool hasSector = _sector.trim().isNotEmpty;
-
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('Select Service'),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x3,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                children: <Widget>[
-                  Text(title, style: AppTypography.display2),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Choose what you want to create for this batch.',
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            const double referenceWidth = 402;
+            final double contentWidth = constraints.maxWidth < referenceWidth
+                ? constraints.maxWidth
+                : referenceWidth;
+            final double scale = contentWidth / referenceWidth;
+            double s(double v) => v * scale;
+
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
+                      child: Row(
+                        children: <Widget>[
+                          InkResponse(
+                            onTap: () => _goBack(context),
+                            radius: s(22),
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_back.svg',
+                              width: s(24),
+                              height: s(24),
+                              colorFilter: const ColorFilter.mode(
+                                Colors.white,
+                                BlendMode.srcIn,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: s(12)),
+                          Text(
+                            'Product Service',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(21),
+                              fontWeight: FontWeight.w600,
+                              height: 19.5 / 21,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const Spacer(),
+                          _OrgTypePill(
+                            scale: scale,
+                            label: _sector.trim().isEmpty
+                                ? 'Product'
+                                : _sector.trim(),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (!hasSector) ...<Widget>[
-                    const SizedBox(height: AppSpacing.x3),
-                    TMZCard(
-                      padding: const EdgeInsets.all(AppSpacing.x4),
-                      child: Text(
-                        'Missing sector information. Please go back and select a sector again.',
-                        style: AppTypography.body2.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.25,
+                    SizedBox(height: s(21)),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F9FC),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(s(20)),
+                          ),
+                        ),
+                        child: Column(
+                          children: <Widget>[
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  s(16),
+                                  s(32),
+                                  s(16),
+                                  s(0),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Row(
+                                      children: <Widget>[
+                                        Text(
+                                          'STEP 1 OF 4',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: s(1),
+                                            height: 15 / 10,
+                                            color: const Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '25%',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            height: 15 / 10,
+                                            color: AppColors.brandBlue,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: s(8)),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                        s(9999),
+                                      ),
+                                      child: SizedBox(
+                                        height: s(4),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: <Widget>[
+                                            const DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFFE5E7EB),
+                                              ),
+                                            ),
+                                            FractionallySizedBox(
+                                              alignment: Alignment.centerLeft,
+                                              widthFactor: 0.25,
+                                              child: const DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.brandBlue,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    Text(
+                                      'Product Service',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(32),
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: s(1.18),
+                                        height: 34 / 32,
+                                        color: const Color(0xFF3A3A3A),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(14)),
+                                    Text(
+                                      'Choose the product certification type for this batch.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(12),
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: s(1.18),
+                                        height: 17.75 / 12,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    _ServiceCard(
+                                      scale: scale,
+                                      title: 'Product Verification',
+                                      subtitle:
+                                          'Issue authenticity / compliance certificates for products.',
+                                      icon: Icons.verified_user_rounded,
+                                      selected:
+                                          _selected ==
+                                          ProductServiceType.verification,
+                                      onTap: () => setState(
+                                        () => _selected =
+                                            ProductServiceType.verification,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(16)),
+                                    _ServiceCard(
+                                      scale: scale,
+                                      title: 'Warranty',
+                                      subtitle: _supportsWarranty
+                                          ? 'Create warranty certificates linked to serial numbers.'
+                                          : 'Not supported for this category.',
+                                      icon: Icons.verified_outlined,
+                                      selected:
+                                          _selected ==
+                                          ProductServiceType.warranty,
+                                      onTap: _supportsWarranty
+                                          ? () => setState(
+                                              () => _selected =
+                                                  ProductServiceType.warranty,
+                                            )
+                                          : () {},
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            _BottomNav(
+                              scale: scale,
+                              child: _GradientCtaButton(
+                                scale: scale,
+                                label: 'Continue',
+                                icon: Icons.arrow_forward_rounded,
+                                enabled: _selected != null,
+                                onPressed: () => _continue(context),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.x5),
-                  _ServiceCard(
-                    title: 'Product Verification',
-                    subtitle:
-                        'Issue authenticity / compliance certificates for products.',
-                    icon: Icons.verified_user_rounded,
-                    selected: _selected == ProductServiceType.verification,
-                    gradient: _primaryGradient,
-                    onTap: hasSector
-                        ? () => setState(
-                            () => _selected = ProductServiceType.verification,
-                          )
-                        : () {},
-                  ),
-                  const SizedBox(height: AppSpacing.x3),
-                  _ServiceCard(
-                    title: 'Warranty',
-                    subtitle: _supportsWarranty
-                        ? 'Create warranty certificates linked to serial numbers.'
-                        : 'Not supported for this category.',
-                    icon: Icons.verified_outlined,
-                    selected: _selected == ProductServiceType.warranty,
-                    gradient: _primaryGradient,
-                    onTap: hasSector
-                        ? (_supportsWarranty
-                              ? () => setState(
-                                  () => _selected = ProductServiceType.warranty,
-                                )
-                              : () {})
-                        : () {},
-                  ),
-                ],
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: _GradientCtaButton(
-                  label: 'Continue',
-                  icon: Icons.arrow_forward_rounded,
-                  gradient: _primaryGradient,
-                  enabled: hasSector && _selected != null,
-                  onPressed: () => _continue(context),
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -252,87 +290,126 @@ class _ProductServiceTypeSelectorPageState
 
 class _ServiceCard extends StatelessWidget {
   const _ServiceCard({
+    required this.scale,
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.selected,
-    required this.gradient,
     required this.onTap,
   });
 
+  final double scale;
   final String title;
   final String subtitle;
   final IconData icon;
   final bool selected;
-  final Gradient gradient;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final BorderSide borderSide = selected
-        ? const BorderSide(color: AppColors.brandBlue, width: 2)
-        : BorderSide(color: Colors.transparent.withAlpha(0));
+    double s(double v) => v * scale;
 
-    return TMZCard(
-      padding: EdgeInsets.zero,
-      onTap: onTap,
-      child: SizedBox(
-        height: 120,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(s(16)),
         child: Container(
+          width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.fromBorderSide(borderSide),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(s(16)),
+            border: Border.all(color: const Color(0xFFDBEAFE)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: const Color(0xFF3B82F6).withAlpha(20),
+                blurRadius: s(20),
+                spreadRadius: s(-2),
+                offset: Offset(0, s(4)),
+              ),
+            ],
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Stack(
             children: <Widget>[
-              Container(
-                width: 10,
-                decoration: BoxDecoration(
-                  gradient: gradient,
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(18),
+              if (selected)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: s(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandBlue,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(s(16)),
+                        bottomLeft: Radius.circular(s(16)),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.x4),
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.brandBlue.withAlpha(20),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: AppColors.brandBlue),
-              ),
-              const SizedBox(width: AppSpacing.x3),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    0,
-                    AppSpacing.x4,
-                    AppSpacing.x4,
-                    AppSpacing.x4,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        style: AppTypography.heading1.copyWith(
-                          fontWeight: FontWeight.w900,
+              Padding(
+                padding: EdgeInsets.fromLTRB(s(24), s(24), s(24), s(24)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Container(
+                          width: s(48),
+                          height: s(48),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF6FF),
+                            borderRadius: BorderRadius.circular(s(12)),
+                            border: Border.all(color: const Color(0xFFDBEAFE)),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            icon,
+                            size: s(30),
+                            color: AppColors.brandBlue,
+                          ),
                         ),
+                        const Spacer(),
+                        if (selected)
+                          Container(
+                            width: s(24),
+                            height: s(24),
+                            decoration: BoxDecoration(
+                              color: AppColors.brandBlue,
+                              borderRadius: BorderRadius.circular(s(9999)),
+                            ),
+                            alignment: Alignment.center,
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_check.svg',
+                              width: s(10.5),
+                              height: s(7.5),
+                            ),
+                          ),
+                      ],
+                    ),
+                    SizedBox(height: s(16)),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(20),
+                        fontWeight: FontWeight.w600,
+                        height: 28 / 20,
+                        color: const Color(0xFF111827),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        subtitle,
-                        style: AppTypography.body2.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.25,
-                        ),
+                    ),
+                    SizedBox(height: s(12)),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w400,
+                        height: 22.75 / 14,
+                        color: const Color(0xFF64748B),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -343,58 +420,151 @@ class _ServiceCard extends StatelessWidget {
   }
 }
 
+class _OrgTypePill extends StatelessWidget {
+  const _OrgTypePill({required this.scale, required this.label});
+
+  final double scale;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      height: s(29),
+      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F7FF),
+        borderRadius: BorderRadius.circular(s(10)),
+        border: Border.all(color: const Color(0xFFE0EFFE)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SvgPicture.asset(
+            'assets/icons/figma/bulk_industry_building.svg',
+            width: s(12),
+            height: s(10),
+            colorFilter: const ColorFilter.mode(
+              AppColors.brandBlue,
+              BlendMode.srcIn,
+            ),
+          ),
+          SizedBox(width: s(8)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(11),
+              fontWeight: FontWeight.w600,
+              letterSpacing: s(0.0644531),
+              height: 16.5 / 11,
+              color: AppColors.brandBlue,
+            ),
+          ),
+          SizedBox(width: s(8)),
+          Container(width: s(1), height: s(12), color: const Color(0xFFE2E8F0)),
+          SizedBox(width: s(8)),
+          Text(
+            'EDIT',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(10),
+              fontWeight: FontWeight.w600,
+              letterSpacing: s(0.25),
+              height: 15 / 10,
+              color: AppColors.brandBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
+            ),
+          ),
+          child: SafeArea(top: false, child: child),
+        ),
+      ),
+    );
+  }
+}
+
 class _GradientCtaButton extends StatelessWidget {
   const _GradientCtaButton({
+    required this.scale,
     required this.label,
     required this.icon,
-    required this.gradient,
     required this.enabled,
     required this.onPressed,
   });
 
+  final double scale;
   final String label;
   final IconData icon;
-  final Gradient gradient;
   final bool enabled;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
+    double s(double v) => v * scale;
     return SizedBox(
       width: double.infinity,
-      height: 54,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: enabled
-              ? gradient
-              : LinearGradient(
-                  colors: <Color>[Colors.grey.shade300, Colors.grey.shade300],
-                ),
-          borderRadius: BorderRadius.circular(14),
+      child: ElevatedButton(
+        onPressed: enabled ? onPressed : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.brandBlue,
+          disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white.withAlpha(180),
+          elevation: 0,
+          padding: EdgeInsets.symmetric(vertical: s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(20)),
+          ),
         ),
-        child: ElevatedButton(
-          onPressed: enabled ? onPressed : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                label,
-                style: AppTypography.body1.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(18),
+                fontWeight: FontWeight.w700,
+                height: 28 / 18,
+                color: Colors.white,
               ),
-              const SizedBox(width: 10),
-              Icon(icon, color: Colors.white, size: 18),
-            ],
-          ),
+            ),
+            SizedBox(width: s(10)),
+            Icon(icon, color: Colors.white, size: s(18)),
+          ],
         ),
       ),
     );

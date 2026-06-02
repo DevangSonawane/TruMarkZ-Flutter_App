@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/network/api_client.dart';
@@ -13,7 +15,6 @@ import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/utils/spreadsheet_preview_util.dart';
-import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
 
@@ -27,6 +28,7 @@ class ProductBulkUploadPage extends ConsumerStatefulWidget {
 
 class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   bool _didInitFromRoute = false;
+  final GlobalKey _menuKey = GlobalKey();
 
   String _sector = 'Consumer Goods & Warranty';
   String _categoryId = '';
@@ -35,18 +37,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   PickedFile? _pickedFile;
   bool _creating = false;
-  List<String> _headers = <String>[];
   List<String> _savedTemplateHeaders = <String>[];
   final TextEditingController _templateHeadersController =
       TextEditingController();
-
-  static const Color _deepBlue = AppColors.deepNavy;
-
-  LinearGradient get _primaryGradient => const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[AppColors.brandBlue, _deepBlue],
-  );
 
   String _selectedCategoryName() => _sector.trim();
 
@@ -99,7 +92,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     super.dispose();
   }
 
-  void _downloadTemplate() {
+  Future<void> _downloadTemplate() async {
     final String suggested = _savedTemplateHeaders.isNotEmpty
         ? _savedTemplateHeaders.join(', ')
         : (_templateHeadersController.text.trim().isNotEmpty
@@ -107,7 +100,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               : 'product_name,category,serial_number,model');
     _templateHeadersController.text = suggested;
 
-    showModalBottomSheet<void>(
+    await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -384,10 +377,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Upload Product Data', style: AppTypography.heading1),
+                Text('Bulk Upload', style: AppTypography.heading1),
                 const SizedBox(height: AppSpacing.x2),
                 Text(
-                  'Pick an Excel/CSV file to create a batch.',
+                  'Pick an Excel/CSV file to create the batch.',
                   style: AppTypography.body2.copyWith(
                     color: Theme.of(
                       context,
@@ -397,17 +390,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                 const SizedBox(height: AppSpacing.x4),
                 _SheetAction(
                   icon: Icons.folder_open_rounded,
-                  label: 'Pick Excel File',
+                  label: 'Pick Excel/CSV File',
                   onTap: () async {
                     final PickedFile? picked = await FilePickerUtil.pickExcel();
                     if (!mounted) return;
                     if (!context.mounted) return;
                     if (picked == null) return;
                     Navigator.of(context).pop();
-                    setState(() {
-                      _pickedFile = picked;
-                      _headers = <String>[];
-                    });
+                    await _setPickedFile(picked);
                   },
                 ),
               ],
@@ -416,6 +406,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         );
       },
     );
+  }
+
+  Future<void> _setPickedFile(PickedFile picked) async {
+    setState(() => _pickedFile = picked);
   }
 
   Future<void> _createBatch() async {
@@ -576,215 +570,294 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
   }
 
+  Future<void> _openMoreMenu({required double scale}) async {
+    final BuildContext? ctx = _menuKey.currentContext;
+    if (ctx == null) return;
+
+    final RenderBox button = ctx.findRenderObject()! as RenderBox;
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final Offset buttonTopLeft = button.localToGlobal(
+      Offset.zero,
+      ancestor: overlay,
+    );
+    final Offset buttonBottomRight = button.localToGlobal(
+      button.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(buttonTopLeft, buttonBottomRight),
+      Offset.zero & overlay.size,
+    );
+
+    final _MoreAction? picked = await showMenu<_MoreAction>(
+      context: context,
+      position: position.shift(Offset(0, button.size.height * 0.6)),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6 * scale),
+        side: BorderSide(color: const Color(0xFFE5E7EB), width: 1 * scale),
+      ),
+      items: <PopupMenuEntry<_MoreAction>>[
+        PopupMenuItem<_MoreAction>(
+          value: _MoreAction.downloadTemplate,
+          child: Text(
+            'Download Template',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14 * scale,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF111827),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (picked == _MoreAction.downloadTemplate) {
+      await _downloadTemplate();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final double referenceWidth = 402;
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('Upload Products'),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x3,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                children: <Widget>[
-                  _ProductFlowStepper(
-                    stepIndex: 2,
-                    gradient: _primaryGradient,
-                    labels: const <String>[
-                      'Sector',
-                      'Product Details',
-                      'Upload',
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.x5),
-                  TMZCard(
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text('Summary', style: AppTypography.heading2),
-                        const SizedBox(height: AppSpacing.x3),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: <Widget>[
-                            Chip(
-                              label: Text(_sector),
-                              backgroundColor: AppColors.brandBlue.withAlpha(
-                                14,
-                              ),
-                              labelStyle: AppTypography.caption.copyWith(
-                                color: AppColors.brandBlue,
-                                fontWeight: FontWeight.w800,
-                              ),
-                              side: BorderSide(
-                                color: AppColors.brandBlue.withAlpha(24),
-                              ),
-                            ),
-                            _SummaryPill(
-                              icon: Icons.folder_rounded,
-                              label: _batchName,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  _InfoCard(
-                    title: 'Excel Columns',
-                    subtitle:
-                        'Required: product_name, category (must match the selected Sector name exactly)\nOptional: other columns will be stored as custom fields',
-                    icon: Icons.info_outline_rounded,
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Text(
-                    'Upload Product Data (.xlsx)',
-                    style: AppTypography.heading2,
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  TMZCard(
-                    onTap: _openUploadSheet,
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Row(
-                      children: <Widget>[
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: AppColors.brandBlue.withAlpha(14),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _pickedFile != null
-                                ? Icons.check_circle_rounded
-                                : Icons.upload_file_rounded,
-                            color: AppColors.brandBlue,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.x4),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                _pickedFile != null
-                                    ? _pickedFile!.name
-                                    : 'Tap to upload your Excel file',
-                                style: AppTypography.body1.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                _pickedFile != null
-                                    ? 'Ready to upload'
-                                    : 'We’ll detect rows & validate required columns',
-                                style: AppTypography.body2.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.textTertiary,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _downloadTemplate,
-                      icon: const Icon(Icons.download_rounded, size: 18),
-                      label: const Text('Download Excel Template'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.brandBlue,
-                        textStyle: AppTypography.body2.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x3),
-                  if (_pickedFile != null)
-                    TMZCard(
-                      padding: const EdgeInsets.all(AppSpacing.x4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double contentWidth = constraints.maxWidth < referenceWidth
+                ? constraints.maxWidth
+                : referenceWidth;
+            final double scale = contentWidth / referenceWidth;
+            double s(double v) => v * scale;
+
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
+                      child: Row(
                         children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Text(
-                                'File selected',
-                                style: AppTypography.heading2.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
+                          InkResponse(
+                            onTap: () => _goBack(context),
+                            radius: s(22),
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_back.svg',
+                              width: s(24),
+                              height: s(24),
+                              colorFilter: const ColorFilter.mode(
+                                Colors.white,
+                                BlendMode.srcIn,
                               ),
-                              const Spacer(),
-                              const Icon(
-                                Icons.table_chart_rounded,
-                                color: AppColors.brandBlue,
-                              ),
-                            ],
+                            ),
                           ),
-                          const SizedBox(height: AppSpacing.x3),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: <Widget>[
-                              for (final String h in _headers.take(8))
-                                Chip(
-                                  label: Text(h),
-                                  backgroundColor: AppColors.brandBlue
-                                      .withAlpha(12),
-                                ),
-                            ],
+                          SizedBox(width: s(12)),
+                          Text(
+                            'Bulk Upload',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(21),
+                              fontWeight: FontWeight.w600,
+                              height: 19.5 / 21,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const Spacer(),
+                          _SectorPill(
+                            scale: scale,
+                            label: _sector.trim().isEmpty
+                                ? 'Product'
+                                : _sector.trim(),
                           ),
                         ],
                       ),
                     ),
-                ],
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
+                    SizedBox(height: s(18)),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F9FC),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(s(20)),
+                          ),
+                        ),
+                        child: Column(
+                          children: <Widget>[
+                            Expanded(
+                              child: SingleChildScrollView(
+                                padding: EdgeInsets.fromLTRB(
+                                  s(16),
+                                  s(28),
+                                  s(16),
+                                  s(140),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    _ProductFlowStepper(
+                                      scale: scale,
+                                      stepIndex: 3,
+                                      totalSteps: 4,
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    Text(
+                                      'BATCH NAME',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(12),
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: s(1.1),
+                                        height: 18 / 12,
+                                        color: const Color(0xFF3A3A3A),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(12)),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(16),
+                                        vertical: s(14),
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(
+                                          s(18),
+                                        ),
+                                        border: Border.all(
+                                          color: const Color(
+                                            0xFFCBD5E1,
+                                          ).withAlpha(160),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        _batchName,
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(14),
+                                          fontWeight: FontWeight.w600,
+                                          height: 20 / 14,
+                                          color: const Color(0xFF111827),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(10)),
+                                    Text(
+                                      'Assigned from the previous step. This batch name will be used for tracking.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(11),
+                                        fontWeight: FontWeight.w500,
+                                        height: 16 / 11,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(26)),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            'Upload CSV',
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(32),
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: s(1.18),
+                                              height: 34 / 32,
+                                              color: const Color(0xFF3A3A3A),
+                                            ),
+                                          ),
+                                        ),
+                                        InkResponse(
+                                          key: _menuKey,
+                                          onTap: () =>
+                                              _openMoreMenu(scale: scale),
+                                          radius: s(22),
+                                          child: SvgPicture.asset(
+                                            'assets/icons/figma/bulk_upload_icon_more.svg',
+                                            width: s(22),
+                                            height: s(22),
+                                            colorFilter: const ColorFilter.mode(
+                                              AppColors.brandBlue,
+                                              BlendMode.srcIn,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: s(14)),
+                                    Text(
+                                      'Download template based on your selected sector.\nUpload your Excel/CSV, then create the batch.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(12),
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: s(1.18),
+                                        height: 17.75 / 12,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(22)),
+                                    _DropZone(
+                                      scale: scale,
+                                      onTap: _openUploadSheet,
+                                    ),
+                                    SizedBox(height: s(26)),
+                                    if (_pickedFile != null) ...<Widget>[
+                                      Text(
+                                        'SELECTED FILE',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(12),
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: s(1.1),
+                                          height: 18 / 12,
+                                          color: const Color(0xFF3A3A3A),
+                                        ),
+                                      ),
+                                      SizedBox(height: s(12)),
+                                      _SelectedFileCard(
+                                        scale: scale,
+                                        fileName: _pickedFile!.name,
+                                        fileSizeLabel: _formatBytes(
+                                          _pickedFile!.bytes.length,
+                                        ),
+                                        onRemove: () =>
+                                            setState(() => _pickedFile = null),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                            _BottomNav(
+                              scale: scale,
+                              child: _UploadButton(
+                                scale: scale,
+                                isLoading: _creating,
+                                enabled: _pickedFile != null && !_creating,
+                                onTap: _createBatch,
+                                label: 'Create Batch',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                child: _GradientCtaButton(
-                  label: _creating ? 'Creating…' : 'Create Batch',
-                  icon: Icons.check_rounded,
-                  gradient: _primaryGradient,
-                  enabled: _pickedFile != null && !_creating,
-                  onPressed: _createBatch,
-                ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -853,83 +926,50 @@ class _SheetAction extends StatelessWidget {
   }
 }
 
-class _SummaryPill extends StatelessWidget {
-  const _SummaryPill({required this.icon, required this.label});
+enum _MoreAction { downloadTemplate }
 
-  final IconData icon;
+class _SectorPill extends StatelessWidget {
+  const _SectorPill({required this.scale, required this.label});
+
+  final double scale;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      height: s(29),
+      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border.withAlpha(120)),
+        color: const Color(0xFFF0F7FF),
+        borderRadius: BorderRadius.circular(s(10)),
+        border: Border.all(color: const Color(0xFFE0EFFE)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 16, color: AppColors.brandBlue),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
+          SvgPicture.asset(
+            'assets/icons/figma/bulk_industry_building.svg',
+            width: s(12),
+            height: s(10),
+            colorFilter: const ColorFilter.mode(
+              AppColors.brandBlue,
+              BlendMode.srcIn,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.brandBlue.withAlpha(18)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(icon, color: AppColors.brandBlue),
-          const SizedBox(width: AppSpacing.x3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: AppTypography.body1.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.25,
-                  ),
-                ),
-              ],
+          SizedBox(width: s(8)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(11),
+              fontWeight: FontWeight.w600,
+              letterSpacing: s(0.0644531),
+              height: 16.5 / 11,
+              color: AppColors.brandBlue,
             ),
           ),
         ],
@@ -940,30 +980,32 @@ class _InfoCard extends StatelessWidget {
 
 class _ProductFlowStepper extends StatelessWidget {
   const _ProductFlowStepper({
+    required this.scale,
     required this.stepIndex,
-    required this.gradient,
-    required this.labels,
+    required this.totalSteps,
   });
 
+  final double scale;
   final int stepIndex;
-  final Gradient gradient;
-  final List<String> labels;
+  final int totalSteps;
 
   @override
   Widget build(BuildContext context) {
-    const int totalSteps = 3;
+    double s(double v) => v * scale;
+    final int currentStep = stepIndex.clamp(0, totalSteps - 1) + 1;
+    final int progressPercent = ((currentStep / totalSteps) * 100).round();
     final double progress = stepIndex / (totalSteps - 1);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(s(16)),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: AppColors.brandBlue.withAlpha(14),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+            blurRadius: s(14),
+            offset: Offset(0, s(8)),
           ),
         ],
       ),
@@ -971,7 +1013,7 @@ class _ProductFlowStepper extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SizedBox(
-            height: 8,
+            height: s(8),
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints c) {
                 final double width = c.maxWidth;
@@ -981,7 +1023,7 @@ class _ProductFlowStepper extends StatelessWidget {
                       width: width,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(99),
+                        borderRadius: BorderRadius.circular(s(99)),
                       ),
                     ),
                     TweenAnimationBuilder<double>(
@@ -992,8 +1034,15 @@ class _ProductFlowStepper extends StatelessWidget {
                         return Container(
                           width: width * t,
                           decoration: BoxDecoration(
-                            gradient: gradient,
-                            borderRadius: BorderRadius.circular(99),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: <Color>[
+                                AppColors.brandBlue,
+                                AppColors.deepNavy,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(s(99)),
                           ),
                         );
                       },
@@ -1003,85 +1052,34 @@ class _ProductFlowStepper extends StatelessWidget {
               },
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: s(10)),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              for (int i = 0; i < totalSteps; i++) ...<Widget>[
-                _MinimalStepDot(
-                  active: i == stepIndex,
-                  completed: i < stepIndex,
-                  gradient: gradient,
+              Text(
+                'STEP $currentStep OF $totalSteps',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: s(1),
+                  height: 15 / 10,
+                  color: const Color(0xFF94A3B8),
                 ),
-                if (i != totalSteps - 1) const Spacer(),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              for (int i = 0; i < labels.length; i++) ...<Widget>[
-                Expanded(
-                  child: Text(
-                    labels[i],
-                    textAlign: i == 0
-                        ? TextAlign.left
-                        : (i == labels.length - 1
-                              ? TextAlign.right
-                              : TextAlign.center),
-                    style: AppTypography.caption.copyWith(
-                      color: i == stepIndex
-                          ? AppColors.brandBlue
-                          : AppColors.textTertiary,
-                      fontWeight: i == stepIndex
-                          ? FontWeight.w800
-                          : FontWeight.w600,
-                    ),
-                  ),
+              ),
+              Text(
+                '$progressPercent%',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  height: 15 / 10,
+                  color: AppColors.brandBlue,
                 ),
-              ],
+              ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _MinimalStepDot extends StatelessWidget {
-  const _MinimalStepDot({
-    required this.active,
-    required this.completed,
-    required this.gradient,
-  });
-
-  final bool active;
-  final bool completed;
-  final Gradient gradient;
-
-  @override
-  Widget build(BuildContext context) {
-    final double size = active ? 12 : 10;
-    final Color fill = completed
-        ? AppColors.brandBlue
-        : const Color(0xFFEFF3FF);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: active || completed ? gradient : null,
-        color: active || completed ? null : fill,
-        boxShadow: active
-            ? <BoxShadow>[
-                BoxShadow(
-                  color: AppColors.brandBlue.withAlpha(26),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : const <BoxShadow>[],
       ),
     );
   }
@@ -1159,4 +1157,368 @@ class _GradientCtaButtonState extends State<_GradientCtaButton> {
       ),
     );
   }
+}
+
+class _DropZone extends StatelessWidget {
+  const _DropZone({required this.scale, required this.onTap});
+
+  final double scale;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(s(20)),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.fromLTRB(s(16), s(26), s(16), s(26)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(s(20)),
+        ),
+        child: CustomPaint(
+          painter: _DashedRRectPainter(
+            radius: s(20),
+            strokeWidth: s(2),
+            dashLength: s(8),
+            gapLength: s(6),
+            color: const Color(0xFFBFD6FF),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(s(14), s(20), s(14), s(20)),
+            child: Column(
+              children: <Widget>[
+                Container(
+                  width: s(64),
+                  height: s(64),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(s(18)),
+                    border: Border.all(
+                      color: const Color(0xFFE6EAF2),
+                      width: s(1),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Colors.black.withAlpha(20),
+                        blurRadius: s(16),
+                        offset: Offset(0, s(6)),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: SvgPicture.asset(
+                    'assets/icons/figma/bulk_upload_icon_upload.svg',
+                    width: s(28),
+                    height: s(28),
+                    colorFilter: const ColorFilter.mode(
+                      AppColors.brandBlue,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ),
+                SizedBox(height: s(18)),
+                Text(
+                  'Tap to select your file',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(20),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: s(0.2),
+                    height: 24 / 20,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: s(8)),
+                Text(
+                  'Upload your Excel or CSV file here',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: s(0.1),
+                    height: 18 / 12,
+                    color: const Color(0xFF64748B),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedFileCard extends StatelessWidget {
+  const _SelectedFileCard({
+    required this.scale,
+    required this.fileName,
+    required this.fileSizeLabel,
+    required this.onRemove,
+  });
+
+  final double scale;
+  final String fileName;
+  final String fileSizeLabel;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(s(14), s(14), s(14), s(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(18)),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: s(1)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: s(48),
+            height: s(48),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(s(14)),
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              'assets/icons/figma/bulk_upload_icon_file_attach.svg',
+              width: s(26),
+              height: s(26),
+              colorFilter: const ColorFilter.mode(
+                Colors.black,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(16),
+                    fontWeight: FontWeight.w700,
+                    height: 20 / 16,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: s(4)),
+                Text(
+                  fileSizeLabel,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 12,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkResponse(
+            onTap: onRemove,
+            radius: s(20),
+            child: SvgPicture.asset(
+              'assets/icons/figma/bulk_close_x.svg',
+              width: s(18),
+              height: s(18),
+              colorFilter: const ColorFilter.mode(
+                Color(0xFF9CA3AF),
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadButton extends StatelessWidget {
+  const _UploadButton({
+    required this.scale,
+    required this.isLoading,
+    required this.enabled,
+    required this.onTap,
+    required this.label,
+  });
+
+  final double scale;
+  final bool isLoading;
+  final bool enabled;
+  final VoidCallback onTap;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: enabled ? onTap : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.brandBlue,
+          disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white.withAlpha(180),
+          elevation: 0,
+          padding: EdgeInsets.symmetric(vertical: s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(20)),
+          ),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: s(20),
+                height: s(20),
+                child: CircularProgressIndicator(
+                  strokeWidth: s(2),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(18),
+                      fontWeight: FontWeight.w700,
+                      height: 28 / 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: s(10)),
+                  SvgPicture.asset(
+                    'assets/icons/figma/new_batch_continue_arrow.svg',
+                    width: s(16),
+                    height: s(16),
+                    colorFilter: const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
+            ),
+          ),
+          child: SafeArea(top: false, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRRectPainter extends CustomPainter {
+  const _DashedRRectPainter({
+    required this.radius,
+    required this.strokeWidth,
+    required this.dashLength,
+    required this.gapLength,
+    required this.color,
+  });
+
+  final double radius;
+  final double strokeWidth;
+  final double dashLength;
+  final double gapLength;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect rect = Offset.zero & size;
+    final RRect rrect = RRect.fromRectAndRadius(
+      rect.deflate(strokeWidth / 2),
+      Radius.circular(radius),
+    );
+
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    final Path path = Path()..addRRect(rrect);
+    final PathMetrics metrics = path.computeMetrics();
+    for (final PathMetric metric in metrics) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final double next = distance + dashLength;
+        final Path extract = metric.extractPath(
+          distance,
+          next.clamp(0, metric.length),
+        );
+        canvas.drawPath(extract, paint);
+        distance = next + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRectPainter oldDelegate) {
+    return oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dashLength != dashLength ||
+        oldDelegate.gapLength != gapLength ||
+        oldDelegate.color != color;
+  }
+}
+
+String _formatBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
+  const List<String> units = <String>['B', 'KB', 'MB', 'GB'];
+  double b = bytes.toDouble();
+  int unit = 0;
+  while (b >= 1024 && unit < units.length - 1) {
+    b /= 1024;
+    unit++;
+  }
+  final String value = b >= 10 || unit == 0
+      ? b.toStringAsFixed(0)
+      : b.toStringAsFixed(1);
+  return '$value ${units[unit]}';
 }

@@ -1,13 +1,15 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
-import '../../../../../core/widgets/tmz_button.dart';
 import '../../../data/verification_repository.dart';
 
 class ProductSectorSelectorPage extends ConsumerStatefulWidget {
@@ -24,14 +26,6 @@ class _ProductSectorSelectorPageState
   bool _loading = true;
   String? _error;
   List<VerificationCategory> _categories = const <VerificationCategory>[];
-
-  static const Color _deepBlue = AppColors.deepNavy;
-
-  LinearGradient get _primaryGradient => const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[AppColors.brandBlue, _deepBlue],
-  );
 
   @override
   void initState() {
@@ -91,141 +85,211 @@ class _ProductSectorSelectorPageState
     final List<VerificationCategory> categories = _categories;
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('Select Sector'),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x3,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                children: <Widget>[
-                  _ProductFlowStepper(
-                    stepIndex: 0,
-                    gradient: _primaryGradient,
-                    labels: const <String>[
-                      'Sector',
-                      'Product Details',
-                      'Upload',
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.x5),
-                  Text('Select Product Sector', style: AppTypography.display2),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Choose the sector category for this product verification batch.',
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            const double referenceWidth = 402;
+            final double contentWidth = constraints.maxWidth < referenceWidth
+                ? constraints.maxWidth
+                : referenceWidth;
+            final double scale = contentWidth / referenceWidth;
+            double s(double v) => v * scale;
+
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
+                      child: Row(
+                        children: <Widget>[
+                          InkResponse(
+                            onTap: () => _goBack(context),
+                            radius: s(22),
+                            child: SvgPicture.asset(
+                              'assets/icons/figma/new_batch_back.svg',
+                              width: s(24),
+                              height: s(24),
+                              colorFilter: const ColorFilter.mode(
+                                Colors.white,
+                                BlendMode.srcIn,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: s(12)),
+                          Text(
+                            'Bulk Upload',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(21),
+                              fontWeight: FontWeight.w600,
+                              height: 19.5 / 21,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.x5),
-                  if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: AppSpacing.x6),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_error != null)
-                    Column(
-                      children: <Widget>[
-                        Text(
-                          'Unable to load categories',
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textSecondary,
+                    SizedBox(height: s(18)),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F9FC),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(s(20)),
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.x2),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TMZButton(
-                            label: 'Retry',
-                            icon: Icons.refresh_rounded,
-                            variant: TMZButtonVariant.secondary,
-                            onPressed: () {
-                              setState(() {
-                                _loading = true;
-                                _error = null;
-                              });
-                              _loadCategories();
-                            },
-                          ),
+                        child: Column(
+                          children: <Widget>[
+                            Expanded(
+                              child: SingleChildScrollView(
+                                padding: EdgeInsets.fromLTRB(
+                                  s(16),
+                                  s(28),
+                                  s(16),
+                                  s(140),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    _ProductFlowStepper(
+                                      scale: scale,
+                                      stepIndex: 0,
+                                      totalSteps: 4,
+                                    ),
+                                    SizedBox(height: s(24)),
+                                    Text(
+                                      'Select Product Sector',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(32),
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: s(1.18),
+                                        height: 34 / 32,
+                                        color: const Color(0xFF3A3A3A),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(14)),
+                                    Text(
+                                      'Choose the sector category for this product verification batch.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(12),
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: s(1.18),
+                                        height: 17.75 / 12,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(22)),
+                                    if (_loading)
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: AppSpacing.x6,
+                                        ),
+                                        child: Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      )
+                                    else if (_error != null)
+                                      _InfoBanner(
+                                        scale: scale,
+                                        title: 'Unable to load categories',
+                                        message:
+                                            'Try loading the category list again.',
+                                        actionLabel: 'Retry',
+                                        onAction: () {
+                                          setState(() {
+                                            _loading = true;
+                                            _error = null;
+                                          });
+                                          _loadCategories();
+                                        },
+                                      )
+                                    else
+                                      LayoutBuilder(
+                                        builder:
+                                            (
+                                              BuildContext context,
+                                              BoxConstraints constraints,
+                                            ) {
+                                              final int columns =
+                                                  constraints.maxWidth >= 800
+                                                  ? 3
+                                                  : 2;
+                                              return GridView.builder(
+                                                itemCount: categories.length,
+                                                shrinkWrap: true,
+                                                physics:
+                                                    const NeverScrollableScrollPhysics(),
+                                                gridDelegate:
+                                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                                      crossAxisCount: columns,
+                                                      mainAxisSpacing:
+                                                          AppSpacing.x3,
+                                                      crossAxisSpacing:
+                                                          AppSpacing.x3,
+                                                      childAspectRatio: 1,
+                                                    ),
+                                                itemBuilder:
+                                                    (
+                                                      BuildContext context,
+                                                      int index,
+                                                    ) {
+                                                      final VerificationCategory
+                                                      cat = categories[index];
+                                                      final bool selected =
+                                                          _selectedCategory
+                                                              ?.id ==
+                                                          cat.id;
+                                                      return _SectorCard(
+                                                        title: cat.categoryName,
+                                                        description:
+                                                            cat.description,
+                                                        icon: _iconForCategory(
+                                                          cat.categoryName,
+                                                        ),
+                                                        selected: selected,
+                                                        onTap: () {
+                                                          setState(
+                                                            () =>
+                                                                _selectedCategory =
+                                                                    cat,
+                                                          );
+                                                          _continue(context);
+                                                        },
+                                                      );
+                                                    },
+                                              );
+                                            },
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            _BottomNav(
+                              scale: scale,
+                              child: _GradientCtaButton(
+                                scale: scale,
+                                label: 'Continue',
+                                icon: Icons.arrow_forward_rounded,
+                                enabled: _selectedCategory != null,
+                                onPressed: () => _continue(context),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    )
-                  else
-                    LayoutBuilder(
-                      builder:
-                          (BuildContext context, BoxConstraints constraints) {
-                            final int columns = constraints.maxWidth >= 800
-                                ? 3
-                                : 2;
-                            return GridView.builder(
-                              itemCount: categories.length,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: columns,
-                                    mainAxisSpacing: AppSpacing.x3,
-                                    crossAxisSpacing: AppSpacing.x3,
-                                    childAspectRatio: 1,
-                                  ),
-                              itemBuilder: (BuildContext context, int index) {
-                                final VerificationCategory cat =
-                                    categories[index];
-                                final bool selected =
-                                    _selectedCategory?.id == cat.id;
-                                return _SectorCard(
-                                  title: cat.categoryName,
-                                  description: cat.description,
-                                  icon: _iconForCategory(cat.categoryName),
-                                  selected: selected,
-                                  onTap: () {
-                                    setState(() => _selectedCategory = cat);
-                                    // Immediately move to the next step on tap.
-                                    _continue(context);
-                                  },
-                                );
-                              },
-                            );
-                          },
+                      ),
                     ),
-                ],
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: _GradientCtaButton(
-                  label: 'Continue',
-                  icon: Icons.arrow_forward_rounded,
-                  gradient: _primaryGradient,
-                  enabled: _selectedCategory != null,
-                  onPressed: () => _continue(context),
+                  ],
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -385,30 +449,32 @@ class _SectorCard extends StatelessWidget {
 
 class _ProductFlowStepper extends StatelessWidget {
   const _ProductFlowStepper({
+    required this.scale,
     required this.stepIndex,
-    required this.gradient,
-    required this.labels,
+    required this.totalSteps,
   });
 
+  final double scale;
   final int stepIndex;
-  final Gradient gradient;
-  final List<String> labels;
+  final int totalSteps;
 
   @override
   Widget build(BuildContext context) {
-    const int totalSteps = 3;
+    double s(double v) => v * scale;
+    final int currentStep = stepIndex.clamp(0, totalSteps - 1) + 1;
+    final int progressPercent = ((currentStep / totalSteps) * 100).round();
     final double progress = stepIndex / (totalSteps - 1);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(s(16)),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: AppColors.brandBlue.withAlpha(14),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+            blurRadius: s(14),
+            offset: Offset(0, s(8)),
           ),
         ],
       ),
@@ -416,7 +482,7 @@ class _ProductFlowStepper extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SizedBox(
-            height: 8,
+            height: s(8),
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints c) {
                 final double width = c.maxWidth;
@@ -426,7 +492,7 @@ class _ProductFlowStepper extends StatelessWidget {
                       width: width,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(99),
+                        borderRadius: BorderRadius.circular(s(99)),
                       ),
                     ),
                     TweenAnimationBuilder<double>(
@@ -437,8 +503,15 @@ class _ProductFlowStepper extends StatelessWidget {
                         return Container(
                           width: width * t,
                           decoration: BoxDecoration(
-                            gradient: gradient,
-                            borderRadius: BorderRadius.circular(99),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: <Color>[
+                                AppColors.brandBlue,
+                                AppColors.deepNavy,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(s(99)),
                           ),
                         );
                       },
@@ -448,42 +521,31 @@ class _ProductFlowStepper extends StatelessWidget {
               },
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: s(10)),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              for (int i = 0; i < totalSteps; i++) ...<Widget>[
-                _MinimalStepDot(
-                  active: i == stepIndex,
-                  completed: i < stepIndex,
-                  gradient: gradient,
+              Text(
+                'STEP $currentStep OF $totalSteps',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: s(1),
+                  height: 15 / 10,
+                  color: const Color(0xFF94A3B8),
                 ),
-                if (i != totalSteps - 1) const Spacer(),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              for (int i = 0; i < labels.length; i++) ...<Widget>[
-                Expanded(
-                  child: Text(
-                    labels[i],
-                    textAlign: i == 0
-                        ? TextAlign.left
-                        : (i == labels.length - 1
-                              ? TextAlign.right
-                              : TextAlign.center),
-                    style: AppTypography.caption.copyWith(
-                      color: i == stepIndex
-                          ? AppColors.brandBlue
-                          : AppColors.textTertiary,
-                      fontWeight: i == stepIndex
-                          ? FontWeight.w800
-                          : FontWeight.w600,
-                    ),
-                  ),
+              ),
+              Text(
+                '$progressPercent%',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  height: 15 / 10,
+                  color: AppColors.brandBlue,
                 ),
-              ],
+              ),
             ],
           ),
         ],
@@ -492,114 +554,176 @@ class _ProductFlowStepper extends StatelessWidget {
   }
 }
 
-class _MinimalStepDot extends StatelessWidget {
-  const _MinimalStepDot({
-    required this.active,
-    required this.completed,
-    required this.gradient,
+class _InfoBanner extends StatelessWidget {
+  const _InfoBanner({
+    required this.scale,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
   });
 
-  final bool active;
-  final bool completed;
-  final Gradient gradient;
+  final double scale;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
-    final double size = active ? 12 : 10;
-    final Color fill = completed
-        ? AppColors.brandBlue
-        : const Color(0xFFEFF3FF);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      width: size,
-      height: size,
+    double s(double v) => v * scale;
+    return Container(
+      padding: EdgeInsets.all(s(16)),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: active || completed ? gradient : null,
-        color: active || completed ? null : fill,
-        boxShadow: active
-            ? <BoxShadow>[
-                BoxShadow(
-                  color: AppColors.brandBlue.withAlpha(26),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
+        color: const Color(0xFFF3F6FF),
+        borderRadius: BorderRadius.circular(s(18)),
+        border: Border.all(color: AppColors.brandBlue.withAlpha(18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.info_outline_rounded, color: AppColors.brandBlue),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w800,
+                    height: 20 / 14,
+                    color: const Color(0xFF111827),
+                  ),
                 ),
-              ]
-            : const <BoxShadow>[],
+                SizedBox(height: s(6)),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 18 / 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                SizedBox(height: s(12)),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: onAction,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.brandBlue,
+                      side: BorderSide(
+                        color: AppColors.brandBlue.withAlpha(64),
+                      ),
+                      padding: EdgeInsets.symmetric(vertical: s(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(s(14)),
+                      ),
+                    ),
+                    child: Text(
+                      actionLabel,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _GradientCtaButton extends StatefulWidget {
+class _GradientCtaButton extends StatelessWidget {
   const _GradientCtaButton({
+    required this.scale,
     required this.label,
     required this.icon,
-    required this.gradient,
     required this.enabled,
     required this.onPressed,
   });
 
+  final double scale;
   final String label;
   final IconData icon;
-  final Gradient gradient;
   final bool enabled;
   final VoidCallback onPressed;
 
   @override
-  State<_GradientCtaButton> createState() => _GradientCtaButtonState();
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: enabled ? onPressed : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.brandBlue,
+          disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white.withAlpha(180),
+          elevation: 0,
+          padding: EdgeInsets.symmetric(vertical: s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(20)),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(18),
+                fontWeight: FontWeight.w700,
+                height: 28 / 18,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: s(10)),
+            Icon(icon, color: Colors.white, size: s(18)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _GradientCtaButtonState extends State<_GradientCtaButton> {
-  bool _isPressed = false;
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final Widget content = Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        Text(
-          widget.label,
-          style: AppTypography.button.copyWith(color: Colors.white),
-        ),
-        const SizedBox(width: 10),
-        Icon(widget.icon, color: Colors.white, size: 18),
-      ],
-    );
-
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 150),
-      opacity: widget.enabled ? 1 : 0.45,
-      child: SizedBox(
-        height: 54,
-        width: double.infinity,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: widget.gradient,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(40),
-                blurRadius: 22,
-                offset: const Offset(0, 12),
-              ),
-            ],
+    double s(double v) => v * scale;
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: widget.enabled ? widget.onPressed : null,
-              onHighlightChanged: (bool value) =>
-                  setState(() => _isPressed = value),
-              child: AnimatedScale(
-                duration: const Duration(milliseconds: 90),
-                scale: _isPressed ? 0.985 : 1,
-                child: Center(child: content),
-              ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
             ),
           ),
+          child: SafeArea(top: false, child: child),
         ),
       ),
     );

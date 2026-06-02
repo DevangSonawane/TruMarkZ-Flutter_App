@@ -25,9 +25,13 @@ class _VerificationChecksPageState
   static const Color _panelBg = Color(0xFFF7F9FC);
 
   String? _lastRouteSignature;
+  String _flow = 'human';
+  String _mode = 'verification';
   String _industry = '';
+  String _categoryId = '';
+  bool _supportsWarranty = true;
 
-  final List<_CheckItem> _items = const <_CheckItem>[
+  static const List<_CheckItem> _humanItems = <_CheckItem>[
     _CheckItem(
       id: 'identity',
       title: 'Identity Verification',
@@ -72,6 +76,92 @@ class _VerificationChecksPageState
 
   final Set<String> _selected = <String>{'identity'};
 
+  static const List<_CheckItem> _productVerificationItems = <_CheckItem>[
+    _CheckItem(
+      id: 'authenticity',
+      title: 'Authenticity Check',
+      subtitle: 'Brand, SKU and product identity match',
+      mode: _CheckMode.auto,
+      costInr: 140,
+      materialIcon: Icons.verified_rounded,
+    ),
+    _CheckItem(
+      id: 'serial',
+      title: 'Serial Number Match',
+      subtitle: 'Match serial numbers with the uploaded list',
+      mode: _CheckMode.manual,
+      costInr: 180,
+      materialIcon: Icons.qr_code_rounded,
+    ),
+    _CheckItem(
+      id: 'model',
+      title: 'Model Verification',
+      subtitle: 'Confirm model name and product variant',
+      mode: _CheckMode.auto,
+      costInr: 120,
+      materialIcon: Icons.inventory_2_rounded,
+    ),
+    _CheckItem(
+      id: 'compliance',
+      title: 'Compliance Check',
+      subtitle: 'Safety labels, documents and declarations',
+      mode: _CheckMode.manual,
+      costInr: 220,
+      materialIcon: Icons.shield_rounded,
+    ),
+    _CheckItem(
+      id: 'warranty',
+      title: 'Warranty Eligibility',
+      subtitle: 'Warranty registration and claim readiness',
+      mode: _CheckMode.manual,
+      costInr: 260,
+      materialIcon: Icons.fact_check_rounded,
+    ),
+  ];
+
+  static const List<_CheckItem> _productWarrantyItems = <_CheckItem>[
+    _CheckItem(
+      id: 'warranty_registration',
+      title: 'Warranty Registration',
+      subtitle: 'Verify the activation details and start date',
+      mode: _CheckMode.auto,
+      costInr: 140,
+      materialIcon: Icons.verified_rounded,
+    ),
+    _CheckItem(
+      id: 'serial',
+      title: 'Serial Number Match',
+      subtitle: 'Match the serial number to the original invoice',
+      mode: _CheckMode.manual,
+      costInr: 180,
+      materialIcon: Icons.qr_code_rounded,
+    ),
+    _CheckItem(
+      id: 'purchase_proof',
+      title: 'Proof of Purchase',
+      subtitle: 'Invoice or bill check for warranty validity',
+      mode: _CheckMode.manual,
+      costInr: 160,
+      materialIcon: Icons.receipt_long_rounded,
+    ),
+    _CheckItem(
+      id: 'activation',
+      title: 'Activation Status',
+      subtitle: 'Confirm product activation and claim window',
+      mode: _CheckMode.auto,
+      costInr: 120,
+      materialIcon: Icons.toggle_on_rounded,
+    ),
+    _CheckItem(
+      id: 'claim',
+      title: 'Claim Eligibility',
+      subtitle: 'Check whether the claim can be approved',
+      mode: _CheckMode.manual,
+      costInr: 220,
+      materialIcon: Icons.verified_user_rounded,
+    ),
+  ];
+
   static const List<String> _industryOptions = <String>[
     'All',
     'Transport',
@@ -101,6 +191,11 @@ class _VerificationChecksPageState
     _lastRouteSignature = signature;
 
     final Map<String, String> qp = uri.queryParameters;
+    final String nextFlow = (qp['flow'] ?? '').trim().toLowerCase();
+    final String nextMode = (qp['mode'] ?? 'verification').trim().toLowerCase();
+    final String nextCategoryId = (qp['category_id'] ?? '').trim();
+    final bool nextSupportsWarranty =
+        (qp['supports_warranty'] ?? '').trim().toLowerCase() == 'true';
     final String fromRoute = (qp['industry'] ?? '').trim();
     final String fromProfile =
         (ref.read(authNotifierProvider).value?.userProfile?.industry ?? '')
@@ -113,6 +208,36 @@ class _VerificationChecksPageState
     if (next != _industry) {
       setState(() => _industry = next);
     }
+    final bool needsFlowRefresh = nextFlow != _flow ||
+        nextMode != _mode ||
+        nextCategoryId != _categoryId ||
+        nextSupportsWarranty != _supportsWarranty;
+    if (needsFlowRefresh) {
+      setState(() {
+        _flow = nextFlow.isEmpty ? 'human' : nextFlow;
+        _mode = nextMode;
+        _categoryId = nextCategoryId;
+        _supportsWarranty = nextSupportsWarranty;
+
+        final List<_CheckItem> currentItems = _itemsForFlow();
+        if (!_selected.any(
+          (String id) => currentItems.any((_CheckItem item) => item.id == id),
+        )) {
+          _selected
+            ..clear()
+            ..add(currentItems.first.id);
+        }
+      });
+    }
+  }
+
+  List<_CheckItem> _itemsForFlow() {
+    if (_flow == 'product') {
+      return _mode == 'warranty'
+          ? _productWarrantyItems
+          : _productVerificationItems;
+    }
+    return _humanItems;
   }
 
   @override
@@ -133,6 +258,12 @@ class _VerificationChecksPageState
     final String resolvedIndustryLabel = _industryLabelForDisplay(
       resolvedIndustryRaw,
     );
+    final bool isProductFlow = _flow == 'product';
+    final List<_CheckItem> items = _itemsForFlow();
+    final String stepText = isProductFlow ? 'STEP 2 OF 4' : 'STEP 1 OF 6';
+    final String progressText = isProductFlow ? '50%' : '17%';
+    final double progressFactor = isProductFlow ? 0.5 : 0.1667;
+    final String fallbackIndustryLabel = isProductFlow ? 'Product' : 'Real Estate';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -184,7 +315,7 @@ class _VerificationChecksPageState
                           _IndustryPill(
                             scale: scale,
                             label: resolvedIndustryLabel.isEmpty
-                                ? 'Real Estate'
+                                ? fallbackIndustryLabel
                                 : resolvedIndustryLabel,
                             onTap: () async {
                               final String? picked = await _pickIndustry(
@@ -223,7 +354,7 @@ class _VerificationChecksPageState
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 2 OF 6',
+                                          stepText,
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -235,7 +366,7 @@ class _VerificationChecksPageState
                                         ),
                                         const Spacer(),
                                         Text(
-                                          '25%',
+                                          progressText,
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -263,7 +394,7 @@ class _VerificationChecksPageState
                                             ),
                                             FractionallySizedBox(
                                               alignment: Alignment.centerLeft,
-                                              widthFactor: 0.25,
+                                              widthFactor: progressFactor,
                                               child: const DecoratedBox(
                                                 decoration: BoxDecoration(
                                                   color: AppColors.brandBlue,
@@ -304,7 +435,7 @@ class _VerificationChecksPageState
                                         padding: EdgeInsets.only(bottom: s(16)),
                                         itemBuilder:
                                             (BuildContext context, int i) {
-                                              final _CheckItem item = _items[i];
+                                              final _CheckItem item = items[i];
                                               final bool selected = _selected
                                                   .contains(item.id);
                                               return _CheckTile(
@@ -325,7 +456,7 @@ class _VerificationChecksPageState
                                         separatorBuilder:
                                             (BuildContext context, int i) =>
                                                 SizedBox(height: s(16)),
-                                        itemCount: _items.length,
+                                        itemCount: items.length,
                                       ),
                                     ),
                                   ],
@@ -346,6 +477,16 @@ class _VerificationChecksPageState
                                   }
                                   if (_industry.trim().isNotEmpty) {
                                     qp['industry'] = _industry.trim();
+                                  }
+                                  if (_flow == 'product') {
+                                    qp['flow'] = 'product';
+                                    qp['mode'] = _mode;
+                                    if (_categoryId.trim().isNotEmpty) {
+                                      qp['category_id'] = _categoryId.trim();
+                                    }
+                                    if (_supportsWarranty) {
+                                      qp['supports_warranty'] = 'true';
+                                    }
                                   }
                                   final Uri uri = Uri(
                                     path: AppRouter.verificationPermissionsPath,
@@ -834,11 +975,17 @@ class _CheckTile extends StatelessWidget {
                       : const <BoxShadow>[],
                 ),
                 alignment: Alignment.center,
-                child: SvgPicture.asset(
-                  item.svgIconPath,
-                  width: s(22),
-                  height: s(18),
-                ),
+                child: item.svgIconPath != null
+                    ? SvgPicture.asset(
+                        item.svgIconPath!,
+                        width: s(22),
+                        height: s(18),
+                      )
+                    : Icon(
+                        item.materialIcon ?? Icons.verified_rounded,
+                        size: s(22),
+                        color: AppColors.brandBlue,
+                      ),
               ),
               SizedBox(width: s(16)),
               Expanded(
@@ -1089,7 +1236,8 @@ class _CheckItem {
     required this.subtitle,
     required this.mode,
     required this.costInr,
-    required this.svgIconPath,
+    this.svgIconPath,
+    this.materialIcon,
   });
 
   final String id;
@@ -1097,5 +1245,6 @@ class _CheckItem {
   final String subtitle;
   final _CheckMode mode;
   final int costInr;
-  final String svgIconPath;
+  final String? svgIconPath;
+  final IconData? materialIcon;
 }
