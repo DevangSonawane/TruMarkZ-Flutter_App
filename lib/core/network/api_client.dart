@@ -279,6 +279,53 @@ class ApiClient {
     }
   }
 
+  Future<VerificationBinaryResponse> verificationPostFormUrlEncodedBinary(
+    String path, {
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final Options options = Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.bytes,
+      );
+      final Response<dynamic> res = await _verificationDio.post<dynamic>(
+        path,
+        data: data,
+        options: options,
+      );
+      return VerificationBinaryResponse(
+        bytes: _asBytes(res.data),
+        contentDisposition: res.headers.value('content-disposition'),
+      );
+    } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Options retryOptions = Options(
+            contentType: Headers.formUrlEncodedContentType,
+            responseType: ResponseType.bytes,
+          );
+          final Response<dynamic> res = await _dio.post<dynamic>(
+            path,
+            data: data,
+            options: retryOptions,
+          );
+          return VerificationBinaryResponse(
+            bytes: _asBytes(res.data),
+            contentDisposition: res.headers.value('content-disposition'),
+          );
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> verificationPatch(
     String path, {
     Object? data,
@@ -378,6 +425,19 @@ class ApiClient {
       return raw;
     }
     return data.toString();
+  }
+
+  Uint8List _asBytes(dynamic data) {
+    if (data == null) return Uint8List(0);
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+    if (data is List) {
+      return Uint8List.fromList(
+        data.map((dynamic e) => (e as num).toInt()).toList(),
+      );
+    }
+    if (data is String) return Uint8List.fromList(data.codeUnits);
+    return Uint8List.fromList(data.toString().codeUnits);
   }
 
   void _configureDio(Dio dio) {
@@ -489,5 +549,26 @@ class ApiClient {
       return data.trim();
     }
     return null;
+  }
+}
+
+class VerificationBinaryResponse {
+  const VerificationBinaryResponse({
+    required this.bytes,
+    this.contentDisposition,
+  });
+
+  final Uint8List bytes;
+  final String? contentDisposition;
+
+  String get filename {
+    final String? disposition = contentDisposition;
+    if (disposition == null || disposition.trim().isEmpty) {
+      return 'human_template.xlsx';
+    }
+    final RegExp quoted = RegExp(r'filename="?([^\";]+)"?');
+    final Match? match = quoted.firstMatch(disposition);
+    if (match != null) return match.group(1)!.trim();
+    return 'human_template.xlsx';
   }
 }

@@ -128,6 +128,20 @@ class VerificationRepository {
     return template.trim();
   }
 
+  Future<VerificationBinaryResponse> generateHumanTemplate({
+    required String headers,
+    required String verificationTypes,
+  }) async {
+    return _api.verificationPostFormUrlEncodedBinary(
+      '/verification/generate-human-template',
+      data: <String, dynamic>{
+        'headers': headers.trim(),
+        if (verificationTypes.trim().isNotEmpty)
+          'verification_types': verificationTypes.trim(),
+      },
+    );
+  }
+
   Future<SingleHumanUploadResponse> uploadSingleHuman({
     required String fullName,
     required String phoneNumber,

@@ -286,6 +286,47 @@ class VerificationCategory {
   }
 }
 
+class VerificationTemplate {
+  const VerificationTemplate({
+    required this.id,
+    required this.templateName,
+    required this.verificationTypes,
+    required this.jsonData,
+    required this.htmlCode,
+    required this.version,
+  });
+
+  final String id;
+  final String templateName;
+  final List<String> verificationTypes;
+  final Map<String, dynamic> jsonData;
+  final String htmlCode;
+  final int version;
+
+  factory VerificationTemplate.fromJson(Map<String, dynamic> json) {
+    final dynamic typesRaw = json['verification_types'];
+    final List<String> types = typesRaw is List
+        ? typesRaw
+              .map((dynamic e) => e?.toString().trim() ?? '')
+              .where((String e) => e.isNotEmpty)
+              .toList()
+        : <String>[];
+    final dynamic dataRaw = json['json_data'];
+    final Map<String, dynamic> data = dataRaw is Map
+        ? Map<String, dynamic>.from(dataRaw)
+        : <String, dynamic>{};
+
+    return VerificationTemplate(
+      id: (json['id'] ?? '').toString(),
+      templateName: (json['template_name'] ?? '').toString(),
+      verificationTypes: types,
+      jsonData: data,
+      htmlCode: (json['html_code'] ?? '').toString(),
+      version: int.tryParse((json['version'] ?? '').toString()) ?? 0,
+    );
+  }
+}
+
 class BulkUploadSuccessUser {
   const BulkUploadSuccessUser({
     required this.row,
