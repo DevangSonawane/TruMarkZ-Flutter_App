@@ -65,6 +65,10 @@ class VerificationRepository {
   Future<BulkUploadResponse> bulkUploadProducts({
     required String batchName,
     String? description,
+    String? industryType,
+    String? verificationTypes,
+    String? credentialVisibility,
+    String? templateId,
     required Uint8List fileBytes,
     required String fileName,
   }) async {
@@ -82,6 +86,15 @@ class VerificationRepository {
       'batch_name': batchName.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
+      if (industryType != null && industryType.trim().isNotEmpty)
+        'industry_type': industryType.trim(),
+      if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
+        'verification_types': verificationTypes.trim(),
+      if (credentialVisibility != null &&
+          credentialVisibility.trim().isNotEmpty)
+        'credential_visibility': credentialVisibility.trim(),
+      if (templateId != null && templateId.trim().isNotEmpty)
+        'template_id': templateId.trim(),
       'file': MultipartFile.fromBytes(
         fileBytes,
         filename: safeName,
@@ -159,6 +172,10 @@ class VerificationRepository {
   Future<BulkUploadResponse> bulkUpload({
     required String batchName,
     String? description,
+    String? industryType,
+    String? verificationTypes,
+    String? credentialVisibility,
+    String? templateId,
     required Uint8List fileBytes,
     required String fileName,
   }) async {
@@ -176,6 +193,15 @@ class VerificationRepository {
       'batch_name': batchName.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
+      if (industryType != null && industryType.trim().isNotEmpty)
+        'industry_type': industryType.trim(),
+      if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
+        'verification_types': verificationTypes.trim(),
+      if (credentialVisibility != null &&
+          credentialVisibility.trim().isNotEmpty)
+        'credential_visibility': credentialVisibility.trim(),
+      if (templateId != null && templateId.trim().isNotEmpty)
+        'template_id': templateId.trim(),
       'file': MultipartFile.fromBytes(
         fileBytes,
         filename: safeName,

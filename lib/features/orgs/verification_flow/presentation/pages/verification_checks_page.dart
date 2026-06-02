@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
+import '../../../../auth/data/auth_repository.dart';
 
 class VerificationChecksPage extends ConsumerStatefulWidget {
   const VerificationChecksPage({super.key});
@@ -115,6 +117,23 @@ class _VerificationChecksPageState
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final String? orgId = authAsync.valueOrNull?.userProfile?.id;
+    final AsyncValue<String?> industryAsync = orgId == null
+        ? const AsyncData<String?>(null)
+        : ref.watch(organizationIndustryTypeProvider(orgId));
+    final String apiIndustry = industryAsync.valueOrNull?.trim() ?? '';
+    final String profileIndustry =
+        authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
+    final String resolvedIndustryRaw = _industry.trim().isNotEmpty
+        ? _industry.trim()
+        : apiIndustry.isNotEmpty
+        ? apiIndustry
+        : _normalizeIndustry(profileIndustry);
+    final String resolvedIndustryLabel = _industryLabelForDisplay(
+      resolvedIndustryRaw,
+    );
+
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -164,13 +183,13 @@ class _VerificationChecksPageState
                           const Spacer(),
                           _IndustryPill(
                             scale: scale,
-                            label: _industry.trim().isEmpty
+                            label: resolvedIndustryLabel.isEmpty
                                 ? 'Real Estate'
-                                : _industry.trim(),
+                                : resolvedIndustryLabel,
                             onTap: () async {
                               final String? picked = await _pickIndustry(
                                 scale: scale,
-                                current: _industry.trim(),
+                                current: resolvedIndustryRaw,
                               );
                               if (!mounted || picked == null) return;
                               setState(() => _industry = picked);
@@ -355,103 +374,192 @@ class _VerificationChecksPageState
     required String current,
   }) async {
     double s(double v) => v * scale;
-    final String selected = current.trim();
+    final Set<String> selected = _industrySelectionFromRaw(current);
 
     return showDialog<String>(
       context: context,
       builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(s(16)),
-            side: BorderSide(color: const Color(0xFFE5E7EB), width: s(1)),
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: s(480)),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Text(
-                        'Select Industry',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: s(16),
-                          fontWeight: FontWeight.w700,
-                          height: 24 / 16,
-                          color: const Color(0xFF111827),
-                        ),
-                      ),
-                      const Spacer(),
-                      InkResponse(
-                        onTap: () => Navigator.of(context).pop(),
-                        radius: s(18),
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: s(20),
-                          color: const Color(0xFF9CA3AF),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: s(10)),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: _industryOptions.length,
-                      separatorBuilder: (BuildContext context, int index) =>
-                          Divider(height: s(1), color: const Color(0xFFF1F5F9)),
-                      itemBuilder: (BuildContext context, int index) {
-                        final String label = _industryOptions[index];
-                        final bool isSelected = label == selected;
-                        return InkWell(
-                          onTap: () => Navigator.of(context).pop(label),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              vertical: s(12),
-                              horizontal: s(2),
-                            ),
-                            child: Row(
-                              children: <Widget>[
-                                Container(
-                                  width: s(10),
-                                  height: s(10),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isSelected
-                                        ? AppColors.brandBlue
-                                        : const Color(0xFFE5E7EB),
-                                  ),
-                                ),
-                                SizedBox(width: s(12)),
-                                Expanded(
-                                  child: Text(
-                                    label,
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: s(14),
-                                      fontWeight: FontWeight.w600,
-                                      height: 20 / 14,
-                                      color: isSelected
-                                          ? AppColors.brandBlue
-                                          : const Color(0xFF334155),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+        return StatefulBuilder(
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setDialogState,
+              ) {
+                final List<String> options = _industryOptions
+                    .where((String e) => e != 'All')
+                    .toList();
+
+                final bool allSelected = selected.length >= options.length;
+
+                void toggle(String label) {
+                  setDialogState(() {
+                    if (label == 'All') {
+                      selected
+                        ..clear()
+                        ..addAll(options);
+                      return;
+                    }
+                    if (selected.contains(label)) {
+                      selected.remove(label);
+                    } else {
+                      selected.add(label);
+                    }
+                  });
+                }
+
+                return Dialog(
+                  insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(s(16)),
+                    side: BorderSide(
+                      color: const Color(0xFFE5E7EB),
+                      width: s(1),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: s(520)),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Text(
+                                'Select Industry',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(16),
+                                  fontWeight: FontWeight.w700,
+                                  height: 24 / 16,
+                                  color: const Color(0xFF111827),
+                                ),
+                              ),
+                              const Spacer(),
+                              InkResponse(
+                                onTap: () => Navigator.of(context).pop(),
+                                radius: s(18),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: s(20),
+                                  color: const Color(0xFF9CA3AF),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: s(10)),
+                          Text(
+                            'Choose one or more industries, then tap Update.',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(12),
+                              fontWeight: FontWeight.w500,
+                              height: 18 / 12,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                          SizedBox(height: s(10)),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: _industryOptions.length,
+                              separatorBuilder:
+                                  (BuildContext context, int index) => Divider(
+                                    height: s(1),
+                                    color: const Color(0xFFF1F5F9),
+                                  ),
+                              itemBuilder: (BuildContext context, int index) {
+                                final String label = _industryOptions[index];
+                                final bool isSelected = label == 'All'
+                                    ? allSelected
+                                    : selected.contains(label);
+                                return InkWell(
+                                  onTap: () => toggle(label),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: s(12),
+                                      horizontal: s(2),
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        Container(
+                                          width: s(18),
+                                          height: s(18),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isSelected
+                                                ? AppColors.brandBlue
+                                                : const Color(0xFFE5E7EB),
+                                          ),
+                                          child: isSelected
+                                              ? Icon(
+                                                  Icons.check_rounded,
+                                                  size: s(12),
+                                                  color: Colors.white,
+                                                )
+                                              : null,
+                                        ),
+                                        SizedBox(width: s(12)),
+                                        Expanded(
+                                          child: Text(
+                                            label,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(14),
+                                              fontWeight: FontWeight.w600,
+                                              height: 20 / 14,
+                                              color: isSelected
+                                                  ? AppColors.brandBlue
+                                                  : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          SizedBox(height: s(12)),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.brandBlue,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: s(14)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(s(12)),
+                                ),
+                              ),
+                              onPressed: selected.isEmpty
+                                  ? null
+                                  : () {
+                                      final List<String> sorted =
+                                          selected.toList()..sort();
+                                      Navigator.of(
+                                        context,
+                                      ).pop(sorted.join(', '));
+                                    },
+                              child: Text(
+                                'Update',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(14),
+                                  fontWeight: FontWeight.w700,
+                                  height: 20 / 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
         );
       },
     );
@@ -494,6 +602,85 @@ class _VerificationChecksPageState
     }
 
     return v;
+  }
+
+  String _industryLabelForDisplay(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return '';
+    final String lower = v.toLowerCase();
+    if (lower == 'all' || lower == 'both') return 'All';
+
+    final List<String> parts = _industryParts(v);
+    if (parts.isEmpty) return _formatIndustryPart(v);
+    if (parts.length >= _industryOptions.length - 1) return 'All';
+    if (parts.length == 1) return _formatIndustryPart(parts.first);
+    return '${_formatIndustryPart(parts.first)} +${parts.length - 1}';
+  }
+
+  static List<String> _industryParts(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return <String>[];
+    if (v.startsWith('[') && v.endsWith(']')) {
+      return v
+          .substring(1, v.length - 1)
+          .split(',')
+          .map((String s) => s.replaceAll('"', '').trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    if (v.contains(',')) {
+      return v
+          .split(',')
+          .map((String s) => s.trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    return <String>[v];
+  }
+
+  static String _formatIndustryPart(String s) {
+    final String cleaned = s.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (cleaned.isEmpty) return '';
+    final List<String> tokens = cleaned
+        .split(' ')
+        .where((String token) => token.trim().isNotEmpty)
+        .toList();
+    return tokens
+        .map(
+          (String token) => token.isEmpty
+              ? token
+              : '${token[0].toUpperCase()}${token.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
+  Set<String> _industrySelectionFromRaw(String raw) {
+    final Set<String> selected = <String>{};
+    final List<String> parts = _industryParts(raw);
+    if (parts.isEmpty) return selected;
+
+    final List<String> options = _industryOptions
+        .where((String e) => e != 'All')
+        .toList();
+    final Set<String> normalizedParts = parts
+        .map((String e) => e.trim().toLowerCase())
+        .where((String e) => e.isNotEmpty)
+        .toSet();
+    final Set<String> normalizedOptions = options
+        .map((String e) => e.toLowerCase())
+        .toSet();
+
+    if (normalizedParts.containsAll(normalizedOptions)) {
+      selected.addAll(options);
+      return selected;
+    }
+
+    for (final String option in options) {
+      if (normalizedParts.contains(option.toLowerCase())) {
+        selected.add(option);
+      }
+    }
+    return selected;
   }
 }
 

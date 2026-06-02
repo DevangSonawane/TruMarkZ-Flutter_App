@@ -11,6 +11,16 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   );
 });
 
+final organizationIndustryTypeProvider = FutureProvider.family<String?, String>(
+  (ref, orgId) async {
+    final String id = orgId.trim();
+    if (id.isEmpty) return null;
+    return ref
+        .read(authRepositoryProvider)
+        .getOrganizationIndustryType(orgId: id);
+  },
+);
+
 class AuthRepository {
   AuthRepository(this._api, this._tokenStorage);
 
@@ -47,8 +57,9 @@ class AuthRepository {
     required String idToken,
     required String userType,
   }) async {
-    final String normalized =
-        userType.trim().toLowerCase() == 'individual' ? 'individual' : 'organization';
+    final String normalized = userType.trim().toLowerCase() == 'individual'
+        ? 'individual'
+        : 'organization';
     final Map<String, dynamic> res = await _api.post(
       '/auth/google?user_type=${Uri.encodeComponent(normalized)}',
       data: <String, dynamic>{'token': idToken},
@@ -66,8 +77,8 @@ class AuthRepository {
     final String loginType = loginTypeRaw == 'individual'
         ? 'individual'
         : loginTypeRaw == 'organization'
-              ? 'organization'
-              : loginTypeRaw;
+        ? 'organization'
+        : loginTypeRaw;
 
     await _tokenStorage.saveToken(parsed.accessToken);
     await _tokenStorage.saveUserId(parsed.userId);
@@ -154,6 +165,40 @@ class AuthRepository {
 
   Future<void> completeOrgOnboarding(OrgOnboardingRequest request) async {
     await _api.post('/auth/onboarding', data: request.toJson());
+  }
+
+  Future<String?> getOrganizationIndustryType({required String orgId}) async {
+    final String id = orgId.trim();
+    if (id.isEmpty) return null;
+    final dynamic res = await _api.verificationGetAny(
+      '/auth/organization/${Uri.encodeComponent(id)}/industry-type',
+    );
+    if (res is String) {
+      final String value = res.trim();
+      return value.isEmpty ? null : value;
+    }
+    if (res is Map) {
+      final dynamic data =
+          res['data'] ?? res['industry_type'] ?? res['industryType'];
+      if (data is String) {
+        final String value = data.trim();
+        return value.isEmpty ? null : value;
+      }
+      if (data is List) {
+        final List<String> values = data
+            .map((dynamic e) => e?.toString().trim() ?? '')
+            .where((String e) => e.isNotEmpty)
+            .toList();
+        if (values.isEmpty) return null;
+        return values.length == 1 ? values.first : values.join(', ');
+      }
+      if (data != null) {
+        final String value = data.toString().trim();
+        return value.isEmpty ? null : value;
+      }
+    }
+    final String value = res?.toString().trim() ?? '';
+    return value.isEmpty ? null : value;
   }
 
   Future<String?> forgotPassword(String emailOrMobile) async {

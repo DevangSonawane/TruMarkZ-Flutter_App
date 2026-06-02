@@ -36,6 +36,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   PickedFile? _pickedFile;
   bool _creating = false;
   List<String> _headers = <String>[];
+  List<String> _savedTemplateHeaders = <String>[];
   final TextEditingController _templateHeadersController =
       TextEditingController();
 
@@ -99,9 +100,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   }
 
   void _downloadTemplate() {
-    final String suggested = _templateHeadersController.text.trim().isNotEmpty
-        ? _templateHeadersController.text.trim()
-        : 'product_name,category,serial_number,model';
+    final String suggested = _savedTemplateHeaders.isNotEmpty
+        ? _savedTemplateHeaders.join(', ')
+        : (_templateHeadersController.text.trim().isNotEmpty
+              ? _templateHeadersController.text.trim()
+              : 'product_name,category,serial_number,model');
     _templateHeadersController.text = suggested;
 
     showModalBottomSheet<void>(
@@ -110,144 +113,259 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       isScrollControlled: true,
       builder: (BuildContext ctx) {
         final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(ctx);
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.x4,
-              AppSpacing.x4,
-              AppSpacing.x4,
-              AppSpacing.x4 + viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Download Template', style: AppTypography.heading1),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  'Enter column headers (comma-separated). The backend will generate an Excel template.',
-                  style: AppTypography.body2.copyWith(
-                    color: Theme.of(ctx).colorScheme.onSurface.withAlpha(160),
-                  ),
+        List<String> savedHeaders = List<String>.from(_savedTemplateHeaders);
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setSheetState) {
+            final double scale = MediaQuery.sizeOf(context).width / 402;
+            double s(double v) => v * scale;
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.x4,
+                  AppSpacing.x4,
+                  AppSpacing.x4,
+                  AppSpacing.x4 + viewInsets.bottom,
                 ),
-                const SizedBox(height: AppSpacing.x3),
-                TextField(
-                  controller: _templateHeadersController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    hintText: 'product_name, serial_number, model, ...',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Download Template',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(16),
+                        fontWeight: FontWeight.w700,
+                        height: 24 / 16,
+                        color: const Color(0xFF111827),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.border),
+                    const SizedBox(height: AppSpacing.x2),
+                    Text(
+                      'Enter column headers (comma-separated). Save them first, then generate the Excel template.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w500,
+                        height: 18 / 12,
+                        color: const Color(0xFF64748B),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      String norm(String s) =>
-                          s.trim().toLowerCase().replaceAll(' ', '_');
-                      final List<String> headers = _templateHeadersController
-                          .text
-                          .split(',')
-                          .map((String s) => s.trim())
-                          .where((String s) => s.isNotEmpty)
-                          .toList();
-                      if (headers.isEmpty) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter at least 1 header.'),
-                          ),
-                        );
-                        return;
-                      }
-                      final Set<String> normalized = headers.map(norm).toSet();
-                      if (!normalized.contains('product_name') ||
-                          !normalized.contains('category')) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Template must include required columns: product_name, category',
-                            ),
-                          ),
-                        );
-                        return;
-                      }
-                      try {
-                        final VerificationRepository repo = ref.read(
-                          verificationRepositoryProvider,
-                        );
-                        final String res = await repo.generateProductsTemplate(
-                          categoryId: _categoryId,
-                          headers: headers,
-                        );
-                        if (!ctx.mounted) return;
-                        Navigator.of(ctx).pop();
-
-                        final String out = res.trim();
-                        if (out.startsWith('http://') ||
-                            out.startsWith('https://')) {
-                          final Uri uri = Uri.parse(out);
-                          final bool ok = await launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          );
-                          if (!mounted) return;
-                          if (!ok) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Could not open template link.'),
+                    const SizedBox(height: AppSpacing.x3),
+                    TextField(
+                      controller: _templateHeadersController,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w400,
+                        height: 20 / 14,
+                        color: const Color(0xFF0F172A),
+                      ),
+                      cursorColor: AppColors.brandBlue,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'product_name, serial_number, model, ...',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x4),
+                    if (savedHeaders.isNotEmpty) ...<Widget>[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          for (final String header in savedHeaders)
+                            Chip(
+                              label: Text(header),
+                              backgroundColor: AppColors.brandBlue.withAlpha(
+                                14,
                               ),
-                            );
-                          }
-                          return;
-                        }
+                              labelStyle: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: s(12),
+                                fontWeight: FontWeight.w600,
+                                height: 16.5 / 12,
+                                color: AppColors.brandBlue,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.x3),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                final List<String> headers =
+                                    _templateHeadersController.text
+                                        .split(',')
+                                        .map((String s) => s.trim())
+                                        .where((String s) => s.isNotEmpty)
+                                        .toList();
+                                if (headers.isEmpty) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Please enter at least 1 header.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                final Set<String> normalized = headers
+                                    .map(
+                                      (String s) => s
+                                          .trim()
+                                          .toLowerCase()
+                                          .replaceAll(' ', '_'),
+                                    )
+                                    .toSet();
+                                if (!normalized.contains('product_name') ||
+                                    !normalized.contains('category')) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Template must include required columns: product_name, category',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setSheetState(() {
+                                  savedHeaders = headers;
+                                });
+                                setState(() {
+                                  _savedTemplateHeaders = headers;
+                                });
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Headers saved for template generation.',
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.save_rounded),
+                              label: Text(
+                                'Save Headers',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(14),
+                                  fontWeight: FontWeight.w700,
+                                  height: 20 / 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.x3),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: savedHeaders.isEmpty
+                                  ? null
+                                  : () async {
+                                      final ScaffoldMessengerState messenger =
+                                          ScaffoldMessenger.of(ctx);
+                                      final List<String> headers =
+                                          List<String>.from(savedHeaders);
+                                      try {
+                                        final VerificationRepository repo = ref
+                                            .read(
+                                              verificationRepositoryProvider,
+                                            );
+                                        final String res = await repo
+                                            .generateProductsTemplate(
+                                              categoryId: _categoryId,
+                                              headers: headers,
+                                            );
+                                        if (!ctx.mounted) return;
+                                        Navigator.of(ctx).pop();
 
-                        if (out.isNotEmpty) {
-                          await Clipboard.setData(ClipboardData(text: out));
-                        }
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              out.isEmpty
-                                  ? 'Template generated.'
-                                  : 'Template generated (response copied).',
+                                        final String out = res.trim();
+                                        if (out.startsWith('http://') ||
+                                            out.startsWith('https://')) {
+                                          final Uri uri = Uri.parse(out);
+                                          final bool ok = await launchUrl(
+                                            uri,
+                                            mode:
+                                                LaunchMode.externalApplication,
+                                          );
+                                          if (!mounted) return;
+                                          if (!ok) {
+                                            messenger.showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Could not open template link.',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return;
+                                        }
+
+                                        if (out.isNotEmpty) {
+                                          await Clipboard.setData(
+                                            ClipboardData(text: out),
+                                          );
+                                        }
+                                        if (!mounted) return;
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              out.isEmpty
+                                                  ? 'Template generated.'
+                                                  : 'Template generated (response copied).',
+                                            ),
+                                          ),
+                                        );
+                                      } on ApiException catch (e) {
+                                        if (!ctx.mounted) return;
+                                        ScaffoldMessenger.of(ctx).showSnackBar(
+                                          SnackBar(content: Text(e.message)),
+                                        );
+                                      } catch (_) {
+                                        if (!ctx.mounted) return;
+                                        ScaffoldMessenger.of(ctx).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Something went wrong. Please try again.',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                              icon: const Icon(Icons.download_rounded),
+                              label: Text(
+                                'Generate',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(14),
+                                  fontWeight: FontWeight.w700,
+                                  height: 20 / 14,
+                                ),
+                              ),
                             ),
                           ),
-                        );
-                      } on ApiException catch (e) {
-                        if (!ctx.mounted) return;
-                        ScaffoldMessenger.of(
-                          ctx,
-                        ).showSnackBar(SnackBar(content: Text(e.message)));
-                      } catch (_) {
-                        if (!ctx.mounted) return;
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Something went wrong. Please try again.',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Generate & Download'),
-                  ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -318,9 +436,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String? categoryIssue = await _validateCategoryValues(pickedFile);
     if (categoryIssue != null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(categoryIssue)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(categoryIssue)));
       return;
     }
     setState(() => _creating = true);
@@ -440,7 +558,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           .where((s) => s.isNotEmpty)
           .toSet();
 
-      final List<String> invalid = seen.where((v) => !allowed.contains(v)).toList();
+      final List<String> invalid = seen
+          .where((v) => !allowed.contains(v))
+          .toList();
       if (invalid.isEmpty) return null;
 
       final String selectedName = _selectedCategoryName();

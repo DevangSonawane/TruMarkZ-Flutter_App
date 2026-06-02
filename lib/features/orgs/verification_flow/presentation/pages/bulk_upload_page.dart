@@ -18,6 +18,9 @@ import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/widgets/tmz_button.dart';
+import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
+import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
 
@@ -40,7 +43,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   late final TextEditingController _batchNameController;
   late final TextEditingController _columnsController;
 
-  String _industry = 'transport';
+  String _industry = '';
+  String _credentialVisibility = 'public_searchable';
   Set<String> _checks = <String>{'identity', 'address', 'criminal'};
 
   PickedFile? _pickedFile;
@@ -65,12 +69,18 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     final Map<String, String> qp = uri.queryParameters;
     final String nextIndustry = (qp['industry'] ?? _industry).trim();
+    final String nextVisibility = (qp['access'] ?? _credentialVisibility)
+        .trim()
+        .toLowerCase();
     final Set<String> nextChecks = _parseCsvSet(qp['checks']) ?? _checks;
     final List<String> nextColumns =
         _parseCsvList(qp['columns']) ?? _templateColumnsForChecks(nextChecks);
 
     setState(() {
       _industry = nextIndustry;
+      if (nextVisibility.isNotEmpty) {
+        _credentialVisibility = nextVisibility;
+      }
       _checks = nextChecks;
       _columnsController.text = nextColumns.join(',');
     });
@@ -504,6 +514,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   Future<void> _confirmAndCreateBatch() async {
     final List<String> columns = _columns();
+    final String resolvedIndustry = _effectiveIndustry();
+    final String displayIndustry = _prettyIndustry(resolvedIndustry);
     debugPrint(
       '[BulkUploadPage] Confirm tapped batch=${_batchNameController.text.trim()} picked=${_pickedFile?.name}',
     );
@@ -524,8 +536,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       path: AppRouter.certificatePreviewPath,
       queryParameters: <String, String>{
         'checks': _checks.join(','),
-        'industry': _industry,
-        'industry_label': _prettyIndustry(_industry),
+        'industry': resolvedIndustry,
+        'industry_label': displayIndustry,
+        'access': _credentialVisibility,
         'identity_type': 'Individual',
       },
     );
@@ -539,6 +552,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (_isUploading) return;
     final PickedFile? file = _pickedFile;
     if (file == null) return;
+    final String resolvedIndustry = _effectiveIndustry();
+    final String? templateId = GoRouterState.of(
+      context,
+    ).uri.queryParameters['template_id'];
 
     final bool ok = await _preflightPreventDuplicatePeople(file);
     if (!ok) return;
@@ -554,6 +571,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       final res = await repo.bulkUpload(
         batchName: _batchNameController.text.trim(),
         description: null,
+        industryType: resolvedIndustry,
+        verificationTypes: _checks.join(','),
+        credentialVisibility: _credentialVisibility,
+        templateId: templateId,
         fileBytes: file.bytes,
         fileName: file.name,
       );
@@ -571,7 +592,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           'errors': res.errors.length.toString(),
           'columns': columns.join(','),
           'checks': _checks.join(','),
-          'industry': _industry,
+          'industry': resolvedIndustry,
+          'access': _credentialVisibility,
           'batch': _batchNameController.text.trim(),
         },
       );
@@ -857,6 +879,20 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final String? orgId = authAsync.valueOrNull?.userProfile?.id;
+    final AsyncValue<String?> industryAsync = orgId == null
+        ? const AsyncData<String?>(null)
+        : ref.watch(organizationIndustryTypeProvider(orgId));
+    final String apiIndustry = industryAsync.valueOrNull?.trim() ?? '';
+    final String profileIndustry =
+        authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
+    final String resolvedIndustry = _industry.trim().isNotEmpty
+        ? _industry.trim()
+        : apiIndustry.isNotEmpty
+        ? apiIndustry
+        : profileIndustry;
+    final String displayIndustry = _prettyIndustry(resolvedIndustry);
     final List<String> columns = _columns();
 
     return Scaffold(
@@ -908,7 +944,15 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           const Spacer(),
                           _IndustryPill(
                             scale: scale,
-                            industryLabel: _prettyIndustry(_industry),
+                            industryLabel: displayIndustry,
+                            onTap: () async {
+                              final String? picked = await _pickIndustry(
+                                scale: scale,
+                                current: resolvedIndustry,
+                              );
+                              if (!mounted || picked == null) return;
+                              setState(() => _industry = picked);
+                            },
                           ),
                         ],
                       ),
@@ -1149,40 +1193,321 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return '$value ${units[unit]}';
   }
 
+  static const List<String> _industryOptions = <String>[
+    'All',
+    'Transport',
+    'Healthcare',
+    'Education',
+    'Manufacturing',
+    'Security',
+    'Agriculture',
+    'Consumer Goods',
+    'Beauty & Cosmetics',
+    'Electronics & Appliances',
+    'EV & Automotive',
+    'Insurance Policies',
+    'Healthcare Products',
+    'Industrial Equipment',
+    'Agriculture Products',
+    'Luxury Products',
+    'Others',
+  ];
+
   static String _prettyIndustry(String raw) {
     final String v = raw.trim();
     if (v.isEmpty) return 'Real Estate';
     final String lower = v.toLowerCase();
     if (lower == 'all' || lower == 'both') return 'All';
 
-    // Handle serialized multi-select values like '["A","B"]' or 'A,B'.
-    if ((v.startsWith('[') && v.endsWith(']')) || v.contains(',')) {
-      List<String> parts;
-      if (v.startsWith('[') && v.endsWith(']')) {
-        parts = v
-            .substring(1, v.length - 1)
-            .split(',')
-            .map((String s) => s.replaceAll('"', '').trim())
-            .where((String s) => s.isNotEmpty)
-            .toList();
-      } else {
-        parts = v
-            .split(',')
-            .map((String s) => s.trim())
-            .where((String s) => s.isNotEmpty)
-            .toList();
-      }
-      if (parts.isNotEmpty && parts.length >= 10) return 'All';
+    final List<String> parts = _parseIndustryParts(v);
+    if (parts.length > 1) {
+      if (parts.length >= 10) return 'All';
+      return '${_formatIndustryPart(parts.first)} +${parts.length - 1}';
     }
-    final List<String> parts = v
+    if (parts.isNotEmpty) return _formatIndustryPart(parts.first);
+
+    final List<String> singleParts = v
         .replaceAll(RegExp(r'[_-]+'), ' ')
         .split(' ')
         .where((String p) => p.trim().isNotEmpty)
         .toList();
-    if (parts.isEmpty) return 'Real Estate';
-    String cap(String s) =>
-        s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
-    return parts.map(cap).join(' ');
+    if (singleParts.isEmpty) return 'Real Estate';
+    return singleParts.map(_formatIndustryPart).join(' ');
+  }
+
+  static List<String> _parseIndustryParts(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return <String>[];
+    if (v.startsWith('[') && v.endsWith(']')) {
+      return v
+          .substring(1, v.length - 1)
+          .split(',')
+          .map((String s) => s.replaceAll('"', '').trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    if (v.contains(',')) {
+      return v
+          .split(',')
+          .map((String s) => s.trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    return <String>[v];
+  }
+
+  static String _formatIndustryPart(String s) {
+    final String cleaned = s.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (cleaned.isEmpty) return '';
+    final List<String> tokens = cleaned
+        .split(' ')
+        .where((String token) => token.trim().isNotEmpty)
+        .toList();
+    return tokens
+        .map(
+          (String token) => token.isEmpty
+              ? token
+              : '${token[0].toUpperCase()}${token.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
+  Future<String?> _pickIndustry({
+    required double scale,
+    required String current,
+  }) async {
+    final Set<String> selected = _industrySelectionFromRaw(current);
+    double s(double v) => v * scale;
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setDialogState,
+              ) {
+                final List<String> options = _industryOptions
+                    .where((String e) => e != 'All')
+                    .toList();
+                final bool allSelected = selected.length >= options.length;
+
+                void toggle(String label) {
+                  setDialogState(() {
+                    if (label == 'All') {
+                      selected
+                        ..clear()
+                        ..addAll(options);
+                      return;
+                    }
+                    if (selected.contains(label)) {
+                      selected.remove(label);
+                    } else {
+                      selected.add(label);
+                    }
+                  });
+                }
+
+                return Dialog(
+                  insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(s(16)),
+                    side: BorderSide(
+                      color: const Color(0xFFE5E7EB),
+                      width: s(1),
+                    ),
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: s(520)),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Text(
+                                'Select Industry',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(16),
+                                  fontWeight: FontWeight.w700,
+                                  height: 24 / 16,
+                                  color: const Color(0xFF111827),
+                                ),
+                              ),
+                              const Spacer(),
+                              InkResponse(
+                                onTap: () => Navigator.of(context).pop(),
+                                radius: s(18),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: s(20),
+                                  color: const Color(0xFF9CA3AF),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: s(10)),
+                          Text(
+                            'Choose one or more industries, then tap Update.',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(12),
+                              fontWeight: FontWeight.w500,
+                              height: 18 / 12,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                          SizedBox(height: s(10)),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: _industryOptions.length,
+                              separatorBuilder:
+                                  (BuildContext context, int index) => Divider(
+                                    height: s(1),
+                                    color: const Color(0xFFF1F5F9),
+                                  ),
+                              itemBuilder: (BuildContext context, int index) {
+                                final String label = _industryOptions[index];
+                                final bool isSelected = label == 'All'
+                                    ? allSelected
+                                    : selected.contains(label);
+                                return InkWell(
+                                  onTap: () => toggle(label),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: s(12),
+                                      horizontal: s(2),
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        Container(
+                                          width: s(18),
+                                          height: s(18),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isSelected
+                                                ? AppColors.brandBlue
+                                                : const Color(0xFFE5E7EB),
+                                          ),
+                                          child: isSelected
+                                              ? Icon(
+                                                  Icons.check_rounded,
+                                                  size: s(12),
+                                                  color: Colors.white,
+                                                )
+                                              : null,
+                                        ),
+                                        SizedBox(width: s(12)),
+                                        Expanded(
+                                          child: Text(
+                                            label,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(14),
+                                              fontWeight: FontWeight.w600,
+                                              height: 20 / 14,
+                                              color: isSelected
+                                                  ? AppColors.brandBlue
+                                                  : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          SizedBox(height: s(12)),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.brandBlue,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: s(14)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(s(12)),
+                                ),
+                              ),
+                              onPressed: selected.isEmpty
+                                  ? null
+                                  : () {
+                                      final List<String> sorted =
+                                          selected.toList()..sort();
+                                      Navigator.of(
+                                        context,
+                                      ).pop(sorted.join(', '));
+                                    },
+                              child: Text(
+                                'Update',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(14),
+                                  fontWeight: FontWeight.w700,
+                                  height: 20 / 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+        );
+      },
+    );
+  }
+
+  Set<String> _industrySelectionFromRaw(String raw) {
+    final Set<String> selected = <String>{};
+    final List<String> parts = _parseIndustryParts(raw);
+    if (parts.isEmpty) return selected;
+
+    final List<String> options = _industryOptions
+        .where((String e) => e != 'All')
+        .toList();
+    final Set<String> normalizedParts = parts
+        .map((String e) => e.trim().toLowerCase())
+        .where((String e) => e.isNotEmpty)
+        .toSet();
+    final Set<String> normalizedOptions = options
+        .map((String e) => e.toLowerCase())
+        .toSet();
+
+    if (normalizedParts.containsAll(normalizedOptions)) {
+      selected.addAll(options);
+      return selected;
+    }
+
+    for (final String option in options) {
+      if (normalizedParts.contains(option.toLowerCase())) {
+        selected.add(option);
+      }
+    }
+    return selected;
+  }
+
+  String _effectiveIndustry() {
+    final AsyncValue<AuthState> authAsync = ref.read(authNotifierProvider);
+    final String? orgId = authAsync.valueOrNull?.userProfile?.id;
+    final AsyncValue<String?> industryAsync = orgId == null
+        ? const AsyncData<String?>(null)
+        : ref.read(organizationIndustryTypeProvider(orgId));
+    final String apiIndustry = industryAsync.valueOrNull?.trim() ?? '';
+    final String profileIndustry =
+        authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
+    if (_industry.trim().isNotEmpty) return _industry.trim();
+    if (apiIndustry.isNotEmpty) return apiIndustry;
+    return profileIndustry;
   }
 
   Future<void> _openMoreMenu({
@@ -1367,64 +1692,77 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 enum _MoreAction { downloadTemplate, viewTemplateColumns }
 
 class _IndustryPill extends StatelessWidget {
-  const _IndustryPill({required this.scale, required this.industryLabel});
+  const _IndustryPill({
+    required this.scale,
+    required this.industryLabel,
+    required this.onTap,
+  });
 
   final double scale;
   final String industryLabel;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    return Container(
-      height: s(29),
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(s(10)),
-        border: Border.all(color: const Color(0xFFE0EFFE)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SvgPicture.asset(
-            'assets/icons/figma/bulk_industry_building.svg',
-            width: s(12),
-            height: s(10),
-            colorFilter: const ColorFilter.mode(
-              AppColors.brandBlue,
-              BlendMode.srcIn,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(s(10)),
+      child: Container(
+        height: s(29),
+        padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F7FF),
+          borderRadius: BorderRadius.circular(s(10)),
+          border: Border.all(color: const Color(0xFFE0EFFE)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SvgPicture.asset(
+              'assets/icons/figma/bulk_industry_building.svg',
+              width: s(12),
+              height: s(10),
+              colorFilter: const ColorFilter.mode(
+                AppColors.brandBlue,
+                BlendMode.srcIn,
+              ),
             ),
-          ),
-          SizedBox(width: s(8)),
-          Text(
-            industryLabel,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.0644531),
-              height: 16.5 / 11,
-              color: AppColors.brandBlue,
+            SizedBox(width: s(8)),
+            Text(
+              industryLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.0644531),
+                height: 16.5 / 11,
+                color: AppColors.brandBlue,
+              ),
             ),
-          ),
-          SizedBox(width: s(8)),
-          Container(width: s(1), height: s(12), color: const Color(0xFFE2E8F0)),
-          SizedBox(width: s(8)),
-          Text(
-            'EDIT',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(10),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.25),
-              height: 15 / 10,
-              color: AppColors.brandBlue,
+            SizedBox(width: s(8)),
+            Container(
+              width: s(1),
+              height: s(12),
+              color: const Color(0xFFE2E8F0),
             ),
-          ),
-        ],
+            SizedBox(width: s(8)),
+            Text(
+              'EDIT',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(10),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.25),
+                height: 15 / 10,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
