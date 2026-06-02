@@ -19,7 +19,6 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
-import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
@@ -477,49 +476,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     );
   }
 
-  void _openUploadSheet({required String title, required String description}) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(title, style: AppTypography.heading1),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  description,
-                  style: AppTypography.body2.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withAlpha(160),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                TMZButton(
-                  label: 'Pick Excel/CSV File',
-                  variant: TMZButtonVariant.secondary,
-                  icon: Icons.folder_open_rounded,
-                  onPressed: () async {
-                    final PickedFile? picked = await FilePickerUtil.pickExcel();
-                    if (!mounted) return;
-                    if (!context.mounted) return;
-                    if (picked == null) return;
-                    Navigator.of(context).pop();
-                    await _setPickedFile(picked);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  Future<void> _pickExcelFile() async {
+    final PickedFile? picked = await FilePickerUtil.pickExcel();
+    if (!mounted) return;
+    if (picked == null) return;
+    await _setPickedFile(picked);
   }
 
   Future<void> _setPickedFile(PickedFile picked) async {
@@ -1129,11 +1090,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                     SizedBox(height: s(22)),
                                     _DropZone(
                                       scale: scale,
-                                      onTap: () => _openUploadSheet(
-                                        title: 'Upload Excel/CSV',
-                                        description:
-                                            'Pick an Excel/CSV file to create the batch.',
-                                      ),
+                                      onTap: _pickExcelFile,
                                     ),
                                     SizedBox(height: s(26)),
                                     if (_pickedFile != null) ...<Widget>[

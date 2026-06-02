@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/theme/app_colors.dart';
 import 'verification_flow_action.dart';
+import 'flow_step_progress.dart';
 
 class PerUnitCostBreakdownPage extends StatefulWidget {
   const PerUnitCostBreakdownPage({super.key});
@@ -110,7 +111,7 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
     final Object? extra = GoRouterState.of(context).extra;
     final VerificationFlowConfirmAction? action =
         extra is VerificationFlowConfirmAction ? extra : null;
-    final String stepText = isProductFlow ? 'STEP 4 OF 4' : 'STEP 4 OF 6';
+    final String stepText = isProductFlow ? 'STEP 5 OF 5' : 'STEP 4 OF 6';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -183,11 +184,13 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    _ProductStyleStepper(
+                                    FlowStepProgress(
                                       scale: scale,
                                       stepLabel: stepText,
-                                      progressLabel: '100%',
-                                      progress: 1,
+                                      progressLabel: isProductFlow
+                                          ? '100%'
+                                          : '67%',
+                                      fillFactor: isProductFlow ? 1 : 0.67,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
@@ -269,112 +272,6 @@ class _CostRow {
 
   final String title;
   final int valueInr;
-}
-
-class _ProductStyleStepper extends StatelessWidget {
-  const _ProductStyleStepper({
-    required this.scale,
-    required this.stepLabel,
-    required this.progressLabel,
-    required this.progress,
-  });
-
-  final double scale;
-  final String stepLabel;
-  final String progressLabel;
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(16)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.brandBlue.withAlpha(14),
-            blurRadius: s(14),
-            offset: Offset(0, s(8)),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SizedBox(
-            height: s(8),
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints c) {
-                final double width = c.maxWidth;
-                return Stack(
-                  children: <Widget>[
-                    Container(
-                      width: width,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(s(99)),
-                      ),
-                    ),
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0, end: progress.clamp(0, 1)),
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeOutCubic,
-                      builder: (BuildContext context, double t, Widget? child) {
-                        return Container(
-                          width: width * t,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: <Color>[
-                                AppColors.brandBlue,
-                                AppColors.deepNavy,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(s(99)),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          SizedBox(height: s(10)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Text(
-                stepLabel,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(10),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: s(1),
-                  height: 15 / 10,
-                  color: const Color(0xFF94A3B8),
-                ),
-              ),
-              Text(
-                progressLabel,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(10),
-                  fontWeight: FontWeight.w700,
-                  height: 15 / 10,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _CostSummaryCard extends StatelessWidget {

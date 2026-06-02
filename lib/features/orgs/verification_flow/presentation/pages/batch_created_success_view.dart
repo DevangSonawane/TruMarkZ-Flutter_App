@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/theme/app_colors.dart';
-import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_button.dart';
-import '../../../../../core/widgets/tmz_card.dart';
 
 class BatchCreatedSuccessView extends StatelessWidget {
   const BatchCreatedSuccessView({
@@ -48,183 +46,297 @@ class BatchCreatedSuccessView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        automaticallyImplyLeading: false,
-        leading: const SizedBox.shrink(),
-        foregroundColor: AppColors.textPrimary,
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  36,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                children: <Widget>[
-                  Center(
-                    child: Container(
-                      width: heroSize,
-                      height: heroSize,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFEEF3FF),
-                          width: 4,
-                        ),
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: AppColors.brandBlue.withAlpha(16),
-                            blurRadius: 24,
-                            offset: const Offset(0, 10),
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double referenceWidth = 402;
+            final double contentWidth = constraints.maxWidth < referenceWidth
+                ? constraints.maxWidth
+                : referenceWidth;
+            final double scale = contentWidth / referenceWidth;
+            double s(double v) => v * scale;
+
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                height: constraints.maxHeight,
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(10), s(16), 0),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: s(21),
+                                fontWeight: FontWeight.w600,
+                                height: 19.5 / 21,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      alignment: Alignment.center,
-                      child: SvgPicture.asset(
-                        heroAssetPath,
-                        width: heroSize * 0.82,
-                        height: heroSize * 0.82,
-                        fit: BoxFit.contain,
-                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.display2.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    subtitle,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-                  TMZCard(
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
+                    SizedBox(height: s(18)),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(s(20)),
+                          ),
+                        ),
+                        child: Column(
                           children: <Widget>[
                             Expanded(
-                              child: Text(
-                                'Batch Details',
-                                style: AppTypography.heading2.copyWith(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w900,
+                              child: ListView(
+                                padding: EdgeInsets.fromLTRB(
+                                  s(16),
+                                  s(24),
+                                  s(16),
+                                  s(24),
+                                ),
+                                children: <Widget>[
+                                  Center(
+                                    child: Container(
+                                      width: s(heroSize + 36),
+                                      height: s(heroSize + 36),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFF),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: const Color(0xFFE8EEFF),
+                                          width: s(2),
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Container(
+                                        width: s(heroSize),
+                                        height: s(heroSize),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                          boxShadow: <BoxShadow>[
+                                            BoxShadow(
+                                              color: Colors.black.withAlpha(10),
+                                              blurRadius: s(28),
+                                              offset: Offset(0, s(12)),
+                                            ),
+                                          ],
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: SvgPicture.asset(
+                                          heroAssetPath,
+                                          width: s(heroSize) * 0.84,
+                                          height: s(heroSize) * 0.84,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: s(28)),
+                                  Text(
+                                    title,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: s(30),
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: s(1.15),
+                                      height: 1.05,
+                                      color: const Color(0xFF111827),
+                                    ),
+                                  ),
+                                  SizedBox(height: s(10)),
+                                  Text(
+                                    subtitle,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: s(12),
+                                      fontWeight: FontWeight.w400,
+                                      height: 1.45,
+                                      color: const Color(0xFF94A3B8),
+                                    ),
+                                  ),
+                                  SizedBox(height: s(28)),
+                                  Container(
+                                    padding: EdgeInsets.all(s(16)),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(
+                                        s(24),
+                                      ),
+                                      border: Border.all(
+                                        color: const Color(0xFFE7EBF3),
+                                      ),
+                                      boxShadow: <BoxShadow>[
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha(8),
+                                          blurRadius: s(20),
+                                          offset: Offset(0, s(10)),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Text(
+                                                'Batch Details',
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: s(18),
+                                                  fontWeight: FontWeight.w800,
+                                                  height: 1.2,
+                                                  color: const Color(
+                                                    0xFF111827,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Container(
+                                              width: s(36),
+                                              height: s(36),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF4F7FF),
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  s(12),
+                                                ),
+                                              ),
+                                              child: const Icon(
+                                                Icons.folder_rounded,
+                                                color: AppColors.brandBlue,
+                                                size: 20,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        SizedBox(height: s(18)),
+                                        Text(
+                                          batchName,
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(15),
+                                            fontWeight: FontWeight.w900,
+                                            height: 1.2,
+                                            color: const Color(0xFF111827),
+                                          ),
+                                        ),
+                                        SizedBox(height: s(12)),
+                                        Text(
+                                          batchIdLabel.toUpperCase(),
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: s(0.8),
+                                            height: 1.4,
+                                            color: const Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                        SizedBox(height: s(6)),
+                                        Text(
+                                          _shortId(batchIdValue),
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(14),
+                                            fontWeight: FontWeight.w800,
+                                            height: 1.3,
+                                            color: const Color(0xFF111827),
+                                          ),
+                                        ),
+                                        SizedBox(height: s(18)),
+                                        Row(
+                                          children: <Widget>[
+                                            for (int i = 0; i < metrics.length; i++)
+                                              ...<Widget>[
+                                                Expanded(
+                                                  child: _MetricTile(
+                                                    metric: metrics[i],
+                                                    scale: scale,
+                                                  ),
+                                                ),
+                                                if (i != metrics.length - 1)
+                                                  SizedBox(width: s(10)),
+                                              ],
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (banners.isNotEmpty) ...<Widget>[
+                                    SizedBox(height: s(16)),
+                                    for (int i = 0; i < banners.length; i++)
+                                      ...<Widget>[
+                                        _InfoBanner(
+                                          banner: banners[i],
+                                          scale: scale,
+                                        ),
+                                        if (i != banners.length - 1)
+                                          SizedBox(height: s(12)),
+                                      ],
+                                  ],
+                                ],
+                              ),
+                            ),
+                            SafeArea(
+                              top: false,
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  s(16),
+                                  s(8),
+                                  s(16),
+                                  s(16),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    _GradientCtaButton(
+                                      label: primaryActionLabel,
+                                      icon: Icons.arrow_forward_rounded,
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: <Color>[
+                                          AppColors.brandBlue,
+                                          AppColors.deepNavy,
+                                        ],
+                                      ),
+                                      enabled: true,
+                                      onPressed: primaryAction,
+                                    ),
+                                    SizedBox(height: s(12)),
+                                    TMZButton(
+                                      label: secondaryActionLabel,
+                                      icon: Icons.dashboard_rounded,
+                                      variant: TMZButtonVariant.secondary,
+                                      onPressed: secondaryAction,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                            const Icon(
-                              Icons.folder_rounded,
-                              color: AppColors.brandBlue,
-                            ),
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.x4),
-                        Text(
-                          batchName,
-                          style: AppTypography.body1.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.x3),
-                        Text(
-                          batchIdLabel.toUpperCase(),
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.textTertiary,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _shortId(batchIdValue),
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.x4),
-                        Row(
-                          children: <Widget>[
-                            for (int i = 0; i < metrics.length; i++) ...<Widget>[
-                              Expanded(
-                                child: _MetricTile(metric: metrics[i]),
-                              ),
-                              if (i != metrics.length - 1)
-                                const SizedBox(width: AppSpacing.x3),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (banners.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: AppSpacing.x4),
-                    for (int i = 0; i < banners.length; i++) ...<Widget>[
-                      _InfoBanner(banner: banners[i]),
-                      if (i != banners.length - 1)
-                        const SizedBox(height: AppSpacing.x3),
-                    ],
-                  ],
-                ],
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _GradientCtaButton(
-                      label: primaryActionLabel,
-                      icon: Icons.arrow_forward_rounded,
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[AppColors.brandBlue, AppColors.deepNavy],
                       ),
-                      enabled: true,
-                      onPressed: primaryAction,
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    TMZButton(
-                      label: secondaryActionLabel,
-                      icon: Icons.dashboard_rounded,
-                      variant: TMZButtonVariant.secondary,
-                      onPressed: secondaryAction,
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -255,17 +367,20 @@ class BatchCreatedBanner {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.metric});
+  const _MetricTile({required this.metric, required this.scale});
 
   final BatchCreatedMetric metric;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
+    double s(double v) => v * scale;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(s(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FF),
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(16)),
+        border: Border.all(color: const Color(0xFFE7EBF3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,13 +393,29 @@ class _MetricTile extends StatelessWidget {
               letterSpacing: 0.8,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            metric.value,
-            style: AppTypography.heading1.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
-            ),
+          SizedBox(height: s(6)),
+          Row(
+            children: <Widget>[
+              Container(
+                width: s(10),
+                height: s(10),
+                decoration: const BoxDecoration(
+                  color: AppColors.brandBlue,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              SizedBox(width: s(8)),
+              Text(
+                metric.value,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(24),
+                  fontWeight: FontWeight.w900,
+                  height: 1.1,
+                  color: const Color(0xFF111827),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -293,24 +424,41 @@ class _MetricTile extends StatelessWidget {
 }
 
 class _InfoBanner extends StatelessWidget {
-  const _InfoBanner({required this.banner});
+  const _InfoBanner({required this.banner, required this.scale});
 
   final BatchCreatedBanner banner;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
+    double s(double v) => v * scale;
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.x4),
+      padding: EdgeInsets.all(s(16)),
       decoration: BoxDecoration(
-        color: banner.bg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: banner.color.withAlpha(50)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(18)),
+        border: Border.all(color: banner.color.withAlpha(45)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withAlpha(6),
+            blurRadius: s(14),
+            offset: Offset(0, s(8)),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(banner.icon, color: banner.color),
-          const SizedBox(width: AppSpacing.x3),
+          Container(
+            width: s(36),
+            height: s(36),
+            decoration: BoxDecoration(
+              color: banner.bg,
+              borderRadius: BorderRadius.circular(s(12)),
+            ),
+            child: Icon(banner.icon, color: banner.color, size: s(20)),
+          ),
+          SizedBox(width: s(12)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,7 +470,7 @@ class _InfoBanner extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: s(6)),
                 Text(
                   banner.subtitle,
                   style: AppTypography.body2.copyWith(
@@ -379,12 +527,12 @@ class _GradientCtaButtonState extends State<_GradientCtaButton> {
       duration: const Duration(milliseconds: 150),
       opacity: widget.enabled ? 1 : 0.45,
       child: SizedBox(
-        height: 54,
+        height: 56,
         width: double.infinity,
         child: DecoratedBox(
           decoration: BoxDecoration(
             gradient: widget.gradient,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: <BoxShadow>[
               BoxShadow(
                 color: AppColors.brandBlue.withAlpha(40),
@@ -396,7 +544,7 @@ class _GradientCtaButtonState extends State<_GradientCtaButton> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(18),
               onTap: widget.enabled ? widget.onPressed : null,
               onHighlightChanged: (bool value) =>
                   setState(() => _isPressed = value),

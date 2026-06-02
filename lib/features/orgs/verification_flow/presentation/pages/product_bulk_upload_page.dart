@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
@@ -20,6 +21,7 @@ import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
+import 'flow_step_progress.dart';
 
 class ProductBulkUploadPage extends ConsumerStatefulWidget {
   const ProductBulkUploadPage({super.key});
@@ -393,48 +395,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     );
   }
 
-  void _openUploadSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Bulk Upload', style: AppTypography.heading1),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  'Pick an Excel/CSV file to create the batch.',
-                  style: AppTypography.body2.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withAlpha(160),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                _SheetAction(
-                  icon: Icons.folder_open_rounded,
-                  label: 'Pick Excel/CSV File',
-                  onTap: () async {
-                    final PickedFile? picked = await FilePickerUtil.pickExcel();
-                    if (!mounted) return;
-                    if (!context.mounted) return;
-                    if (picked == null) return;
-                    Navigator.of(context).pop();
-                    await _setPickedFile(picked);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  Future<void> _pickExcelFile() async {
+    final PickedFile? picked = await FilePickerUtil.pickExcel();
+    if (!mounted) return;
+    if (picked == null) return;
+    await _setPickedFile(picked);
   }
 
   Future<void> _setPickedFile(PickedFile picked) async {
@@ -443,23 +408,25 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   Future<void> _confirmAndCreateBatch() async {
     final PickedFile? pickedFile = _pickedFile;
-    if (pickedFile == null || _creating) {
+    if (_creating) {
       return;
     }
-    final String? missing = _missingRequiredColumns(pickedFile);
-    if (missing != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(missing)));
-      return;
-    }
-    final String? categoryIssue = await _validateCategoryValues(pickedFile);
-    if (categoryIssue != null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(categoryIssue)));
-      return;
+    if (pickedFile != null) {
+      final String? missing = _missingRequiredColumns(pickedFile);
+      if (missing != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(missing)));
+        return;
+      }
+      final String? categoryIssue = await _validateCategoryValues(pickedFile);
+      if (categoryIssue != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(categoryIssue)));
+        return;
+      }
     }
     final List<String> columns = _columns();
     final String resolvedIndustry = _effectiveIndustry();
@@ -490,7 +457,35 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   Future<void> _uploadAndNavigate(List<String> columns) async {
     if (_creating) return;
     final PickedFile? pickedFile = _pickedFile;
-    if (pickedFile == null) return;
+    if (pickedFile == null) {
+      final BulkUploadResponse report = BulkUploadResponse(
+        message: 'Test batch created',
+        batchId: 'TEST-${DateTime.now().millisecondsSinceEpoch}',
+        totalUploaded: 0,
+        totalSkipped: 0,
+        successfulUsers: const <BulkUploadSuccessUser>[],
+        skippedUsers: const <BulkUploadSkippedUser>[],
+        errors: const <BulkUploadErrorRow>[],
+      );
+      if (!mounted) return;
+      final Uri uri = Uri(
+        path: AppRouter.productBatchCreatedPath,
+        queryParameters: <String, String>{
+          'sector': _sector,
+          'batch': _batchName,
+          'records': '0',
+          'skipped': '0',
+          'batchId': report.batchId,
+          if (columns.isNotEmpty) 'columns': columns.join(','),
+          if (_checks.isNotEmpty) 'checks': _checks.join(','),
+          'access': _access,
+          'flow': 'product',
+          'mode': _mode,
+        },
+      );
+      context.go(uri.toString(), extra: report);
+      return;
+    }
 
     setState(() => _creating = true);
     try {
@@ -525,7 +520,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           'mode': _mode,
         },
       );
-      context.push(uri.toString(), extra: res);
+      context.go(uri.toString(), extra: res);
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -975,10 +970,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    _ProductFlowStepper(
+                                    FlowStepProgress(
                                       scale: scale,
-                                      stepIndex: 3,
-                                      totalSteps: 5,
+                                      stepLabel: 'STEP 4 OF 5',
+                                      progressLabel: '80%',
+                                      fillFactor: 0.8027,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
@@ -1082,7 +1078,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     SizedBox(height: s(22)),
                                     _DropZone(
                                       scale: scale,
-                                      onTap: _openUploadSheet,
+                                      onTap: _pickExcelFile,
                                     ),
                                     SizedBox(height: s(26)),
                                     if (_pickedFile != null) ...<Widget>[
@@ -1131,68 +1127,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetAction extends StatelessWidget {
-  const _SheetAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.x4,
-            vertical: AppSpacing.x4,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: onTap == null ? AppColors.border : AppColors.brandBlue,
-              width: 1.25,
-            ),
-          ),
-          child: Row(
-            children: <Widget>[
-              Icon(icon, color: AppColors.brandBlue),
-              const SizedBox(width: AppSpacing.x3),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTypography.body1.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              if (onTap == null)
-                Text(
-                  'Soon',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textTertiary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                )
-              else
-                const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
         ),
       ),
     );
@@ -1273,113 +1207,6 @@ class _IndustryPill extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ProductFlowStepper extends StatelessWidget {
-  const _ProductFlowStepper({
-    required this.scale,
-    required this.stepIndex,
-    required this.totalSteps,
-  });
-
-  final double scale;
-  final int stepIndex;
-  final int totalSteps;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    final int currentStep = stepIndex.clamp(0, totalSteps - 1) + 1;
-    final int progressPercent = ((currentStep / totalSteps) * 100).round();
-    final double progress = stepIndex / (totalSteps - 1);
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(16)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.brandBlue.withAlpha(14),
-            blurRadius: s(14),
-            offset: Offset(0, s(8)),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SizedBox(
-            height: s(8),
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints c) {
-                final double width = c.maxWidth;
-                return Stack(
-                  children: <Widget>[
-                    Container(
-                      width: width,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(s(99)),
-                      ),
-                    ),
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0, end: progress.clamp(0, 1)),
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeOutCubic,
-                      builder: (BuildContext context, double t, Widget? child) {
-                        return Container(
-                          width: width * t,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: <Color>[
-                                AppColors.brandBlue,
-                                AppColors.deepNavy,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(s(99)),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          SizedBox(height: s(10)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Text(
-                'STEP $currentStep OF $totalSteps',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(10),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: s(1),
-                  height: 15 / 10,
-                  color: const Color(0xFF94A3B8),
-                ),
-              ),
-              Text(
-                '$progressPercent%',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(10),
-                  fontWeight: FontWeight.w700,
-                  height: 15 / 10,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
