@@ -495,9 +495,9 @@ class _RegistryResultCard extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: s(16)),
+          SizedBox(height: s(8)),
           Divider(color: const Color(0xFFF1F5F9), height: 1, thickness: 1),
-          SizedBox(height: s(12)),
+          SizedBox(height: s(8)),
           Row(
             children: <Widget>[
               for (final _RegistryAction action in result.actions) ...<Widget>[
@@ -680,6 +680,7 @@ class _ActionSquare extends StatelessWidget {
         borderRadius: BorderRadius.circular(s(12)),
         border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
+      alignment: Alignment.center,
       child: action == _RegistryAction.share
           ? SvgPicture.asset(
               'assets/icons/figma/registry_share.svg',
