@@ -40,7 +40,9 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
   }
 
   Future<void> _onContinue(BuildContext context) async {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final Object? extra = GoRouterState.of(context).extra;
     final Uri uri = Uri(
       path: AppRouter.perUnitCostBreakdownPath,
@@ -380,15 +382,12 @@ class _SwipeableCertificateCards extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  static const List<({String asset, double aspectRatio})> _images =
-      <({String asset, double aspectRatio})>[
-        (asset: 'assets/images/driver.png', aspectRatio: 1054 / 1492),
-        (
-          asset: 'assets/images/certificate_preview_sample.png',
-          aspectRatio: 866 / 1230,
-        ),
-        (asset: 'assets/images/warehouse.png', aspectRatio: 1054 / 1492),
-      ];
+  static const List<({String asset, double aspectRatio})>
+  _images = <({String asset, double aspectRatio})>[
+    (asset: 'assets/products/product_preview_1.png', aspectRatio: 1054 / 1492),
+    (asset: 'assets/products/product_preview_2.png', aspectRatio: 866 / 1230),
+    (asset: 'assets/products/product_preview_3.png', aspectRatio: 1054 / 1492),
+  ];
 
   @override
   Widget build(BuildContext context) {

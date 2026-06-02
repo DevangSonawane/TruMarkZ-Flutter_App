@@ -16,13 +16,17 @@ class ProductBatchCreatedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
 
     final int records = _tryParseInt(qp['records'], fallback: 0);
     final int skipped = _tryParseInt(qp['skipped'], fallback: 0);
     final String batchId = (qp['batchId'] ?? '').trim();
     final Object? extra = GoRouterState.of(context).extra;
-    final BulkUploadResponse? report = extra is BulkUploadResponse ? extra : null;
+    final BulkUploadResponse? report = extra is BulkUploadResponse
+        ? extra
+        : null;
 
     return BatchCreatedSuccessView(
       heroAssetPath: 'assets/batch_created_Success.svg',
@@ -40,33 +44,13 @@ class ProductBatchCreatedPage extends StatelessWidget {
           value: (report?.errors.length ?? 0).toString(),
         ),
       ],
-      banners: <BatchCreatedBanner>[
-        if (report != null && report.skippedUsers.isNotEmpty)
-          BatchCreatedBanner(
-            title: '${report.skippedUsers.length} rows were skipped',
-            subtitle:
-                'The file contained rows that could not be imported. Review the upload report for details.',
-            color: const Color(0xFFF59E0B),
-            bg: const Color(0xFFFFFBEB),
-            icon: Icons.warning_amber_rounded,
-          ),
-        if (report != null && report.errors.isNotEmpty)
-          BatchCreatedBanner(
-            title: '${report.errors.length} rows had errors',
-            subtitle:
-                'Fix the invalid product rows and upload again to include them in this batch.',
-            color: const Color(0xFFEF4444),
-            bg: const Color(0xFFFEF2F2),
-            icon: Icons.error_outline_rounded,
-          ),
-      ],
       primaryActionLabel: 'View Batch',
       primaryAction: batchId.trim().isEmpty
           ? () => context.go(AppRouter.appBatchesPath)
           : () => context.go(
               '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
             ),
-      secondaryActionLabel: 'Back to Dashboard',
+      secondaryActionLabel: 'Dashboard',
       secondaryAction: () => context.go(AppRouter.dashboardPath),
     );
   }

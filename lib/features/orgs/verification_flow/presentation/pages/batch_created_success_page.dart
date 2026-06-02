@@ -15,7 +15,9 @@ class BatchCreatedSuccessPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final String batchId = (qp['batch_id'] ?? '').trim();
     final int uploaded = _tryParseInt(qp['total_uploaded'], fallback: 0);
     final int skipped = _tryParseInt(qp['total_skipped'], fallback: 0);
@@ -35,33 +37,13 @@ class BatchCreatedSuccessPage extends StatelessWidget {
         BatchCreatedMetric(label: 'Skipped', value: skipped.toString()),
         BatchCreatedMetric(label: 'Errors', value: errors.toString()),
       ],
-      banners: <BatchCreatedBanner>[
-        if (skipped > 0)
-          BatchCreatedBanner(
-            title: '$skipped records were skipped',
-            subtitle:
-                'Check your Excel file for missing required fields (full_name, email, phone_number).',
-            color: const Color(0xFFF59E0B),
-            bg: const Color(0xFFFFFBEB),
-            icon: Icons.warning_amber_rounded,
-          ),
-        if (errors > 0)
-          BatchCreatedBanner(
-            title: '$errors rows had errors',
-            subtitle:
-                'Please fix the invalid rows and upload again to include them in this batch.',
-            color: const Color(0xFFEF4444),
-            bg: const Color(0xFFFEF2F2),
-            icon: Icons.error_outline_rounded,
-          ),
-      ],
       primaryActionLabel: 'View Batch',
       primaryAction: batchId.trim().isEmpty
           ? () => context.go(AppRouter.appBatchesPath)
           : () => context.go(
               '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
             ),
-      secondaryActionLabel: 'Back to Dashboard',
+      secondaryActionLabel: 'Dashboard',
       secondaryAction: () => context.go(AppRouter.dashboardPath),
     );
   }
