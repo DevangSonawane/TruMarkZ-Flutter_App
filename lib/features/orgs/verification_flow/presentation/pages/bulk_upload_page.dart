@@ -559,10 +559,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         'identity_type': 'Individual',
       },
     );
-    final Object? res = await context.push(uri.toString());
-    if (res == true) {
-      await _uploadAndNavigate(columns);
-    }
+    Future<void> confirmAction() => _uploadAndNavigate(columns);
+    await context.push(uri.toString(), extra: confirmAction);
   }
 
   Future<void> _uploadAndNavigate(List<String> columns) async {

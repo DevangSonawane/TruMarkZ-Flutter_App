@@ -20,9 +20,6 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
 
   int _selectedTemplateIndex = 0;
 
-  String? _checksParam(BuildContext context) =>
-      GoRouterState.of(context).uri.queryParameters['checks'];
-
   String _industryLabel(BuildContext context) {
     final Map<String, String> qp = GoRouterState.of(
       context,
@@ -43,14 +40,16 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
   }
 
   Future<void> _onContinue(BuildContext context) async {
-    final String? checks = _checksParam(context);
+    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Object? extra = GoRouterState.of(context).extra;
     final Uri uri = Uri(
       path: AppRouter.perUnitCostBreakdownPath,
       queryParameters: <String, String>{
-        if (checks != null && checks.trim().isNotEmpty) 'checks': checks.trim(),
+        for (final MapEntry<String, String> entry in qp.entries)
+          if (entry.value.trim().isNotEmpty) entry.key: entry.value.trim(),
       },
     );
-    final Object? res = await context.push(uri.toString());
+    final Object? res = await context.push(uri.toString(), extra: extra);
     if (!context.mounted) return;
     context.pop(res == true);
   }

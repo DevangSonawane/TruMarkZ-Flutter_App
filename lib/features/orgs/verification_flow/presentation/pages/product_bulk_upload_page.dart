@@ -15,6 +15,9 @@ import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/utils/spreadsheet_preview_util.dart';
+import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
+import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
 
@@ -27,13 +30,17 @@ class ProductBulkUploadPage extends ConsumerStatefulWidget {
 }
 
 class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
+  String? _lastRouteSignature;
   bool _didInitFromRoute = false;
   final GlobalKey _menuKey = GlobalKey();
 
+  String _industry = '';
   String _sector = 'Consumer Goods & Warranty';
   String _categoryId = '';
   String _batchName = 'New Product Batch';
   String _mode = 'verification'; // 'verification' | 'warranty'
+  String _access = 'public_searchable';
+  final Set<String> _checks = <String>{};
 
   PickedFile? _pickedFile;
   bool _creating = false;
@@ -55,8 +62,13 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didInitFromRoute) return;
-    _didInitFromRoute = true;
+    final Uri uri = GoRouterState.of(context).uri;
+    final String signature = uri.query;
+    if (_lastRouteSignature == signature) return;
+    _lastRouteSignature = signature;
+    if (!_didInitFromRoute) {
+      _didInitFromRoute = true;
+    }
 
     final Object? extra = GoRouterState.of(context).extra;
     final String? sector = extra is String ? extra : null;
@@ -64,9 +76,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       _sector = sector.trim();
     }
 
-    final Map<String, String> qp = GoRouterState.of(
-      context,
-    ).uri.queryParameters;
+    final Map<String, String> qp = uri.queryParameters;
+
+    final String flowIndustry = (qp['industry'] ?? '').trim();
+    if (flowIndustry.isNotEmpty) {
+      _industry = flowIndustry;
+    }
 
     final String? categoryId = qp['category_id'];
     if (categoryId != null && categoryId.trim().isNotEmpty) {
@@ -83,6 +98,20 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String mode = (qp['mode'] ?? 'verification').trim().toLowerCase();
     if (mode == 'warranty' || mode == 'verification') {
       _mode = mode;
+    }
+
+    final String access = (qp['access'] ?? _access).trim().toLowerCase();
+    if (access.isNotEmpty) {
+      _access = access;
+    }
+
+    final String checks = (qp['checks'] ?? '').trim();
+    if (checks.isNotEmpty) {
+      _checks
+        ..clear()
+        ..addAll(
+          checks.split(',').map((String s) => s.trim()).where((String s) => s.isNotEmpty),
+        );
     }
   }
 
@@ -412,12 +441,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     setState(() => _pickedFile = picked);
   }
 
-  Future<void> _createBatch() async {
+  Future<void> _confirmAndCreateBatch() async {
     final PickedFile? pickedFile = _pickedFile;
     if (pickedFile == null || _creating) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please pick an Excel file first.')),
-      );
       return;
     }
     final String? missing = _missingRequiredColumns(pickedFile);
@@ -435,6 +461,37 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       ).showSnackBar(SnackBar(content: Text(categoryIssue)));
       return;
     }
+    final List<String> columns = _columns();
+    final String resolvedIndustry = _effectiveIndustry();
+    final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final String modeLabel = _mode == 'warranty' ? 'Warranty' : 'Product Verification';
+    final Uri previewUri = Uri(
+      path: AppRouter.certificatePreviewPath,
+      queryParameters: <String, String>{
+        if (_checks.isNotEmpty) 'checks': _checks.join(','),
+        'industry': resolvedIndustry,
+        'industry_label': displayIndustry,
+        'access': _access,
+        'identity_type': 'Product',
+        'flow': 'product',
+        'mode': _mode,
+        if (_categoryId.trim().isNotEmpty) 'category_id': _categoryId.trim(),
+        if (_sector.trim().isNotEmpty) 'sector': _sector.trim(),
+        if (_mode == 'warranty') 'supports_warranty': 'true',
+        'batch': _batchName,
+        'desc': '$_sector • $modeLabel',
+      },
+    );
+    Future<void> confirmAction() => _uploadAndNavigate(columns);
+    // ignore: use_build_context_synchronously
+    await context.push(previewUri.toString(), extra: confirmAction);
+  }
+
+  Future<void> _uploadAndNavigate(List<String> columns) async {
+    if (_creating) return;
+    final PickedFile? pickedFile = _pickedFile;
+    if (pickedFile == null) return;
+
     setState(() => _creating = true);
     try {
       final VerificationRepository repo = ref.read(
@@ -461,6 +518,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           'records': res.totalUploaded.toString(),
           'skipped': res.totalSkipped.toString(),
           'batchId': res.batchId,
+          if (columns.isNotEmpty) 'columns': columns.join(','),
+          if (_checks.isNotEmpty) 'checks': _checks.join(','),
+          'access': _access,
+          'flow': 'product',
+          'mode': _mode,
         },
       );
       context.push(uri.toString(), extra: res);
@@ -570,6 +632,92 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
   }
 
+  List<String> _columns() {
+    final String raw = _savedTemplateHeaders.isNotEmpty
+        ? _savedTemplateHeaders.join(',')
+        : _templateHeadersController.text;
+    final List<String> out = raw
+        .split(',')
+        .map((String s) => s.trim())
+        .where((String s) => s.isNotEmpty)
+        .toList();
+    out.sort();
+    return out;
+  }
+
+  String _effectiveIndustry() {
+    final AsyncValue<AuthState> authAsync = ref.read(authNotifierProvider);
+    final String? orgId = authAsync.valueOrNull?.userProfile?.id;
+    final AsyncValue<String?> industryAsync = orgId == null
+        ? const AsyncData<String?>(null)
+        : ref.read(organizationIndustryTypeProvider(orgId));
+    final String apiIndustry = industryAsync.valueOrNull?.trim() ?? '';
+    final String profileIndustry =
+        authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
+    if (_industry.trim().isNotEmpty) return _industry.trim();
+    if (apiIndustry.isNotEmpty) return apiIndustry;
+    return profileIndustry;
+  }
+
+  static String _prettyIndustry(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return 'Product';
+    final String lower = v.toLowerCase();
+    if (lower == 'all' || lower == 'both') return 'All';
+
+    final List<String> parts = _parseIndustryParts(v);
+    if (parts.length > 1) {
+      if (parts.length >= 10) return 'All';
+      return '${_formatIndustryPart(parts.first)} +${parts.length - 1}';
+    }
+    if (parts.isNotEmpty) return _formatIndustryPart(parts.first);
+
+    final List<String> singleParts = v
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .split(' ')
+        .where((String p) => p.trim().isNotEmpty)
+        .toList();
+    if (singleParts.isEmpty) return 'Product';
+    return singleParts.map(_formatIndustryPart).join(' ');
+  }
+
+  static List<String> _parseIndustryParts(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return <String>[];
+    if (v.startsWith('[') && v.endsWith(']')) {
+      return v
+          .substring(1, v.length - 1)
+          .split(',')
+          .map((String s) => s.replaceAll('"', '').trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    if (v.contains(',')) {
+      return v
+          .split(',')
+          .map((String s) => s.trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    return <String>[v];
+  }
+
+  static String _formatIndustryPart(String s) {
+    final String cleaned = s.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (cleaned.isEmpty) return '';
+    final List<String> tokens = cleaned
+        .split(' ')
+        .where((String token) => token.trim().isNotEmpty)
+        .toList();
+    return tokens
+        .map(
+          (String token) => token.isEmpty
+              ? token
+              : '${token[0].toUpperCase()}${token.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
   Future<void> _openMoreMenu({required double scale}) async {
     final BuildContext? ctx = _menuKey.currentContext;
     if (ctx == null) return;
@@ -603,27 +751,153 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       items: <PopupMenuEntry<_MoreAction>>[
         PopupMenuItem<_MoreAction>(
           value: _MoreAction.downloadTemplate,
-          child: Text(
-            'Download Template',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 14 * scale,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF111827),
+          height: 40 * scale,
+          child: Center(
+            child: Text(
+              'Download Template',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w600,
+                height: 18 / 12,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<_MoreAction>(
+          value: _MoreAction.viewTemplateColumns,
+          height: 40 * scale,
+          child: Center(
+            child: Text(
+              'View Template Columns',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w600,
+                height: 18 / 12,
+                color: AppColors.brandBlue,
+              ),
             ),
           ),
         ),
       ],
     );
 
-    if (picked == _MoreAction.downloadTemplate) {
-      await _downloadTemplate();
+    if (!mounted || picked == null) return;
+
+    switch (picked) {
+      case _MoreAction.downloadTemplate:
+        await _downloadTemplate();
+      case _MoreAction.viewTemplateColumns:
+        await _showTemplateColumnsDialog(scale: scale, columns: _columns());
     }
+  }
+
+  Future<void> _showTemplateColumnsDialog({
+    required double scale,
+    required List<String> columns,
+  }) async {
+    double s(double v) => v * scale;
+
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(16)),
+            side: BorderSide(color: const Color(0xFFE5E7EB), width: s(1)),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Text(
+                      'Template Columns',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(16),
+                        fontWeight: FontWeight.w700,
+                        height: 24 / 16,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                    const Spacer(),
+                    InkResponse(
+                      onTap: () => Navigator.of(context).pop(),
+                      radius: s(18),
+                      child: SvgPicture.asset(
+                        'assets/icons/figma/bulk_close_x.svg',
+                        width: s(18),
+                        height: s(18),
+                        colorFilter: const ColorFilter.mode(
+                          Color(0xFF9CA3AF),
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: s(12)),
+                Wrap(
+                  spacing: s(8),
+                  runSpacing: s(8),
+                  children: <Widget>[
+                    for (final String c in columns)
+                      Container(
+                        padding: EdgeInsets.fromLTRB(s(10), s(6), s(10), s(6)),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEF3FF),
+                          borderRadius: BorderRadius.circular(s(999)),
+                        ),
+                        child: Text(
+                          c,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(12),
+                            fontWeight: FontWeight.w600,
+                            height: 16 / 12,
+                            color: AppColors.brandBlue,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(height: s(14)),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(13),
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.brandBlue,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final double referenceWidth = 402;
+    final String resolvedIndustry = _effectiveIndustry();
+    final String displayIndustry = _prettyIndustry(resolvedIndustry);
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -671,11 +945,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                             ),
                           ),
                           const Spacer(),
-                          _SectorPill(
+                          _IndustryPill(
                             scale: scale,
-                            label: _sector.trim().isEmpty
-                                ? 'Product'
-                                : _sector.trim(),
+                            label: displayIndustry,
+                            onTap: () {},
                           ),
                         ],
                       ),
@@ -705,7 +978,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     _ProductFlowStepper(
                                       scale: scale,
                                       stepIndex: 3,
-                                      totalSteps: 4,
+                                      totalSteps: 5,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
@@ -796,7 +1069,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     ),
                                     SizedBox(height: s(14)),
                                     Text(
-                                      'Download template based on your selected sector.\nUpload your Excel/CSV, then create the batch.',
+                                      'Download template based on your selected sector.\nUpload your Excel/CSV, then Confirm the batch.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -844,8 +1117,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                               child: _UploadButton(
                                 scale: scale,
                                 isLoading: _creating,
-                                enabled: _pickedFile != null && !_creating,
-                                onTap: _createBatch,
+                                enabled: !_creating,
+                                onTap: _confirmAndCreateBatch,
                                 label: 'Create Batch',
                               ),
                             ),
@@ -926,53 +1199,80 @@ class _SheetAction extends StatelessWidget {
   }
 }
 
-enum _MoreAction { downloadTemplate }
+enum _MoreAction { downloadTemplate, viewTemplateColumns }
 
-class _SectorPill extends StatelessWidget {
-  const _SectorPill({required this.scale, required this.label});
+class _IndustryPill extends StatelessWidget {
+  const _IndustryPill({
+    required this.scale,
+    required this.label,
+    required this.onTap,
+  });
 
   final double scale;
   final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    return Container(
-      height: s(29),
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(s(10)),
-        border: Border.all(color: const Color(0xFFE0EFFE)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SvgPicture.asset(
-            'assets/icons/figma/bulk_industry_building.svg',
-            width: s(12),
-            height: s(10),
-            colorFilter: const ColorFilter.mode(
-              AppColors.brandBlue,
-              BlendMode.srcIn,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(s(10)),
+      child: Container(
+        height: s(29),
+        padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F7FF),
+          borderRadius: BorderRadius.circular(s(10)),
+          border: Border.all(color: const Color(0xFFE0EFFE)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SvgPicture.asset(
+              'assets/icons/figma/bulk_industry_building.svg',
+              width: s(12),
+              height: s(10),
+              colorFilter: const ColorFilter.mode(
+                AppColors.brandBlue,
+                BlendMode.srcIn,
+              ),
             ),
-          ),
-          SizedBox(width: s(8)),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.0644531),
-              height: 16.5 / 11,
-              color: AppColors.brandBlue,
+            SizedBox(width: s(8)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.0644531),
+                height: 16.5 / 11,
+                color: AppColors.brandBlue,
+              ),
             ),
-          ),
-        ],
+            SizedBox(width: s(8)),
+            Container(
+              width: s(1),
+              height: s(12),
+              color: const Color(0xFFE2E8F0),
+            ),
+            SizedBox(width: s(8)),
+            Text(
+              'EDIT',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(10),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.25),
+                height: 15 / 10,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

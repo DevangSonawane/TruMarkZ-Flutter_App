@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/theme/app_colors.dart';
+import 'verification_flow_action.dart';
 
 class PerUnitCostBreakdownPage extends StatefulWidget {
   const PerUnitCostBreakdownPage({super.key});
@@ -20,6 +21,7 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
   static const Color _panelText = Color(0xFF3A3A3A);
 
   bool _agreed = false;
+  bool _isSubmitting = false;
 
   static const Map<String, _CheckPricing> _pricing = <String, _CheckPricing>{
     'identity': _CheckPricing('Identity Verification', 120),
@@ -27,6 +29,20 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
     'criminal': _CheckPricing('Criminal Record Search', 185),
     'education': _CheckPricing('Education Verification', 300),
     'employment': _CheckPricing('Employment History', 450),
+  };
+
+  static const Map<String, _CheckPricing> _productPricing =
+      <String, _CheckPricing>{
+    'authenticity': _CheckPricing('Authenticity Check', 140),
+    'serial': _CheckPricing('Serial Number Match', 180),
+    'model': _CheckPricing('Model Verification', 120),
+    'compliance': _CheckPricing('Compliance Check', 220),
+    'warranty': _CheckPricing('Warranty Eligibility', 260),
+    'warranty_registration':
+        _CheckPricing('Warranty Registration', 140),
+    'purchase_proof': _CheckPricing('Proof of Purchase', 160),
+    'activation': _CheckPricing('Activation Status', 120),
+    'claim': _CheckPricing('Claim Eligibility', 220),
   };
 
   List<String> _selectedChecks(BuildContext context) {
@@ -46,16 +62,55 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
 
   int _totalCostInr(Iterable<String> ids) {
     int total = 0;
+    final bool isProductFlow = _isProductFlow();
+    final Map<String, _CheckPricing> pricing = isProductFlow
+        ? _productPricing
+        : _pricing;
     for (final String id in ids) {
-      total += _pricing[id]?.costInr ?? 0;
+      total += pricing[id]?.costInr ?? 0;
     }
     return total;
+  }
+
+  bool _isProductFlow() {
+    return (GoRouterState.of(context).uri.queryParameters['flow'] ?? '')
+            .trim()
+            .toLowerCase() ==
+        'product';
+  }
+
+  Future<void> _confirmAndSubmit(
+    VerificationFlowConfirmAction? action,
+  ) async {
+    if (_isSubmitting) return;
+    if (!_agreed) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      if (action != null) {
+        await action();
+      } else if (mounted) {
+        context.pop(true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final List<String> ids = _selectedChecks(context);
     final int total = _totalCostInr(ids);
+    final bool isProductFlow = _isProductFlow();
+    final Map<String, _CheckPricing> pricing = isProductFlow
+        ? _productPricing
+        : _pricing;
+    final Object? extra = GoRouterState.of(context).extra;
+    final VerificationFlowConfirmAction? action =
+        extra is VerificationFlowConfirmAction ? extra : null;
+    final String stepText = isProductFlow ? 'STEP 4 OF 4' : 'STEP 4 OF 6';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -128,56 +183,11 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    Row(
-                                      children: <Widget>[
-                                        Text(
-                                          'STEP 4 OF 6',
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: s(10),
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: s(1),
-                                            height: 15 / 10,
-                                            color: const Color(0xFF94A3B8),
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        Text(
-                                          '100%',
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: s(10),
-                                            fontWeight: FontWeight.w700,
-                                            height: 15 / 10,
-                                            color: AppColors.brandBlue,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: s(8)),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                        s(9999),
-                                      ),
-                                      child: SizedBox(
-                                        width: double.infinity,
-                                        height: s(4),
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: const <Widget>[
-                                            DecoratedBox(
-                                              decoration: BoxDecoration(
-                                                color: Color(0xFFE5E7EB),
-                                              ),
-                                            ),
-                                            DecoratedBox(
-                                              decoration: BoxDecoration(
-                                                color: AppColors.brandBlue,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                    _ProductStyleStepper(
+                                      scale: scale,
+                                      stepLabel: stepText,
+                                      progressLabel: '100%',
+                                      progress: 1,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
@@ -209,9 +219,8 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                       rows: <_CostRow>[
                                         for (final String id in ids)
                                           _CostRow(
-                                            title: _pricing[id]?.title ?? id,
-                                            valueInr:
-                                                _pricing[id]?.costInr ?? 0,
+                                            title: pricing[id]?.title ?? id,
+                                            valueInr: pricing[id]?.costInr ?? 0,
                                           ),
                                       ],
                                       totalInr: total,
@@ -232,8 +241,12 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                               scale: scale,
                               child: _ConfirmButton(
                                 scale: scale,
-                                enabled: _agreed && ids.isNotEmpty,
-                                onTap: () => context.pop(true),
+                                enabled:
+                                    _agreed &&
+                                    ids.isNotEmpty &&
+                                    !_isSubmitting,
+                                isLoading: _isSubmitting,
+                                onTap: () => _confirmAndSubmit(action),
                               ),
                             ),
                           ],
@@ -256,6 +269,112 @@ class _CostRow {
 
   final String title;
   final int valueInr;
+}
+
+class _ProductStyleStepper extends StatelessWidget {
+  const _ProductStyleStepper({
+    required this.scale,
+    required this.stepLabel,
+    required this.progressLabel,
+    required this.progress,
+  });
+
+  final double scale;
+  final String stepLabel;
+  final String progressLabel;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(16)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: AppColors.brandBlue.withAlpha(14),
+            blurRadius: s(14),
+            offset: Offset(0, s(8)),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SizedBox(
+            height: s(8),
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints c) {
+                final double width = c.maxWidth;
+                return Stack(
+                  children: <Widget>[
+                    Container(
+                      width: width,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(s(99)),
+                      ),
+                    ),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: progress.clamp(0, 1)),
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      builder: (BuildContext context, double t, Widget? child) {
+                        return Container(
+                          width: width * t,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: <Color>[
+                                AppColors.brandBlue,
+                                AppColors.deepNavy,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(s(99)),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          SizedBox(height: s(10)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Text(
+                stepLabel,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: s(1),
+                  height: 15 / 10,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+              Text(
+                progressLabel,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w700,
+                  height: 15 / 10,
+                  color: AppColors.brandBlue,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CostSummaryCard extends StatelessWidget {
@@ -508,11 +627,13 @@ class _ConfirmButton extends StatelessWidget {
   const _ConfirmButton({
     required this.scale,
     required this.enabled,
+    required this.isLoading,
     required this.onTap,
   });
 
   final double scale;
   final bool enabled;
+  final bool isLoading;
   final VoidCallback onTap;
 
   @override
@@ -521,8 +642,8 @@ class _ConfirmButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton(
-        onPressed: enabled ? onTap : null,
+        child: ElevatedButton(
+          onPressed: enabled ? onTap : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.brandBlue,
           disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
@@ -534,35 +655,46 @@ class _ConfirmButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(s(20)),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'Confirm',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(18),
-                fontWeight: FontWeight.w700,
-                height: 28 / 18,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(width: s(10)),
-            SvgPicture.asset(
-              'assets/icons/figma/new_batch_continue_arrow.svg',
-              width: s(16),
-              height: s(16),
-              colorFilter: const ColorFilter.mode(
-                Colors.white,
-                BlendMode.srcIn,
-              ),
-            ),
-          ],
+          child: isLoading
+              ? SizedBox(
+                  width: s(20),
+                  height: s(20),
+                  child: CircularProgressIndicator(
+                    strokeWidth: s(2),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Colors.white,
+                    ),
+                  ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      'Confirm',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(18),
+                        fontWeight: FontWeight.w700,
+                        height: 28 / 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(width: s(10)),
+                    SvgPicture.asset(
+                      'assets/icons/figma/new_batch_continue_arrow.svg',
+                      width: s(16),
+                      height: s(16),
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ],
+                ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.scale, required this.child});

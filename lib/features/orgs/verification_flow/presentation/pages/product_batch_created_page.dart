@@ -3,11 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
-import '../../../../../core/theme/app_colors.dart';
-import '../../../../../core/theme/app_spacing.dart';
-import '../../../../../core/theme/app_typography.dart';
-import '../../../../../core/widgets/tmz_button.dart';
-import '../../../../../core/widgets/tmz_card.dart';
+import 'batch_created_success_view.dart';
 
 class ProductBatchCreatedPage extends StatelessWidget {
   const ProductBatchCreatedPage({super.key});
@@ -18,352 +14,60 @@ class ProductBatchCreatedPage extends StatelessWidget {
     return parsed ?? fallback;
   }
 
-  static const Color _deepBlue = AppColors.deepNavy;
-
-  static LinearGradient get _primaryGradient => const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[AppColors.brandBlue, _deepBlue],
-  );
-
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.dashboardPath);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(
-      context,
-    ).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
 
-    final String sector = (qp['sector']?.trim().isNotEmpty ?? false)
-        ? qp['sector']!.trim()
-        : 'Product';
-    final int records = _tryParseInt(qp['records'], fallback: 120);
+    final int records = _tryParseInt(qp['records'], fallback: 0);
     final int skipped = _tryParseInt(qp['skipped'], fallback: 0);
     final String batchId = (qp['batchId'] ?? '').trim();
     final Object? extra = GoRouterState.of(context).extra;
     final BulkUploadResponse? report = extra is BulkUploadResponse ? extra : null;
 
-    return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
+    return BatchCreatedSuccessView(
+      heroAssetPath: 'assets/batch_created_Success.svg',
+      title: 'Batch Created!',
+      subtitle:
+          'Your product verification batch has been queued. Certificates will be generated and stored on blockchain.',
+      batchName: (qp['batch'] ?? 'New Product Batch').trim(),
+      batchIdLabel: 'Batch ID',
+      batchIdValue: batchId,
+      metrics: <BatchCreatedMetric>[
+        BatchCreatedMetric(label: 'Products', value: records.toString()),
+        BatchCreatedMetric(label: 'Skipped', value: skipped.toString()),
+        BatchCreatedMetric(
+          label: 'Errors',
+          value: (report?.errors.length ?? 0).toString(),
         ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  36,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                children: <Widget>[
-                  Center(
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0.9, end: 1),
-                      duration: const Duration(milliseconds: 420),
-                      curve: Curves.easeOutBack,
-                      builder: (BuildContext context, double t, Widget? child) {
-                        return Transform.scale(scale: t, child: child);
-                      },
-                      child: Container(
-                        width: 96,
-                        height: 96,
-                        decoration: BoxDecoration(
-                          color: AppColors.successBg,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.success.withAlpha(40),
-                            width: 4,
-                          ),
-                          boxShadow: <BoxShadow>[
-                            BoxShadow(
-                              color: AppColors.success.withAlpha(22),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.check_rounded,
-                          size: 54,
-                          color: AppColors.success,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-                  Text(
-                    'Batch Created!',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.display2.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Your product verification batch has been queued. Certificates will be generated and stored on blockchain.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-                  TMZCard(
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                '$records Products',
-                                style: AppTypography.heading1.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Chip(
-                                label: Text(sector),
-                                backgroundColor: AppColors.brandBlue.withAlpha(
-                                  14,
-                                ),
-                                labelStyle: AppTypography.caption.copyWith(
-                                  color: AppColors.brandBlue,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                                side: BorderSide(
-                                  color: AppColors.brandBlue.withAlpha(24),
-                                ),
-                              ),
-                              if (skipped > 0) ...<Widget>[
-                                const SizedBox(height: 10),
-                                Text(
-                                  '$skipped skipped',
-                                  style: AppTypography.body2.copyWith(
-                                    color: const Color(0xFFF59E0B),
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: AppColors.brandBlue.withAlpha(12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.inventory_2_rounded,
-                            color: AppColors.brandBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (report != null &&
-                      (report.skippedUsers.isNotEmpty ||
-                          report.errors.isNotEmpty)) ...<Widget>[
-                    const SizedBox(height: AppSpacing.x4),
-                    TMZCard(
-                      padding: const EdgeInsets.all(AppSpacing.x4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text('Upload Report', style: AppTypography.heading2),
-                          const SizedBox(height: AppSpacing.x2),
-                          if (report.skippedUsers.isNotEmpty) ...<Widget>[
-                            Text(
-                              'Skipped (first ${report.skippedUsers.length > 5 ? 5 : report.skippedUsers.length})',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.textTertiary,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.x2),
-                            ...report.skippedUsers
-                                .take(5)
-                                .map(
-                                  (BulkUploadSkippedUser s) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: Text(
-                                      'Row ${s.row}: ${s.reason}',
-                                      style: AppTypography.body2.copyWith(
-                                        color: const Color(0xFFF59E0B),
-                                        height: 1.25,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                          ],
-                          if (report.errors.isNotEmpty) ...<Widget>[
-                            const SizedBox(height: AppSpacing.x2),
-                            Text(
-                              'Errors (first ${report.errors.length > 5 ? 5 : report.errors.length})',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.textTertiary,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.x2),
-                            ...report.errors
-                                .take(5)
-                                .map(
-                                  (BulkUploadErrorRow e) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: Text(
-                                      'Row ${e.row} • ${e.field}: ${e.error}',
-                                      style: AppTypography.body2.copyWith(
-                                        color: AppColors.error,
-                                        height: 1.25,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _GradientCtaButton(
-                      label: 'View Batch',
-                      icon: Icons.arrow_forward_rounded,
-                      gradient: _primaryGradient,
-                      enabled: true,
-                      onPressed: () => batchId.trim().isEmpty
-                          ? context.go(AppRouter.appBatchesPath)
-                          : context.go(
-                              '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
-                            ),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    TMZButton(
-                      label: 'Back to Dashboard',
-                      icon: Icons.dashboard_rounded,
-                      variant: TMZButtonVariant.secondary,
-                      onPressed: () => context.go(AppRouter.dashboardPath),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GradientCtaButton extends StatefulWidget {
-  const _GradientCtaButton({
-    required this.label,
-    required this.icon,
-    required this.gradient,
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  final String label;
-  final IconData icon;
-  final Gradient gradient;
-  final bool enabled;
-  final VoidCallback onPressed;
-
-  @override
-  State<_GradientCtaButton> createState() => _GradientCtaButtonState();
-}
-
-class _GradientCtaButtonState extends State<_GradientCtaButton> {
-  bool _isPressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget content = Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        Text(
-          widget.label,
-          style: AppTypography.button.copyWith(color: Colors.white),
-        ),
-        const SizedBox(width: 10),
-        Icon(widget.icon, color: Colors.white, size: 18),
       ],
-    );
-
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 150),
-      opacity: widget.enabled ? 1 : 0.45,
-      child: SizedBox(
-        height: 54,
-        width: double.infinity,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: widget.gradient,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(40),
-                blurRadius: 22,
-                offset: const Offset(0, 12),
-              ),
-            ],
+      banners: <BatchCreatedBanner>[
+        if (report != null && report.skippedUsers.isNotEmpty)
+          BatchCreatedBanner(
+            title: '${report.skippedUsers.length} rows were skipped',
+            subtitle:
+                'The file contained rows that could not be imported. Review the upload report for details.',
+            color: const Color(0xFFF59E0B),
+            bg: const Color(0xFFFFFBEB),
+            icon: Icons.warning_amber_rounded,
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: widget.enabled ? widget.onPressed : null,
-              onHighlightChanged: (bool value) =>
-                  setState(() => _isPressed = value),
-              child: AnimatedScale(
-                duration: const Duration(milliseconds: 90),
-                scale: _isPressed ? 0.985 : 1,
-                child: Center(child: content),
-              ),
+        if (report != null && report.errors.isNotEmpty)
+          BatchCreatedBanner(
+            title: '${report.errors.length} rows had errors',
+            subtitle:
+                'Fix the invalid product rows and upload again to include them in this batch.',
+            color: const Color(0xFFEF4444),
+            bg: const Color(0xFFFEF2F2),
+            icon: Icons.error_outline_rounded,
+          ),
+      ],
+      primaryActionLabel: 'View Batch',
+      primaryAction: batchId.trim().isEmpty
+          ? () => context.go(AppRouter.appBatchesPath)
+          : () => context.go(
+              '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
             ),
-          ),
-        ),
-      ),
+      secondaryActionLabel: 'Back to Dashboard',
+      secondaryAction: () => context.go(AppRouter.dashboardPath),
     );
   }
 }
