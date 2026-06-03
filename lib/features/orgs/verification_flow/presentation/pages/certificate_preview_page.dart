@@ -20,6 +20,13 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
 
   int _selectedTemplateIndex = 0;
 
+  bool _isProductFlow(BuildContext context) {
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
+    return (qp['flow'] ?? '').trim().toLowerCase() == 'product';
+  }
+
   String _industryLabel(BuildContext context) {
     final Map<String, String> qp = GoRouterState.of(
       context,
@@ -60,6 +67,7 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
   Widget build(BuildContext context) {
     final String industryLabel = _industryLabel(context);
     final String identityTypeLabel = _identityTypeLabel(context);
+    final bool isProductFlow = _isProductFlow(context);
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -146,7 +154,9 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                         horizontal: s(16),
                                       ),
                                       child: Text(
-                                        'Choose Identity Credential',
+                                        isProductFlow
+                                            ? 'Choose Product Certificate'
+                                            : 'Choose Identity Credential',
                                         style: TextStyle(
                                           fontFamily: 'Inter',
                                           fontSize: s(22),
@@ -162,7 +172,9 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                         horizontal: s(16),
                                       ),
                                       child: Text(
-                                        'Select a secure visual template for your verified digital\nidentity.',
+                                        isProductFlow
+                                            ? 'Select a secure visual template for your verified product\ncertificate.'
+                                            : 'Select a secure visual template for your verified digital\nidentity.',
                                         style: TextStyle(
                                           fontFamily: 'Inter',
                                           fontSize: s(12),
@@ -176,6 +188,7 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                     _SwipeableCertificateCards(
                                       scale: scale,
                                       selectedIndex: _selectedTemplateIndex,
+                                      isProductFlow: isProductFlow,
                                       onSelected: (int i) => setState(() {
                                         _selectedTemplateIndex = i;
                                       }),
@@ -376,14 +389,23 @@ class _SwipeableCertificateCards extends StatelessWidget {
     required this.scale,
     required this.selectedIndex,
     required this.onSelected,
+    this.isProductFlow = false,
   });
 
   final double scale;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final bool isProductFlow;
 
   static const List<({String asset, double aspectRatio})>
-  _images = <({String asset, double aspectRatio})>[
+  _humanImages = <({String asset, double aspectRatio})>[
+    (asset: 'assets/images/figma/cert_card_1.png', aspectRatio: 1054 / 1492),
+    (asset: 'assets/images/figma/cert_card_2.png', aspectRatio: 866 / 1230),
+    (asset: 'assets/images/figma/cert_card_3.png', aspectRatio: 1054 / 1492),
+  ];
+
+  static const List<({String asset, double aspectRatio})>
+  _productImages = <({String asset, double aspectRatio})>[
     (asset: 'assets/products/product_preview_1.png', aspectRatio: 1054 / 1492),
     (asset: 'assets/products/product_preview_2.png', aspectRatio: 866 / 1230),
     (asset: 'assets/products/product_preview_3.png', aspectRatio: 1054 / 1492),
@@ -392,6 +414,10 @@ class _SwipeableCertificateCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
+    final List<({String asset, double aspectRatio})> images = isProductFlow
+        ? _productImages
+        : _humanImages;
 
     final double h = s(220);
     final double sidePadding = s(16);
@@ -409,13 +435,12 @@ class _SwipeableCertificateCards extends StatelessWidget {
           child: Row(
             children: <Widget>[
               SizedBox(width: sidePadding),
-              ...List<Widget>.generate(_images.length, (int index) {
-                final ({String asset, double aspectRatio}) item =
-                    _images[index];
+              ...List<Widget>.generate(images.length, (int index) {
+                final ({String asset, double aspectRatio}) item = images[index];
                 final bool isSelected = index == selectedIndex;
                 return Padding(
                   padding: EdgeInsets.only(
-                    right: index == _images.length - 1 ? sidePadding : gap,
+                    right: index == images.length - 1 ? sidePadding : gap,
                   ),
                   child: GestureDetector(
                     onTap: () => onSelected(index),
