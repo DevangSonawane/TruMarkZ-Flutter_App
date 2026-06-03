@@ -37,8 +37,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const Color _panelText = Color(0xFF3A3A3A);
 
-  final GlobalKey _menuKey = GlobalKey();
-
   String? _lastRouteSignature;
 
   late final TextEditingController _batchNameController;
@@ -873,8 +871,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         ? apiIndustry
         : profileIndustry;
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
-    final List<String> columns = _columns();
-
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -1060,20 +1056,28 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                             ),
                                           ),
                                         ),
-                                        InkResponse(
-                                          key: _menuKey,
-                                          onTap: () => _openMoreMenu(
-                                            scale: scale,
-                                            columns: columns,
+                                        TextButton(
+                                          onPressed: _downloadTemplate,
+                                          style: TextButton.styleFrom(
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: Size.zero,
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            foregroundColor:
+                                                AppColors.brandBlue,
+                                            textStyle: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(12),
+                                              fontWeight: FontWeight.w600,
+                                              height: 18 / 12,
+                                            ),
                                           ),
-                                          radius: s(22),
-                                          child: SvgPicture.asset(
-                                            'assets/icons/figma/bulk_upload_icon_more.svg',
-                                            width: s(22),
-                                            height: s(22),
-                                            colorFilter: const ColorFilter.mode(
-                                              AppColors.brandBlue,
-                                              BlendMode.srcIn,
+                                          child: Text(
+                                            'Download Template',
+                                            style: const TextStyle(
+                                              color: AppColors.brandBlue,
                                             ),
                                           ),
                                         ),
@@ -1485,187 +1489,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (apiIndustry.isNotEmpty) return apiIndustry;
     return profileIndustry;
   }
-
-  Future<void> _openMoreMenu({
-    required double scale,
-    required List<String> columns,
-  }) async {
-    final BuildContext? ctx = _menuKey.currentContext;
-    if (ctx == null) return;
-
-    final RenderBox button = ctx.findRenderObject()! as RenderBox;
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final Offset buttonTopLeft = button.localToGlobal(
-      Offset.zero,
-      ancestor: overlay,
-    );
-    final Offset buttonBottomRight = button.localToGlobal(
-      button.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(buttonTopLeft, buttonBottomRight),
-      Offset.zero & overlay.size,
-    );
-
-    final _MoreAction? picked = await showMenu<_MoreAction>(
-      context: context,
-      position: position.shift(Offset(0, button.size.height * 0.6)),
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6 * scale),
-        side: BorderSide(color: const Color(0xFFE5E7EB), width: 1 * scale),
-      ),
-      items: <PopupMenuEntry<_MoreAction>>[
-        PopupMenuItem<_MoreAction>(
-          value: _MoreAction.downloadTemplate,
-          height: 40 * scale,
-          child: Center(
-            child: Text(
-              'Download Template',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12 * scale,
-                fontWeight: FontWeight.w600,
-                height: 18 / 12,
-                color: AppColors.brandBlue,
-              ),
-            ),
-          ),
-        ),
-        const PopupMenuDivider(height: 1),
-        PopupMenuItem<_MoreAction>(
-          value: _MoreAction.viewTemplateColumns,
-          height: 40 * scale,
-          child: Center(
-            child: Text(
-              'View Template Columns',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12 * scale,
-                fontWeight: FontWeight.w600,
-                height: 18 / 12,
-                color: AppColors.brandBlue,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-
-    if (!mounted || picked == null) return;
-
-    switch (picked) {
-      case _MoreAction.downloadTemplate:
-        await _downloadTemplate();
-      case _MoreAction.viewTemplateColumns:
-        await _showTemplateColumnsDialog(scale: scale, columns: columns);
-    }
-  }
-
-  Future<void> _showTemplateColumnsDialog({
-    required double scale,
-    required List<String> columns,
-  }) async {
-    double s(double v) => v * scale;
-
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(s(16)),
-            side: BorderSide(color: const Color(0xFFE5E7EB), width: s(1)),
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Text(
-                      'Template Columns',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(16),
-                        fontWeight: FontWeight.w700,
-                        height: 24 / 16,
-                        color: const Color(0xFF111827),
-                      ),
-                    ),
-                    const Spacer(),
-                    InkResponse(
-                      onTap: () => Navigator.of(context).pop(),
-                      radius: s(18),
-                      child: SvgPicture.asset(
-                        'assets/icons/figma/bulk_close_x.svg',
-                        width: s(18),
-                        height: s(18),
-                        colorFilter: const ColorFilter.mode(
-                          Color(0xFF9CA3AF),
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: s(12)),
-                Wrap(
-                  spacing: s(8),
-                  runSpacing: s(8),
-                  children: <Widget>[
-                    for (final String c in columns)
-                      Container(
-                        padding: EdgeInsets.fromLTRB(s(10), s(6), s(10), s(6)),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEEF3FF),
-                          borderRadius: BorderRadius.circular(s(999)),
-                        ),
-                        child: Text(
-                          c,
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: s(12),
-                            fontWeight: FontWeight.w600,
-                            height: 16 / 12,
-                            color: AppColors.brandBlue,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                SizedBox(height: s(14)),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Close',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(13),
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.brandBlue,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
-
-enum _MoreAction { downloadTemplate, viewTemplateColumns }
 
 class _HumanTemplateDialog extends ConsumerStatefulWidget {
   const _HumanTemplateDialog({
@@ -1983,6 +1807,13 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
               cursorColor: AppColors.brandBlue,
               decoration: InputDecoration(
                 hintText: 'Enter header name',
+                hintStyle: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(14),
+                  fontWeight: FontWeight.w400,
+                  height: 20 / 14,
+                  color: const Color(0xFF94A3B8),
+                ),
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(

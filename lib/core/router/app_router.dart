@@ -19,6 +19,7 @@ import '../../features/notifications/presentation/pages/notification_centre_page
 import '../../features/onboarding/presentation/pages/splash_page.dart';
 import '../../features/onboarding/presentation/pages/onboarding_page.dart';
 import '../../features/orgs/presentation/pages/batch_progress_page.dart';
+import '../../features/orgs/presentation/pages/all_batches_page.dart';
 import '../../features/orgs/presentation/pages/org_credentials_page.dart';
 import '../../features/orgs/presentation/pages/org_dashboard_page.dart';
 import '../../features/orgs/presentation/pages/profile_settings_page.dart';
@@ -318,7 +319,7 @@ class AppRouter {
             path: appBatchesPath,
             name: 'batches',
             pageBuilder: (BuildContext context, GoRouterState state) =>
-                _slideFadePage(state: state, child: const BatchProgressPage()),
+                _slideFadePage(state: state, child: const AllBatchesPage()),
           ),
           GoRoute(
             path: appBatchTrackingDetailPath,
@@ -477,10 +478,8 @@ class AppRouter {
       GoRoute(
         path: batchProgressPath,
         name: 'batch_progress',
-        redirect: (BuildContext context, GoRouterState state) {
-          final String query = state.uri.hasQuery ? '?${state.uri.query}' : '';
-          return '$appBatchesPath$query';
-        },
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(state: state, child: const BatchProgressPage()),
       ),
 
       // Organisation auth flow

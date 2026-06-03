@@ -158,7 +158,33 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                     sideInset + 16,
                     0,
                   ),
-                  child: const _SectionTitle('RECENT BATCH PROCESS'),
+                  child: Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: _SectionTitle('RECENT BATCH PROCESS'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            context.go(AppRouter.batchProgressPath),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: AppColors.brandBlue,
+                        ),
+                        child: const Text(
+                          'Certificates',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               SliverToBoxAdapter(

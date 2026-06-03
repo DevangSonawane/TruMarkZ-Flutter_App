@@ -60,7 +60,9 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
     );
     final Object? res = await context.push(uri.toString(), extra: extra);
     if (!context.mounted) return;
-    context.pop(res == true);
+    if (res == true) {
+      context.pop(true);
+    }
   }
 
   @override
@@ -323,7 +325,7 @@ class _StepProgress extends StatelessWidget {
             Padding(
               padding: EdgeInsets.only(left: s(4)),
               child: Text(
-                'STEP 5 OF 6',
+                'STEP 4 OF 6',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(10),

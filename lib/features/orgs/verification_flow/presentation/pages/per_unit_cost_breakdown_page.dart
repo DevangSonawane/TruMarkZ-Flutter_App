@@ -121,7 +121,7 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
     final Object? extra = GoRouterState.of(context).extra;
     final VerificationFlowConfirmAction? action =
         extra is VerificationFlowConfirmAction ? extra : null;
-    final String stepText = isProductFlow ? 'STEP 5 OF 5' : 'STEP 4 OF 6';
+    final String stepText = 'STEP 5 OF 6';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
