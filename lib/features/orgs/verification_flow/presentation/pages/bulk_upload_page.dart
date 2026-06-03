@@ -494,6 +494,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final List<String> columns = _columns();
     final String resolvedIndustry = _effectiveIndustry();
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final int userCount = _pickedFile == null
+        ? 0
+        : _parseUsersFromPickedFile(_pickedFile!).length;
     debugPrint(
       '[BulkUploadPage] Confirm tapped batch=${_batchNameController.text.trim()} picked=${_pickedFile?.name}',
     );
@@ -518,6 +521,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         'industry_label': displayIndustry,
         'access': _credentialVisibility,
         'identity_type': 'Individual',
+        if (userCount > 0) 'users_count': userCount.toString(),
       },
     );
     Future<void> confirmAction() => _uploadAndNavigate(columns);

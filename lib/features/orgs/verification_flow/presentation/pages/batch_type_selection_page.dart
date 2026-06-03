@@ -431,9 +431,10 @@ class _ContinueButtonState extends State<_ContinueButton> {
         Text(
           'Continue',
           style: TextStyle(
+            fontFamily: 'Inter',
             fontSize: s(18),
             fontWeight: FontWeight.w700,
-            letterSpacing: s(0.035),
+            height: 28 / 18,
             color: Colors.white,
           ),
         ),

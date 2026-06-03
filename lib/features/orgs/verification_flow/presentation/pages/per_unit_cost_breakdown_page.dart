@@ -26,6 +26,14 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
   bool _agreed = false;
   bool _isSubmitting = false;
 
+  int _userCount(BuildContext context) {
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
+    final int parsed = int.tryParse((qp['users_count'] ?? '').trim()) ?? 1;
+    return parsed > 0 ? parsed : 1;
+  }
+
   static final Map<String, _CheckPricing> _pricing = <String, _CheckPricing>{
     for (final HumanVerificationCheckDefinition item
         in HumanVerificationChecksCatalog.items)
@@ -72,6 +80,10 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
     return total;
   }
 
+  int _lineTotalInr(int unitCostInr, int userCount) {
+    return unitCostInr * userCount;
+  }
+
   bool _isProductFlow() {
     return (GoRouterState.of(context).uri.queryParameters['flow'] ?? '')
             .trim()
@@ -100,7 +112,8 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
   @override
   Widget build(BuildContext context) {
     final List<String> ids = _selectedChecks(context);
-    final int total = _totalCostInr(ids);
+    final int userCount = _userCount(context);
+    final int total = _totalCostInr(ids) * userCount;
     final bool isProductFlow = _isProductFlow();
     final Map<String, _CheckPricing> pricing = isProductFlow
         ? _productPricing
@@ -191,7 +204,7 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
-                                      'Per-unit Cost Breakdown',
+                                      'Total Cost Breakdown',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(24),
@@ -203,7 +216,7 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                     ),
                                     SizedBox(height: s(12)),
                                     Text(
-                                      'Determine how verification data will be accessed and who\ncan view the finalized reports.',
+                                      'Determine the total verification cost for all users in the Excel file.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -220,11 +233,17 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                         for (final String id in ids)
                                           _CostRow(
                                             title: pricing[id]?.title ?? id,
-                                            valueInr: pricing[id]?.costInr ?? 0,
+                                            unitCostInr:
+                                                pricing[id]?.costInr ?? 0,
+                                            totalInr: _lineTotalInr(
+                                              pricing[id]?.costInr ?? 0,
+                                              userCount,
+                                            ),
                                           ),
                                       ],
                                       totalInr: total,
                                       checksCount: ids.length,
+                                      userCount: userCount,
                                     ),
                                     SizedBox(height: s(18)),
                                     _AgreementTile(
@@ -263,10 +282,15 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
 }
 
 class _CostRow {
-  const _CostRow({required this.title, required this.valueInr});
+  const _CostRow({
+    required this.title,
+    required this.unitCostInr,
+    required this.totalInr,
+  });
 
   final String title;
-  final int valueInr;
+  final int unitCostInr;
+  final int totalInr;
 }
 
 class _CostSummaryCard extends StatelessWidget {
@@ -275,12 +299,14 @@ class _CostSummaryCard extends StatelessWidget {
     required this.rows,
     required this.totalInr,
     required this.checksCount,
+    required this.userCount,
   });
 
   final double scale;
   final List<_CostRow> rows;
   final int totalInr;
   final int checksCount;
+  final int userCount;
 
   @override
   Widget build(BuildContext context) {
@@ -288,7 +314,11 @@ class _CostSummaryCard extends StatelessWidget {
 
     final List<_CostRow> safeRows = rows.isEmpty
         ? const <_CostRow>[
-            _CostRow(title: 'Identity Verification', valueInr: 0),
+            _CostRow(
+              title: 'Identity Verification',
+              unitCostInr: 0,
+              totalInr: 0,
+            ),
           ]
         : rows;
 
@@ -344,7 +374,7 @@ class _CostSummaryCard extends StatelessWidget {
           ),
           SizedBox(height: s(16)),
           for (int i = 0; i < safeRows.length; i++) ...<Widget>[
-            _SummaryRow(scale: scale, row: safeRows[i]),
+            _SummaryRow(scale: scale, row: safeRows[i], userCount: userCount),
             if (i != safeRows.length - 1) ...<Widget>[
               SizedBox(height: s(12)),
               Divider(height: s(1), color: const Color(0xFFF1F5F9)),
@@ -355,7 +385,7 @@ class _CostSummaryCard extends StatelessWidget {
           Divider(height: s(1), color: const Color(0xFFF1F5F9)),
           SizedBox(height: s(14)),
           Text(
-            'TOTAL PER UNIT',
+            'TOTAL COST',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(10),
@@ -379,22 +409,45 @@ class _CostSummaryCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Container(
-                padding: EdgeInsets.fromLTRB(s(12), s(6), s(12), s(6)),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEEF3FF),
-                  borderRadius: BorderRadius.circular(s(999)),
-                ),
-                child: Text(
-                  '$checksCount Checks',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(12),
-                    fontWeight: FontWeight.w600,
-                    height: 16 / 12,
-                    color: AppColors.brandBlue,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Container(
+                    padding: EdgeInsets.fromLTRB(s(12), s(6), s(12), s(6)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF3FF),
+                      borderRadius: BorderRadius.circular(s(999)),
+                    ),
+                    child: Text(
+                      '$checksCount Checks',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w600,
+                        height: 16 / 12,
+                        color: AppColors.brandBlue,
+                      ),
+                    ),
                   ),
-                ),
+                  SizedBox(height: s(8)),
+                  Container(
+                    padding: EdgeInsets.fromLTRB(s(12), s(6), s(12), s(6)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(s(999)),
+                    ),
+                    child: Text(
+                      '$userCount Users',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w600,
+                        height: 16 / 12,
+                        color: const Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -405,10 +458,15 @@ class _CostSummaryCard extends StatelessWidget {
 }
 
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.scale, required this.row});
+  const _SummaryRow({
+    required this.scale,
+    required this.row,
+    required this.userCount,
+  });
 
   final double scale;
   final _CostRow row;
+  final int userCount;
 
   @override
   Widget build(BuildContext context) {
@@ -428,15 +486,31 @@ class _SummaryRow extends StatelessWidget {
             ),
           ),
         ),
-        Text(
-          '₹${row.valueInr}',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(16),
-            fontWeight: FontWeight.w700,
-            height: 24 / 16,
-            color: const Color(0xFF111827),
-          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Text(
+              '₹${row.unitCostInr} × $userCount',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w600,
+                height: 16 / 11,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            SizedBox(height: s(2)),
+            Text(
+              '₹${row.totalInr}',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(16),
+                fontWeight: FontWeight.w700,
+                height: 24 / 16,
+                color: const Color(0xFF111827),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -498,7 +572,7 @@ class _AgreementTile extends StatelessWidget {
             SizedBox(width: s(12)),
             Expanded(
               child: Text(
-                'I agree to the per-unit cost breakdown and\nthe terms of service for these verification\nchecks.',
+                'I agree to the total cost breakdown and\nthe terms of service for these verification\nchecks.',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(12),
