@@ -47,7 +47,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   String _industry = '';
   String _credentialVisibility = 'public_searchable';
-  Set<String> _checks = <String>{'identity', 'address', 'criminal'};
+  Set<String> _checks = <String>{'police', 'dob', 'education'};
 
   PickedFile? _pickedFile;
   bool _isUploading = false;
@@ -1680,8 +1680,9 @@ class _HumanTemplateDialog extends ConsumerStatefulWidget {
 }
 
 class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
-  static const MethodChannel _downloadsChannel =
-      MethodChannel('trumarkz/downloads');
+  static const MethodChannel _downloadsChannel = MethodChannel(
+    'trumarkz/downloads',
+  );
 
   late final TextEditingController _headerInputController;
   late List<String> _headers;
@@ -1782,15 +1783,15 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
 
       String savedUri = '';
       try {
-        savedUri = await _downloadsChannel.invokeMethod<String>(
-              'saveFileToDownloads',
-              <String, dynamic>{
-                'fileName': res.filename,
-                'mimeType':
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'bytes': res.bytes,
-              },
-            ) ??
+        savedUri =
+            await _downloadsChannel.invokeMethod<
+              String
+            >('saveFileToDownloads', <String, dynamic>{
+              'fileName': res.filename,
+              'mimeType':
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'bytes': res.bytes,
+            }) ??
             '';
       } on MissingPluginException catch (e) {
         debugPrint('[HumanTemplate] downloads channel missing: $e');
@@ -1808,16 +1809,14 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
             action: SnackBarAction(
               label: 'Share',
               onPressed: () async {
-                await Share.shareXFiles(
-                  <XFile>[
-                    XFile.fromData(
-                      res.bytes,
-                      name: fallbackName,
-                      mimeType:
-                          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    ),
-                  ],
-                );
+                await Share.shareXFiles(<XFile>[
+                  XFile.fromData(
+                    res.bytes,
+                    name: fallbackName,
+                    mimeType:
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  ),
+                ]);
               },
             ),
           ),
@@ -1831,9 +1830,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } on PlatformException catch (e) {
       debugPrint(
         '[HumanTemplate] save failed code=${e.code} message=${e.message} details=${e.details}',
@@ -1895,11 +1894,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
             TextButton(
               onPressed: () async {
                 try {
-                  await Share.shareXFiles(
-                    <XFile>[
-                      XFile.fromData(fileBytes, name: fileName),
-                    ],
-                  );
+                  await Share.shareXFiles(<XFile>[
+                    XFile.fromData(fileBytes, name: fileName),
+                  ]);
                 } catch (e) {
                   debugPrint('[HumanTemplate] share failed: $e');
                 }
@@ -2035,7 +2032,8 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
               spacing: 8,
               runSpacing: 8,
               children: <Widget>[
-                for (final String check in widget.selectedChecks.toList()..sort())
+                for (final String check
+                    in widget.selectedChecks.toList()..sort())
                   Chip(
                     label: Text(check),
                     backgroundColor: AppColors.brandBlue.withAlpha(14),
@@ -2122,9 +2120,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                   ),
                   decoration: const BoxDecoration(
                     color: Color(0xFFF8FAFC),
-                    border: Border(
-                      top: BorderSide(color: Color(0xFFE5E7EB)),
-                    ),
+                    border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
                   ),
                   child: SizedBox(
                     width: double.infinity,
@@ -2146,10 +2142,11 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.brandBlue,
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  AppColors.brandBlue.withAlpha(90),
-                              disabledForegroundColor:
-                                  Colors.white.withAlpha(180),
+                              disabledBackgroundColor: AppColors.brandBlue
+                                  .withAlpha(90),
+                              disabledForegroundColor: Colors.white.withAlpha(
+                                180,
+                              ),
                               elevation: 0,
                               padding: EdgeInsets.symmetric(vertical: s(18)),
                               shape: RoundedRectangleBorder(
@@ -2186,10 +2183,11 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.brandBlue,
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  AppColors.brandBlue.withAlpha(90),
-                              disabledForegroundColor:
-                                  Colors.white.withAlpha(180),
+                              disabledBackgroundColor: AppColors.brandBlue
+                                  .withAlpha(90),
+                              disabledForegroundColor: Colors.white.withAlpha(
+                                180,
+                              ),
                               elevation: 0,
                               padding: EdgeInsets.symmetric(vertical: s(18)),
                               shape: RoundedRectangleBorder(

@@ -10,6 +10,8 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
+import 'human_verification_checks_catalog.dart';
+import 'product_verification_checks_catalog.dart';
 
 class VerificationChecksPage extends ConsumerStatefulWidget {
   const VerificationChecksPage({super.key});
@@ -31,92 +33,36 @@ class _VerificationChecksPageState
   String _categoryId = '';
   bool _supportsWarranty = true;
 
-  static const List<_CheckItem> _humanItems = <_CheckItem>[
-    _CheckItem(
-      id: 'identity',
-      title: 'Identity Verification',
-      subtitle: 'PAN, Aadhar & Face Match',
-      mode: _CheckMode.auto,
-      costInr: 120,
-      svgIconPath: 'assets/icons/figma/checks_icon_identity.svg',
-    ),
-    _CheckItem(
-      id: 'address',
-      title: 'Address History',
-      subtitle: 'Physical site verification',
-      mode: _CheckMode.manual,
-      costInr: 240,
-      svgIconPath: 'assets/icons/figma/checks_icon_address.svg',
-    ),
-    _CheckItem(
-      id: 'criminal',
-      title: 'Criminal Record',
-      subtitle: 'Global/National database search',
-      mode: _CheckMode.auto,
-      costInr: 180,
-      svgIconPath: 'assets/icons/figma/checks_icon_criminal.svg',
-    ),
-    _CheckItem(
-      id: 'education',
-      title: 'Education Check',
-      subtitle: 'Highest qualification check',
-      mode: _CheckMode.manual,
-      costInr: 350,
-      svgIconPath: 'assets/icons/figma/checks_icon_education.svg',
-    ),
-    _CheckItem(
-      id: 'employment',
-      title: 'Employment History',
-      subtitle: 'Last 2 employers verification',
-      mode: _CheckMode.manual,
-      costInr: 420,
-      svgIconPath: 'assets/icons/figma/checks_icon_employment.svg',
-    ),
+  static final List<_CheckItem> _humanItems = <_CheckItem>[
+    for (final HumanVerificationCheckDefinition item
+        in HumanVerificationChecksCatalog.items)
+      _CheckItem(
+        id: item.id,
+        title: item.title,
+        subtitle: item.subtitle,
+        mode: item.mode == HumanVerificationCheckMode.auto
+            ? _CheckMode.auto
+            : _CheckMode.manual,
+        costInr: HumanVerificationChecksCatalog.humanPricesInr[item.id] ?? 0,
+        materialIcon: item.icon,
+      ),
   ];
 
-  final Set<String> _selected = <String>{'identity'};
+  final Set<String> _selected = <String>{'police'};
 
-  static const List<_CheckItem> _productVerificationItems = <_CheckItem>[
-    _CheckItem(
-      id: 'authenticity',
-      title: 'Authenticity Check',
-      subtitle: 'Brand, SKU and product identity match',
-      mode: _CheckMode.auto,
-      costInr: 140,
-      materialIcon: Icons.verified_rounded,
-    ),
-    _CheckItem(
-      id: 'serial',
-      title: 'Serial Number Match',
-      subtitle: 'Match serial numbers with the uploaded list',
-      mode: _CheckMode.manual,
-      costInr: 180,
-      materialIcon: Icons.qr_code_rounded,
-    ),
-    _CheckItem(
-      id: 'model',
-      title: 'Model Verification',
-      subtitle: 'Confirm model name and product variant',
-      mode: _CheckMode.auto,
-      costInr: 120,
-      materialIcon: Icons.inventory_2_rounded,
-    ),
-    _CheckItem(
-      id: 'compliance',
-      title: 'Compliance Check',
-      subtitle: 'Safety labels, documents and declarations',
-      mode: _CheckMode.manual,
-      costInr: 220,
-      materialIcon: Icons.shield_rounded,
-    ),
-    _CheckItem(
-      id: 'warranty',
-      title: 'Warranty Eligibility',
-      subtitle: 'Warranty registration and claim readiness',
-      mode: _CheckMode.manual,
-      costInr: 260,
-      materialIcon: Icons.fact_check_rounded,
-    ),
+  static final List<_CheckItem> _productVerificationItems = <_CheckItem>[
+    for (final ProductVerificationCheckDefinition item
+        in ProductVerificationChecksCatalog.items)
+      _CheckItem(
+        id: item.id,
+        title: item.title,
+        subtitle: item.subtitle,
+        mode: item.mode == ProductVerificationCheckMode.auto
+            ? _CheckMode.auto
+            : _CheckMode.manual,
+        costInr: ProductVerificationChecksCatalog.pricesInr[item.id] ?? 0,
+        materialIcon: item.icon,
+      ),
   ];
 
   static const List<_CheckItem> _productWarrantyItems = <_CheckItem>[
@@ -208,7 +154,8 @@ class _VerificationChecksPageState
     if (next != _industry) {
       setState(() => _industry = next);
     }
-    final bool needsFlowRefresh = nextFlow != _flow ||
+    final bool needsFlowRefresh =
+        nextFlow != _flow ||
         nextMode != _mode ||
         nextCategoryId != _categoryId ||
         nextSupportsWarranty != _supportsWarranty;
@@ -263,7 +210,9 @@ class _VerificationChecksPageState
     final String stepText = isProductFlow ? 'STEP 2 OF 4' : 'STEP 1 OF 6';
     final String progressText = isProductFlow ? '50%' : '17%';
     final double progressFactor = isProductFlow ? 0.5 : 0.1667;
-    final String fallbackIndustryLabel = isProductFlow ? 'Product' : 'Real Estate';
+    final String fallbackIndustryLabel = isProductFlow
+        ? 'Product'
+        : 'Real Estate';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -975,17 +924,11 @@ class _CheckTile extends StatelessWidget {
                       : const <BoxShadow>[],
                 ),
                 alignment: Alignment.center,
-                child: item.svgIconPath != null
-                    ? SvgPicture.asset(
-                        item.svgIconPath!,
-                        width: s(22),
-                        height: s(18),
-                      )
-                    : Icon(
-                        item.materialIcon ?? Icons.verified_rounded,
-                        size: s(22),
-                        color: AppColors.brandBlue,
-                      ),
+                child: Icon(
+                  item.materialIcon ?? Icons.verified_rounded,
+                  size: s(22),
+                  color: AppColors.brandBlue,
+                ),
               ),
               SizedBox(width: s(16)),
               Expanded(
@@ -1236,7 +1179,6 @@ class _CheckItem {
     required this.subtitle,
     required this.mode,
     required this.costInr,
-    this.svgIconPath,
     this.materialIcon,
   });
 
@@ -1245,6 +1187,5 @@ class _CheckItem {
   final String subtitle;
   final _CheckMode mode;
   final int costInr;
-  final String? svgIconPath;
   final IconData? materialIcon;
 }

@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import 'human_verification_checks_catalog.dart';
 
 enum _AccessType { publicSearchable, permissionBased }
 
@@ -41,44 +42,19 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
   int _lastStepIndex = 0;
 
   late final List<_VerificationCheck> _checks = <_VerificationCheck>[
-    const _VerificationCheck(
-      id: 'identity',
-      title: 'Identity Verification',
-      mode: 'API (auto)',
-      subtitle: 'KYC/Aadhaar Link',
-      costInr: 120,
-      defaultSelected: true,
-    ),
-    const _VerificationCheck(
-      id: 'address',
-      title: 'Address History',
-      mode: 'Human (manual)',
-      subtitle: 'Physical Check',
-      costInr: 240,
-      defaultSelected: true,
-    ),
-    const _VerificationCheck(
-      id: 'criminal',
-      title: 'Criminal Record Search',
-      mode: 'API (auto)',
-      subtitle: 'National Database',
-      costInr: 185,
-      defaultSelected: true,
-    ),
-    const _VerificationCheck(
-      id: 'education',
-      title: 'Education Verification',
-      mode: 'Human (manual)',
-      subtitle: 'Institute Check',
-      costInr: 300,
-    ),
-    const _VerificationCheck(
-      id: 'employment',
-      title: 'Employment History',
-      mode: 'Human (manual)',
-      subtitle: 'Previous HR Contact',
-      costInr: 450,
-    ),
+    for (final HumanVerificationCheckDefinition item
+        in HumanVerificationChecksCatalog.items)
+      _VerificationCheck(
+        id: item.id,
+        title: item.title,
+        mode: item.mode == HumanVerificationCheckMode.auto
+            ? 'API (auto)'
+            : 'Human (manual)',
+        subtitle: item.subtitle,
+        costInr: HumanVerificationChecksCatalog.humanPricesInr[item.id] ?? 0,
+        defaultSelected:
+            item.id == 'police' || item.id == 'dob' || item.id == 'education',
+      ),
   ];
 
   late final Set<String> _selectedCheckIds = <String>{
@@ -566,20 +542,8 @@ class _CheckTile extends StatelessWidget {
   }
 
   IconData get _icon {
-    switch (check.id) {
-      case 'identity':
-        return Icons.badge_outlined;
-      case 'criminal':
-        return Icons.gavel_outlined;
-      case 'employment':
-        return Icons.work_outline;
-      case 'address':
-        return Icons.home_work_outlined;
-      case 'education':
-        return Icons.school_outlined;
-      default:
-        return Icons.fact_check_outlined;
-    }
+    return HumanVerificationChecksCatalog.byId[check.id]?.icon ??
+        Icons.fact_check_outlined;
   }
 
   @override

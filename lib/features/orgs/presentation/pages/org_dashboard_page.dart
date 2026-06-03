@@ -45,10 +45,13 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final dynamic profile = authAsync.value?.userProfile;
     final String displayName =
-        authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
-        ? authAsync.value!.userProfile!.fullName!.trim()
-        : 'User';
+        profile?.organizationName?.trim().isNotEmpty == true
+        ? profile!.organizationName!.trim()
+        : (profile?.fullName?.trim().isNotEmpty == true
+              ? profile!.fullName!.trim()
+              : 'Organisation');
     final VerificationListState verificationState = ref.watch(
       verificationListNotifierProvider,
     );

@@ -13,9 +13,8 @@ class OrgShellPage extends StatelessWidget {
     final String path = Uri.parse(location).path;
     if (path.startsWith(AppRouter.appBatchesPath)) return 1; // View All
     if (path.startsWith(AppRouter.qrScannerPath)) return 2; // Scan
-    if (path.startsWith(AppRouter.settingsPath) ||
-        path.startsWith(AppRouter.notificationsPath)) {
-      return 4; // Account
+    if (path.startsWith(AppRouter.appRegistryPath)) {
+      return 4; // Registry
     }
     return 0; // Dashboard
   }
@@ -35,7 +34,7 @@ class OrgShellPage extends StatelessWidget {
         context.push(AppRouter.batchTypeSelectionPath); // New Batch
         return;
       case 4:
-        context.go(AppRouter.settingsPath); // Account
+        context.go(AppRouter.appRegistryPath); // Registry
         return;
     }
   }
@@ -96,8 +95,8 @@ class OrgShellPage extends StatelessWidget {
               onTap: () => _onTap(context, 3),
             ),
             OrgBottomNavBarItem(
-              label: 'Account',
-              svgAssetPath: 'assets/icons/figma/nav_account.svg',
+              label: 'Registry',
+              svgAssetPath: 'assets/icons/figma/registry.svg',
               letterSpacing: 0.0391,
               onTap: () => _onTap(context, 4),
             ),

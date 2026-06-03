@@ -5,6 +5,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/theme/app_colors.dart';
+import 'human_verification_checks_catalog.dart';
+import 'product_verification_checks_catalog.dart';
 import 'verification_flow_action.dart';
 import 'flow_step_progress.dart';
 
@@ -24,27 +26,24 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
   bool _agreed = false;
   bool _isSubmitting = false;
 
-  static const Map<String, _CheckPricing> _pricing = <String, _CheckPricing>{
-    'identity': _CheckPricing('Identity Verification', 120),
-    'address': _CheckPricing('Address History', 240),
-    'criminal': _CheckPricing('Criminal Record Search', 185),
-    'education': _CheckPricing('Education Verification', 300),
-    'employment': _CheckPricing('Employment History', 450),
+  static final Map<String, _CheckPricing> _pricing = <String, _CheckPricing>{
+    for (final HumanVerificationCheckDefinition item
+        in HumanVerificationChecksCatalog.items)
+      item.id: _CheckPricing(
+        item.title,
+        HumanVerificationChecksCatalog.humanPricesInr[item.id] ?? 0,
+      ),
   };
 
-  static const Map<String, _CheckPricing> _productPricing =
+  static final Map<String, _CheckPricing> _productPricing =
       <String, _CheckPricing>{
-    'authenticity': _CheckPricing('Authenticity Check', 140),
-    'serial': _CheckPricing('Serial Number Match', 180),
-    'model': _CheckPricing('Model Verification', 120),
-    'compliance': _CheckPricing('Compliance Check', 220),
-    'warranty': _CheckPricing('Warranty Eligibility', 260),
-    'warranty_registration':
-        _CheckPricing('Warranty Registration', 140),
-    'purchase_proof': _CheckPricing('Proof of Purchase', 160),
-    'activation': _CheckPricing('Activation Status', 120),
-    'claim': _CheckPricing('Claim Eligibility', 220),
-  };
+        for (final ProductVerificationCheckDefinition item
+            in ProductVerificationChecksCatalog.items)
+          item.id: _CheckPricing(
+            item.title,
+            ProductVerificationChecksCatalog.pricesInr[item.id] ?? 0,
+          ),
+      };
 
   List<String> _selectedChecks(BuildContext context) {
     final Map<String, String> qp = GoRouterState.of(
@@ -80,9 +79,7 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
         'product';
   }
 
-  Future<void> _confirmAndSubmit(
-    VerificationFlowConfirmAction? action,
-  ) async {
+  Future<void> _confirmAndSubmit(VerificationFlowConfirmAction? action) async {
     if (_isSubmitting) return;
     if (!_agreed) return;
 
@@ -245,9 +242,7 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                               child: _ConfirmButton(
                                 scale: scale,
                                 enabled:
-                                    _agreed &&
-                                    ids.isNotEmpty &&
-                                    !_isSubmitting,
+                                    _agreed && ids.isNotEmpty && !_isSubmitting,
                                 isLoading: _isSubmitting,
                                 onTap: () => _confirmAndSubmit(action),
                               ),
@@ -539,8 +534,8 @@ class _ConfirmButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-        child: ElevatedButton(
-          onPressed: enabled ? onTap : null,
+      child: ElevatedButton(
+        onPressed: enabled ? onTap : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.brandBlue,
           disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
@@ -552,46 +547,44 @@ class _ConfirmButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(s(20)),
           ),
         ),
-          child: isLoading
-              ? SizedBox(
-                  width: s(20),
-                  height: s(20),
-                  child: CircularProgressIndicator(
-                    strokeWidth: s(2),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Colors.white,
+        child: isLoading
+            ? SizedBox(
+                width: s(20),
+                height: s(20),
+                child: CircularProgressIndicator(
+                  strokeWidth: s(2),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    'Confirm',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(18),
+                      fontWeight: FontWeight.w700,
+                      height: 28 / 18,
+                      color: Colors.white,
                     ),
                   ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Text(
-                      'Confirm',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(18),
-                        fontWeight: FontWeight.w700,
-                        height: 28 / 18,
-                        color: Colors.white,
-                      ),
+                  SizedBox(width: s(10)),
+                  SvgPicture.asset(
+                    'assets/icons/figma/new_batch_continue_arrow.svg',
+                    width: s(16),
+                    height: s(16),
+                    colorFilter: const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.srcIn,
                     ),
-                    SizedBox(width: s(10)),
-                    SvgPicture.asset(
-                      'assets/icons/figma/new_batch_continue_arrow.svg',
-                      width: s(16),
-                      height: s(16),
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      );
-    }
+                  ),
+                ],
+              ),
+      ),
+    );
   }
+}
 
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.scale, required this.child});
