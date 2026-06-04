@@ -58,7 +58,7 @@ class _TMZSelectState<T> extends State<TMZSelect<T>> {
         if (widget.label.trim().isNotEmpty) ...<Widget>[
           Text(
             widget.label.toUpperCase(),
-            style: GoogleFonts.robotoSlab(
+            style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               letterSpacing: 1.2,
@@ -97,7 +97,7 @@ class _TMZSelectState<T> extends State<TMZSelect<T>> {
                           hasValue ? displayLabel : widget.hint,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.robotoSlab(
+                          style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
                             color: hasValue
@@ -254,7 +254,7 @@ class _SheetContent<T> extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               title,
-              style: GoogleFonts.robotoSlab(
+              style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -283,7 +283,7 @@ class _SheetContent<T> extends StatelessWidget {
                         ),
                   title: Text(
                     option.label,
-                    style: GoogleFonts.robotoSlab(
+                    style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
                       color: AppColors.textPrimary,

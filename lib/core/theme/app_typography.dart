@@ -2,40 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTypography {
-  static TextStyle display1 = GoogleFonts.robotoSlab(
+  static TextStyle display1 = GoogleFonts.inter(
     fontSize: 32,
     fontWeight: FontWeight.w800,
   );
-  static TextStyle display2 = GoogleFonts.robotoSlab(
+  static TextStyle display2 = GoogleFonts.inter(
     fontSize: 24,
     fontWeight: FontWeight.w800,
   );
-  static TextStyle heading1 = GoogleFonts.robotoSlab(
+  static TextStyle heading1 = GoogleFonts.inter(
     fontSize: 20,
     fontWeight: FontWeight.w700,
   );
-  static TextStyle heading2 = GoogleFonts.robotoSlab(
+  static TextStyle heading2 = GoogleFonts.inter(
     fontSize: 18,
     fontWeight: FontWeight.w700,
   );
-  static TextStyle body1 = GoogleFonts.robotoSlab(
+  static TextStyle body1 = GoogleFonts.inter(
     fontSize: 16,
     fontWeight: FontWeight.w400,
   );
-  static TextStyle body2 = GoogleFonts.robotoSlab(
+  static TextStyle body2 = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w400,
   );
-  static TextStyle caption = GoogleFonts.robotoSlab(
+  static TextStyle caption = GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.w400,
   );
-  static TextStyle label = GoogleFonts.robotoSlab(
+  static TextStyle label = GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.w600,
     letterSpacing: 1.2,
   );
-  static TextStyle button = GoogleFonts.robotoSlab(
+  static TextStyle button = GoogleFonts.inter(
     fontSize: 15,
     fontWeight: FontWeight.w700,
   );

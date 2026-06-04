@@ -181,282 +181,258 @@ class _IndividualRecordDetailPageState
     );
   }
 
-  Future<void> _openUrl(String url) async {
-    final Uri? uri = Uri.tryParse(url);
-    if (uri == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid URL.')));
-      return;
-    }
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('Individual Record Detail'),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: _data.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object err, _) => Padding(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Unable to load record', style: AppTypography.display2),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  err.toString(),
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                ElevatedButton.icon(
-                  onPressed: _load,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Retry'),
-                ),
-              ],
-            ),
-          ),
-          data: (VerificationUser user) {
-            final String statusLabel = _statusLabel(user.verificationStatus);
-            final _StatusStyle style = _statusStyle(user.verificationStatus);
+    final String title = 'Individual Record Detail';
 
-            return ListView(
+    return Scaffold(
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.x4,
                 AppSpacing.x3,
                 AppSpacing.x4,
-                AppSpacing.x6,
+                AppSpacing.x3,
               ),
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: AppColors.brandBlue.withAlpha(14),
-                      backgroundImage: (user.photoUrl ?? '').trim().isNotEmpty
-                          ? NetworkImage(user.photoUrl!)
-                          : null,
-                      child: (user.photoUrl ?? '').trim().isNotEmpty
-                          ? null
-                          : const Icon(
-                              Icons.person_rounded,
-                              color: AppColors.brandBlue,
-                            ),
+              child: Row(
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () => _goBack(context),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.heading1.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.x3),
-                    Expanded(
+                  ),
+                  IconButton(
+                    tooltip: 'Refresh',
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh_rounded),
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: _data.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (Object err, _) => Padding(
+                      padding: const EdgeInsets.all(AppSpacing.x4),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            user.fullName.trim().isEmpty
-                                ? 'Unnamed'
-                                : user.fullName,
-                            style: AppTypography.heading1.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
+                            'Unable to load record',
+                            style: AppTypography.display2,
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpacing.x2),
                           Text(
-                            user.email,
+                            err.toString(),
                             style: AppTypography.body2.copyWith(
                               color: AppColors.textSecondary,
-                              fontSize: 12,
                             ),
+                          ),
+                          const SizedBox(height: AppSpacing.x4),
+                          ElevatedButton.icon(
+                            onPressed: _load,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Retry'),
                           ),
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: style.bg,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: style.fg.withAlpha(40)),
-                      ),
-                      child: Text(
-                        statusLabel.toUpperCase(),
-                        style: AppTypography.caption.copyWith(
-                          color: style.fg,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.8,
+                    data: (VerificationUser user) {
+                      final String statusLabel = _statusLabel(
+                        user.verificationStatus,
+                      );
+                      final _StatusStyle style = _statusStyle(
+                        user.verificationStatus,
+                      );
+                      final String? photoUrl =
+                          (user.photoUrl ?? '').trim().isEmpty
+                          ? null
+                          : user.photoUrl!.trim();
+
+                      return ListView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.x4,
+                          AppSpacing.x4,
+                          AppSpacing.x4,
+                          AppSpacing.x6 +
+                              MediaQuery.viewPaddingOf(context).bottom,
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                TMZCard(
-                  padding: const EdgeInsets.all(AppSpacing.x4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text('Details', style: AppTypography.heading2),
-                      const SizedBox(height: AppSpacing.x3),
-                      _kv('Phone', user.phoneNumber),
-                      _kv('DOB', user.dob ?? '—'),
-                      _kv('Aadhar', user.aadharNumber ?? '—'),
-                      _kv('PAN', user.panNumber ?? '—'),
-                      _kv(
-                        'Invite',
-                        user.inviteAccepted ? 'Accepted' : 'Pending',
-                      ),
-                      const SizedBox(height: AppSpacing.x2),
-                      _kv('Address', _formatAddress(user)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.x4),
-                Text('Documents', style: AppTypography.heading2),
-                const SizedBox(height: AppSpacing.x2),
-                if (user.documents.isEmpty)
-                  TMZCard(
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Row(
-                      children: <Widget>[
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: style.bg,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            user.verificationStatus == 'failed'
-                                ? Icons.cancel_rounded
-                                : Icons.hourglass_bottom_rounded,
-                            color: style.fg,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.x3),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
                             children: <Widget>[
-                              Text(
-                                'No documents uploaded yet',
-                                style: AppTypography.body2.copyWith(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
+                              ClipOval(
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  color: AppColors.blueTint,
+                                  child: photoUrl == null
+                                      ? const Icon(
+                                          Icons.person_rounded,
+                                          color: AppColors.brandBlue,
+                                        )
+                                      : Image.network(
+                                          photoUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (
+                                                BuildContext context,
+                                                Object error,
+                                                StackTrace? stackTrace,
+                                              ) => const Icon(
+                                                Icons.person_rounded,
+                                                color: AppColors.brandBlue,
+                                              ),
+                                        ),
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Status: ${statusLabel.toUpperCase()}',
-                                style: AppTypography.caption.copyWith(
-                                  fontSize: 10,
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w700,
+                              const SizedBox(width: AppSpacing.x3),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      user.fullName.trim().isEmpty
+                                          ? 'Unnamed'
+                                          : user.fullName,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 20,
+                                        height: 24 / 20,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      user.email,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 13,
+                                        height: 18 / 13,
+                                        fontWeight: FontWeight.w400,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: style.bg,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: style.fg.withAlpha(40),
+                                  ),
+                                ),
+                                child: Text(
+                                  statusLabel.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 11,
+                                    height: 15 / 11,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.8,
+                                  ).copyWith(color: style.fg),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  for (final VerificationDocument d
-                      in user.documents) ...<Widget>[
-                    TMZCard(
-                      padding: const EdgeInsets.all(AppSpacing.x4),
-                      onTap: d.documentUrl.trim().isEmpty
-                          ? null
-                          : () => _openUrl(d.documentUrl),
-                      child: Row(
-                        children: <Widget>[
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: const BoxDecoration(
-                              color: AppColors.blueTint,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.description_outlined,
-                              color: AppColors.brandBlue,
-                              size: 18,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.x3),
-                          Expanded(
+                          const SizedBox(height: AppSpacing.x4),
+                          TMZCard(
+                            padding: const EdgeInsets.all(AppSpacing.x4),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  d.documentLabel.replaceAll('_', ' '),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.body2.copyWith(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'v${d.version} • ${_statusLabel(d.verificationStatus).toUpperCase()}',
-                                  style: AppTypography.caption.copyWith(
-                                    fontSize: 10,
-                                    color: AppColors.textSecondary,
+                                  'Details',
+                                  style: AppTypography.heading2.copyWith(
+                                    fontFamily: 'Inter',
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                                const SizedBox(height: AppSpacing.x3),
+                                _kv('Phone', user.phoneNumber),
+                                _kv('DOB', user.dob ?? '—'),
+                                _kv('Aadhar', user.aadharNumber ?? '—'),
+                                _kv('PAN', user.panNumber ?? '—'),
+                                _kv(
+                                  'Invite',
+                                  user.inviteAccepted ? 'Accepted' : 'Pending',
+                                ),
+                                const SizedBox(height: AppSpacing.x2),
+                                _kv('Address', _formatAddress(user)),
                               ],
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.x2),
-                          Icon(
-                            Icons.open_in_new_rounded,
-                            size: 18,
-                            color: d.documentUrl.trim().isEmpty
-                                ? AppColors.textTertiary
-                                : AppColors.brandBlue,
+                          const SizedBox(height: AppSpacing.x4),
+                          Text(
+                            'SDC Card',
+                            style: AppTypography.heading2.copyWith(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
+                          const SizedBox(height: AppSpacing.x2),
+                          const _SdcPreviewCard(),
+                          const SizedBox(height: AppSpacing.x3),
+                          Text(
+                            'Preview fetched for this user. The live API will replace this sample image later.',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              height: 17 / 12,
+                              fontWeight: FontWeight.w400,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          if (user.verificationStatus ==
+                              'verified') ...<Widget>[
+                            const SizedBox(height: AppSpacing.x4),
+                            TMZButton(
+                              label: 'Generate Certificate',
+                              icon: Icons.qr_code_rounded,
+                              onPressed: _generateCertificate,
+                            ),
+                          ],
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x2),
-                  ],
-                const SizedBox(height: AppSpacing.x4),
-                if (user.verificationStatus == 'verified') ...<Widget>[
-                  Text('Certificate', style: AppTypography.heading2),
-                  const SizedBox(height: AppSpacing.x2),
-                  TMZButton(
-                    label: 'Generate Certificate',
-                    icon: Icons.qr_code_rounded,
-                    onPressed: _generateCertificate,
+                      );
+                    },
                   ),
-                ],
-              ],
-            );
-          },
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -472,18 +448,24 @@ class _IndividualRecordDetailPageState
             width: 92,
             child: Text(
               k,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textTertiary,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                height: 16 / 12,
                 fontWeight: FontWeight.w800,
+                color: AppColors.textTertiary,
               ),
             ),
           ),
           Expanded(
             child: Text(
               v.trim().isEmpty ? '—' : v,
-              style: AppTypography.body2.copyWith(
-                color: AppColors.textPrimary,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 14,
+                height: 20 / 14,
                 fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -527,6 +509,76 @@ class _IndividualRecordDetailPageState
       default:
         return const _StatusStyle(bg: Color(0xFFFFFBEB), fg: Color(0xFFF59E0B));
     }
+  }
+}
+
+class _SdcPreviewCard extends StatelessWidget {
+  const _SdcPreviewCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return TMZCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.blueTint,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.badge_rounded,
+                  color: AppColors.brandBlue,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.x3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'SDC Certificate',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        height: 20 / 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Sample preview until live API is connected',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        height: 17 / 12,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.asset(
+              'assets/images/certificate_preview_sample.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

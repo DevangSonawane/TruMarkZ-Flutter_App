@@ -108,7 +108,7 @@ class _TMZButtonState extends State<TMZButton> {
             widget.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.robotoSlab(
+            style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: foregroundColor,

@@ -124,7 +124,7 @@ class _NavItem extends StatelessWidget {
                 AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOut,
-                  style: GoogleFonts.robotoSlab(
+                  style: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                     color: labelColor,

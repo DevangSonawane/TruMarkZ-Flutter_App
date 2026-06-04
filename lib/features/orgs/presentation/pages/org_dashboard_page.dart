@@ -611,7 +611,7 @@ class _MetricTile extends StatelessWidget {
         Text(
           _formatMetricValue(value),
           style: const TextStyle(
-            fontFamily: 'Roboto',
+            fontFamily: 'Inter',
             fontSize: 20,
             height: 24 / 20,
             fontWeight: FontWeight.w700,

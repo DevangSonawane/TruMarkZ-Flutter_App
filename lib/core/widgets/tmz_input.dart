@@ -104,7 +104,7 @@ class _TMZInputState extends State<TMZInput> {
         if (widget.label.trim().isNotEmpty) ...<Widget>[
           Text(
             widget.label.toUpperCase(),
-            style: GoogleFonts.robotoSlab(
+            style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               letterSpacing: 1.2,
@@ -143,14 +143,14 @@ class _TMZInputState extends State<TMZInput> {
                     keyboardType: widget.keyboardType,
                     obscureText: _obscure,
                     onChanged: widget.onChanged,
-                    style: GoogleFonts.robotoSlab(
+                    style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
                       color: AppColors.textPrimary,
                     ),
                     decoration: InputDecoration(
                       hintText: widget.hint,
-                      hintStyle: GoogleFonts.robotoSlab(
+                      hintStyle: GoogleFonts.inter(
                         fontSize: 14,
                         color: AppColors.textTertiary,
                       ),
@@ -187,7 +187,7 @@ class _TMZInputState extends State<TMZInput> {
           const SizedBox(height: 8),
           Text(
             widget.errorText!,
-            style: GoogleFonts.robotoSlab(
+            style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w400,
               color: AppColors.error,
