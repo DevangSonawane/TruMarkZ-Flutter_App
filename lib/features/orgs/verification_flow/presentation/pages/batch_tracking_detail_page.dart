@@ -72,6 +72,7 @@ class _BatchTrackingDetailPageState
     final String title = _batchId.trim().isEmpty
         ? 'Batch'
         : 'Batch ${_batchId.substring(0, _batchId.length.clamp(0, 10))}';
+    const double navBarHeight = 71.016;
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -151,7 +152,8 @@ class _BatchTrackingDetailPageState
                         AppSpacing.x4,
                         AppSpacing.x4,
                         AppSpacing.x6 +
-                            MediaQuery.viewPaddingOf(context).bottom,
+                            MediaQuery.viewPaddingOf(context).bottom +
+                            navBarHeight,
                       ),
                       children: <Widget>[
                         _SummarySection(
@@ -450,22 +452,7 @@ class _UserTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Row(
-                  children: <Widget>[
-                    _StatusBadge(label: label, style: style),
-                    const SizedBox(width: 10),
-                    if (user.inviteAccepted)
-                      _MiniPill(
-                        icon: Icons.check_rounded,
-                        label: 'Invite accepted',
-                        color: AppColors.success,
-                      )
-                    else
-                      _MiniPill(
-                        icon: Icons.schedule_rounded,
-                        label: 'Invite pending',
-                        color: const Color(0xFFF59E0B),
-                      ),
-                  ],
+                  children: <Widget>[_StatusBadge(label: label, style: style)],
                 ),
               ],
             ),
@@ -488,46 +475,6 @@ class _UserTile extends StatelessWidget {
       default:
         return (const _StatusStyle.pending(), 'Pending');
     }
-  }
-}
-
-class _MiniPill extends StatelessWidget {
-  const _MiniPill({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withAlpha(16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withAlpha(32)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 12,
-              height: 16 / 12,
-              fontWeight: FontWeight.w700,
-            ).copyWith(color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
   }
 }
 

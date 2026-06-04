@@ -155,21 +155,27 @@ class _NavItemView extends StatelessWidget {
                 )
               : Container(
                   decoration: BoxDecoration(
-                    color: AppColors.brandBlue,
+                    color: active ? AppColors.brandBlue : AppColors.brandBlue,
                     borderRadius: BorderRadius.circular(9999),
                     border: Border.all(
-                      color: const Color(0xFFF7F9FC),
+                      color: active
+                          ? const Color(0xFFBFD2FF)
+                          : const Color(0xFFF7F9FC),
                       width: 4.288,
                     ),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: AppColors.brandBlue.withValues(alpha: 0.30),
+                        color: active
+                            ? AppColors.brandBlue.withValues(alpha: 0.42)
+                            : AppColors.brandBlue.withValues(alpha: 0.30),
                         offset: const Offset(0, 4.288),
                         blurRadius: 6.432,
                         spreadRadius: -4.288,
                       ),
                       BoxShadow(
-                        color: AppColors.brandBlue.withValues(alpha: 0.30),
+                        color: active
+                            ? AppColors.brandBlue.withValues(alpha: 0.42)
+                            : AppColors.brandBlue.withValues(alpha: 0.30),
                         offset: const Offset(0, 10.72),
                         blurRadius: 16.08,
                         spreadRadius: -3.216,

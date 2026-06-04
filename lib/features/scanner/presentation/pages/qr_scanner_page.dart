@@ -122,10 +122,6 @@ class _QRScannerPageState extends State<QRScannerPage> {
               padding: const EdgeInsets.all(AppSpacing.x4),
               child: Row(
                 children: <Widget>[
-                  _OverlayIconButton(
-                    icon: Icons.arrow_back_rounded,
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
                   const Spacer(),
                   _OverlayIconButton(
                     icon: _frontCamera
