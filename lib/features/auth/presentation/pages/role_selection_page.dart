@@ -206,7 +206,7 @@ class _HeroImagePane extends StatelessWidget {
       width: s(340),
       height: s(340),
       child: Transform.scale(
-        scale: 1.12,
+        scale: 1.18,
         child: Image.asset(
           assetPath,
           fit: BoxFit.contain,
