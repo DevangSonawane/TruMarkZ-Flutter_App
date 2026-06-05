@@ -251,7 +251,7 @@ class _OnboardingHero extends StatelessWidget {
               alignment: Alignment.center,
               child:
                   Image.asset(
-                        'assets/icons/onboarding_screen-3.png',
+                        'assets/onboadring/onboarding1.png',
                         height: availableHeight * 0.65,
                         fit: BoxFit.contain,
                       )

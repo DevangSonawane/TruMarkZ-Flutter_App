@@ -108,6 +108,7 @@ flutter:
     - assets/images_role/
     - assets/images/figma/
     - assets/products/
+    - assets/onboadring/
     - assets/
 
   # An image asset can refer to one or more resolution-specific "variants", see
