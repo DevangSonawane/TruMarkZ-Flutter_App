@@ -131,7 +131,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                 scale: scale,
                                 role: _Role.individual,
                                 title: 'Individual',
-                                subtitle: 'Personal records and vault access',
+                                subtitle:
+                                    'Personal records and vault access',
                                 accentColor: const Color(0xFF243B6B),
                                 badgeLabel: 'Prime',
                                 footerLabel: 'PERSONAL ACCESS',
@@ -153,7 +154,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                 scale: scale,
                                 role: _Role.organisation,
                                 title: 'Organisation',
-                                subtitle: 'Team workflows and shared control',
+                                subtitle:
+                                    'Team workflows and shared control',
                                 accentColor: AppColors.brandBlue,
                                 badgeLabel: 'Royale',
                                 footerLabel: 'ENTERPRISE TIER',
@@ -201,19 +203,12 @@ class _HeroImagePane extends StatelessWidget {
         : 'assets/images_role/indv.png';
 
     return SizedBox(
-      width: s(344),
-      height: s(352),
-      child: Transform.translate(
-        offset: Offset(
-          s(isOrganisation ? -32 : -24),
-          s(isOrganisation ? 20 : 18),
-        ),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          alignment: Alignment.centerRight,
-          width: s(isOrganisation ? 292 : 284),
-        ),
+      width: s(340),
+      height: s(340),
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
       ),
     );
   }
