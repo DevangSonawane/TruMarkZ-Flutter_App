@@ -1555,8 +1555,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     }
     setState(() {
       _headers = _normalizeHeaders(<String>[..._headers, cleaned]);
-      _headersSaved = false;
+      _headersSaved = true;
     });
+    widget.onSave(List<String>.from(_headers));
     _headerInputController.clear();
   }
 
@@ -1567,19 +1568,6 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
           (String value) => value.toLowerCase() == header.toLowerCase(),
         );
       _headersSaved = false;
-    });
-  }
-
-  Future<void> _saveHeaders() async {
-    if (_headers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least 1 header first.')),
-      );
-      return;
-    }
-    widget.onSave(List<String>.from(_headers));
-    setState(() {
-      _headersSaved = true;
     });
   }
 
@@ -1782,7 +1770,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
           ),
           children: <Widget>[
             Text(
-              'Add headers one at a time. Save them first, then generate the Excel template. Selected verification types will be added automatically.',
+              'Add headers one at a time. Added headers are saved automatically, then generate the Excel template. Selected verification types will be added automatically.',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: s(12),
@@ -1871,13 +1859,13 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                     in widget.selectedChecks.toList()..sort())
                   Chip(
                     label: Text(check),
-                    backgroundColor: AppColors.brandBlue.withAlpha(14),
+                    backgroundColor: AppColors.brandBlue,
                     labelStyle: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(12),
                       fontWeight: FontWeight.w600,
                       height: 16.5 / 12,
-                      color: AppColors.brandBlue,
+                      color: Colors.white,
                     ),
                   ),
               ],
@@ -1914,16 +1902,20 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                   for (final String header in _headers)
                     InputChip(
                       label: Text(header),
-                      backgroundColor: AppColors.brandBlue.withAlpha(14),
-                      deleteIcon: const Icon(Icons.close_rounded),
+                      backgroundColor: AppColors.brandBlue,
+                      deleteIcon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
                       onDeleted: () => _removeHeader(header),
                       labelStyle: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: s(12),
                         fontWeight: FontWeight.w600,
                         height: 16.5 / 12,
-                        color: AppColors.brandBlue,
+                        color: Colors.white,
                       ),
+                      deleteIconColor: Colors.white,
                     ),
                 ],
               ),
@@ -1959,79 +1951,42 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                   ),
                   child: SizedBox(
                     width: double.infinity,
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _saveHeaders,
-                            icon: const Icon(Icons.save_rounded),
-                            label: Text(
-                              'Save Headers',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: s(14),
-                                fontWeight: FontWeight.w700,
-                                height: 20 / 14,
+                    child: ElevatedButton.icon(
+                      onPressed: _headersSaved && !_isGenerating
+                          ? _generateTemplate
+                          : null,
+                      icon: _isGenerating
+                          ? SizedBox(
+                              width: s(16),
+                              height: s(16),
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
                               ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.brandBlue,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: AppColors.brandBlue
-                                  .withAlpha(90),
-                              disabledForegroundColor: Colors.white.withAlpha(
-                                180,
-                              ),
-                              elevation: 0,
-                              padding: EdgeInsets.symmetric(vertical: s(18)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(s(20)),
-                              ),
-                            ),
-                          ),
+                            )
+                          : const Icon(Icons.download_rounded),
+                      label: Text(
+                        _isGenerating ? 'Downloading' : 'Download',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(14),
+                          fontWeight: FontWeight.w700,
+                          height: 20 / 14,
                         ),
-                        const SizedBox(width: AppSpacing.x3),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _headersSaved && !_isGenerating
-                                ? _generateTemplate
-                                : null,
-                            icon: _isGenerating
-                                ? SizedBox(
-                                    width: s(16),
-                                    height: s(16),
-                                    child: const CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(Icons.download_rounded),
-                            label: Text(
-                              _isGenerating ? 'Generating' : 'Generate',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: s(14),
-                                fontWeight: FontWeight.w700,
-                                height: 20 / 14,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.brandBlue,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: AppColors.brandBlue
-                                  .withAlpha(90),
-                              disabledForegroundColor: Colors.white.withAlpha(
-                                180,
-                              ),
-                              elevation: 0,
-                              padding: EdgeInsets.symmetric(vertical: s(18)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(s(20)),
-                              ),
-                            ),
-                          ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandBlue,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor:
+                            AppColors.brandBlue.withAlpha(90),
+                        disabledForegroundColor:
+                            Colors.white.withAlpha(180),
+                        elevation: 0,
+                        padding: EdgeInsets.symmetric(vertical: s(18)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(s(20)),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
