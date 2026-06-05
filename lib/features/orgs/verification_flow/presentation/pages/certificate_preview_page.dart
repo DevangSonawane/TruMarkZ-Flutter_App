@@ -148,7 +148,10 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                       padding: EdgeInsets.symmetric(
                                         horizontal: s(16),
                                       ),
-                                      child: _StepProgress(scale: scale),
+                                      child: _StepProgress(
+                                        scale: scale,
+                                        isProductFlow: isProductFlow,
+                                      ),
                                     ),
                                     SizedBox(height: s(24)),
                                     Padding(
@@ -310,9 +313,13 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
 }
 
 class _StepProgress extends StatelessWidget {
-  const _StepProgress({required this.scale});
+  const _StepProgress({
+    required this.scale,
+    required this.isProductFlow,
+  });
 
   final double scale;
+  final bool isProductFlow;
 
   @override
   Widget build(BuildContext context) {
@@ -338,7 +345,7 @@ class _StepProgress extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              '90%',
+              isProductFlow ? '67%' : '90%',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: s(10),
@@ -369,7 +376,7 @@ class _StepProgress extends StatelessWidget {
                   left: 0,
                   top: 0,
                   bottom: 0,
-                  width: s(333),
+                    width: isProductFlow ? s(247) : s(333),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: const Color(0xFF2563EB),

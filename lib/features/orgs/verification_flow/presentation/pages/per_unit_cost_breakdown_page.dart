@@ -198,9 +198,9 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
                                       scale: scale,
                                       stepLabel: stepText,
                                       progressLabel: isProductFlow
-                                          ? '100%'
+                                          ? '83%'
                                           : '67%',
-                                      fillFactor: isProductFlow ? 1 : 0.67,
+                                      fillFactor: isProductFlow ? 0.8333 : 0.67,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(

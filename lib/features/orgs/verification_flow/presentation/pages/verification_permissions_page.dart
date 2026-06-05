@@ -21,6 +21,7 @@ class _VerificationPermissionsPageState
   static const Color _panelBg = Color(0xFFF7F9FC);
 
   _AccessMode _mode = _AccessMode.publicSearchable;
+  bool _redirectedProductFlow = false;
 
   List<String> get _checksFromRoute {
     final Map<String, String> qp = GoRouterState.of(
@@ -33,6 +34,31 @@ class _VerificationPermissionsPageState
         .map((String e) => e.trim())
         .where((String e) => e.isNotEmpty)
         .toList();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_redirectedProductFlow) return;
+
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
+    final bool isProductFlow =
+        (qp['flow'] ?? '').trim().toLowerCase() == 'product';
+    if (!isProductFlow) return;
+
+    _redirectedProductFlow = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(
+        Uri(
+          path: AppRouter.productBulkUploadPath,
+          queryParameters: qp,
+        ).toString(),
+      );
+    });
   }
 
   @override

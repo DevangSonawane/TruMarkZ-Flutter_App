@@ -151,7 +151,7 @@ class _ProductServiceTypeSelectorPageState
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 1 OF 4',
+                                          'STEP 1 OF 6',
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -163,7 +163,7 @@ class _ProductServiceTypeSelectorPageState
                                         ),
                                         const Spacer(),
                                         Text(
-                                          '25%',
+                                          '17%',
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -187,11 +187,11 @@ class _ProductServiceTypeSelectorPageState
                                             const DecoratedBox(
                                               decoration: BoxDecoration(
                                                 color: Color(0xFFE5E7EB),
-                                              ),
                                             ),
-                                            FractionallySizedBox(
-                                              alignment: Alignment.centerLeft,
-                                              widthFactor: 0.25,
+                                          ),
+                                          FractionallySizedBox(
+                                            alignment: Alignment.centerLeft,
+                                              widthFactor: 0.1667,
                                               child: const DecoratedBox(
                                                 decoration: BoxDecoration(
                                                   color: AppColors.brandBlue,

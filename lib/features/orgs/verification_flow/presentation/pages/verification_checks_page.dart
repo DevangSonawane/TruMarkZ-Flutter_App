@@ -207,9 +207,9 @@ class _VerificationChecksPageState
     );
     final bool isProductFlow = _flow == 'product';
     final List<_CheckItem> items = _itemsForFlow();
-    final String stepText = isProductFlow ? 'STEP 2 OF 4' : 'STEP 1 OF 6';
-    final String progressText = isProductFlow ? '50%' : '17%';
-    final double progressFactor = isProductFlow ? 0.5 : 0.1667;
+    final String stepText = isProductFlow ? 'STEP 2 OF 6' : 'STEP 1 OF 6';
+    final String progressText = isProductFlow ? '33%' : '17%';
+    final double progressFactor = isProductFlow ? 0.3333 : 0.1667;
     final String fallbackIndustryLabel = isProductFlow
         ? 'Product'
         : 'Real Estate';
@@ -436,9 +436,12 @@ class _VerificationChecksPageState
                                     if (_supportsWarranty) {
                                       qp['supports_warranty'] = 'true';
                                     }
+                                    qp['access'] = 'public_searchable';
                                   }
                                   final Uri uri = Uri(
-                                    path: AppRouter.verificationPermissionsPath,
+                                    path: _flow == 'product'
+                                        ? AppRouter.productBulkUploadPath
+                                        : AppRouter.verificationPermissionsPath,
                                     queryParameters: qp,
                                   );
                                   context.push(uri.toString());

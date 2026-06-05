@@ -972,9 +972,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                   children: <Widget>[
                                     FlowStepProgress(
                                       scale: scale,
-                                      stepLabel: 'STEP 4 OF 5',
-                                      progressLabel: '80%',
-                                      fillFactor: 0.8027,
+                                      stepLabel: 'STEP 3 OF 6',
+                                      progressLabel: '50%',
+                                      fillFactor: 0.5,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
