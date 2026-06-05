@@ -205,10 +205,13 @@ class _HeroImagePane extends StatelessWidget {
     return SizedBox(
       width: s(340),
       height: s(340),
-      child: Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-        alignment: Alignment.center,
+      child: Transform.scale(
+        scale: 1.12,
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+        ),
       ),
     );
   }
