@@ -950,7 +950,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                   s(16),
                                   s(28),
                                   s(16),
-                                  s(140),
+                                  s(28),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
