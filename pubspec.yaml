@@ -105,6 +105,7 @@ flutter:
     - assets/icons/dashbaord/
     - assets/icons/figma/
     - assets/images/
+    - assets/images_role/
     - assets/images/figma/
     - assets/products/
     - assets/
