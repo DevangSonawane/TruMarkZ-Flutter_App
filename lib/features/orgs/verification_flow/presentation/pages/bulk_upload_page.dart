@@ -1522,6 +1522,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     super.initState();
     _headerInputController = TextEditingController();
     _headers = _normalizeHeaders(widget.initialHeaders);
+    _headersSaved = _headers.isNotEmpty;
   }
 
   @override
@@ -1567,12 +1568,13 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
         ..removeWhere(
           (String value) => value.toLowerCase() == header.toLowerCase(),
         );
-      _headersSaved = false;
+      _headersSaved = _headers.isNotEmpty;
     });
+    widget.onSave(List<String>.from(_headers));
   }
 
   Future<void> _generateTemplate() async {
-    if (_headers.isEmpty || _isGenerating || !_headersSaved) return;
+    if (_headers.isEmpty || _isGenerating) return;
     setState(() {
       _isGenerating = true;
     });
@@ -1952,7 +1954,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _headersSaved && !_isGenerating
+                      onPressed: _headers.isNotEmpty && !_isGenerating
                           ? _generateTemplate
                           : null,
                       icon: _isGenerating
