@@ -129,12 +129,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                             children: <Widget>[
                               _RolePlanCard(
                                 scale: scale,
-                                role: _Role.individual,
                                 title: 'Individual',
                                 subtitle:
                                     'Personal records and vault access',
-                                accentColor: const Color(0xFF243B6B),
-                                badgeLabel: 'Prime',
+                                accentColor: AppColors.brandBlue,
                                 footerLabel: 'PERSONAL ACCESS',
                                 icon: Icons.person_rounded,
                                 features: const <String>[
@@ -142,7 +140,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                   'Simple one-user experience',
                                 ],
                                 selected: _selected == _Role.individual,
-                                isAccent: false,
                                 onTap: () => setState(
                                   () => _selected = _Role.individual,
                                 ),
@@ -152,12 +149,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                               SizedBox(height: s(10)),
                               _RolePlanCard(
                                 scale: scale,
-                                role: _Role.organisation,
                                 title: 'Organisation',
                                 subtitle:
                                     'Team workflows and shared control',
                                 accentColor: AppColors.brandBlue,
-                                badgeLabel: 'Royale',
                                 footerLabel: 'ENTERPRISE TIER',
                                 icon: Icons.apartment_rounded,
                                 features: const <String>[
@@ -165,7 +160,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                   'Verification workflow management',
                                 ],
                                 selected: _selected == _Role.organisation,
-                                isAccent: true,
                                 onTap: () => setState(
                                   () => _selected = _Role.organisation,
                                 ),
@@ -203,10 +197,10 @@ class _HeroImagePane extends StatelessWidget {
         : 'assets/images_role/indv.png';
 
     return SizedBox(
-      width: s(340),
-      height: s(340),
+      width: s(400),
+      height: s(400),
       child: Transform.scale(
-        scale: 1.18,
+        scale: 1.42,
         child: Image.asset(
           assetPath,
           fit: BoxFit.contain,
@@ -220,50 +214,43 @@ class _HeroImagePane extends StatelessWidget {
 class _RolePlanCard extends StatelessWidget {
   const _RolePlanCard({
     required this.scale,
-    required this.role,
     required this.title,
     required this.subtitle,
     required this.accentColor,
-    required this.badgeLabel,
     required this.footerLabel,
     required this.icon,
     required this.features,
     required this.selected,
-    required this.isAccent,
     required this.onTap,
     required this.onPressed,
   });
 
   final double scale;
-  final _Role role;
   final String title;
   final String subtitle;
   final Color accentColor;
-  final String badgeLabel;
   final String footerLabel;
   final IconData icon;
   final List<String> features;
   final bool selected;
-  final bool isAccent;
   final VoidCallback onTap;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     double s(double value) => value * scale;
-    final Color background = isAccent ? AppColors.brandBlue : const Color(0xFF2D3440);
+    final Color background = selected
+        ? accentColor
+        : const Color(0xFF2D3440);
     final Color foreground = Colors.white;
-    final Color bodyText = isAccent
-        ? Colors.white.withAlpha(210)
+    final Color bodyText = selected
+        ? Colors.white.withAlpha(216)
         : Colors.white.withAlpha(220);
-    final Color dividerColor = isAccent
-        ? Colors.white.withAlpha(45)
+    final Color dividerColor = selected
+        ? Colors.white.withAlpha(42)
         : Colors.white.withAlpha(24);
-    final Color badgeBg = isAccent
-        ? Colors.white.withAlpha(18)
-        : Colors.white.withAlpha(10);
-    final Color iconBg = isAccent
-        ? Colors.white.withAlpha(12)
+    final Color iconBg = selected
+        ? Colors.white.withAlpha(14)
         : Colors.white.withAlpha(8);
 
     return Material(
@@ -278,14 +265,13 @@ class _RolePlanCard extends StatelessWidget {
             color: background,
             borderRadius: BorderRadius.circular(s(24)),
             border: Border.all(
-              color: selected
-                  ? Colors.white.withAlpha(isAccent ? 55 : 28)
-                  : Colors.transparent,
+              color:
+                  selected ? Colors.white.withAlpha(56) : Colors.transparent,
               width: s(1.2),
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: Colors.black.withAlpha(isAccent ? 28 : 20),
+                color: Colors.black.withAlpha(selected ? 26 : 20),
                 blurRadius: s(18),
                 offset: Offset(0, s(8)),
               ),
@@ -311,25 +297,32 @@ class _RolePlanCard extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: s(10),
-                      vertical: s(6),
-                    ),
-                    decoration: BoxDecoration(
-                      color: badgeBg,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      badgeLabel,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(9.5),
-                        fontWeight: FontWeight.w600,
-                        color: foreground,
-                        letterSpacing: 0.35,
-                      ),
-                    ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: selected
+                        ? Container(
+                            key: const ValueKey<bool>(true),
+                            width: s(26),
+                            height: s(26),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withAlpha(20),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: Colors.white.withAlpha(34),
+                                width: s(1),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.check_rounded,
+                              size: s(16),
+                              color: Colors.white,
+                            ),
+                          )
+                        : SizedBox(
+                            key: const ValueKey<bool>(false),
+                            width: s(26),
+                            height: s(26),
+                          ),
                   ),
                 ],
               ),
@@ -396,8 +389,10 @@ class _RolePlanCard extends StatelessWidget {
                       child: TextButton(
                         onPressed: onPressed,
                         style: TextButton.styleFrom(
-                          backgroundColor: isAccent ? Colors.white : AppColors.brandBlue,
-                          foregroundColor: isAccent ? AppColors.brandBlue : Colors.white,
+                          backgroundColor:
+                              selected ? Colors.white : AppColors.brandBlue,
+                          foregroundColor:
+                              selected ? accentColor : Colors.white,
                           padding: EdgeInsets.symmetric(
                             horizontal: s(14),
                             vertical: s(6),
@@ -412,6 +407,7 @@ class _RolePlanCard extends StatelessWidget {
                             fontFamily: 'Inter',
                             fontSize: s(10.5),
                             fontWeight: FontWeight.w700,
+                            color: selected ? accentColor : Colors.white,
                           ),
                         ),
                       ),
