@@ -12,7 +12,9 @@ import '../../features/auth/presentation/pages/auth_error_page.dart';
 import '../services/token_storage.dart';
 import '../../features/individual/presentation/pages/individual_dashboard_page.dart';
 import '../../features/individual/presentation/pages/individual_profile_page.dart';
+import '../../features/individual/presentation/pages/individual_reports_page.dart';
 import '../../features/individual/presentation/pages/individual_skill_tree_page.dart';
+import '../../features/individual/presentation/pages/individual_sdc_page.dart';
 import '../../features/individual/presentation/pages/individual_vault_page.dart';
 import '../../features/individual/presentation/shell/app_shell_page.dart';
 import '../../features/notifications/presentation/pages/notification_centre_page.dart';
@@ -143,6 +145,8 @@ class AppRouter {
   // Individual
   static const String individualIdentityPath = '/me/identity';
   static const String individualScanPath = '/me/scan';
+  static const String individualReportsPath = '/me/reports';
+  static const String individualSdcPath = '/me/sdc';
   static const String individualVaultPath = '/me/vault';
   static const String individualProfilePath = '/me/profile';
 
@@ -415,6 +419,24 @@ class AppRouter {
                 _slideFadePage(
                   state: state,
                   child: const IndividualSkillTreePage(),
+                ),
+          ),
+          GoRoute(
+            path: individualReportsPath,
+            name: 'individual_reports',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualReportsPage(),
+                ),
+          ),
+          GoRoute(
+            path: individualSdcPath,
+            name: 'individual_sdc',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualSdcPage(),
                 ),
           ),
           GoRoute(

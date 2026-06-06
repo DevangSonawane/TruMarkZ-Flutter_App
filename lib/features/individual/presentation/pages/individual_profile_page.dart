@@ -95,7 +95,8 @@ class _IndividualProfilePageState extends ConsumerState<IndividualProfilePage> {
                         children: <Widget>[
                           InkWell(
                             borderRadius: BorderRadius.circular(999),
-                            onTap: () => Navigator.of(context).maybePop(),
+                            onTap: () =>
+                                context.go(AppRouter.individualIdentityPath),
                             child: const Padding(
                               padding: EdgeInsets.all(8),
                               child: Icon(
