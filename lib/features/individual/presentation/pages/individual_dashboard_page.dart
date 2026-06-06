@@ -25,8 +25,9 @@ class IndividualDashboardPage extends ConsumerWidget {
 
     final double headerTop = safeTop;
     final double welcomeTop = safeTop + 54;
-    final double heroTop = safeTop + 128;
-    final double topSectionHeight = safeTop + 270;
+    final double drawerTop = safeTop + 111;
+    final double bgTop = safeTop + 211;
+    final double topSectionHeight = safeTop + 375;
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -42,6 +43,21 @@ class IndividualDashboardPage extends ConsumerWidget {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: <Widget>[
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: bgTop,
+                        bottom: 0,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: AppColors.pageBg,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
+                            ),
+                          ),
+                        ),
+                      ),
                       Positioned(
                         left: 16,
                         right: 16,
@@ -65,11 +81,19 @@ class IndividualDashboardPage extends ConsumerWidget {
                         ),
                       ),
                       Positioned(
-                        left: 0,
-                        right: 0,
-                        top: heroTop,
-                        child: const _IdentityHeroCard(
+                        left: 16,
+                        right: 16,
+                        top: drawerTop,
+                        child: _IdentityHeroCard(
                           verificationState: _VerificationState.verified,
+                          onTapVerification: () =>
+                              context.go(AppRouter.individualScanPath),
+                          onTapSkillTree: () =>
+                              context.go(AppRouter.individualScanPath),
+                          onTapReports: () =>
+                              context.go(AppRouter.individualReportsPath),
+                          onTapSdc: () =>
+                              context.go(AppRouter.individualSdcPath),
                         ),
                       ),
                     ],
@@ -78,14 +102,28 @@ class IndividualDashboardPage extends ConsumerWidget {
               ),
               SliverToBoxAdapter(
                 child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  color: AppColors.pageBg,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const SizedBox(height: 30),
+                      Container(
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: AppColors.brandBlue,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: AppColors.brandBlue.withValues(alpha: 0.14),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
                       const Text(
-                        'QUICK ACCESS',
+                        'VERIFICATION',
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 12,
@@ -96,72 +134,6 @@ class IndividualDashboardPage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.topLeft,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.topLeft,
-                          child: SizedBox(
-                            width: 339.1047,
-                            height: 87.1341,
-                            child: Stack(
-                              children: <Widget>[
-                                Positioned(
-                                  left: 13.5524,
-                                  top: 0,
-                                  child: _QuickActionCircle(
-                                    label: 'Verification',
-                                    svgAssetPath:
-                                        'assets/icons/figma/qa_scan_qr.svg',
-                                    iconSize: 25.662,
-                                    onTap: () =>
-                                        context.go(AppRouter.individualScanPath),
-                                  ),
-                                ),
-                                Positioned(
-                                  left: 97.5524,
-                                  top: 0,
-                                  child: _QuickActionCircle(
-                                    label: 'Skill Tree',
-                                    svgAssetPath:
-                                        'assets/icons/figma/nav_batches.svg',
-                                    iconSize: 25.662,
-                                    onTap: () => context.go(
-                                      AppRouter.individualScanPath,
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  left: 181.5524,
-                                  top: 0,
-                                  child: _QuickActionCircle(
-                                    label: 'Reports',
-                                    svgAssetPath:
-                                        'assets/icons/figma/qa_reports.svg',
-                                    iconSize: 25.662,
-                                    onTap: () => context.go(
-                                      AppRouter.individualReportsPath,
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  left: 265.5524,
-                                  top: 0,
-                                  child: _QuickActionCircle(
-                                    label: 'SDC',
-                                    svgAssetPath:
-                                        'assets/icons/figma/account_icon_shield.svg',
-                                    iconSize: 25.662,
-                                    onTap: () =>
-                                        context.go(AppRouter.individualSdcPath),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
                       _VerificationStatusCard(
                         onStart: () {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -171,7 +143,7 @@ class IndividualDashboardPage extends ConsumerWidget {
                           );
                         },
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       SizedBox(
                         height: MediaQuery.viewPaddingOf(context).bottom + 112,
                       ),
@@ -325,51 +297,69 @@ enum _VerificationState { verified, notVerified, inProcess }
 class _IdentityHeroCard extends StatelessWidget {
   const _IdentityHeroCard({
     this.verificationState = _VerificationState.verified,
+    required this.onTapVerification,
+    required this.onTapSkillTree,
+    required this.onTapReports,
+    required this.onTapSdc,
   });
 
   final _VerificationState verificationState;
+  final VoidCallback onTapVerification;
+  final VoidCallback onTapSkillTree;
+  final VoidCallback onTapReports;
+  final VoidCallback onTapSdc;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(22),
-          topRight: Radius.circular(22),
-        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: const Color(0xFF9CA3AF).withValues(alpha: 0.25),
+            blurRadius: 4,
+            offset: const Offset(4, 4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(16, 22, 16, 22),
+      padding: const EdgeInsets.fromLTRB(15, 26.64, 16, 23.48),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           SizedBox(
-            width: double.infinity,
-            child: Row(
+            width: 313.2232,
+            height: 63.7505,
+            child: Stack(
               children: <Widget>[
-                Expanded(
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  width: 145.3504,
                   child: _MetricTile(
                     label: 'Verified',
                     value: 12,
                     indicatorColor: const Color(0xFF00DDA3),
                     trackColor: const Color(0xFF323232),
-                    fraction: 0.77,
+                    fraction: 0.7719299258572772,
                   ),
                 ),
-                const SizedBox(width: 22.1644),
-                Expanded(
+                Positioned(
+                  left: 145.3504 + 22.1644,
+                  top: 0,
+                  width: 145.7084,
                   child: _MetricTile(
                     label: 'Pending',
                     value: 2,
                     indicatorColor: AppColors.warning,
                     trackColor: const Color(0xFF323232),
-                    fraction: 0.32,
+                    fraction: 0.32631579555143664,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 22),
           Row(
             children: <Widget>[
               Expanded(
@@ -405,8 +395,63 @@ class _IdentityHeroCard extends StatelessWidget {
               _StatusPill(state: verificationState),
             ],
           ),
-          const SizedBox(height: 10),
-          Container(height: 1, color: AppColors.divider.withValues(alpha: 0.78)),
+          const SizedBox(height: 29),
+          Align(
+            alignment: Alignment.topLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 339.1047,
+                height: 87.1341,
+                child: Stack(
+                  children: <Widget>[
+                    Positioned(
+                      left: 13.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'Verification',
+                        svgAssetPath: 'assets/icons/figma/qa_scan_qr.svg',
+                        iconSize: 25.662,
+                        onTap: onTapVerification,
+                      ),
+                    ),
+                    Positioned(
+                      left: 97.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'Skill Tree',
+                        svgAssetPath: 'assets/icons/figma/nav_batches.svg',
+                        iconSize: 25.662,
+                        onTap: onTapSkillTree,
+                      ),
+                    ),
+                    Positioned(
+                      left: 181.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'Reports',
+                        svgAssetPath: 'assets/icons/figma/qa_reports.svg',
+                        iconSize: 25.662,
+                        onTap: onTapReports,
+                      ),
+                    ),
+                    Positioned(
+                      left: 265.5524,
+                      top: 0,
+                      child: _QuickActionCircle(
+                        label: 'SDC',
+                        svgAssetPath:
+                            'assets/icons/figma/account_icon_shield.svg',
+                        iconSize: 25.662,
+                        onTap: onTapSdc,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
