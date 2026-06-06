@@ -127,7 +127,7 @@ class IndividualDashboardPage extends ConsumerWidget {
                           );
                         },
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 20),
                       SizedBox(
                         height: MediaQuery.viewPaddingOf(context).bottom + 112,
                       ),
@@ -330,7 +330,7 @@ class _IdentityHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 1),
           Row(
             children: <Widget>[
               Expanded(
