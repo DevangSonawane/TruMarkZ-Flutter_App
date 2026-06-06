@@ -119,7 +119,7 @@ class _IndividualBottomNav extends StatelessWidget {
                 height: 45.288,
                 child: _NavItemView(
                   label: 'Skill Tree',
-                  svgAssetPath: 'assets/icons/figma/nav_batches.svg',
+                  iconData: Icons.device_hub_outlined,
                   active: currentIndex == 1,
                   onTap: () => onTap(1),
                 ),
@@ -169,13 +169,15 @@ class _IndividualBottomNav extends StatelessWidget {
 class _NavItemView extends StatelessWidget {
   const _NavItemView({
     required this.label,
-    required this.svgAssetPath,
+    this.svgAssetPath,
+    this.iconData,
     required this.active,
     required this.onTap,
   });
 
   final String label;
-  final String svgAssetPath;
+  final String? svgAssetPath;
+  final IconData? iconData;
   final bool active;
   final VoidCallback onTap;
 
@@ -195,12 +197,14 @@ class _NavItemView extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
-              SvgPicture.asset(
-                svgAssetPath,
-                width: 24,
-                height: 24,
-                colorFilter: ColorFilter.mode(fg, BlendMode.srcIn),
-              ),
+              iconData != null
+                  ? Icon(iconData, color: fg, size: 24)
+                  : SvgPicture.asset(
+                      svgAssetPath!,
+                      width: 24,
+                      height: 24,
+                      colorFilter: ColorFilter.mode(fg, BlendMode.srcIn),
+                    ),
               const SizedBox(height: 4.29),
               Text(
                 label,

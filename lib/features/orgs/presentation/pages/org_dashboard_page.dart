@@ -595,6 +595,9 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const double barHeight = 6.12002;
+    const double barRadius = 3.06001;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -621,26 +624,30 @@ class _MetricTile extends StatelessWidget {
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final double w = constraints.maxWidth;
-            return Stack(
-              children: <Widget>[
-                Container(
-                  height: 6.12,
-                  width: w,
-                  decoration: BoxDecoration(
-                    color: trackColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(11.22),
+            final double barWidth = constraints.maxWidth;
+            return SizedBox(
+              width: barWidth,
+              height: barHeight,
+              child: Stack(
+                children: <Widget>[
+                  Container(
+                    height: barHeight,
+                    width: barWidth,
+                    decoration: BoxDecoration(
+                      color: trackColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(barRadius),
+                    ),
                   ),
-                ),
-                Container(
-                  height: 6.12,
-                  width: (w * fraction).clamp(0, w),
-                  decoration: BoxDecoration(
-                    color: indicatorColor.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(11.22),
+                  Container(
+                    height: barHeight,
+                    width: (barWidth * fraction).clamp(0, barWidth),
+                    decoration: BoxDecoration(
+                      color: indicatorColor.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(barRadius),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         ),

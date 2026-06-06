@@ -64,7 +64,9 @@ class IndividualDashboardPage extends ConsumerWidget {
                         top: headerTop,
                         height: 40,
                         child: _HomeHeader(
-                          titleLine1: 'Personal Dashboard',
+                          locationLine1: displayName,
+                          locationLine2: 'TruMarkZ Identity',
+                          avatarAssetPath: 'assets/icons/dashbaord/profile.png',
                           onAlertsTap: () =>
                               context.go(AppRouter.notificationsPath),
                           onProfileTap: () =>
@@ -84,7 +86,6 @@ class IndividualDashboardPage extends ConsumerWidget {
                         right: 16,
                         top: drawerTop,
                         child: _IdentityHeroCard(
-                          verificationState: _VerificationState.verified,
                           onTapVerification: () =>
                               context.go(AppRouter.individualScanPath),
                           onTapSkillTree: () =>
@@ -102,7 +103,7 @@ class IndividualDashboardPage extends ConsumerWidget {
               SliverToBoxAdapter(
                 child: Container(
                   color: AppColors.pageBg,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -117,7 +118,7 @@ class IndividualDashboardPage extends ConsumerWidget {
                           color: Color(0xFF323232),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       _VerificationStatusCard(
                         onStart: () {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -127,7 +128,7 @@ class IndividualDashboardPage extends ConsumerWidget {
                           );
                         },
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       SizedBox(
                         height: MediaQuery.viewPaddingOf(context).bottom + 112,
                       ),
@@ -149,12 +150,16 @@ class IndividualDashboardPage extends ConsumerWidget {
 
 class _HomeHeader extends StatelessWidget {
   const _HomeHeader({
-    required this.titleLine1,
+    required this.locationLine1,
+    required this.locationLine2,
+    required this.avatarAssetPath,
     this.onAlertsTap,
     this.onProfileTap,
   });
 
-  final String titleLine1;
+  final String locationLine1;
+  final String locationLine2;
+  final String avatarAssetPath;
   final VoidCallback? onAlertsTap;
   final VoidCallback? onProfileTap;
 
@@ -165,31 +170,64 @@ class _HomeHeader extends StatelessWidget {
         Expanded(
           child: Row(
             children: <Widget>[
-              Container(
+              SvgPicture.asset(
+                'assets/icons/figma/header_location.svg',
                 width: 24,
                 height: 24,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-                ),
-                child: const Icon(
-                  Icons.fingerprint_rounded,
-                  color: Colors.white,
-                  size: 16,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                titleLine1,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  height: 17.5 / 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+              SizedBox(
+                width: 123,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      locationLine1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        height: 17.5 / 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      locationLine2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        height: 16.5 / 11,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.03,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 2),
+              SizedBox(
+                width: 14.125,
+                height: 35,
+                child: Align(
+                  alignment: const Alignment(0, -0.15),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: SvgPicture.asset(
+                      'assets/icons/figma/header_chevron.svg',
+                      width: 10.125,
+                      height: 10.125,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -198,22 +236,27 @@ class _HomeHeader extends StatelessWidget {
         const SizedBox(width: 12),
         IconButton(
           onPressed: onAlertsTap,
-          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+          icon: SvgPicture.asset(
+            'assets/icons/figma/header_bell.svg',
+            width: 24,
+            height: 24,
+            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          ),
         ),
         GestureDetector(
           onTap: onProfileTap,
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-            ),
-            child: const Icon(
-              Icons.account_circle_rounded,
-              color: Colors.white,
-              size: 24,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(9999),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+              ),
+              child: ClipOval(
+                child: Image.asset(avatarAssetPath, fit: BoxFit.cover),
+              ),
             ),
           ),
         ),
@@ -263,18 +306,14 @@ class _WelcomeMessage extends StatelessWidget {
   }
 }
 
-enum _VerificationState { verified, notVerified, inProcess }
-
 class _IdentityHeroCard extends StatelessWidget {
   const _IdentityHeroCard({
-    this.verificationState = _VerificationState.verified,
     required this.onTapVerification,
     required this.onTapSkillTree,
     required this.onTapReports,
     required this.onTapSdc,
   });
 
-  final _VerificationState verificationState;
   final VoidCallback onTapVerification;
   final VoidCallback onTapSkillTree;
   final VoidCallback onTapReports;
@@ -322,7 +361,7 @@ class _IdentityHeroCard extends StatelessWidget {
                   child: _MetricTile(
                     label: 'Pending',
                     value: 2,
-                    indicatorColor: AppColors.warning,
+                    indicatorColor: const Color(0xFFF59E0B),
                     trackColor: const Color(0xFF323232),
                     fraction: 0.32631579555143664,
                   ),
@@ -330,43 +369,7 @@ class _IdentityHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 1),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'ID NUMBER',
-                      style: AppTypography.caption.copyWith(
-                        fontSize: 10,
-                        color: AppColors.textTertiary,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: <Widget>[
-                        Text(
-                          'TMZ-8829-4401',
-                          style: AppTypography.body2.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                            letterSpacing: 1.8,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              _StatusPill(state: verificationState),
-            ],
-          ),
-          const SizedBox(height: 29),
+          const SizedBox(height: 31),
           Align(
             alignment: Alignment.topLeft,
             child: FittedBox(
@@ -382,7 +385,7 @@ class _IdentityHeroCard extends StatelessWidget {
                       top: 0,
                       child: _QuickActionCircle(
                         label: 'Verification',
-                        svgAssetPath: 'assets/icons/figma/qa_scan_qr.svg',
+                        iconData: Icons.add_rounded,
                         iconSize: 25.662,
                         onTap: onTapVerification,
                       ),
@@ -392,7 +395,7 @@ class _IdentityHeroCard extends StatelessWidget {
                       top: 0,
                       child: _QuickActionCircle(
                         label: 'Skill Tree',
-                        svgAssetPath: 'assets/icons/figma/nav_batches.svg',
+                        iconData: Icons.device_hub_outlined,
                         iconSize: 25.662,
                         onTap: onTapSkillTree,
                       ),
@@ -429,56 +432,6 @@ class _IdentityHeroCard extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.state});
-
-  final _VerificationState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final ({
-      Color fg,
-      Color bg,
-      String label,
-    }) config = switch (state) {
-      _VerificationState.verified => (
-        fg: AppColors.success,
-        bg: AppColors.successBg,
-        label: 'Verified',
-      ),
-      _VerificationState.notVerified => (
-        fg: AppColors.danger,
-        bg: AppColors.dangerBg,
-        label: 'Not verified',
-      ),
-      _VerificationState.inProcess => (
-        fg: AppColors.warning,
-        bg: AppColors.warningBg,
-        label: 'In process',
-      ),
-    };
-
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: config.bg,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          config.label,
-          style: AppTypography.caption.copyWith(
-            color: config.fg,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _MetricTile extends StatelessWidget {
   const _MetricTile({
     required this.label,
@@ -496,52 +449,61 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const double barHeight = 6.12002;
+    const double barRadius = 3.06001;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-                height: 1.2,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF323232),
-              ),
-            ),
-            Text(
-              value.toString(),
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF323232),
-              ),
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14.2800,
+            height: 17.2821 / 14.2800,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF323232),
+          ),
+        ),
+        Text(
+          value.toString(),
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 20,
+            height: 24 / 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0B0F19),
+          ),
         ),
         const SizedBox(height: 8),
-        Container(
-          height: 10,
-          decoration: BoxDecoration(
-            color: trackColor,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: fraction,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: indicatorColor,
-                  borderRadius: BorderRadius.circular(999),
-                ),
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double barWidth = constraints.maxWidth;
+            return SizedBox(
+              width: barWidth,
+              height: barHeight,
+              child: Stack(
+                children: <Widget>[
+                  Container(
+                    height: barHeight,
+                    width: barWidth,
+                    decoration: BoxDecoration(
+                      color: trackColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(barRadius),
+                    ),
+                  ),
+                  Container(
+                    height: barHeight,
+                    width: (barWidth * fraction).clamp(0, barWidth),
+                    decoration: BoxDecoration(
+                      color: indicatorColor.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(barRadius),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
+            );
+          },
         ),
       ],
     );
@@ -635,16 +597,26 @@ class _VerificationStatusCard extends StatelessWidget {
                 onPressed: onStart,
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                    horizontal: 12,
+                    vertical: 6,
                   ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  backgroundColor: AppColors.brandBlue.withValues(alpha: 0.1),
+                  backgroundColor: AppColors.brandBlue.withValues(alpha: 0.08),
                   foregroundColor: AppColors.brandBlue,
                 ),
-                child: const Text('Start Verification'),
+                child: Text(
+                  'Start Verification',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                  ),
+                ),
               ),
             ],
           ),
@@ -657,13 +629,15 @@ class _VerificationStatusCard extends StatelessWidget {
 class _QuickActionCircle extends StatelessWidget {
   const _QuickActionCircle({
     required this.label,
-    required this.svgAssetPath,
+    this.svgAssetPath,
+    this.iconData,
     required this.onTap,
     required this.iconSize,
   });
 
   final String label;
-  final String svgAssetPath;
+  final String? svgAssetPath;
+  final IconData? iconData;
   final VoidCallback onTap;
   final double iconSize;
 
@@ -702,15 +676,21 @@ class _QuickActionCircle extends StatelessWidget {
                   ],
                 ),
                 child: Center(
-                  child: SvgPicture.asset(
-                    svgAssetPath,
-                    width: iconSize,
-                    height: iconSize,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white,
-                      BlendMode.srcIn,
-                    ),
-                  ),
+                  child: iconData != null
+                      ? Icon(
+                          iconData,
+                          color: Colors.white,
+                          size: iconSize,
+                        )
+                      : SvgPicture.asset(
+                          svgAssetPath!,
+                          width: iconSize,
+                          height: iconSize,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 9.1341),
