@@ -478,7 +478,10 @@ class _MetricTile extends StatelessWidget {
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final double barWidth = constraints.maxWidth;
+            final double barWidth = (constraints.maxWidth - 8).clamp(
+              0.0,
+              constraints.maxWidth,
+            );
             return SizedBox(
               width: barWidth,
               height: barHeight,
