@@ -20,6 +20,15 @@ class IndividualDashboardPage extends ConsumerWidget {
         authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
             ? authAsync.value!.userProfile!.fullName!.trim()
             : 'User';
+    final String headerLine1 =
+        authAsync.value?.userProfile?.address?.trim().isNotEmpty == true
+            ? authAsync.value!.userProfile!.address!.trim()
+            : 'Individual Dashboard';
+    final String headerLine2 =
+        authAsync.value?.userProfile?.organizationName?.trim().isNotEmpty ==
+                true
+            ? authAsync.value!.userProfile!.organizationName!.trim()
+            : 'Individual Account';
 
     final double safeTop = MediaQuery.paddingOf(context).top;
 
@@ -64,13 +73,13 @@ class IndividualDashboardPage extends ConsumerWidget {
                         top: headerTop,
                         height: 40,
                         child: _HomeHeader(
-                          locationLine1: displayName,
-                          locationLine2: 'TruMarkZ Identity',
+                          locationLine1: 'Kandivali, Mumbai',
+                          locationLine2: 'Asynk Pvt Ltd',
                           avatarAssetPath: 'assets/icons/dashbaord/profile.png',
                           onAlertsTap: () =>
                               context.go(AppRouter.notificationsPath),
                           onProfileTap: () =>
-                              context.go(AppRouter.individualProfilePath),
+                              context.go(AppRouter.settingsPath),
                         ),
                       ),
                       Positioned(
@@ -338,7 +347,7 @@ class _IdentityHeroCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           SizedBox(
-            width: 313.2232,
+            width: 314,
             height: 63.7505,
             child: Stack(
               children: <Widget>[
@@ -355,9 +364,9 @@ class _IdentityHeroCard extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  left: 145.3504 + 22.1644,
+                  left: 167.873,
                   top: 0,
-                  width: 145.7084,
+                  width: 145.3504,
                   child: _MetricTile(
                     label: 'Pending',
                     value: 2,
@@ -451,64 +460,62 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     const double barHeight = 6.12002;
     const double barRadius = 3.06001;
+    const double tileWidth = 145.3504;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14.2800,
-            height: 17.2821 / 14.2800,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF323232),
+    return SizedBox(
+      width: tileWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14.2800,
+              height: 17.2821 / 14.2800,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF323232),
+            ),
           ),
-        ),
-        Text(
-          value.toString(),
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 20,
-            height: 24 / 20,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF0B0F19),
+          Text(
+            value.toString(),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 20,
+              height: 24 / 20,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0B0F19),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double barWidth = (constraints.maxWidth - 8).clamp(
-              0.0,
-              constraints.maxWidth,
-            );
-            return SizedBox(
-              width: barWidth,
-              height: barHeight,
-              child: Stack(
-                children: <Widget>[
-                  Container(
-                    height: barHeight,
-                    width: barWidth,
-                    decoration: BoxDecoration(
-                      color: trackColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(barRadius),
-                    ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: tileWidth,
+            height: barHeight,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: <Widget>[
+                Container(
+                  height: barHeight,
+                  width: tileWidth,
+                  decoration: BoxDecoration(
+                    color: trackColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(barRadius),
                   ),
-                  Container(
-                    height: barHeight,
-                    width: (barWidth * fraction).clamp(0, barWidth),
-                    decoration: BoxDecoration(
-                      color: indicatorColor.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(barRadius),
-                    ),
+                ),
+                Container(
+                  height: barHeight,
+                  width: (tileWidth * fraction).clamp(0, tileWidth),
+                  decoration: BoxDecoration(
+                    color: indicatorColor.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(barRadius),
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

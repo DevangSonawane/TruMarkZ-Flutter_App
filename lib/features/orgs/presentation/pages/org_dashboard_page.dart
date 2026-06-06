@@ -482,7 +482,7 @@ class _HomeDrawerCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           SizedBox(
-            width: 313.2232,
+            width: 314,
             height: 63.7505,
             child: Stack(
               children: <Widget>[
@@ -499,9 +499,9 @@ class _HomeDrawerCard extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  left: 145.3504 + 22.1644,
+                  left: 167.873,
                   top: 0,
-                  width: 145.7084,
+                  width: 145.3504,
                   child: _MetricTile(
                     label: 'Pending',
                     value: pending,
@@ -598,63 +598,62 @@ class _MetricTile extends StatelessWidget {
     const double barHeight = 6.12002;
     const double barRadius = 3.06001;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14.2800,
-            height: 17.2821 / 14.2800,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF323232),
+    const double tileWidth = 145.3504;
+
+    return SizedBox(
+      width: tileWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14.2800,
+              height: 17.2821 / 14.2800,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF323232),
+            ),
           ),
-        ),
-        Text(
-          _formatMetricValue(value),
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 20,
-            height: 24 / 20,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF0B0F19),
+          Text(
+            _formatMetricValue(value),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 20,
+              height: 24 / 20,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0B0F19),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double barWidth = (constraints.maxWidth - 8).clamp(
-              0.0,
-              constraints.maxWidth,
-            );
-            return SizedBox(
-              width: barWidth,
-              height: barHeight,
-              child: Stack(
-                children: <Widget>[
-                  Container(
-                    height: barHeight,
-                    width: barWidth,
-                    decoration: BoxDecoration(
-                      color: trackColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(barRadius),
-                    ),
+          const SizedBox(height: 8.0),
+          SizedBox(
+            width: tileWidth,
+            height: barHeight,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: <Widget>[
+                Container(
+                  height: barHeight,
+                  width: tileWidth,
+                  decoration: BoxDecoration(
+                    color: trackColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(barRadius),
                   ),
-                  Container(
-                    height: barHeight,
-                    width: (barWidth * fraction).clamp(0, barWidth),
-                    decoration: BoxDecoration(
-                      color: indicatorColor.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(barRadius),
-                    ),
+                ),
+                Container(
+                  height: barHeight,
+                  width: (tileWidth * fraction).clamp(0, tileWidth),
+                  decoration: BoxDecoration(
+                    color: indicatorColor.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(barRadius),
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
