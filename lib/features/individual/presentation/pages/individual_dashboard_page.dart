@@ -77,7 +77,6 @@ class IndividualDashboardPage extends ConsumerWidget {
                         child: _WelcomeMessage(
                           greeting: 'Welcome back,',
                           name: displayName,
-                          subtitle: 'Your verified identity at a glance.',
                         ),
                       ),
                       Positioned(
@@ -107,21 +106,6 @@ class IndividualDashboardPage extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Container(
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: AppColors.brandBlue,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: <BoxShadow>[
-                            BoxShadow(
-                              color: AppColors.brandBlue.withValues(alpha: 0.14),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
                       const Text(
                         'VERIFICATION',
                         style: TextStyle(
@@ -143,7 +127,7 @@ class IndividualDashboardPage extends ConsumerWidget {
                           );
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       SizedBox(
                         height: MediaQuery.viewPaddingOf(context).bottom + 112,
                       ),
@@ -242,12 +226,10 @@ class _WelcomeMessage extends StatelessWidget {
   const _WelcomeMessage({
     required this.greeting,
     required this.name,
-    required this.subtitle,
   });
 
   final String greeting;
   final String name;
-  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -274,17 +256,6 @@ class _WelcomeMessage extends StatelessWidget {
             height: 19.5 / 22.2857,
             fontWeight: FontWeight.w600,
             color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 12,
-            height: 17 / 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.white.withValues(alpha: 0.82),
           ),
         ),
       ],
