@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
-import 'human_verification_checks_catalog.dart';
+import '../../../data/verification_repository.dart';
 
 enum _AccessType { publicSearchable, permissionBased }
 
@@ -16,6 +18,7 @@ class _VerificationCheck {
     required this.mode,
     required this.subtitle,
     required this.costInr,
+    required this.icon,
     this.defaultSelected = false,
   });
 
@@ -24,42 +27,29 @@ class _VerificationCheck {
   final String mode;
   final String subtitle;
   final int costInr;
+  final IconData icon;
   final bool defaultSelected;
 }
 
-class VerificationPlanSetupPage extends StatefulWidget {
+class VerificationPlanSetupPage extends ConsumerStatefulWidget {
   const VerificationPlanSetupPage({super.key});
 
   @override
-  State<VerificationPlanSetupPage> createState() =>
+  ConsumerState<VerificationPlanSetupPage> createState() =>
       _VerificationPlanSetupPageState();
 }
 
-class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
+class _VerificationPlanSetupPageState
+    extends ConsumerState<VerificationPlanSetupPage> {
   bool _didInitFromRoute = false;
   bool _singleFlow = false;
   int _stepIndex = 0;
   int _lastStepIndex = 0;
 
-  late final List<_VerificationCheck> _checks = <_VerificationCheck>[
-    for (final HumanVerificationCheckDefinition item
-        in HumanVerificationChecksCatalog.items)
-      _VerificationCheck(
-        id: item.id,
-        title: item.title,
-        mode: item.mode == HumanVerificationCheckMode.auto
-            ? 'API (auto)'
-            : 'Human (manual)',
-        subtitle: item.subtitle,
-        costInr: HumanVerificationChecksCatalog.humanPricesInr[item.id] ?? 0,
-        defaultSelected:
-            item.id == 'police' || item.id == 'dob' || item.id == 'education',
-      ),
-  ];
-
-  late final Set<String> _selectedCheckIds = <String>{
-    for (final _VerificationCheck check in _checks)
-      if (check.defaultSelected) check.id,
+  final Set<String> _selectedCheckIds = <String>{
+    'police',
+    'dob',
+    'education',
   };
 
   _AccessType _accessType = _AccessType.publicSearchable;
@@ -145,6 +135,57 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
 
   String _formatInr(int amount) => '₹$amount';
 
+  List<_VerificationCheck> _checksFromApi(
+    List<VerificationTypeDefinition> types,
+  ) {
+    return types
+        .map(
+          (VerificationTypeDefinition item) => _VerificationCheck(
+            id: item.id,
+            title: item.name,
+            mode: item.label.trim().toLowerCase() == 'automatic'
+                ? 'API (auto)'
+                : 'Human (manual)',
+            subtitle: _subtitleForType(item),
+            costInr: item.price ?? 0,
+            icon: _iconForType(item),
+            defaultSelected:
+                item.id == 'police' ||
+                item.id == 'dob' ||
+                item.id == 'education',
+          ),
+        )
+        .toList();
+  }
+
+  static String _subtitleForType(VerificationTypeDefinition item) {
+    final String timeline = item.timeline?.trim() ?? '';
+    final int? price = item.price;
+    if (timeline.isNotEmpty && price != null) {
+      return '$timeline • ₹$price';
+    }
+    if (timeline.isNotEmpty) return timeline;
+    if (price != null) return 'Starting at ₹$price';
+    return item.category.trim().isNotEmpty
+        ? item.category.trim().toUpperCase()
+        : '';
+  }
+
+  static IconData _iconForType(VerificationTypeDefinition item) {
+    final String key = '${item.id} ${item.name}'.toLowerCase();
+    if (key.contains('dob')) return Icons.cake_rounded;
+    if (key.contains('address')) return Icons.location_on_rounded;
+    if (key.contains('education')) return Icons.school_rounded;
+    if (key.contains('skills')) return Icons.psychology_rounded;
+    if (key.contains('criminal')) return Icons.gavel_rounded;
+    if (key.contains('driving')) return Icons.drive_eta_rounded;
+    if (key.contains('experience')) return Icons.work_history_rounded;
+    if (key.contains('drug')) return Icons.science_rounded;
+    if (key.contains('company')) return Icons.domain_rounded;
+    if (key.contains('police')) return Icons.local_police_rounded;
+    return Icons.fact_check_outlined;
+  }
+
   String get _stepTitle => switch (_stepIndex) {
     0 => 'Checks',
     _ => 'Permissions',
@@ -152,24 +193,32 @@ class _VerificationPlanSetupPageState extends State<VerificationPlanSetupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<List<VerificationTypeDefinition>> humanTypesAsync = ref
+        .watch(verificationTypesProvider('human'));
+    final List<_VerificationCheck> apiChecks =
+        _checksFromApi(
+          humanTypesAsync.valueOrNull ?? const <VerificationTypeDefinition>[],
+        );
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final bool movingForward = _stepIndex >= _lastStepIndex;
 
     final Widget content = switch (_stepIndex) {
-      0 => _ChecksStep(
-        checks: _checks,
-        selectedCheckIds: _selectedCheckIds,
-        formatInr: _formatInr,
-        onToggleCheck: (String id, bool selected) {
-          setState(() {
-            if (selected) {
-              _selectedCheckIds.add(id);
-            } else {
-              _selectedCheckIds.remove(id);
-            }
-          });
-        },
-      ),
+      0 => humanTypesAsync.isLoading && apiChecks.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _ChecksStep(
+              checks: apiChecks,
+              selectedCheckIds: _selectedCheckIds,
+              formatInr: _formatInr,
+              onToggleCheck: (String id, bool selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedCheckIds.add(id);
+                  } else {
+                    _selectedCheckIds.remove(id);
+                  }
+                });
+              },
+            ),
       _ => _PermissionsStep(
         accessType: _accessType,
         whatsAppConsent: _whatsAppConsent,
@@ -542,8 +591,7 @@ class _CheckTile extends StatelessWidget {
   }
 
   IconData get _icon {
-    return HumanVerificationChecksCatalog.byId[check.id]?.icon ??
-        Icons.fact_check_outlined;
+    return check.icon;
   }
 
   @override

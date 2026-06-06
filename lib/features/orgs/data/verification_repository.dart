@@ -11,10 +11,51 @@ final verificationRepositoryProvider = Provider<VerificationRepository>((ref) {
   return VerificationRepository(ref.read(apiClientProvider));
 });
 
+final verificationTypesProvider =
+    FutureProvider.family.autoDispose<List<VerificationTypeDefinition>, String>(
+      (ref, category) async {
+        final VerificationRepository repo = ref.read(
+          verificationRepositoryProvider,
+        );
+        return repo.getVerificationTypes(category: category);
+      },
+    );
+
 class VerificationRepository {
   VerificationRepository(this._api);
 
   final ApiClient _api;
+
+  Future<List<VerificationTypeDefinition>> getVerificationTypes({
+    String? category,
+  }) async {
+    final dynamic res = await _api.verificationGetAny(
+      '/verification/verification-types',
+    );
+
+    Iterable<dynamic> rawItems;
+    if (res is List) {
+      rawItems = res;
+    } else if (res is Map) {
+      final dynamic data = res['data'] ?? res['verification_types'] ?? res['types'];
+      rawItems = data is List ? data : const <dynamic>[];
+    } else {
+      rawItems = const <dynamic>[];
+    }
+
+    final String normalizedCategory = category?.trim().toLowerCase() ?? '';
+    return rawItems
+        .whereType<Map>()
+        .map(
+          (Map e) =>
+              VerificationTypeDefinition.fromJson(Map<String, dynamic>.from(e)),
+        )
+        .where((VerificationTypeDefinition item) {
+          if (normalizedCategory.isEmpty) return true;
+          return item.category.trim().toLowerCase() == normalizedCategory;
+        })
+        .toList();
+  }
 
   Future<List<VerificationCategory>> getProductCategories() async {
     final dynamic res = await _api.verificationGetAny(

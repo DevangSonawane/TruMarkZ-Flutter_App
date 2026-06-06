@@ -45,7 +45,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   String _industry = '';
   String _credentialVisibility = 'public_searchable';
-  Set<String> _checks = <String>{'police', 'dob', 'education'};
+  Set<String> _checks = <String>{};
+  bool _seededDefaultChecks = false;
 
   PickedFile? _pickedFile;
   bool _isUploading = false;
@@ -72,7 +73,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final String nextVisibility = (qp['access'] ?? _credentialVisibility)
         .trim()
         .toLowerCase();
-    final Set<String> nextChecks = _parseCsvSet(qp['checks']) ?? _checks;
+    final Set<String> nextChecks = _parseCsvSet(qp['checks']) ?? <String>{};
     final List<String> nextColumns =
         _parseCsvList(qp['columns']) ?? _templateColumnsForChecks(nextChecks);
 
@@ -82,6 +83,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         _credentialVisibility = nextVisibility;
       }
       _checks = nextChecks;
+      _seededDefaultChecks = false;
       _columnsController.text = nextColumns.join(',');
     });
   }
@@ -421,7 +423,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final String phone = _normalizePhone(valueAt('phone_number'));
 
     if (fullName.isEmpty) return null;
-    if (email.isEmpty && phone.isEmpty) return null;
+    // Match the backend contract for human bulk upload:
+    // full_name, email, and phone_number are all required.
+    if (email.isEmpty || phone.isEmpty) return null;
 
     final String? dob = _normalizeDob(valueAt('dob'));
     final String aadhar = _normalizeDigits(valueAt('aadhar_number'));
@@ -510,6 +514,16 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       );
       return;
     }
+    if (userCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No valid human rows were found. Please fill full_name, email, and phone_number before uploading.',
+          ),
+        ),
+      );
+      return;
+    }
 
     final Uri uri = Uri(
       path: AppRouter.certificatePreviewPath,
@@ -540,11 +554,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     setState(() => _isUploading = true);
     try {
+      final PickedFile uploadFile = _normalizeHumanDobValues(file);
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
       debugPrint(
-        '[BulkUploadPage] Uploading bulk file name=${file.name} bytes=${file.bytes.length}',
+        '[BulkUploadPage] Uploading bulk file name=${uploadFile.name} bytes=${uploadFile.bytes.length}',
       );
       final res = await repo.bulkUpload(
         batchName: _batchNameController.text.trim(),
@@ -553,8 +568,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         verificationTypes: _checks.join(','),
         credentialVisibility: _credentialVisibility,
         templateId: templateId,
-        fileBytes: file.bytes,
-        fileName: file.name,
+        fileBytes: uploadFile.bytes,
+        fileName: uploadFile.name,
       );
       final String batchName = _batchNameController.text.trim();
       await ref
@@ -842,6 +857,115 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return v.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').trim().toUpperCase();
   }
 
+  PickedFile _normalizeHumanDobValues(PickedFile file) {
+    final String ext = file.extension.toLowerCase().replaceAll('.', '').trim();
+    if (ext == 'csv') {
+      return _normalizeDobInCsv(file) ?? file;
+    }
+    if (ext == 'xlsx') {
+      return _normalizeDobInXlsx(file) ?? file;
+    }
+    return file;
+  }
+
+  PickedFile? _normalizeDobInCsv(PickedFile file) {
+    final String raw = utf8.decode(file.bytes, allowMalformed: true);
+    final List<List<dynamic>> table = const CsvToListConverter(
+      shouldParseNumbers: false,
+    ).convert(raw);
+    if (table.isEmpty) return null;
+
+    int headerIndex = 0;
+    while (headerIndex < table.length &&
+        _Identifiers._isRowEmpty(table[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= table.length) return null;
+
+    final List<String> header = table[headerIndex]
+        .map((dynamic e) => (e?.toString() ?? '').trim())
+        .toList();
+    final int dobIndex = _userIndexMap(header)['dob'] ?? -1;
+    if (dobIndex < 0) return null;
+
+    bool changed = false;
+    for (int i = headerIndex + 1; i < table.length; i++) {
+      final List<dynamic> row = table[i];
+      if (_Identifiers._isRowEmpty(row)) continue;
+      if (dobIndex >= row.length) continue;
+      final String rawDob = row[dobIndex]?.toString().trim() ?? '';
+      final String? normalized = _normalizeDob(rawDob);
+      if (normalized == null || normalized == rawDob) continue;
+      row[dobIndex] = normalized;
+      changed = true;
+    }
+
+    if (!changed) return null;
+    final String csv = const ListToCsvConverter().convert(table);
+    return PickedFile(
+      name: file.name,
+      bytes: Uint8List.fromList(utf8.encode(csv)),
+      extension: file.extension,
+    );
+  }
+
+  PickedFile? _normalizeDobInXlsx(PickedFile file) {
+    Excel excel;
+    try {
+      excel = Excel.decodeBytes(file.bytes);
+    } catch (_) {
+      return null;
+    }
+
+    final List<String> sheetNames = excel.tables.keys.toList();
+    if (sheetNames.isEmpty) return null;
+    final Sheet? sheet = excel.tables[sheetNames.first];
+    if (sheet == null) return null;
+
+    final List<List<Data?>> all = sheet.rows;
+    if (all.isEmpty) return null;
+
+    int headerIndex = 0;
+    while (headerIndex < all.length &&
+        _Identifiers._isExcelRowEmpty(all[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= all.length) return null;
+
+    final List<String> header = all[headerIndex]
+        .map((Data? d) => (d?.value?.toString() ?? '').trim())
+        .toList();
+    final int dobIndex = _userIndexMap(header)['dob'] ?? -1;
+    if (dobIndex < 0) return null;
+
+    bool changed = false;
+    for (int i = headerIndex + 1; i < all.length; i++) {
+      final List<Data?> row = all[i];
+      if (_Identifiers._isExcelRowEmpty(row)) continue;
+      if (dobIndex >= row.length) continue;
+
+      final Data? cell = row[dobIndex];
+      final String rawDob = (cell?.value?.toString() ?? '').trim();
+      final String? normalized = _normalizeDob(rawDob);
+      if (normalized == null || normalized == rawDob) continue;
+      excel.updateCell(
+        sheetNames.first,
+        CellIndex.indexByColumnRow(columnIndex: dobIndex, rowIndex: i),
+        TextCellValue(normalized),
+      );
+      changed = true;
+    }
+
+    if (!changed) return null;
+    final List<int>? encoded = excel.encode();
+    if (encoded == null) return null;
+    return PickedFile(
+      name: file.name,
+      bytes: Uint8List.fromList(encoded),
+      extension: file.extension,
+    );
+  }
+
   void _logLong(String message) {
     // debugPrint() can throttle long lines; chunk them to ensure visibility.
     const int chunk = 800;
@@ -871,6 +995,29 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         ? apiIndustry
         : profileIndustry;
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final AsyncValue<List<VerificationTypeDefinition>> humanTypesAsync = ref
+        .watch(verificationTypesProvider('human'));
+    if (_checks.isEmpty &&
+        !_seededDefaultChecks &&
+        (humanTypesAsync.valueOrNull?.isNotEmpty == true ||
+            !humanTypesAsync.isLoading)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_checks.isNotEmpty) return;
+        setState(() {
+          _checks
+            ..clear()
+            ..addAll(
+              (humanTypesAsync.valueOrNull?.isNotEmpty == true)
+                  ? humanTypesAsync.valueOrNull!
+                      .take(3)
+                      .map((VerificationTypeDefinition t) => t.id)
+                  : <String>{'police', 'dob', 'education'},
+            );
+          _seededDefaultChecks = true;
+        });
+      });
+    }
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -1738,6 +1885,14 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     final bool keyboardOpen = mediaQuery.viewInsets.bottom > 0;
     final double scale = mediaQuery.size.width / 402;
     double s(double v) => v * scale;
+    final AsyncValue<List<VerificationTypeDefinition>> verificationTypesAsync =
+        ref.watch(verificationTypesProvider('human'));
+    final Map<String, VerificationTypeDefinition> verificationTypesById =
+        <String, VerificationTypeDefinition>{
+          for (final VerificationTypeDefinition item
+              in verificationTypesAsync.valueOrNull ?? <VerificationTypeDefinition>[])
+            item.id: item,
+        };
 
     return Dialog.fullscreen(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -1853,25 +2008,40 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
               ),
             ),
             const SizedBox(height: AppSpacing.x2),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                for (final String check
-                    in widget.selectedChecks.toList()..sort())
-                  Chip(
-                    label: Text(check),
-                    backgroundColor: AppColors.brandBlue,
-                    labelStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w600,
-                      height: 16.5 / 12,
-                      color: Colors.white,
+            if (verificationTypesAsync.isLoading &&
+                verificationTypesAsync.valueOrNull == null)
+              Text(
+                'Loading verification types...',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w500,
+                  height: 18 / 12,
+                  color: const Color(0xFF64748B),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  for (final String check
+                      in widget.selectedChecks.toList()..sort())
+                    Chip(
+                      label: Text(
+                        verificationTypesById[check]?.name ?? check,
+                      ),
+                      backgroundColor: AppColors.brandBlue,
+                      labelStyle: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w600,
+                        height: 16.5 / 12,
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
             const SizedBox(height: AppSpacing.x4),
             Text(
               'Saved headers',

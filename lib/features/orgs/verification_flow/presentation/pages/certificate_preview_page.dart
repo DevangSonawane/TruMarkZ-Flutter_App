@@ -406,27 +406,22 @@ class _SwipeableCertificateCards extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final bool isProductFlow;
 
-  static const List<({String asset, double aspectRatio})>
-  _humanImages = <({String asset, double aspectRatio})>[
-    (asset: 'assets/images/figma/cert_card_1.png', aspectRatio: 1054 / 1492),
-    (asset: 'assets/images/figma/cert_card_2.png', aspectRatio: 866 / 1230),
-    (asset: 'assets/images/figma/cert_card_3.png', aspectRatio: 1054 / 1492),
-  ];
-
-  static const List<({String asset, double aspectRatio})>
-  _productImages = <({String asset, double aspectRatio})>[
-    (asset: 'assets/products/product_preview_1.png', aspectRatio: 1054 / 1492),
-    (asset: 'assets/products/product_preview_2.png', aspectRatio: 866 / 1230),
-    (asset: 'assets/products/product_preview_3.png', aspectRatio: 1054 / 1492),
-  ];
+  static const List<({String asset, double aspectRatio})> _certificateImages =
+      <({String asset, double aspectRatio})>[
+        (
+          asset: 'assets/images/certificate_preview_sample.png',
+          aspectRatio: 866 / 1230,
+        ),
+        (asset: 'assets/images/driver.png', aspectRatio: 1054 / 1492),
+        (asset: 'assets/images/warehouse.png', aspectRatio: 1054 / 1492),
+      ];
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    final List<({String asset, double aspectRatio})> images = isProductFlow
-        ? _productImages
-        : _humanImages;
+    final List<({String asset, double aspectRatio})> images =
+        _certificateImages;
 
     final double h = s(220);
     final double sidePadding = s(16);

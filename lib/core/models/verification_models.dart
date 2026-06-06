@@ -44,6 +44,55 @@ class VerificationDocument {
   };
 }
 
+class VerificationTypeDefinition {
+  const VerificationTypeDefinition({
+    required this.id,
+    required this.name,
+    required this.label,
+    required this.category,
+    required this.emailAddress,
+    required this.apiLink,
+    required this.price,
+    required this.timeline,
+  });
+
+  final String id;
+  final String name;
+  final String label;
+  final String category;
+  final String? emailAddress;
+  final String? apiLink;
+  final int? price;
+  final String? timeline;
+
+  factory VerificationTypeDefinition.fromJson(Map<String, dynamic> json) {
+    final Object? rawPrice = json['price'];
+    return VerificationTypeDefinition(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      label: (json['label'] ?? '').toString(),
+      category: (json['category'] ?? '').toString(),
+      emailAddress: json['email_address']?.toString(),
+      apiLink: json['api_link']?.toString(),
+      price: rawPrice is num
+          ? rawPrice.toInt()
+          : int.tryParse(rawPrice?.toString() ?? ''),
+      timeline: json['timeline']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'name': name,
+    'label': label,
+    'category': category,
+    'email_address': emailAddress,
+    'api_link': apiLink,
+    'price': price,
+    'timeline': timeline,
+  };
+}
+
 class VerificationUser {
   const VerificationUser({
     required this.id,

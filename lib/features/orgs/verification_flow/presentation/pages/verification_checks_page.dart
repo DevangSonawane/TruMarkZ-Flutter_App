@@ -7,10 +7,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/models/verification_models.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
-import 'human_verification_checks_catalog.dart';
+import '../../../data/verification_repository.dart';
 import 'product_verification_checks_catalog.dart';
 
 class VerificationChecksPage extends ConsumerStatefulWidget {
@@ -33,39 +34,9 @@ class _VerificationChecksPageState
   String _categoryId = '';
   bool _supportsWarranty = true;
 
-  static final List<_CheckItem> _humanItems = <_CheckItem>[
-    for (final HumanVerificationCheckDefinition item
-        in HumanVerificationChecksCatalog.items)
-      _CheckItem(
-        id: item.id,
-        title: item.title,
-        subtitle: item.subtitle,
-        mode: item.mode == HumanVerificationCheckMode.auto
-            ? _CheckMode.auto
-            : _CheckMode.manual,
-        costInr: HumanVerificationChecksCatalog.humanPricesInr[item.id] ?? 0,
-        materialIcon: item.icon,
-      ),
-  ];
+  final Set<String> _selected = <String>{};
 
-  final Set<String> _selected = <String>{'police'};
-
-  static final List<_CheckItem> _productVerificationItems = <_CheckItem>[
-    for (final ProductVerificationCheckDefinition item
-        in ProductVerificationChecksCatalog.items)
-      _CheckItem(
-        id: item.id,
-        title: item.title,
-        subtitle: item.subtitle,
-        mode: item.mode == ProductVerificationCheckMode.auto
-            ? _CheckMode.auto
-            : _CheckMode.manual,
-        costInr: ProductVerificationChecksCatalog.pricesInr[item.id] ?? 0,
-        materialIcon: item.icon,
-      ),
-  ];
-
-  static const List<_CheckItem> _productWarrantyItems = <_CheckItem>[
+  static const List<_CheckItem> _warrantyItems = <_CheckItem>[
     _CheckItem(
       id: 'warranty_registration',
       title: 'Warranty Registration',
@@ -142,6 +113,16 @@ class _VerificationChecksPageState
     final String nextCategoryId = (qp['category_id'] ?? '').trim();
     final bool nextSupportsWarranty =
         (qp['supports_warranty'] ?? '').trim().toLowerCase() == 'true';
+    final Set<String> nextChecks = <String>{};
+    final String rawChecks = (qp['checks'] ?? '').trim();
+    if (rawChecks.isNotEmpty) {
+      nextChecks.addAll(
+        rawChecks
+            .split(',')
+            .map((String s) => s.trim())
+            .where((String s) => s.isNotEmpty),
+      );
+    }
     final String fromRoute = (qp['industry'] ?? '').trim();
     final String fromProfile =
         (ref.read(authNotifierProvider).value?.userProfile?.industry ?? '')
@@ -165,26 +146,115 @@ class _VerificationChecksPageState
         _mode = nextMode;
         _categoryId = nextCategoryId;
         _supportsWarranty = nextSupportsWarranty;
-
-        final List<_CheckItem> currentItems = _itemsForFlow();
-        if (!_selected.any(
-          (String id) => currentItems.any((_CheckItem item) => item.id == id),
-        )) {
-          _selected
-            ..clear()
-            ..add(currentItems.first.id);
-        }
+        _selected
+          ..clear()
+          ..addAll(nextChecks);
       });
     }
   }
 
-  List<_CheckItem> _itemsForFlow() {
-    if (_flow == 'product') {
-      return _mode == 'warranty'
-          ? _productWarrantyItems
-          : _productVerificationItems;
+  String _verificationCategoryForFlow() {
+    if (_flow == 'product') return 'product';
+    return 'human';
+  }
+
+  List<_CheckItem> _buildItems(List<VerificationTypeDefinition> types) {
+    return types
+        .map(
+          (VerificationTypeDefinition item) => _CheckItem(
+            id: item.id,
+            title: item.name,
+            subtitle: _subtitleForVerificationType(item),
+            mode: item.label.trim().toLowerCase() == 'automatic'
+                ? _CheckMode.auto
+                : _CheckMode.manual,
+            costInr: _resolvedPrice(item),
+            materialIcon: _iconForVerificationType(item),
+          ),
+        )
+        .toList();
+  }
+
+  int _resolvedPrice(VerificationTypeDefinition item) {
+    final int? apiPrice = item.price;
+    if (apiPrice != null && apiPrice > 0) return apiPrice;
+    if (item.category.trim().toLowerCase() == 'product') {
+      return ProductVerificationChecksCatalog.pricesInr[item.id] ?? 0;
     }
-    return _humanItems;
+    return 0;
+  }
+
+  List<_CheckItem> _productWarrantyItems() {
+    return _warrantyItems;
+  }
+
+  void _ensureDefaultSelection(List<_CheckItem> items) {
+    if (items.isEmpty) return;
+    final bool hasValidSelection = _selected.any(
+      (String id) => items.any((_CheckItem item) => item.id == id),
+    );
+    if (hasValidSelection) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_selected.any(
+        (String id) => items.any((_CheckItem item) => item.id == id),
+      )) {
+        return;
+      }
+      setState(() {
+        _selected
+          ..clear()
+          ..add(items.first.id);
+      });
+    });
+  }
+
+  static String _subtitleForVerificationType(
+    VerificationTypeDefinition item,
+  ) {
+    final String timeline = item.timeline?.trim() ?? '';
+    final int? price = item.price;
+    final String email = item.emailAddress?.trim() ?? '';
+
+    if (timeline.isNotEmpty && price != null) {
+      return '$timeline • ₹$price';
+    }
+    if (timeline.isNotEmpty) return timeline;
+    if (price != null) return 'Starting at ₹$price';
+    if (email.isNotEmpty) return email;
+    return item.category.trim().isNotEmpty
+        ? item.category.trim().toUpperCase()
+        : '';
+  }
+
+  static IconData _iconForVerificationType(VerificationTypeDefinition item) {
+    final String key = '${item.category}-${item.name}-${item.id}'
+        .toLowerCase();
+    if (key.contains('dob')) return Icons.cake_rounded;
+    if (key.contains('address')) return Icons.location_on_rounded;
+    if (key.contains('education')) return Icons.school_rounded;
+    if (key.contains('skills')) return Icons.psychology_rounded;
+    if (key.contains('criminal')) return Icons.gavel_rounded;
+    if (key.contains('driving')) return Icons.drive_eta_rounded;
+    if (key.contains('experience')) return Icons.work_history_rounded;
+    if (key.contains('drug')) return Icons.science_rounded;
+    if (key.contains('company')) return Icons.domain_rounded;
+    if (key.contains('police')) return Icons.local_police_rounded;
+    if (key.contains('bis')) return Icons.verified_rounded;
+    if (key.contains('quality')) return Icons.fact_check_rounded;
+    if (key.contains('safety')) return Icons.electrical_services_rounded;
+    if (key.contains('installation')) return Icons.handyman_rounded;
+    if (key.contains('warranty')) return Icons.card_membership_rounded;
+    if (key.contains('service centre') || key.contains('service_center')) {
+      return Icons.store_rounded;
+    }
+    if (key.contains('repair')) return Icons.build_circle_rounded;
+    if (key.contains('extended warranty')) {
+      return Icons.workspace_premium_rounded;
+    }
+    return item.category.trim().toLowerCase() == 'product'
+        ? Icons.inventory_2_rounded
+        : Icons.badge_rounded;
   }
 
   @override
@@ -206,7 +276,18 @@ class _VerificationChecksPageState
       resolvedIndustryRaw,
     );
     final bool isProductFlow = _flow == 'product';
-    final List<_CheckItem> items = _itemsForFlow();
+    final AsyncValue<List<VerificationTypeDefinition>> verificationTypesAsync =
+        _mode == 'warranty'
+            ? const AsyncData<List<VerificationTypeDefinition>>(
+                <VerificationTypeDefinition>[],
+              )
+            : ref.watch(
+                verificationTypesProvider(_verificationCategoryForFlow()),
+              );
+    final List<_CheckItem> apiItems = _mode == 'warranty'
+        ? _productWarrantyItems()
+        : _buildItems(verificationTypesAsync.valueOrNull ?? <VerificationTypeDefinition>[]);
+    _ensureDefaultSelection(apiItems);
     final String stepText = isProductFlow ? 'STEP 2 OF 6' : 'STEP 1 OF 6';
     final String progressText = isProductFlow ? '33%' : '17%';
     final double progressFactor = isProductFlow ? 0.3333 : 0.1667;
@@ -380,33 +461,54 @@ class _VerificationChecksPageState
                                     ),
                                     SizedBox(height: s(24)),
                                     Expanded(
-                                      child: ListView.separated(
-                                        padding: EdgeInsets.only(bottom: s(16)),
-                                        itemBuilder:
-                                            (BuildContext context, int i) {
-                                              final _CheckItem item = items[i];
-                                              final bool selected = _selected
-                                                  .contains(item.id);
-                                              return _CheckTile(
-                                                scale: scale,
-                                                item: item,
-                                                selected: selected,
-                                                onTap: () {
-                                                  setState(() {
-                                                    if (selected) {
-                                                      _selected.remove(item.id);
-                                                    } else {
-                                                      _selected.add(item.id);
-                                                    }
-                                                  });
-                                                },
-                                              );
-                                            },
-                                        separatorBuilder:
-                                            (BuildContext context, int i) =>
-                                                SizedBox(height: s(16)),
-                                        itemCount: items.length,
-                                      ),
+                                      child: verificationTypesAsync.isLoading &&
+                                              apiItems.isEmpty
+                                          ? const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            )
+                                          : ListView.separated(
+                                              padding: EdgeInsets.only(
+                                                bottom: s(16),
+                                              ),
+                                              itemBuilder:
+                                                  (
+                                                    BuildContext context,
+                                                    int i,
+                                                  ) {
+                                                    final _CheckItem item =
+                                                        apiItems[i];
+                                                    final bool selected =
+                                                        _selected.contains(
+                                                          item.id,
+                                                        );
+                                                    return _CheckTile(
+                                                      scale: scale,
+                                                      item: item,
+                                                      selected: selected,
+                                                      onTap: () {
+                                                        setState(() {
+                                                          if (selected) {
+                                                            _selected.remove(
+                                                              item.id,
+                                                            );
+                                                          } else {
+                                                            _selected.add(
+                                                              item.id,
+                                                            );
+                                                          }
+                                                        });
+                                                      },
+                                                    );
+                                                  },
+                                              separatorBuilder:
+                                                  (
+                                                    BuildContext context,
+                                                    int i,
+                                                  ) =>
+                                                      SizedBox(height: s(16)),
+                                              itemCount: apiItems.length,
+                                            ),
                                     ),
                                   ],
                                 ),
@@ -977,7 +1079,7 @@ class _CheckTile extends StatelessWidget {
                   _SelectIndicator(scale: scale, selected: selected),
                   SizedBox(height: s(12)),
                   Text(
-                    '₹${item.costInr}',
+                    item.costInr > 0 ? '₹${item.costInr}' : 'Custom',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(14),

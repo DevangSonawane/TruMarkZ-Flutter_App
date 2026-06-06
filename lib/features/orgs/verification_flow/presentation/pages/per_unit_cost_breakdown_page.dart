@@ -1,24 +1,27 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/theme/app_colors.dart';
-import 'human_verification_checks_catalog.dart';
+import '../../../data/verification_repository.dart';
 import 'product_verification_checks_catalog.dart';
 import 'verification_flow_action.dart';
 import 'flow_step_progress.dart';
 
-class PerUnitCostBreakdownPage extends StatefulWidget {
+class PerUnitCostBreakdownPage extends ConsumerStatefulWidget {
   const PerUnitCostBreakdownPage({super.key});
 
   @override
-  State<PerUnitCostBreakdownPage> createState() =>
+  ConsumerState<PerUnitCostBreakdownPage> createState() =>
       _PerUnitCostBreakdownPageState();
 }
 
-class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
+class _PerUnitCostBreakdownPageState
+    extends ConsumerState<PerUnitCostBreakdownPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const Color _panelText = Color(0xFF3A3A3A);
@@ -34,24 +37,18 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
     return parsed > 0 ? parsed : 1;
   }
 
-  static final Map<String, _CheckPricing> _pricing = <String, _CheckPricing>{
-    for (final HumanVerificationCheckDefinition item
-        in HumanVerificationChecksCatalog.items)
-      item.id: _CheckPricing(
-        item.title,
-        HumanVerificationChecksCatalog.humanPricesInr[item.id] ?? 0,
-      ),
-  };
-
-  static final Map<String, _CheckPricing> _productPricing =
-      <String, _CheckPricing>{
-        for (final ProductVerificationCheckDefinition item
-            in ProductVerificationChecksCatalog.items)
-          item.id: _CheckPricing(
-            item.title,
-            ProductVerificationChecksCatalog.pricesInr[item.id] ?? 0,
-          ),
-      };
+  Map<String, _CheckPricing> _pricingFromTypes(
+    List<VerificationTypeDefinition> types,
+    bool isProductFlow,
+  ) {
+    return <String, _CheckPricing>{
+      for (final VerificationTypeDefinition item in types)
+        item.id: _CheckPricing(
+          item.name,
+          _resolvedPrice(item, isProductFlow: isProductFlow),
+        ),
+    };
+  }
 
   List<String> _selectedChecks(BuildContext context) {
     final Map<String, String> qp = GoRouterState.of(
@@ -68,12 +65,11 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
     return ids;
   }
 
-  int _totalCostInr(Iterable<String> ids) {
+  int _totalCostInr(
+    Iterable<String> ids,
+    Map<String, _CheckPricing> pricing,
+  ) {
     int total = 0;
-    final bool isProductFlow = _isProductFlow();
-    final Map<String, _CheckPricing> pricing = isProductFlow
-        ? _productPricing
-        : _pricing;
     for (final String id in ids) {
       total += pricing[id]?.costInr ?? 0;
     }
@@ -82,6 +78,18 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
 
   int _lineTotalInr(int unitCostInr, int userCount) {
     return unitCostInr * userCount;
+  }
+
+  int _resolvedPrice(
+    VerificationTypeDefinition item, {
+    required bool isProductFlow,
+  }) {
+    final int? apiPrice = item.price;
+    if (apiPrice != null && apiPrice > 0) return apiPrice;
+    if (isProductFlow) {
+      return ProductVerificationChecksCatalog.pricesInr[item.id] ?? 0;
+    }
+    return 0;
   }
 
   bool _isProductFlow() {
@@ -113,11 +121,15 @@ class _PerUnitCostBreakdownPageState extends State<PerUnitCostBreakdownPage> {
   Widget build(BuildContext context) {
     final List<String> ids = _selectedChecks(context);
     final int userCount = _userCount(context);
-    final int total = _totalCostInr(ids) * userCount;
     final bool isProductFlow = _isProductFlow();
-    final Map<String, _CheckPricing> pricing = isProductFlow
-        ? _productPricing
-        : _pricing;
+    final AsyncValue<List<VerificationTypeDefinition>> typesAsync = ref.watch(
+      verificationTypesProvider(isProductFlow ? 'product' : 'human'),
+    );
+    final Map<String, _CheckPricing> pricing = _pricingFromTypes(
+      typesAsync.valueOrNull ?? <VerificationTypeDefinition>[],
+      isProductFlow,
+    );
+    final int total = _totalCostInr(ids, pricing) * userCount;
     final Object? extra = GoRouterState.of(context).extra;
     final VerificationFlowConfirmAction? action =
         extra is VerificationFlowConfirmAction ? extra : null;

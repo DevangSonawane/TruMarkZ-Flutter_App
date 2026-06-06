@@ -893,6 +893,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final double referenceWidth = 402;
     final String resolvedIndustry = _effectiveIndustry();
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final AsyncValue<List<VerificationTypeDefinition>> productTypesAsync =
+        ref.watch(verificationTypesProvider('product'));
+    final Map<String, VerificationTypeDefinition> productTypesById =
+        <String, VerificationTypeDefinition>{
+          for (final VerificationTypeDefinition item
+              in productTypesAsync.valueOrNull ?? <VerificationTypeDefinition>[])
+            item.id: item,
+        };
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -1028,6 +1036,60 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                         color: const Color(0xFF94A3B8),
                                       ),
                                     ),
+                                    if (_checks.isNotEmpty) ...<Widget>[
+                                      SizedBox(height: s(16)),
+                                      Text(
+                                        'Selected checks',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(12),
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: s(1.1),
+                                          height: 18 / 12,
+                                          color: const Color(0xFF3A3A3A),
+                                        ),
+                                      ),
+                                      SizedBox(height: s(10)),
+                                      if (productTypesAsync.isLoading &&
+                                          productTypesAsync.valueOrNull ==
+                                              null)
+                                        Text(
+                                          'Loading verification types...',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(12),
+                                            fontWeight: FontWeight.w500,
+                                            height: 18 / 12,
+                                            color: const Color(0xFF64748B),
+                                          ),
+                                        )
+                                      else
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: <Widget>[
+                                            for (final String check
+                                                in _checks.toList()..sort())
+                                              Chip(
+                                                label: Text(
+                                                  productTypesById[check]
+                                                          ?.name ??
+                                                      check,
+                                                ),
+                                                backgroundColor:
+                                                    AppColors.brandBlue
+                                                        .withAlpha(18),
+                                                labelStyle: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: s(12),
+                                                  fontWeight: FontWeight.w600,
+                                                  height: 16.5 / 12,
+                                                  color: AppColors.brandBlue,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                    ],
                                     SizedBox(height: s(26)),
                                     Row(
                                       crossAxisAlignment:
