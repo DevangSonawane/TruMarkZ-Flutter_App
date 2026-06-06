@@ -209,6 +209,8 @@ class AppRouter {
       final TokenStorage tokenStorage = container.read(tokenStorageProvider);
       final String? token = await tokenStorage.getToken();
       final bool isAuthenticated = token != null && token.trim().isNotEmpty;
+      final String loginType =
+          (await tokenStorage.getLoginType())?.trim().toLowerCase() ?? '';
 
       final bool forceAuthFlow =
           state.uri.queryParameters['force']?.toLowerCase() == 'true';
@@ -237,9 +239,21 @@ class AppRouter {
       if (!isAuthenticated && !isOnAuthPage) return loginPath;
 
       if (isAuthenticated &&
+          loginType == 'individual' &&
+          state.matchedLocation.startsWith('/app/')) {
+        return individualIdentityPath;
+      }
+
+      if (isAuthenticated &&
+          loginType.isNotEmpty &&
+          loginType != 'individual' &&
+          state.matchedLocation.startsWith('/me/')) {
+        return dashboardPath;
+      }
+
+      if (isAuthenticated &&
           (state.matchedLocation == loginPath ||
               state.matchedLocation == registerPath)) {
-        final String loginType = (await tokenStorage.getLoginType()) ?? '';
         return loginType == 'individual'
             ? individualIdentityPath
             : dashboardPath;

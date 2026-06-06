@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -78,10 +79,89 @@ class IndividualDashboardPage extends ConsumerWidget {
               SliverToBoxAdapter(
                 child: Container(
                   color: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
+                      const SizedBox(height: 30),
+                      const Text(
+                        'QUICK ACCESS',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          height: 17.75 / 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.18,
+                          color: Color(0xFF323232),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.topLeft,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.topLeft,
+                          child: SizedBox(
+                            width: 339.1047,
+                            height: 87.1341,
+                            child: Stack(
+                              children: <Widget>[
+                                Positioned(
+                                  left: 13.5524,
+                                  top: 0,
+                                  child: _QuickActionCircle(
+                                    label: 'Verification',
+                                    svgAssetPath:
+                                        'assets/icons/figma/qa_scan_qr.svg',
+                                    iconSize: 25.662,
+                                    onTap: () =>
+                                        context.go(AppRouter.individualScanPath),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: 97.5524,
+                                  top: 0,
+                                  child: _QuickActionCircle(
+                                    label: 'Skill Tree',
+                                    svgAssetPath:
+                                        'assets/icons/figma/nav_batches.svg',
+                                    iconSize: 25.662,
+                                    onTap: () => context.go(
+                                      AppRouter.individualScanPath,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: 181.5524,
+                                  top: 0,
+                                  child: _QuickActionCircle(
+                                    label: 'Reports',
+                                    svgAssetPath:
+                                        'assets/icons/figma/qa_reports.svg',
+                                    iconSize: 25.662,
+                                    onTap: () => context.go(
+                                      AppRouter.individualReportsPath,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: 265.5524,
+                                  top: 0,
+                                  child: _QuickActionCircle(
+                                    label: 'SDC',
+                                    svgAssetPath:
+                                        'assets/icons/figma/account_icon_shield.svg',
+                                    iconSize: 25.662,
+                                    onTap: () =>
+                                        context.go(AppRouter.individualSdcPath),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       _VerificationStatusCard(
                         onStart: () {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -91,60 +171,9 @@ class IndividualDashboardPage extends ConsumerWidget {
                           );
                         },
                       ),
-                      const SizedBox(height: 4),
-                      const _SectionHeader(
-                        title: 'QUICK ACCESS',
-                        subtitle: 'Tap a card to open the module',
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: _ModuleCard(
-                              title: 'Skill Tree',
-                              subtitle: 'Blank for now',
-                              icon: Icons.account_tree_outlined,
-                              onTap: () => context.go(
-                                AppRouter.individualScanPath,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.x3),
-                          Expanded(
-                            child: _ModuleCard(
-                              title: 'Reports',
-                              subtitle: 'Review activity',
-                              icon: Icons.bar_chart_outlined,
-                              onTap: () => context.go(
-                                AppRouter.individualReportsPath,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: _ModuleCard(
-                              title: 'SDC',
-                              subtitle: 'Secure data space',
-                              icon: Icons.shield_outlined,
-                              onTap: () => context.go(AppRouter.individualSdcPath),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.x3),
-                          Expanded(
-                            child: _ModuleCard(
-                              title: 'Profile',
-                              subtitle: 'Top-right access',
-                              icon: Icons.account_circle_outlined,
-                              onTap: () => context.go(
-                                AppRouter.individualProfilePath,
-                              ),
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        height: MediaQuery.viewPaddingOf(context).bottom + 112,
                       ),
                     ],
                   ),
@@ -284,50 +313,6 @@ class _WelcomeMessage extends StatelessWidget {
             height: 17 / 12,
             fontWeight: FontWeight.w500,
             color: Colors.white.withValues(alpha: 0.82),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                title,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 12,
-                  height: 17.75 / 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.18,
-                  color: Color(0xFF323232),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
           ),
         ),
       ],
@@ -653,75 +638,77 @@ class _VerificationStatusCard extends StatelessWidget {
   }
 }
 
-class _ModuleCard extends StatelessWidget {
-  const _ModuleCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
+class _QuickActionCircle extends StatelessWidget {
+  const _QuickActionCircle({
+    required this.label,
+    required this.svgAssetPath,
     required this.onTap,
+    required this.iconSize,
   });
 
-  final String title;
-  final String subtitle;
-  final IconData icon;
+  final String label;
+  final String svgAssetPath;
   final VoidCallback onTap;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
+    return Semantics(
+      button: true,
+      label: label,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        child: Container(
-          height: 138,
-          padding: const EdgeInsets.all(AppSpacing.x4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border.withValues(alpha: 0.45)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+        child: SizedBox(
+          width: 60,
+          height: 87.13,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Container(
-                width: 40,
-                height: 40,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
-                  color: AppColors.blueTint,
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.brandBlue,
+                  borderRadius: BorderRadius.circular(50),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: AppColors.brandBlue.withValues(alpha: 0.2),
+                      offset: const Offset(0, 4.5671),
+                      blurRadius: 6.8506,
+                      spreadRadius: -4.5671,
+                    ),
+                    BoxShadow(
+                      color: AppColors.brandBlue.withValues(alpha: 0.2),
+                      offset: const Offset(0, 11.4177),
+                      blurRadius: 17.1265,
+                      spreadRadius: -3.4253,
+                    ),
+                  ],
                 ),
-                child: Icon(icon, color: AppColors.brandBlue),
+                child: Center(
+                  child: SvgPicture.asset(
+                    svgAssetPath,
+                    width: iconSize,
+                    height: iconSize,
+                    colorFilter: const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ),
               ),
-              const Spacer(),
+              const SizedBox(height: 9.1341),
               Text(
-                title.toUpperCase(),
+                label,
+                textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 12,
-                  height: 17.75 / 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.0,
-                  color: Color(0xFF323232),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.25,
+                  fontSize: 10.9946,
+                  height: 17.1265 / 10.9946,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF475569),
                 ),
               ),
             ],
