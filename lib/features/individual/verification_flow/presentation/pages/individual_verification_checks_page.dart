@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:ui';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
@@ -21,20 +22,70 @@ class _IndividualVerificationChecksPageState
     extends State<IndividualVerificationChecksPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
+  static const List<String> _industryOptions = <String>[
+    'All',
+    'Transport',
+    'Healthcare',
+    'Education',
+    'Manufacturing',
+    'Security',
+    'Agriculture',
+    'Consumer Goods',
+    'Beauty & Cosmetics',
+    'Electronics & Appliances',
+    'EV & Automotive',
+    'Insurance Policies',
+    'Healthcare Products',
+    'Industrial Equipment',
+    'Agriculture Products',
+    'Luxury Products',
+    'Others',
+  ];
 
+  String? _lastRouteSignature;
+  String _industry = '';
   final Set<String> _selected = <String>{};
 
-  String _industryLabel(BuildContext context) {
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
-    final String label = (qp['industry_label'] ?? '').trim();
-    if (label.isNotEmpty) {
-      return summarizeIndividualIndustryLabel(
-        label,
-        fallback: 'Industry',
-      );
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final Uri uri = GoRouterState.of(context).uri;
+    final String signature = uri.query;
+    if (_lastRouteSignature == signature) return;
+    _lastRouteSignature = signature;
+
+    final Map<String, String> qp = uri.queryParameters;
+    final String next = (qp['industry'] ?? '').trim().isNotEmpty
+        ? (qp['industry'] ?? '').trim()
+        : (qp['industry_label'] ?? '').trim();
+    if (next != _industry) {
+      setState(() => _industry = next);
     }
-    final String raw = (qp['industry'] ?? '').trim();
-    return summarizeIndividualIndustryLabel(raw, fallback: 'Industry');
+  }
+
+  String _industryRaw(BuildContext context) {
+    return _industry.trim();
+  }
+
+  String _industryLabel(BuildContext context) {
+    return summarizeIndividualIndustryLabel(_industry, fallback: 'Industry');
+  }
+
+  List<_CheckItem> _buildItems() {
+    return HumanVerificationChecksCatalog.items
+        .map(
+          (HumanVerificationCheckDefinition item) => _CheckItem(
+            id: item.id,
+            title: item.title,
+            subtitle: item.subtitle,
+            mode: item.mode == HumanVerificationCheckMode.auto
+                ? _CheckMode.auto
+                : _CheckMode.manual,
+            costInr: item.priceMinInr,
+            materialIcon: item.icon,
+          ),
+        )
+        .toList();
   }
 
   void _continue(BuildContext context) {
@@ -43,12 +94,10 @@ class _IndividualVerificationChecksPageState
       path: AppRouter.individualVerificationUploadPath,
       queryParameters: <String, String>{
         'flow': 'individual',
-        'industry': GoRouterState.of(context).uri.queryParameters['industry'] ??
-            '',
-        'industry_label':
-            GoRouterState.of(context).uri.queryParameters['industry_label'] ??
-            '',
         if (ids.isNotEmpty) 'checks': ids.join(','),
+        if (_industryRaw(context).isNotEmpty) 'industry': _industryRaw(context),
+        if (_industryLabel(context).isNotEmpty)
+          'industry_label': _industryLabel(context),
       },
     );
     context.push(uri.toString());
@@ -56,9 +105,14 @@ class _IndividualVerificationChecksPageState
 
   @override
   Widget build(BuildContext context) {
-    final String industryLabel = _industryLabel(context);
-    final List<HumanVerificationCheckDefinition> items =
-        HumanVerificationChecksCatalog.items;
+    final String resolvedIndustryRaw = _industryRaw(context);
+    final String resolvedIndustryLabel = _industryLabel(context);
+    final List<_CheckItem> apiItems = _buildItems();
+
+    final String stepText = 'STEP 2 OF 5';
+    final String progressText = '40%';
+    const double progressFactor = 0.4;
+    final String fallbackIndustryLabel = 'Industry';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -97,7 +151,7 @@ class _IndividualVerificationChecksPageState
                           ),
                           SizedBox(width: s(12)),
                           Text(
-                            'Verification Checks',
+                            'Checks',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: s(21),
@@ -107,7 +161,20 @@ class _IndividualVerificationChecksPageState
                             ),
                           ),
                           const Spacer(),
-                          _IndustryPill(label: industryLabel, scale: scale),
+                          _IndustryPill(
+                            scale: scale,
+                            label: resolvedIndustryLabel.isEmpty
+                                ? fallbackIndustryLabel
+                                : resolvedIndustryLabel,
+                            onTap: () async {
+                              final String? picked = await _pickIndustry(
+                                scale: scale,
+                                current: resolvedIndustryRaw,
+                              );
+                              if (!mounted || picked == null) return;
+                              setState(() => _industry = picked);
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -123,21 +190,69 @@ class _IndividualVerificationChecksPageState
                         child: Column(
                           children: <Widget>[
                             Expanded(
-                              child: SingleChildScrollView(
+                              child: Padding(
                                 padding: EdgeInsets.fromLTRB(
                                   s(16),
                                   s(32),
                                   s(16),
-                                  s(24),
+                                  0,
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    FlowStepProgress(
-                                      scale: scale,
-                                      stepLabel: 'STEP 2 OF 5',
-                                      progressLabel: '40%',
-                                      fillFactor: 0.4,
+                                    Row(
+                                      children: <Widget>[
+                                        Text(
+                                          stepText,
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: s(1),
+                                            height: 15 / 10,
+                                            color: const Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          progressText,
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(10),
+                                            fontWeight: FontWeight.w700,
+                                            height: 15 / 10,
+                                            color: AppColors.brandBlue,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: s(8)),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                        s(9999),
+                                      ),
+                                      child: SizedBox(
+                                        height: s(4),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: <Widget>[
+                                            const DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFFE5E7EB),
+                                              ),
+                                            ),
+                                            FractionallySizedBox(
+                                              alignment: Alignment.centerLeft,
+                                              widthFactor: progressFactor,
+                                              child: const DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.brandBlue,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
@@ -146,51 +261,81 @@ class _IndividualVerificationChecksPageState
                                         fontFamily: 'Inter',
                                         fontSize: s(24),
                                         fontWeight: FontWeight.w700,
-                                        letterSpacing: s(1.18),
+                                        letterSpacing: s(1.1833819),
                                         height: 22.6 / 24,
                                         color: const Color(0xFF3A3A3A),
                                       ),
                                     ),
                                     SizedBox(height: s(12)),
                                     Text(
-                                      'Choose the checks that should be included in this individual verification flow.',
+                                      'Customize your verification flow by selecting the\nnecessary checks for your candidates.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
                                         fontWeight: FontWeight.w500,
-                                        letterSpacing: s(1.18),
+                                        letterSpacing: s(1.1833819),
                                         height: 17.75 / 12,
                                         color: const Color(0xFF94A3B8),
                                       ),
                                     ),
                                     SizedBox(height: s(24)),
-                                    for (int i = 0; i < items.length; i++) ...<Widget>[
-                                      _CheckTile(
-                                        scale: scale,
-                                        item: items[i],
-                                        selected: _selected.contains(items[i].id),
-                                        onTap: () {
-                                          setState(() {
-                                            if (_selected.contains(items[i].id)) {
-                                              _selected.remove(items[i].id);
-                                            } else {
-                                              _selected.add(items[i].id);
-                                            }
-                                          });
-                                        },
-                                      ),
-                                      if (i != items.length - 1)
-                                        SizedBox(height: s(14)),
-                                    ],
+                                    Expanded(
+                                      child: apiItems.isEmpty
+                                          ? const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            )
+                                          : ListView.separated(
+                                              padding: EdgeInsets.only(
+                                                bottom: s(16),
+                                              ),
+                                              itemBuilder:
+                                                  (
+                                                    BuildContext context,
+                                                    int i,
+                                                  ) {
+                                                    final _CheckItem item =
+                                                        apiItems[i];
+                                                    final bool selected =
+                                                        _selected.contains(
+                                                          item.id,
+                                                        );
+                                                    return _CheckTile(
+                                                      scale: scale,
+                                                      item: item,
+                                                      selected: selected,
+                                                      onTap: () {
+                                                        setState(() {
+                                                          if (selected) {
+                                                            _selected.remove(
+                                                              item.id,
+                                                            );
+                                                          } else {
+                                                            _selected.add(
+                                                              item.id,
+                                                            );
+                                                          }
+                                                        });
+                                                      },
+                                                    );
+                                                  },
+                                              separatorBuilder:
+                                                  (
+                                                    BuildContext context,
+                                                    int i,
+                                                  ) =>
+                                                      SizedBox(height: s(16)),
+                                              itemCount: apiItems.length,
+                                            ),
+                                    ),
                                   ],
                                 ),
                               ),
                             ),
                             _BottomNav(
                               scale: scale,
-                              child: _ContinueButton(
+                              child: _BottomContinue(
                                 scale: scale,
-                                enabled: _selected.isNotEmpty,
                                 onTap: () => _continue(context),
                               ),
                             ),
@@ -207,52 +352,327 @@ class _IndividualVerificationChecksPageState
       ),
     );
   }
+
+  Future<String?> _pickIndustry({
+    required double scale,
+    required String current,
+  }) async {
+    final Set<String> selected = _industrySelectionFromRaw(current);
+    double s(double v) => v * scale;
+    final List<String> options = _industryOptions
+        .where((String e) => e != 'All')
+        .toList();
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setDialogState,
+              ) {
+                final bool allSelected = selected.length >= options.length;
+
+                void toggle(String label) {
+                  setDialogState(() {
+                    if (label == 'All') {
+                      selected
+                        ..clear()
+                        ..addAll(options);
+                      return;
+                    }
+                    if (selected.contains(label)) {
+                      selected.remove(label);
+                    } else {
+                      selected.add(label);
+                    }
+                  });
+                }
+
+                return Dialog(
+                  insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(s(16)),
+                    side: BorderSide(
+                      color: const Color(0xFFE5E7EB),
+                      width: s(1),
+                    ),
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: s(520)),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Text(
+                                'Select Industry',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(16),
+                                  fontWeight: FontWeight.w700,
+                                  height: 24 / 16,
+                                  color: const Color(0xFF111827),
+                                ),
+                              ),
+                              const Spacer(),
+                              InkResponse(
+                                onTap: () => Navigator.of(context).pop(),
+                                radius: s(18),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: s(20),
+                                  color: const Color(0xFF9CA3AF),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: s(10)),
+                          Text(
+                            'Choose one or more industries, then tap Update.',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(12),
+                              fontWeight: FontWeight.w500,
+                              height: 18 / 12,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                          SizedBox(height: s(10)),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: options.length + 1,
+                              separatorBuilder:
+                                  (BuildContext context, int index) => Divider(
+                                    height: s(1),
+                                    color: const Color(0xFFF1F5F9),
+                                  ),
+                              itemBuilder: (BuildContext context, int index) {
+                                final String label = index == 0
+                                    ? 'All'
+                                    : options[index - 1];
+                                final bool isSelected = label == 'All'
+                                    ? allSelected
+                                    : selected.contains(label);
+                                return InkWell(
+                                  onTap: () => toggle(label),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: s(12),
+                                      horizontal: s(2),
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        Container(
+                                          width: s(18),
+                                          height: s(18),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isSelected
+                                                ? AppColors.brandBlue
+                                                : const Color(0xFFE5E7EB),
+                                          ),
+                                          child: isSelected
+                                              ? Icon(
+                                                  Icons.check_rounded,
+                                                  size: s(12),
+                                                  color: Colors.white,
+                                                )
+                                              : null,
+                                        ),
+                                        SizedBox(width: s(12)),
+                                        Expanded(
+                                          child: Text(
+                                            label,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(14),
+                                              fontWeight: FontWeight.w600,
+                                              height: 20 / 14,
+                                              color: isSelected
+                                                  ? AppColors.brandBlue
+                                                  : const Color(0xFF334155),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          SizedBox(height: s(12)),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.brandBlue,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: s(14)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(s(12)),
+                                ),
+                              ),
+                              onPressed: selected.isEmpty
+                                  ? null
+                                  : () {
+                                      final List<String> sorted =
+                                          selected.toList()..sort();
+                                      Navigator.of(
+                                        context,
+                                      ).pop(sorted.join(', '));
+                                    },
+                              child: Text(
+                                'Update',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(14),
+                                  fontWeight: FontWeight.w700,
+                                  height: 20 / 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+        );
+      },
+    );
+  }
+
+  Set<String> _industrySelectionFromRaw(String raw) {
+    final Set<String> selected = <String>{};
+    final List<String> parts = _parseIndustryParts(raw);
+    if (parts.isEmpty) return selected;
+
+    final List<String> options = _industryOptions
+        .where((String e) => e != 'All')
+        .toList();
+    final Set<String> normalizedParts = parts
+        .map((String e) => e.trim().toLowerCase())
+        .where((String e) => e.isNotEmpty)
+        .toSet();
+    final Set<String> normalizedOptions = options
+        .map((String e) => e.toLowerCase())
+        .toSet();
+
+    if (normalizedParts.containsAll(normalizedOptions)) {
+      selected.addAll(options);
+      return selected;
+    }
+
+    for (final String option in options) {
+      if (normalizedParts.contains(option.toLowerCase())) {
+        selected.add(option);
+      }
+    }
+    return selected;
+  }
+
+  static List<String> _parseIndustryParts(String raw) {
+    final String v = raw.trim();
+    if (v.isEmpty) return <String>[];
+    if (v.startsWith('[') && v.endsWith(']')) {
+      return v
+          .substring(1, v.length - 1)
+          .split(',')
+          .map((String s) => s.replaceAll('"', '').trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    if (v.contains(',')) {
+      return v
+          .split(',')
+          .map((String s) => s.trim())
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    return <String>[v];
+  }
 }
 
 class _IndustryPill extends StatelessWidget {
-  const _IndustryPill({required this.label, required this.scale});
+  const _IndustryPill({
+    required this.scale,
+    required this.label,
+    required this.onTap,
+  });
 
-  final String label;
   final double scale;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    return Container(
-      height: s(29),
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(s(10)),
-        border: Border.all(color: const Color(0xFFE0EFFE)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SvgPicture.asset(
-            'assets/icons/figma/checks_industry_building.svg',
-            width: s(12),
-            height: s(10),
-            colorFilter: const ColorFilter.mode(
-              AppColors.brandBlue,
-              BlendMode.srcIn,
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(s(10)),
+      child: Container(
+        height: s(29),
+        padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F7FF),
+          borderRadius: BorderRadius.circular(s(10)),
+          border: Border.all(color: const Color(0xFFE0EFFE)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SvgPicture.asset(
+              'assets/icons/figma/checks_industry_building.svg',
+              width: s(12),
+              height: s(10),
+              colorFilter: const ColorFilter.mode(
+                AppColors.brandBlue,
+                BlendMode.srcIn,
+              ),
             ),
-          ),
-          SizedBox(width: s(8)),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.0644531),
-              height: 16.5 / 11,
-              color: AppColors.brandBlue,
+            SizedBox(width: s(8)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.0644531),
+                height: 16.5 / 11,
+                color: AppColors.brandBlue,
+              ),
             ),
-          ),
-        ],
+            SizedBox(width: s(8)),
+            Container(
+              width: s(1),
+              height: s(12),
+              color: const Color(0xFFE2E8F0),
+            ),
+            SizedBox(width: s(8)),
+            Text(
+              'EDIT',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(10),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.25),
+                height: 15 / 10,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -267,79 +687,131 @@ class _CheckTile extends StatelessWidget {
   });
 
   final double scale;
-  final HumanVerificationCheckDefinition item;
+  final _CheckItem item;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    final Color border = selected ? AppColors.brandBlue : const Color(0xFFF1F5F9);
-    final Color bg = selected ? const Color(0xFFF0F7FF) : Colors.white;
+
+    final Color cardBg = selected ? const Color(0xFFF0F7FF) : Colors.white;
+    final Color cardBorder = selected
+        ? AppColors.brandBlue
+        : const Color(0xFFF1F5F9);
+    final double borderWidth = selected ? s(2) : s(1);
+    final BoxShadow shadow = selected
+        ? const BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          )
+        : const BoxShadow(
+            color: Color(0x05000000),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          );
+
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(s(16)),
       child: InkWell(
-        onTap: onTap,
         borderRadius: BorderRadius.circular(s(16)),
+        onTap: onTap,
         child: Container(
+          padding: EdgeInsets.all(s(20)),
           decoration: BoxDecoration(
-            color: bg,
+            color: cardBg,
             borderRadius: BorderRadius.circular(s(16)),
-            border: Border.all(color: border, width: selected ? s(2) : s(1)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            border: Border.all(color: cardBorder, width: borderWidth),
+            boxShadow: <BoxShadow>[shadow],
           ),
-          padding: EdgeInsets.all(s(16)),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
               Container(
-                width: s(44),
-                height: s(44),
+                width: s(48),
+                height: s(48),
                 decoration: BoxDecoration(
-                  color: AppColors.brandBlue.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(s(14)),
+                  color: selected ? Colors.white : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(s(12)),
+                  border: Border.all(
+                    color: selected
+                        ? const Color(0xFFE0EFFE)
+                        : const Color(0xFFF1F5F9),
+                  ),
+                  boxShadow: selected
+                      ? const <BoxShadow>[
+                          BoxShadow(
+                            color: Color(0x0D000000),
+                            blurRadius: 2,
+                            offset: Offset(0, 1),
+                          ),
+                        ]
+                      : const <BoxShadow>[],
                 ),
                 alignment: Alignment.center,
-                child: Icon(item.icon, color: AppColors.brandBlue, size: s(22)),
+                child: Icon(
+                  item.materialIcon ?? Icons.verified_rounded,
+                  size: s(22),
+                  color: AppColors.brandBlue,
+                ),
               ),
-              SizedBox(width: s(14)),
+              SizedBox(width: s(16)),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      item.title,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(14),
-                        fontWeight: FontWeight.w700,
-                        height: 20 / 14,
-                        color: const Color(0xFF0F172A),
-                      ),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(16),
+                              fontWeight: FontWeight.w600,
+                              height: 24 / 16,
+                              color: const Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: s(12)),
+                        _ModePill(scale: scale, mode: item.mode),
+                      ],
                     ),
-                    SizedBox(height: s(3)),
+                    SizedBox(height: s(4)),
                     Text(
                       item.subtitle,
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: s(11),
-                        fontWeight: FontWeight.w500,
-                        height: 16 / 11,
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w400,
+                        height: 15 / 12,
                         color: const Color(0xFF64748B),
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                selected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
-                color: selected ? AppColors.brandBlue : const Color(0xFFCBD5E1),
-                size: s(24),
+              SizedBox(width: s(16)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  _SelectIndicator(scale: scale, selected: selected),
+                  SizedBox(height: s(12)),
+                  Text(
+                    item.costInr > 0 ? '₹${item.costInr}' : 'Custom',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(14),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: s(-0.1230469),
+                      height: 21 / 14,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -349,11 +821,151 @@ class _CheckTile extends StatelessWidget {
   }
 }
 
+class _ModePill extends StatelessWidget {
+  const _ModePill({required this.scale, required this.mode});
+
+  final double scale;
+  final _CheckMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    final bool auto = mode == _CheckMode.auto;
+    final Color bg = auto ? AppColors.brandBlue : const Color(0xFFEFF3F7);
+    final Color fg = auto ? Colors.white : const Color(0xFF64748B);
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: s(6), vertical: s(2)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(s(4)),
+      ),
+      child: Text(
+        auto ? 'AUTO' : 'MANUAL',
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: s(9),
+          fontWeight: FontWeight.w700,
+          letterSpacing: s(0.45),
+          height: 13.5 / 9,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectIndicator extends StatelessWidget {
+  const _SelectIndicator({required this.scale, required this.selected});
+
+  final double scale;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    if (selected) {
+      return Container(
+        width: s(24),
+        height: s(24),
+        decoration: BoxDecoration(
+          color: AppColors.brandBlue,
+          borderRadius: BorderRadius.circular(s(9999)),
+        ),
+        alignment: Alignment.center,
+        child: SvgPicture.asset(
+          'assets/icons/figma/checks_checkmark.svg',
+          width: s(9),
+          height: s(7),
+        ),
+      );
+    }
+
+    return Container(
+      width: s(24),
+      height: s(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(9999)),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: s(2)),
+      ),
+    );
+  }
+}
+
+class _BottomContinue extends StatelessWidget {
+  const _BottomContinue({required this.scale, required this.onTap});
+
+  final double scale;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      height: s(60),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.brandBlue,
+        borderRadius: BorderRadius.circular(s(16)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: AppColors.brandBlue.withAlpha(51),
+            blurRadius: s(6),
+            spreadRadius: s(-4),
+            offset: Offset(0, s(4)),
+          ),
+          BoxShadow(
+            color: AppColors.brandBlue.withAlpha(51),
+            blurRadius: s(15),
+            spreadRadius: s(-3),
+            offset: Offset(0, s(10)),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(s(16)),
+          onTap: onTap,
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  'Continue',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(18),
+                    fontWeight: FontWeight.w700,
+                    height: 28 / 18,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(width: s(10)),
+                SvgPicture.asset(
+                  'assets/icons/figma/new_batch_continue_arrow.svg',
+                  width: s(16),
+                  height: s(16),
+                  colorFilter: const ColorFilter.mode(
+                    Colors.white,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({
-    required this.scale,
-    required this.child,
-  });
+  const _BottomNav({required this.scale, required this.child});
 
   final double scale;
   final Widget child;
@@ -361,11 +973,11 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
         child: Container(
-          width: double.infinity,
           padding: EdgeInsets.fromLTRB(
             s(13.604),
             s(12.864),
@@ -385,67 +997,22 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-class _ContinueButton extends StatelessWidget {
-  const _ContinueButton({
-    required this.scale,
-    required this.enabled,
-    required this.onTap,
+enum _CheckMode { auto, manual }
+
+class _CheckItem {
+  const _CheckItem({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.mode,
+    required this.costInr,
+    this.materialIcon,
   });
 
-  final double scale;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 150),
-      opacity: enabled ? 1 : 0.45,
-      child: SizedBox(
-        height: s(60),
-        width: double.infinity,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.brandBlue,
-            borderRadius: BorderRadius.circular(s(16)),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(s(16)),
-              onTap: enabled ? onTap : null,
-              child: Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Text(
-                      'Continue',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(18),
-                        fontWeight: FontWeight.w700,
-                        height: 28 / 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(width: s(10)),
-                    SvgPicture.asset(
-                      'assets/icons/figma/new_batch_continue_arrow.svg',
-                      width: s(16),
-                      height: s(16),
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  final String id;
+  final String title;
+  final String subtitle;
+  final _CheckMode mode;
+  final int costInr;
+  final IconData? materialIcon;
 }
