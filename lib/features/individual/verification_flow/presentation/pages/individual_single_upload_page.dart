@@ -99,7 +99,6 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
 
   @override
   Widget build(BuildContext context) {
-    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -405,7 +404,6 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                             ),
                             _BottomNav(
                               scale: scale,
-                              bottomInset: safeBottom,
                               child: SizedBox(
                                 width: double.infinity,
                                 height: s(60),
@@ -479,12 +477,10 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
 class _BottomNav extends StatelessWidget {
   const _BottomNav({
     required this.scale,
-    required this.bottomInset,
     required this.child,
   });
 
   final double scale;
-  final double bottomInset;
   final Widget child;
 
   @override
@@ -499,7 +495,7 @@ class _BottomNav extends StatelessWidget {
             s(13.604),
             s(12.864),
             s(13.668),
-            s(12.864) + bottomInset,
+            s(12.864),
           ),
           decoration: BoxDecoration(
             color: Colors.white.withAlpha(204),
