@@ -124,10 +124,8 @@ class IndividualDashboardPage extends ConsumerWidget {
                       const SizedBox(height: _sectionHeaderToCardGap),
                       _VerificationStatusCard(
                         onStart: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Start Verification coming soon'),
-                            ),
+                          context.go(
+                            AppRouter.individualVerificationIndustryPath,
                           );
                         },
                       ),

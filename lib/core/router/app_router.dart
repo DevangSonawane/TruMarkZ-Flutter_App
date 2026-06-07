@@ -13,6 +13,11 @@ import '../services/token_storage.dart';
 import '../../features/individual/presentation/pages/individual_dashboard_page.dart';
 import '../../features/individual/presentation/pages/individual_profile_page.dart';
 import '../../features/individual/presentation/pages/individual_reports_page.dart';
+import '../../features/individual/verification_flow/presentation/pages/individual_certificate_preview_page.dart';
+import '../../features/individual/verification_flow/presentation/pages/individual_cost_breakdown_page.dart';
+import '../../features/individual/verification_flow/presentation/pages/individual_single_upload_page.dart';
+import '../../features/individual/verification_flow/presentation/pages/individual_verification_checks_page.dart';
+import '../../features/individual/verification_flow/presentation/pages/individual_verification_industry_page.dart';
 import '../../features/individual/presentation/pages/individual_skill_tree_page.dart';
 import '../../features/individual/presentation/pages/individual_sdc_page.dart';
 import '../../features/individual/presentation/pages/individual_vault_page.dart';
@@ -149,6 +154,16 @@ class AppRouter {
   static const String individualSdcPath = '/me/sdc';
   static const String individualVaultPath = '/me/vault';
   static const String individualProfilePath = '/me/profile';
+  static const String individualVerificationIndustryPath =
+      '/me/verification/industry';
+  static const String individualVerificationChecksPath =
+      '/me/verification/checks';
+  static const String individualVerificationUploadPath =
+      '/me/verification/upload';
+  static const String individualVerificationCertificatePreviewPath =
+      '/me/verification/certificate-preview';
+  static const String individualVerificationCostBreakdownPath =
+      '/me/verification/cost-breakdown';
 
   // Admin
   static const String superAdminDashboardPath = '/admin/dashboard';
@@ -469,6 +484,51 @@ class AppRouter {
                 _slideFadePage(
                   state: state,
                   child: const IndividualProfilePage(),
+                ),
+          ),
+          GoRoute(
+            path: individualVerificationIndustryPath,
+            name: 'individual_verification_industry',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualVerificationIndustryPage(),
+                ),
+          ),
+          GoRoute(
+            path: individualVerificationChecksPath,
+            name: 'individual_verification_checks',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualVerificationChecksPage(),
+                ),
+          ),
+          GoRoute(
+            path: individualVerificationUploadPath,
+            name: 'individual_verification_upload',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualSingleUploadPage(),
+                ),
+          ),
+          GoRoute(
+            path: individualVerificationCertificatePreviewPath,
+            name: 'individual_verification_certificate_preview',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualCertificatePreviewPage(),
+                ),
+          ),
+          GoRoute(
+            path: individualVerificationCostBreakdownPath,
+            name: 'individual_verification_cost_breakdown',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualCostBreakdownPage(),
                 ),
           ),
         ],
