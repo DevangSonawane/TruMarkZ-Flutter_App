@@ -256,6 +256,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.of(context).viewPadding.bottom;
+    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final bool isKeyboardOpen = keyboardInset > 0;
 
     return PopScope(
       canPop: false,
@@ -265,148 +267,156 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       },
       child: Scaffold(
         backgroundColor: AppColors.darkNavy,
+        resizeToAvoidBottomInset: false,
         body: SafeArea(
           bottom: false,
-          child: Column(
-            children: <Widget>[
-              Expanded(
-                flex: 1,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.x5,
-                    AppSpacing.x3,
-                    AppSpacing.x5,
-                    AppSpacing.x4,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      IconButton(
-                        onPressed: () =>
-                            context.go(AppRouter.roleSelectionPath),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: Colors.white,
-                        tooltip: 'Back',
-                        padding: const EdgeInsets.all(4),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      const SizedBox(height: AppSpacing.x2),
-                      Text(
-                        'Go ahead and set up\nyour account',
-                        style: AppTypography.display1.copyWith(
-                          fontSize: 30,
-                          height: 1.15,
-                          color: Colors.white,
-                        ),
-                      ).animate().fadeIn(duration: 220.ms),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: _isRegisterMode ? 4 : 3,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(
-                    begin: _isRegisterMode ? 22 : 16,
-                    end: _isRegisterMode ? 16 : 16,
-                  ),
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  builder: (BuildContext context, double dy, Widget? child) {
-                    return Transform.translate(
-                      offset: Offset(0, dy),
-                      child: child,
-                    );
-                  },
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: Column(
+              children: <Widget>[
+                Expanded(
+                  flex: 1,
                   child: Container(
                     width: double.infinity,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(40),
-                        topRight: Radius.circular(40),
-                      ),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.x5,
+                      AppSpacing.x3,
+                      AppSpacing.x5,
+                      AppSpacing.x4,
                     ),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.x5,
-                        _isRegisterMode ? AppSpacing.x3 : AppSpacing.x2,
-                        AppSpacing.x5,
-                        AppSpacing.x3 + bottomInset,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        IconButton(
+                          onPressed: () =>
+                              context.go(AppRouter.roleSelectionPath),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          color: Colors.white,
+                          tooltip: 'Back',
+                          padding: const EdgeInsets.all(4),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(height: AppSpacing.x2),
+                        Text(
+                          'Go ahead and set up\nyour account',
+                          style: AppTypography.display1.copyWith(
+                            fontSize: 30,
+                            height: 1.15,
+                            color: Colors.white,
+                          ),
+                        ).animate().fadeIn(duration: 220.ms),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: _isRegisterMode ? 4 : 3,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(
+                      begin: _isRegisterMode ? 22 : 16,
+                      end: _isRegisterMode ? 16 : 16,
+                    ),
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    builder: (BuildContext context, double dy, Widget? child) {
+                      return Transform.translate(
+                        offset: Offset(0, dy),
+                        child: child,
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(40),
+                          topRight: Radius.circular(40),
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          _AuthTabs(
-                            isRegisterMode: _isRegisterMode,
-                            onLogin: () => _setRegisterMode(false),
-                            onRegister: () => _setRegisterMode(true),
-                          ),
-                          SizedBox(
-                            height: _isRegisterMode ? AppSpacing.x2 : AppSpacing.x2,
-                          ),
-                          Expanded(
-                            child: ClipRect(
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                layoutBuilder: (
-                                  Widget? currentChild,
-                                  List<Widget> previousChildren,
-                                ) {
-                                  return Align(
-                                    alignment: Alignment.topCenter,
-                                    child: currentChild ?? const SizedBox.shrink(),
-                                  );
-                                },
-                                transitionBuilder: (
-                                  Widget child,
-                                  Animation<double> animation,
-                                ) {
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: child,
-                                  );
-                                },
-                                child: _isRegisterMode
-                                    ? _RegisterForm(
-                                        key: const ValueKey<String>('register'),
-                                        isLoading: _isLoading,
-                                        fullNameController: _fullNameController,
-                                        emailController: _emailController,
-                                        addressController: _addressController,
-                                        passwordController: _passwordController,
-                                        onSubmit: _onRegister,
-                                      )
-                                    : _LoginForm(
-                                        key: const ValueKey<String>('login'),
-                                        isLoading: _isLoading,
-                                        rememberMe: _rememberMe,
-                                        onRememberMeChanged: () {
-                                          setState(() {
-                                            _rememberMe = !_rememberMe;
-                                          });
-                                        },
-                                        emailController: _emailController,
-                                        passwordController: _passwordController,
-                                        onForgotPassword: () => context.go(
-                                          AppRouter.forgotPasswordPath,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.x5,
+                          _isRegisterMode ? AppSpacing.x3 : AppSpacing.x2,
+                          AppSpacing.x5,
+                          AppSpacing.x3 + bottomInset,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            _AuthTabs(
+                              isRegisterMode: _isRegisterMode,
+                              onLogin: () => _setRegisterMode(false),
+                              onRegister: () => _setRegisterMode(true),
+                            ),
+                            SizedBox(
+                              height: _isRegisterMode ? AppSpacing.x2 : AppSpacing.x2,
+                            ),
+                            Expanded(
+                              child: ClipRect(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  layoutBuilder: (
+                                    Widget? currentChild,
+                                    List<Widget> previousChildren,
+                                  ) {
+                                    return Align(
+                                      alignment: Alignment.topCenter,
+                                      child: currentChild ?? const SizedBox.shrink(),
+                                    );
+                                  },
+                                  transitionBuilder: (
+                                    Widget child,
+                                    Animation<double> animation,
+                                  ) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    );
+                                  },
+                                  child: _isRegisterMode
+                                      ? _RegisterForm(
+                                          key: const ValueKey<String>('register'),
+                                          isLoading: _isLoading,
+                                          compactMode: isKeyboardOpen,
+                                          fullNameController: _fullNameController,
+                                          emailController: _emailController,
+                                          addressController: _addressController,
+                                          passwordController: _passwordController,
+                                          onSubmit: _onRegister,
+                                        )
+                                      : _LoginForm(
+                                          key: const ValueKey<String>('login'),
+                                          isLoading: _isLoading,
+                                          compactMode: isKeyboardOpen,
+                                          rememberMe: _rememberMe,
+                                          onRememberMeChanged: () {
+                                            setState(() {
+                                              _rememberMe = !_rememberMe;
+                                            });
+                                          },
+                                          emailController: _emailController,
+                                          passwordController: _passwordController,
+                                          onForgotPassword: () => context.go(
+                                            AppRouter.forgotPasswordPath,
+                                          ),
+                                          onSubmit: _onSignIn,
+                                          onGoogle: _signInWithGoogle,
                                         ),
-                                        onSubmit: _onSignIn,
-                                        onGoogle: _signInWithGoogle,
-                                      ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -532,6 +542,7 @@ class _LoginForm extends StatelessWidget {
   const _LoginForm({
     super.key,
     required this.isLoading,
+    required this.compactMode,
     required this.rememberMe,
     required this.onRememberMeChanged,
     required this.emailController,
@@ -542,6 +553,7 @@ class _LoginForm extends StatelessWidget {
   });
 
   final bool isLoading;
+  final bool compactMode;
   final bool rememberMe;
   final VoidCallback onRememberMeChanged;
   final TextEditingController emailController;
@@ -552,142 +564,190 @@ class _LoginForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        TMZInput(
-          label: 'Email Address',
-          hint: 'Enter your email',
-          keyboardType: TextInputType.emailAddress,
-          prefixIcon: Icons.mail_outline_rounded,
-          controller: emailController,
-          enabled: !isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x4),
-        TMZInput(
-          label: 'Password',
-          hint: 'Enter your password',
-          prefixIcon: Icons.lock_outline_rounded,
-          obscureText: true,
-          controller: passwordController,
-          enabled: !isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x4),
-        Row(
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+        return Stack(
+          alignment: Alignment.topCenter,
           children: <Widget>[
-            InkWell(
-              onTap: isLoading ? null : onRememberMeChanged,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 4,
-                  horizontal: 2,
+            ...previousChildren,
+            if (currentChild case final Widget child) child,
+          ],
+        );
+      },
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      child: compactMode
+          ? Column(
+              key: const ValueKey<String>('login-compact'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TMZInput(
+                  label: 'Email Address',
+                  hint: 'Enter your email',
+                  keyboardType: TextInputType.emailAddress,
+                  prefixIcon: Icons.mail_outline_rounded,
+                  controller: emailController,
+                  enabled: !isLoading,
                 ),
-                child: Row(
+                const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Password',
+                  hint: 'Enter your password',
+                  prefixIcon: Icons.lock_outline_rounded,
+                  obscureText: true,
+                  controller: passwordController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZButton(
+                  onPressed: isLoading ? null : onSubmit,
+                  label: 'Sign In',
+                  isLoading: isLoading,
+                ),
+              ],
+            )
+          : Column(
+              key: const ValueKey<String>('login-full'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TMZInput(
+                  label: 'Email Address',
+                  hint: 'Enter your email',
+                  keyboardType: TextInputType.emailAddress,
+                  prefixIcon: Icons.mail_outline_rounded,
+                  controller: emailController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                TMZInput(
+                  label: 'Password',
+                  hint: 'Enter your password',
+                  prefixIcon: Icons.lock_outline_rounded,
+                  obscureText: true,
+                  controller: passwordController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                Row(
                   children: <Widget>[
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        color: rememberMe
-                            ? AppColors.brandBlue
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: rememberMe
-                              ? AppColors.brandBlue
-                              : AppColors.border,
-                          width: 1.2,
+                    InkWell(
+                      onTap: isLoading ? null : onRememberMeChanged,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 2,
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: rememberMe
+                                    ? AppColors.brandBlue
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: rememberMe
+                                      ? AppColors.brandBlue
+                                      : AppColors.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: rememberMe
+                                  ? const Icon(
+                                      Icons.check_rounded,
+                                      size: 12,
+                                      color: Colors.white,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Remember me',
+                              style: AppTypography.body2.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: rememberMe
-                          ? const Icon(
-                              Icons.check_rounded,
-                              size: 12,
-                              color: Colors.white,
-                            )
-                          : null,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Remember me',
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
+                    const Spacer(),
+                    TextButton(
+                      onPressed: isLoading ? null : onForgotPassword,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textTertiary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Forgot Password?',
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ),
-            const Spacer(),
-            TextButton(
-              onPressed: isLoading ? null : onForgotPassword,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textTertiary,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                'Forgot Password?',
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.textTertiary,
+                const SizedBox(height: AppSpacing.x5),
+                TMZButton(
+                  onPressed: isLoading ? null : onSubmit,
+                  label: 'Sign In',
+                  isLoading: isLoading,
                 ),
-              ),
+                const SizedBox(height: AppSpacing.x4),
+                Row(
+                  children: <Widget>[
+                    const Expanded(child: Divider()),
+                    const SizedBox(width: AppSpacing.x3),
+                    Text(
+                      'Or continue with',
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.x3),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.x8),
+                OutlinedButton(
+                  onPressed: isLoading ? null : onGoogle,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    side: const BorderSide(
+                      color: AppColors.border,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    foregroundColor: AppColors.textPrimary,
+                    backgroundColor: Colors.white,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      SvgPicture.asset(
+                        'assets/icons/google-icon-logo-svgrepo-com.svg',
+                        width: 18,
+                        height: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      const Text('Google'),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.x5),
-        TMZButton(
-          onPressed: isLoading ? null : onSubmit,
-          label: 'Sign In',
-          isLoading: isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x4),
-        Row(
-          children: <Widget>[
-            const Expanded(child: Divider()),
-            const SizedBox(width: AppSpacing.x3),
-            Text(
-              'Or continue with',
-              style: AppTypography.body2.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.x3),
-            const Expanded(child: Divider()),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.x8),
-        OutlinedButton(
-          onPressed: isLoading ? null : onGoogle,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(52),
-            side: const BorderSide(
-              color: AppColors.border,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-            foregroundColor: AppColors.textPrimary,
-            backgroundColor: Colors.white,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              SvgPicture.asset(
-                'assets/icons/google-icon-logo-svgrepo-com.svg',
-                width: 18,
-                height: 18,
-              ),
-              const SizedBox(width: 10),
-              const Text('Google'),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -696,6 +756,7 @@ class _RegisterForm extends StatelessWidget {
   const _RegisterForm({
     super.key,
     required this.isLoading,
+    required this.compactMode,
     required this.fullNameController,
     required this.emailController,
     required this.addressController,
@@ -704,6 +765,7 @@ class _RegisterForm extends StatelessWidget {
   });
 
   final bool isLoading;
+  final bool compactMode;
   final TextEditingController fullNameController;
   final TextEditingController emailController;
   final TextEditingController addressController;
@@ -712,50 +774,107 @@ class _RegisterForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        const SizedBox(height: AppSpacing.x4),
-        TMZInput(
-          label: 'Full Name',
-          hint: 'John Doe',
-          prefixIcon: Icons.person_outline_rounded,
-          controller: fullNameController,
-          enabled: !isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: 'Email',
-          hint: 'name@company.com',
-          keyboardType: TextInputType.emailAddress,
-          prefixIcon: Icons.mail_outline_rounded,
-          controller: emailController,
-          enabled: !isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: 'Address (optional)',
-          hint: 'Your full address',
-          prefixIcon: Icons.location_on_outlined,
-          controller: addressController,
-          enabled: !isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: 'Password',
-          hint: '••••••••',
-          prefixIcon: Icons.lock_outline_rounded,
-          obscureText: true,
-          controller: passwordController,
-          enabled: !isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZButton(
-          onPressed: isLoading ? null : onSubmit,
-          label: 'Register',
-          isLoading: isLoading,
-        ),
-      ],
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+        return Stack(
+          alignment: Alignment.topCenter,
+          children: <Widget>[
+            ...previousChildren,
+            if (currentChild case final Widget child) child,
+          ],
+        );
+      },
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      child: compactMode
+          ? Column(
+              key: const ValueKey<String>('register-compact'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const SizedBox(height: AppSpacing.x2),
+                TMZInput(
+                  label: 'Full Name',
+                  hint: 'John Doe',
+                  prefixIcon: Icons.person_outline_rounded,
+                  controller: fullNameController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TMZInput(
+                  label: 'Email',
+                  hint: 'name@company.com',
+                  keyboardType: TextInputType.emailAddress,
+                  prefixIcon: Icons.mail_outline_rounded,
+                  controller: emailController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TMZInput(
+                  label: 'Password',
+                  hint: '••••••••',
+                  prefixIcon: Icons.lock_outline_rounded,
+                  obscureText: true,
+                  controller: passwordController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TMZButton(
+                  onPressed: isLoading ? null : onSubmit,
+                  label: 'Register',
+                  isLoading: isLoading,
+                ),
+              ],
+            )
+          : Column(
+              key: const ValueKey<String>('register-full'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const SizedBox(height: AppSpacing.x4),
+                TMZInput(
+                  label: 'Full Name',
+                  hint: 'John Doe',
+                  prefixIcon: Icons.person_outline_rounded,
+                  controller: fullNameController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Email',
+                  hint: 'name@company.com',
+                  keyboardType: TextInputType.emailAddress,
+                  prefixIcon: Icons.mail_outline_rounded,
+                  controller: emailController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Address (optional)',
+                  hint: 'Your full address',
+                  prefixIcon: Icons.location_on_outlined,
+                  controller: addressController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Password',
+                  hint: '••••••••',
+                  prefixIcon: Icons.lock_outline_rounded,
+                  obscureText: true,
+                  controller: passwordController,
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZButton(
+                  onPressed: isLoading ? null : onSubmit,
+                  label: 'Register',
+                  isLoading: isLoading,
+                ),
+              ],
+            ),
     );
   }
 }
