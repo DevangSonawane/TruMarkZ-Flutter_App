@@ -60,11 +60,6 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
     super.dispose();
   }
 
-  String? _requiredValidator(String? value, {required String label}) {
-    if (value == null || value.trim().isEmpty) return '$label is required.';
-    return null;
-  }
-
   InputDecoration _decoration(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,
@@ -272,11 +267,6 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                                           'Full Name',
                                           hint: 'Alex Johnson',
                                         ),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Full name',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
@@ -286,11 +276,6 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                                           'Phone Number',
                                           hint: '+91 9876543210',
                                         ),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Phone number',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
@@ -301,11 +286,6 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                                           'Email Address',
                                           hint: 'name@example.com',
                                         ),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Email',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
@@ -314,31 +294,16 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                                           'Date of Birth',
                                           hint: 'YYYY-MM-DD',
                                         ),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Date of birth',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
                                         controller: _aadhar,
                                         decoration: _decoration('Aadhar Number'),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Aadhar number',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
                                         controller: _pan,
                                         decoration: _decoration('PAN Number'),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'PAN number',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
@@ -346,11 +311,6 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                                         decoration: _decoration(
                                           'Address Line 1',
                                         ),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Address line 1',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
@@ -371,31 +331,16 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                                         controller: _pincode,
                                         keyboardType: TextInputType.number,
                                         decoration: _decoration('Pincode'),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Pincode',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
                                         controller: _state,
                                         decoration: _decoration('State'),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'State',
-                                            ),
                                       ),
                                       SizedBox(height: s(12)),
                                       TextFormField(
                                         controller: _country,
                                         decoration: _decoration('Country'),
-                                        validator: (String? v) =>
-                                            _requiredValidator(
-                                              v,
-                                              label: 'Country',
-                                            ),
                                       ),
                                     ],
                                   ),
@@ -414,17 +359,10 @@ class _IndividualSingleUploadPageState extends State<IndividualSingleUploadPage>
                                   ),
                                   child: Material(
                                     color: Colors.transparent,
-                                    child: InkWell(
+                                      child: InkWell(
                                       borderRadius:
                                           BorderRadius.circular(s(16)),
-                                      onTap: () {
-                                        final FormState? state =
-                                            _formKey.currentState;
-                                        if (state == null || !state.validate()) {
-                                          return;
-                                        }
-                                        _continue();
-                                      },
+                                      onTap: _continue,
                                       child: Center(
                                         child: Row(
                                           mainAxisAlignment:
