@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../orgs/verification_flow/presentation/pages/flow_step_progress.dart';
+import 'individual_industry_label_utils.dart';
 
 class IndividualCertificatePreviewPage extends StatefulWidget {
   const IndividualCertificatePreviewPage({super.key});
@@ -36,9 +38,11 @@ class _IndividualCertificatePreviewPageState
 
   @override
   Widget build(BuildContext context) {
-    final String industryLabel =
-        (GoRouterState.of(context).uri.queryParameters['industry_label'] ?? '')
-            .trim();
+    final String industryLabel = summarizeIndividualIndustryLabel(
+      GoRouterState.of(context).uri.queryParameters['industry_label'] ?? '',
+      fallback: 'Individual',
+    );
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -106,7 +110,7 @@ class _IndividualCertificatePreviewPageState
                                   s(16),
                                   s(32),
                                   s(16),
-                                  s(24) + s(85.728),
+                                  s(24),
                                 ),
                                 child: Column(
                                   crossAxisAlignment:
@@ -187,28 +191,50 @@ class _IndividualCertificatePreviewPageState
                             ),
                             _BottomNav(
                               scale: scale,
+                              bottomInset: safeBottom,
                               child: SizedBox(
                                 width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: () => _continue(context),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.brandBlue,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: s(16),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(s(16)),
-                                    ),
+                                height: s(60),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.brandBlue,
+                                    borderRadius: BorderRadius.circular(s(16)),
                                   ),
-                                  child: Text(
-                                    'Continue',
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: s(16),
-                                      fontWeight: FontWeight.w700,
-                                      height: 24 / 16,
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius:
+                                          BorderRadius.circular(s(16)),
+                                      onTap: () => _continue(context),
+                                      child: Center(
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: <Widget>[
+                                            Text(
+                                              'Continue',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: s(18),
+                                                fontWeight: FontWeight.w700,
+                                                height: 28 / 18,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            SizedBox(width: s(10)),
+                                            SvgPicture.asset(
+                                              'assets/icons/figma/new_batch_continue_arrow.svg',
+                                              width: s(16),
+                                              height: s(16),
+                                              colorFilter:
+                                                  const ColorFilter.mode(
+                                                Colors.white,
+                                                BlendMode.srcIn,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -376,24 +402,39 @@ class _MiniInfoCard extends StatelessWidget {
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.scale, required this.child});
+  const _BottomNav({
+    required this.scale,
+    required this.bottomInset,
+    required this.child,
+  });
 
   final double scale;
+  final double bottomInset;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(s(16), s(14), s(16), s(14)),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFF1F5F9)),
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864) + bottomInset,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
+            ),
+          ),
+          child: SafeArea(top: false, child: child),
         ),
       ),
-      child: child,
     );
   }
 }

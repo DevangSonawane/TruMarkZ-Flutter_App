@@ -1,9 +1,12 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../orgs/verification_flow/presentation/pages/flow_step_progress.dart';
 
 class IndividualVerificationIndustryPage extends StatefulWidget {
   const IndividualVerificationIndustryPage({super.key});
@@ -89,6 +92,7 @@ class _IndividualVerificationIndustryPageState
 
   @override
   Widget build(BuildContext context) {
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -155,11 +159,18 @@ class _IndividualVerificationIndustryPageState
                                   s(16),
                                   s(32),
                                   s(16),
-                                  s(24) + s(96),
+                                  s(24),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
+                                    FlowStepProgress(
+                                      scale: scale,
+                                      stepLabel: 'STEP 1 OF 5',
+                                      progressLabel: '20%',
+                                      fillFactor: 0.2,
+                                    ),
+                                    SizedBox(height: s(24)),
                                     Text(
                                       'Select Industry',
                                       style: TextStyle(
@@ -213,6 +224,7 @@ class _IndividualVerificationIndustryPageState
                             ),
                             _BottomNav(
                               scale: scale,
+                              bottomInset: safeBottom,
                               child: _ContinueButton(
                                 scale: scale,
                                 enabled: _selectedIndustryIds.isNotEmpty,
@@ -343,24 +355,39 @@ class _IndustryCard extends StatelessWidget {
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.scale, required this.child});
+  const _BottomNav({
+    required this.scale,
+    required this.bottomInset,
+    required this.child,
+  });
 
   final double scale;
+  final double bottomInset;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(s(16), s(14), s(16), s(14)),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFF1F5F9)),
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864) + bottomInset,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
+            ),
+          ),
+          child: SafeArea(top: false, child: child),
         ),
       ),
-      child: child,
     );
   }
 }
@@ -379,26 +406,50 @@ class _ContinueButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: enabled ? onTap : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.brandBlue,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: EdgeInsets.symmetric(vertical: s(16)),
-          shape: RoundedRectangleBorder(
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 150),
+      opacity: enabled ? 1 : 0.45,
+      child: SizedBox(
+        height: s(60),
+        width: double.infinity,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.brandBlue,
             borderRadius: BorderRadius.circular(s(16)),
           ),
-        ),
-        child: Text(
-          'Continue',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(16),
-            fontWeight: FontWeight.w700,
-            height: 24 / 16,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(s(16)),
+              onTap: enabled ? onTap : null,
+              child: Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      'Continue',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(18),
+                        fontWeight: FontWeight.w700,
+                        height: 28 / 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(width: s(10)),
+                    SvgPicture.asset(
+                      'assets/icons/figma/new_batch_continue_arrow.svg',
+                      width: s(16),
+                      height: s(16),
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

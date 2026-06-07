@@ -44,21 +44,36 @@ class IndividualShellPage extends StatelessWidget {
     final String location = GoRouterState.of(context).uri.toString();
     final int currentIndex = _indexForLocation(location);
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bool isVerificationFlow = location.startsWith(
+      AppRouter.individualVerificationIndustryPath,
+    ) ||
+        location.startsWith(AppRouter.individualVerificationChecksPath) ||
+        location.startsWith(AppRouter.individualVerificationUploadPath) ||
+        location.startsWith(
+          AppRouter.individualVerificationCertificatePreviewPath,
+        ) ||
+        location.startsWith(AppRouter.individualVerificationCostBreakdownPath);
 
     return PopScope(
-      canPop: false,
+      canPop: GoRouter.of(context).canPop(),
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (didPop) return;
-        context.go(AppRouter.individualIdentityPath);
+        if (GoRouter.of(context).canPop()) {
+          context.pop(result);
+        } else {
+          context.go(AppRouter.individualIdentityPath);
+        }
       },
       child: Scaffold(
         extendBody: true,
         body: child,
-        bottomNavigationBar: _IndividualBottomNav(
-          safeBottom: safeBottom,
-          currentIndex: currentIndex,
-          onTap: (int i) => _onTap(context, i),
-        ),
+        bottomNavigationBar: isVerificationFlow
+            ? null
+            : _IndividualBottomNav(
+                safeBottom: safeBottom,
+                currentIndex: currentIndex,
+                onTap: (int i) => _onTap(context, i),
+              ),
       ),
     );
   }
