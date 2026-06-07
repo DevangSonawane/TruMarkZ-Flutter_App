@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
 import 'dart:ui';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../../orgs/verification_flow/presentation/pages/flow_step_progress.dart';
 import 'individual_industry_label_utils.dart';
 
 class IndividualCertificatePreviewPage extends StatefulWidget {
@@ -23,8 +23,22 @@ class _IndividualCertificatePreviewPageState
 
   int _selectedTemplateIndex = 0;
 
-  void _continue(BuildContext context) {
+  String _industryLabel(BuildContext context) {
     final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final String raw = (qp['industry_label'] ?? qp['industry'] ?? '').trim();
+    return summarizeIndividualIndustryLabel(raw, fallback: 'Individual');
+  }
+
+  String _identityTypeLabel(BuildContext context) {
+    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final String label = (qp['identity_type'] ?? '').trim();
+    if (label.isNotEmpty) return label;
+    return 'Individual';
+  }
+
+  Future<void> _onContinue(BuildContext context) async {
+    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Object? extra = GoRouterState.of(context).extra;
     final Uri uri = Uri(
       path: AppRouter.individualVerificationCostBreakdownPath,
       queryParameters: <String, String>{
@@ -33,15 +47,17 @@ class _IndividualCertificatePreviewPageState
           if (entry.value.trim().isNotEmpty) entry.key: entry.value.trim(),
       },
     );
-    context.push(uri.toString());
+    final Object? res = await context.push(uri.toString(), extra: extra);
+    if (!context.mounted) return;
+    if (res == true) {
+      context.pop(true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String industryLabel = summarizeIndividualIndustryLabel(
-      GoRouterState.of(context).uri.queryParameters['industry_label'] ?? '',
-      fallback: 'Individual',
-    );
+    final String industryLabel = _industryLabel(context);
+    final String identityTypeLabel = _identityTypeLabel(context);
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -66,7 +82,7 @@ class _IndividualCertificatePreviewPageState
                       child: Row(
                         children: <Widget>[
                           InkResponse(
-                            onTap: () => context.pop(),
+                            onTap: () => context.pop(false),
                             radius: s(22),
                             child: SvgPicture.asset(
                               'assets/icons/figma/new_batch_back.svg',
@@ -101,29 +117,27 @@ class _IndividualCertificatePreviewPageState
                             top: Radius.circular(s(20)),
                           ),
                         ),
-                        child: Column(
+                        child: Stack(
                           children: <Widget>[
-                            Expanded(
+                            Positioned.fill(
                               child: SingleChildScrollView(
                                 padding: EdgeInsets.fromLTRB(
-                                  s(16),
+                                  0,
                                   s(32),
-                                  s(16),
-                                  s(24),
+                                  0,
+                                  s(24) + s(85.728),
                                 ),
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: <Widget>[
                                     Padding(
                                       padding: EdgeInsets.symmetric(
                                         horizontal: s(16),
                                       ),
-                                      child: FlowStepProgress(
+                                      child: _StepProgress(
                                         scale: scale,
-                                        stepLabel: 'STEP 4 OF 5',
-                                        progressLabel: '80%',
-                                        fillFactor: 0.8,
                                       ),
                                     ),
                                     SizedBox(height: s(24)),
@@ -159,7 +173,7 @@ class _IndividualCertificatePreviewPageState
                                       ),
                                     ),
                                     SizedBox(height: s(20)),
-                                    _TemplateCarousel(
+                                    _SwipeableCertificateCards(
                                       scale: scale,
                                       selectedIndex: _selectedTemplateIndex,
                                       onSelected: (int i) => setState(() {
@@ -171,68 +185,95 @@ class _IndividualCertificatePreviewPageState
                                       padding: EdgeInsets.symmetric(
                                         horizontal: s(16),
                                       ),
-                                      child: _MiniInfoCard(
-                                        scale: scale,
-                                        label: 'INDUSTRY',
-                                        value: industryLabel.isEmpty
-                                            ? 'Individual'
-                                            : industryLabel,
-                                        icon: SvgPicture.asset(
-                                          'assets/icons/figma/checks_industry_building.svg',
-                                          width: s(14),
-                                          height: s(12),
-                                        ),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Expanded(
+                                            child: _MiniInfoCard(
+                                              scale: scale,
+                                              label: 'INDUSTRY',
+                                              value: industryLabel,
+                                              icon: SvgPicture.asset(
+                                                'assets/icons/figma/checks_industry_building.svg',
+                                                width: s(14),
+                                                height: s(12),
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: s(12)),
+                                          Expanded(
+                                            child: _MiniInfoCard(
+                                              scale: scale,
+                                              label: 'IDENTITY TYPE',
+                                              value: identityTypeLabel,
+                                              icon: SvgPicture.asset(
+                                                'assets/icons/figma/new_batch_human.svg',
+                                                width: s(14),
+                                                height: s(12),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                    ),
+                                    SizedBox(height: s(16)),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: s(16),
+                                      ),
+                                      child: _ComplianceCard(scale: scale),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
-                            _BottomNav(
-                              scale: scale,
-                              child: SizedBox(
-                                width: double.infinity,
-                                height: s(60),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: AppColors.brandBlue,
-                                    borderRadius: BorderRadius.circular(s(16)),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius:
-                                          BorderRadius.circular(s(16)),
-                                      onTap: () => _continue(context),
-                                      child: Center(
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: <Widget>[
-                                            Text(
-                                              'Continue',
-                                              style: TextStyle(
-                                                fontFamily: 'Inter',
-                                                fontSize: s(18),
-                                                fontWeight: FontWeight.w700,
-                                                height: 28 / 18,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            SizedBox(width: s(10)),
-                                            SvgPicture.asset(
-                                              'assets/icons/figma/new_batch_continue_arrow.svg',
-                                              width: s(16),
-                                              height: s(16),
-                                              colorFilter:
-                                                  const ColorFilter.mode(
-                                                Colors.white,
-                                                BlendMode.srcIn,
-                                              ),
-                                            ),
-                                          ],
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: _BottomNav(
+                                scale: scale,
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: () => _onContinue(context),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.brandBlue,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: s(16),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          s(16),
                                         ),
                                       ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: <Widget>[
+                                        Text(
+                                          'Continue',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: s(18),
+                                            fontWeight: FontWeight.w700,
+                                            height: 28 / 18,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        SizedBox(width: s(10)),
+                                        SvgPicture.asset(
+                                          'assets/icons/figma/new_batch_continue_arrow.svg',
+                                          width: s(16),
+                                          height: s(16),
+                                          colorFilter: const ColorFilter.mode(
+                                            Colors.white,
+                                            BlendMode.srcIn,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -253,8 +294,87 @@ class _IndividualCertificatePreviewPageState
   }
 }
 
-class _TemplateCarousel extends StatelessWidget {
-  const _TemplateCarousel({
+class _StepProgress extends StatelessWidget {
+  const _StepProgress({
+    required this.scale,
+  });
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Column(
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.only(left: s(4)),
+              child: Text(
+                'STEP 4 OF 5',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(10),
+                  fontWeight: FontWeight.w600,
+                  height: 15 / 10,
+                  letterSpacing: 0.8,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '80%',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(10),
+                fontWeight: FontWeight.w600,
+                height: 15 / 10,
+                letterSpacing: 0.2,
+                color: const Color(0xFF2563EB),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: s(8)),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: SizedBox(
+            height: s(4),
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: s(305),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SwipeableCertificateCards extends StatelessWidget {
+  const _SwipeableCertificateCards({
     required this.scale,
     required this.selectedIndex,
     required this.onSelected,
@@ -264,76 +384,101 @@ class _TemplateCarousel extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
+  static const List<({String asset, double aspectRatio})> _certificateImages =
+      <({String asset, double aspectRatio})>[
+        (
+          asset: 'assets/images/certificate_preview_sample.png',
+          aspectRatio: 866 / 1230,
+        ),
+        (asset: 'assets/images/driver.png', aspectRatio: 1054 / 1492),
+        (asset: 'assets/images/warehouse.png', aspectRatio: 1054 / 1492),
+      ];
+
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
+    final List<({String asset, double aspectRatio})> images =
+        _certificateImages;
+
+    final double h = s(220);
+    final double sidePadding = s(16);
+    final double gap = s(12);
+    final double radius = s(14);
+
     return SizedBox(
-      height: s(300),
-      child: PageView.builder(
-        itemCount: 3,
-        controller: PageController(viewportFraction: 0.86),
-        itemBuilder: (BuildContext context, int index) {
-          final bool selected = index == selectedIndex;
-          return Padding(
-            padding: EdgeInsets.symmetric(horizontal: s(6)),
-            child: GestureDetector(
-              onTap: () => onSelected(index),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(s(20)),
-                  border: Border.all(
-                    color: selected ? AppColors.brandBlue : const Color(0xFFE5E7EB),
-                    width: selected ? s(2) : s(1),
+      height: h,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(color: Colors.white),
+          child: Row(
+            children: <Widget>[
+              SizedBox(width: sidePadding),
+              ...List<Widget>.generate(images.length, (int index) {
+                final ({String asset, double aspectRatio}) item = images[index];
+                final bool isSelected = index == selectedIndex;
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: index == images.length - 1 ? sidePadding : gap,
                   ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
+                  child: GestureDetector(
+                    onTap: () => onSelected(index),
+                    child: SizedBox(
+                      height: h,
+                      child: AspectRatio(
+                        aspectRatio: item.aspectRatio,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOut,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(radius),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.brandBlue
+                                  : const Color(0xFFE2E8F0),
+                              width: isSelected ? s(2) : s(1),
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(radius),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: <Widget>[
+                                Image.asset(item.asset, fit: BoxFit.cover),
+                                if (isSelected)
+                                  Positioned(
+                                    top: s(10),
+                                    right: s(10),
+                                    child: Container(
+                                      width: s(24),
+                                      height: s(24),
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.brandBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.check,
+                                          size: s(16),
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[Color(0xFFF8FBFF), Colors.white],
                   ),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        Icons.badge_rounded,
-                        size: s(64),
-                        color: AppColors.brandBlue,
-                      ),
-                      SizedBox(height: s(12)),
-                      Text(
-                        'Template ${index + 1}',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: s(18),
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
-                      SizedBox(height: s(6)),
-                      Text(
-                        'Individual verified credential',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: s(12),
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -355,39 +500,114 @@ class _MiniInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
     return Container(
-      padding: EdgeInsets.all(s(14)),
+      height: s(72),
+      padding: EdgeInsets.all(s(16)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(s(16)),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(s(12)),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 1,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(10),
+              fontWeight: FontWeight.w600,
+              height: 15 / 10,
+              letterSpacing: -0.25,
+              color: const Color(0xFF323232),
+            ),
+          ),
+          const Spacer(),
+          Row(
+            children: <Widget>[
+              icon,
+              SizedBox(width: s(8)),
+              Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(14),
+                  fontWeight: FontWeight.w600,
+                  height: 21 / 14,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComplianceCard extends StatelessWidget {
+  const _ComplianceCard({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      padding: EdgeInsets.all(s(16)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(s(12)),
+        border: Border.all(color: const Color(0xCCE5E7EB), width: 1),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          icon,
-          SizedBox(width: s(10)),
+          Padding(
+            padding: EdgeInsets.only(top: s(2)),
+            child: SvgPicture.asset(
+              'assets/icons/figma/permissions_icon_info.svg',
+              width: s(16),
+              height: s(16),
+            ),
+          ),
+          SizedBox(width: s(8)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
-                  label,
+                  'Security Standards Compliance',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(10),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: s(0.8),
-                    color: const Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w600,
+                    height: 15 / 10,
+                    color: const Color(0xFF323232),
                   ),
                 ),
-                SizedBox(height: s(3)),
+                SizedBox(height: s(4)),
                 Text(
-                  value,
+                  'Secured via biometric binding and government-grade\nAES-256 encryption. Supports ISO/IEC 18013-5 mobile ID\nstandards.',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: s(13),
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
+                    fontSize: s(11),
+                    fontWeight: FontWeight.w400,
+                    height: 17.88 / 11,
+                    letterSpacing: 0.0215,
+                    color: const Color(0xFF94A3B8),
                   ),
                 ),
               ],
@@ -400,10 +620,7 @@ class _MiniInfoCard extends StatelessWidget {
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({
-    required this.scale,
-    required this.child,
-  });
+  const _BottomNav({required this.scale, required this.child});
 
   final double scale;
   final Widget child;
@@ -411,11 +628,11 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
         child: Container(
-          width: double.infinity,
           padding: EdgeInsets.fromLTRB(
             s(13.604),
             s(12.864),
