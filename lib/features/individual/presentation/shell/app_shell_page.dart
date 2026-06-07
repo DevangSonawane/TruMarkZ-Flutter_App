@@ -26,9 +26,7 @@ class IndividualShellPage extends StatelessWidget {
         context.go(AppRouter.individualScanPath);
         return;
       case 2:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Start Verification coming soon')),
-        );
+        context.go(AppRouter.individualVerificationIndustryPath);
         return;
       case 3:
         context.go(AppRouter.individualReportsPath);
@@ -52,7 +50,8 @@ class IndividualShellPage extends StatelessWidget {
         location.startsWith(
           AppRouter.individualVerificationCertificatePreviewPath,
         ) ||
-        location.startsWith(AppRouter.individualVerificationCostBreakdownPath);
+        location.startsWith(AppRouter.individualVerificationCostBreakdownPath) ||
+        location.startsWith(AppRouter.individualVerificationCompletionPath);
 
     return PopScope(
       canPop: GoRouter.of(context).canPop(),

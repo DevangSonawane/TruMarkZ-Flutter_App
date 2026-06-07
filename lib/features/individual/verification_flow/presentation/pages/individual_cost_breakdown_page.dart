@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:ui';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,7 +8,6 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../orgs/verification_flow/presentation/pages/flow_step_progress.dart';
 import '../../../../orgs/verification_flow/presentation/pages/human_verification_checks_catalog.dart';
-import 'individual_industry_label_utils.dart';
 
 class IndividualCostBreakdownPage extends StatefulWidget {
   const IndividualCostBreakdownPage({super.key});
@@ -55,7 +55,18 @@ class _IndividualCostBreakdownPageState
     setState(() => _isSubmitting = true);
     try {
       if (!mounted) return;
-      context.go(AppRouter.individualIdentityPath);
+      final Map<String, String> qp = GoRouterState.of(
+        context,
+      ).uri.queryParameters;
+      final Uri uri = Uri(
+        path: AppRouter.individualVerificationCompletionPath,
+        queryParameters: <String, String>{
+          'flow': 'individual',
+          for (final MapEntry<String, String> entry in qp.entries)
+            if (entry.value.trim().isNotEmpty) entry.key: entry.value.trim(),
+        },
+      );
+      context.go(uri.toString());
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -64,11 +75,7 @@ class _IndividualCostBreakdownPageState
   @override
   Widget build(BuildContext context) {
     final List<String> ids = _selectedChecks(context);
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
-    final String industryLabel = summarizeIndividualIndustryLabel(
-      qp['industry_label'] ?? '',
-      fallback: 'Individual',
-    );
+    final int total = _totalCostInr(ids);
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -81,8 +88,6 @@ class _IndividualCostBreakdownPageState
                 : _referenceWidth;
             final double scale = contentWidth / _referenceWidth;
             double s(double v) => v * scale;
-
-            final int total = _totalCostInr(ids);
 
             return Center(
               child: SizedBox(
@@ -138,7 +143,7 @@ class _IndividualCostBreakdownPageState
                                   s(16),
                                   s(32),
                                   s(16),
-                                  s(24),
+                                  s(140),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,10 +203,7 @@ class _IndividualCostBreakdownPageState
                                       ],
                                       totalInr: total,
                                       checksCount: ids.length,
-                                      industryLabel:
-                                          industryLabel.isEmpty
-                                              ? 'Individual'
-                                              : industryLabel,
+                                      userCount: 1,
                                     ),
                                     SizedBox(height: s(18)),
                                     _AgreementTile(
@@ -218,7 +220,8 @@ class _IndividualCostBreakdownPageState
                               scale: scale,
                               child: _ConfirmButton(
                                 scale: scale,
-                                enabled: _agreed && ids.isNotEmpty && !_isSubmitting,
+                                enabled:
+                                    _agreed && ids.isNotEmpty && !_isSubmitting,
                                 isLoading: _isSubmitting,
                                 onTap: _finish,
                               ),
@@ -256,119 +259,220 @@ class _CostSummaryCard extends StatelessWidget {
     required this.rows,
     required this.totalInr,
     required this.checksCount,
-    required this.industryLabel,
+    required this.userCount,
   });
 
   final double scale;
   final List<_CostRow> rows;
   final int totalInr;
   final int checksCount;
-  final String industryLabel;
+  final int userCount;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
+    final List<_CostRow> safeRows = rows.isEmpty
+        ? const <_CostRow>[
+            _CostRow(
+              title: 'Identity Verification',
+              unitCostInr: 0,
+              totalInr: 0,
+            ),
+          ]
+        : rows;
+
     return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(s(20)),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withAlpha(18),
+            blurRadius: s(18),
+            offset: Offset(0, s(10)),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Padding(
-            padding: EdgeInsets.all(s(16)),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    industryLabel,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(16),
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
-                    ),
+          Row(
+            children: <Widget>[
+              Container(
+                width: s(40),
+                height: s(40),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF3FF),
+                  borderRadius: BorderRadius.circular(s(12)),
+                ),
+                alignment: Alignment.center,
+                child: SvgPicture.asset(
+                  'assets/icons/figma/per_unit_cost_summary_icon.svg',
+                  width: s(16),
+                  height: s(18),
+                  colorFilter: const ColorFilter.mode(
+                    AppColors.brandBlue,
+                    BlendMode.srcIn,
                   ),
                 ),
-                Text(
-                  '$checksCount checks',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(11),
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.brandBlue,
-                  ),
+              ),
+              SizedBox(width: s(12)),
+              Text(
+                'Cost Summary',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(16),
+                  fontWeight: FontWeight.w700,
+                  height: 24 / 16,
+                  color: const Color(0xFF111827),
                 ),
-              ],
+              ),
+            ],
+          ),
+          SizedBox(height: s(16)),
+          for (int i = 0; i < safeRows.length; i++) ...<Widget>[
+            _SummaryRow(scale: scale, row: safeRows[i], userCount: userCount),
+            if (i != safeRows.length - 1) ...<Widget>[
+              SizedBox(height: s(12)),
+              Divider(height: s(1), color: const Color(0xFFF1F5F9)),
+              SizedBox(height: s(12)),
+            ],
+          ],
+          SizedBox(height: s(16)),
+          Divider(height: s(1), color: const Color(0xFFF1F5F9)),
+          SizedBox(height: s(14)),
+          Text(
+            'TOTAL COST',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(10),
+              fontWeight: FontWeight.w700,
+              letterSpacing: s(1),
+              height: 15 / 10,
+              color: const Color(0xFF94A3B8),
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          for (int i = 0; i < rows.length; i++) ...<Widget>[
-            Padding(
-              padding: EdgeInsets.all(s(16)),
-              child: Row(
+          SizedBox(height: s(10)),
+          Row(
+            children: <Widget>[
+              Text(
+                '₹$totalInr',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(28),
+                  fontWeight: FontWeight.w800,
+                  height: 32 / 28,
+                  color: AppColors.brandBlue,
+                ),
+              ),
+              const Spacer(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
-                  Expanded(
+                  Container(
+                    padding: EdgeInsets.fromLTRB(s(12), s(6), s(12), s(6)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF3FF),
+                      borderRadius: BorderRadius.circular(s(999)),
+                    ),
                     child: Text(
-                      rows[i].title,
+                      '$checksCount Checks',
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: s(14),
+                        fontSize: s(12),
                         fontWeight: FontWeight.w600,
+                        height: 16 / 12,
+                        color: AppColors.brandBlue,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: s(8)),
+                  Container(
+                    padding: EdgeInsets.fromLTRB(s(12), s(6), s(12), s(6)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(s(999)),
+                    ),
+                    child: Text(
+                      '$userCount Users',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w600,
+                        height: 16 / 12,
                         color: const Color(0xFF334155),
                       ),
                     ),
                   ),
-                  Text(
-                    '₹${rows[i].unitCostInr}',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(13),
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF334155),
-                    ),
-                  ),
                 ],
               ),
-            ),
-            if (i != rows.length - 1)
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          ],
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(s(16)),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF8FAFF),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-            ),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Total',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(14),
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-                Text(
-                  '₹$totalInr',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(16),
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.brandBlue,
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({
+    required this.scale,
+    required this.row,
+    required this.userCount,
+  });
+
+  final double scale;
+  final _CostRow row;
+  final int userCount;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            row.title,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(14),
+              fontWeight: FontWeight.w500,
+              height: 20 / 14,
+              color: const Color(0xFF334155),
+            ),
+          ),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Text(
+              '₹${row.unitCostInr} × $userCount',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w600,
+                height: 16 / 11,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            SizedBox(height: s(2)),
+            Text(
+              '₹${row.totalInr}',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(16),
+                fontWeight: FontWeight.w700,
+                height: 24 / 16,
+                color: const Color(0xFF111827),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -387,15 +491,17 @@ class _AgreementTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
+
     return InkWell(
       onTap: onToggle,
       borderRadius: BorderRadius.circular(s(16)),
       child: Container(
-        padding: EdgeInsets.all(s(16)),
+        width: double.infinity,
+        padding: EdgeInsets.fromLTRB(s(14), s(14), s(14), s(14)),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFF3F8FF),
           borderRadius: BorderRadius.circular(s(16)),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: const Color(0xFFD7E7FF), width: s(1)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -404,64 +510,32 @@ class _AgreementTile extends StatelessWidget {
               width: s(22),
               height: s(22),
               decoration: BoxDecoration(
-                color: agreed ? AppColors.brandBlue : Colors.white,
+                color: agreed ? AppColors.brandBlue : Colors.transparent,
                 borderRadius: BorderRadius.circular(s(6)),
-                border: Border.all(color: AppColors.brandBlue),
+                border: Border.all(
+                  color: agreed ? AppColors.brandBlue : const Color(0xFFCBD5E1),
+                  width: s(1.6),
+                ),
               ),
+              alignment: Alignment.center,
               child: agreed
-                  ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                  ? Icon(Icons.check_rounded, size: s(16), color: Colors.white)
                   : null,
             ),
             SizedBox(width: s(12)),
             Expanded(
               child: Text(
-                'I agree to the total cost breakdown and\nthe terms of service for this verification request.',
+                'I agree to the total cost breakdown and\nthe terms of service for this verification\nrequest.',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(12),
                   fontWeight: FontWeight.w500,
                   height: 18 / 12,
-                  color: const Color(0xFF475569),
+                  color: const Color(0xFF334155),
                 ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({
-    required this.scale,
-    required this.child,
-  });
-
-  final double scale;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            s(13.604),
-            s(12.864),
-            s(13.668),
-            s(12.864),
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(204),
-            border: Border(
-              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
-            ),
-          ),
-          child: SafeArea(top: false, child: child),
         ),
       ),
     );
@@ -484,62 +558,88 @@ class _ConfirmButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 150),
-      opacity: enabled ? 1 : 0.45,
-      child: SizedBox(
-        height: s(60),
-        width: double.infinity,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.brandBlue,
-            borderRadius: BorderRadius.circular(s(16)),
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: enabled ? onTap : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.brandBlue,
+          disabledBackgroundColor: AppColors.brandBlue.withAlpha(90),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white.withAlpha(180),
+          elevation: 0,
+          padding: EdgeInsets.symmetric(vertical: s(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(s(20)),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(s(16)),
-              onTap: enabled ? onTap : null,
-              child: Center(
-                child: isLoading
-                    ? SizedBox(
-                        width: s(20),
-                        height: s(20),
-                        child: CircularProgressIndicator(
-                          strokeWidth: s(2),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: <Widget>[
-                          Text(
-                            'Confirm',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(18),
-                              fontWeight: FontWeight.w700,
-                              height: 28 / 18,
-                              color: Colors.white,
-                            ),
-                          ),
-                          SizedBox(width: s(10)),
-                          SvgPicture.asset(
-                            'assets/icons/figma/new_batch_continue_arrow.svg',
-                            width: s(16),
-                            height: s(16),
-                            colorFilter: const ColorFilter.mode(
-                              Colors.white,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                        ],
-                      ),
+        ),
+        child: isLoading
+            ? SizedBox(
+                width: s(20),
+                height: s(20),
+                child: CircularProgressIndicator(
+                  strokeWidth: s(2),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    'Confirm',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(18),
+                      fontWeight: FontWeight.w700,
+                      height: 28 / 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: s(10)),
+                  SvgPicture.asset(
+                    'assets/icons/figma/new_batch_continue_arrow.svg',
+                    width: s(16),
+                    height: s(16),
+                    colorFilter: const ColorFilter.mode(
+                      Colors.white,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ],
               ),
+      ),
+    );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: s(12.864), sigmaY: s(12.864)),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            s(13.604),
+            s(12.864),
+            s(13.668),
+            s(12.864),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(204),
+            border: Border(
+              top: BorderSide(color: const Color(0xFFF3F4F6), width: s(1.072)),
             ),
           ),
+          child: SafeArea(top: false, child: child),
         ),
       ),
     );

@@ -15,6 +15,7 @@ import '../../features/individual/presentation/pages/individual_profile_page.dar
 import '../../features/individual/presentation/pages/individual_reports_page.dart';
 import '../../features/individual/verification_flow/presentation/pages/individual_certificate_preview_page.dart';
 import '../../features/individual/verification_flow/presentation/pages/individual_cost_breakdown_page.dart';
+import '../../features/individual/verification_flow/presentation/pages/individual_verification_completion_page.dart';
 import '../../features/individual/verification_flow/presentation/pages/individual_single_upload_page.dart';
 import '../../features/individual/verification_flow/presentation/pages/individual_verification_checks_page.dart';
 import '../../features/individual/verification_flow/presentation/pages/individual_verification_industry_page.dart';
@@ -164,6 +165,8 @@ class AppRouter {
       '/me/verification/certificate-preview';
   static const String individualVerificationCostBreakdownPath =
       '/me/verification/cost-breakdown';
+  static const String individualVerificationCompletionPath =
+      '/me/verification/completion';
 
   // Admin
   static const String superAdminDashboardPath = '/admin/dashboard';
@@ -336,6 +339,15 @@ class AppRouter {
               child: AuthErrorPage(
                 message: state.uri.queryParameters['message'],
               ),
+            ),
+      ),
+      GoRoute(
+        path: individualVerificationCompletionPath,
+        name: 'individual_verification_completion',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const IndividualVerificationCompletionPage(),
             ),
       ),
       ShellRoute(

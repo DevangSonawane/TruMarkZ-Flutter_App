@@ -89,8 +89,9 @@ class IndividualDashboardPage extends ConsumerWidget {
                         right: 16,
                         top: drawerTop,
                         child: _IdentityHeroCard(
-                          onTapVerification: () =>
-                              context.go(AppRouter.individualScanPath),
+                          onTapVerification: () => context.go(
+                            AppRouter.individualVerificationIndustryPath,
+                          ),
                           onTapSkillTree: () =>
                               context.go(AppRouter.individualScanPath),
                           onTapReports: () =>
