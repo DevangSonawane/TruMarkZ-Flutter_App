@@ -15,6 +15,30 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   late final AuthRepository _repo = ref.read(authRepositoryProvider);
   late final TokenStorage _tokenStorage = ref.read(tokenStorageProvider);
 
+  String _normalizeLoginType(String? loginType) {
+    final String normalized = (loginType ?? '').trim().toLowerCase();
+    if (normalized == 'individual') return 'individual';
+    if (normalized == 'organization') return 'organization';
+    return 'organization';
+  }
+
+  Future<void> _persistLoginType(String loginType) async {
+    await _tokenStorage.saveLoginType(_normalizeLoginType(loginType));
+  }
+
+  String _routeForLoginType({
+    required String loginType,
+    required bool requiresOnboarding,
+  }) {
+    if (_normalizeLoginType(loginType) == 'individual') {
+      return AppRouter.individualIdentityPath;
+    }
+    if (requiresOnboarding) {
+      return AppRouter.orgOnboardingPath;
+    }
+    return AppRouter.dashboardPath;
+  }
+
   @override
   Future<AuthState> build() async {
     final String? token = await _tokenStorage.getToken();
@@ -23,6 +47,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
     try {
       final UserProfile me = await _repo.getMe();
+      await _persistLoginType(me.loginType);
       return AuthState(
         status: AuthStatus.authenticated,
         userId: me.id,
@@ -51,15 +76,23 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         password: password,
       );
       final UserProfile me = await _repo.getMe();
+      final String resolvedLoginType =
+          me.loginType.trim().isNotEmpty ? me.loginType : login.loginType;
+      await _persistLoginType(resolvedLoginType);
       state = AsyncData(
         AuthState(
           status: AuthStatus.authenticated,
           userId: login.userId,
-          loginType: me.loginType,
+          loginType: resolvedLoginType,
           userProfile: me,
         ),
       );
-      AppRouter.router.go(AppRouter.individualIdentityPath);
+      AppRouter.router.go(
+        _routeForLoginType(
+          loginType: resolvedLoginType,
+          requiresOnboarding: login.requiresOnboarding,
+        ),
+      );
     } on ApiException catch (e) {
       state = AsyncData(
         (state.value ?? const AuthState()).copyWith(
@@ -97,19 +130,23 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         password: password,
       );
       final UserProfile me = await _repo.getMe();
+      final String resolvedLoginType =
+          me.loginType.trim().isNotEmpty ? me.loginType : login.loginType;
+      await _persistLoginType(resolvedLoginType);
       state = AsyncData(
         AuthState(
           status: AuthStatus.authenticated,
           userId: login.userId,
-          loginType: me.loginType,
+          loginType: resolvedLoginType,
           userProfile: me,
         ),
       );
-      if (login.requiresOnboarding) {
-        AppRouter.router.go(AppRouter.orgOnboardingPath);
-      } else {
-        AppRouter.router.go(AppRouter.dashboardPath);
-      }
+      AppRouter.router.go(
+        _routeForLoginType(
+          loginType: resolvedLoginType,
+          requiresOnboarding: login.requiresOnboarding,
+        ),
+      );
     } on ApiException catch (e) {
       state = AsyncData(
         (state.value ?? const AuthState()).copyWith(
@@ -150,27 +187,23 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         userType: userType,
       );
       final UserProfile me = await _repo.getMe();
-      final String loginType = login.loginType.trim().toLowerCase();
+      final String resolvedLoginType =
+          me.loginType.trim().isNotEmpty ? me.loginType : login.loginType;
+      await _persistLoginType(resolvedLoginType);
       state = AsyncData(
         AuthState(
           status: AuthStatus.authenticated,
           userId: login.userId,
-          loginType: loginType,
+          loginType: resolvedLoginType,
           userProfile: me,
         ),
       );
-
-      // Backend may return transitional values like "pending" for new accounts.
-      // Treat anything other than "individual" as organization flow.
-      if (loginType != 'individual') {
-        if (login.requiresOnboarding) {
-          AppRouter.router.go(AppRouter.orgOnboardingPath);
-        } else {
-          AppRouter.router.go(AppRouter.dashboardPath);
-        }
-      } else {
-        AppRouter.router.go(AppRouter.individualIdentityPath);
-      }
+      AppRouter.router.go(
+        _routeForLoginType(
+          loginType: resolvedLoginType,
+          requiresOnboarding: login.requiresOnboarding,
+        ),
+      );
     } on ApiException catch (e) {
       state = AsyncData(
         (state.value ?? const AuthState()).copyWith(

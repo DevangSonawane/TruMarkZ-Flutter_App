@@ -73,16 +73,8 @@ class AuthRepository {
       );
     }
 
-    final String loginTypeRaw = parsed.loginType.trim().toLowerCase();
-    final String loginType = loginTypeRaw == 'individual'
-        ? 'individual'
-        : loginTypeRaw == 'organization'
-        ? 'organization'
-        : loginTypeRaw;
-
     await _tokenStorage.saveToken(parsed.accessToken);
     await _tokenStorage.saveUserId(parsed.userId);
-    await _tokenStorage.saveLoginType(loginType);
     return parsed;
   }
 
@@ -110,9 +102,6 @@ class AuthRepository {
     }
     await _tokenStorage.saveToken(parsed.accessToken);
     await _tokenStorage.saveUserId(parsed.userId);
-    // Treat the requested login type as source of truth for routing.
-    // Some backends may return a generic/incorrect `login_type` field.
-    await _tokenStorage.saveLoginType(loginType);
     return parsed;
   }
 
