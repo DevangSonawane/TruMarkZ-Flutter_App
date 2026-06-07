@@ -346,41 +346,58 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           SizedBox(
                             height: _isRegisterMode ? AppSpacing.x2 : AppSpacing.x2,
                           ),
-                          AnimatedSlide(
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
-                            offset: _isRegisterMode
-                                ? const Offset(0, -0.03)
-                                : Offset.zero,
-                            child: AnimatedSize(
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOutCubic,
-                              alignment: Alignment.topCenter,
-                              child: _isRegisterMode
-                                  ? _RegisterForm(
-                                      isLoading: _isLoading,
-                                      fullNameController: _fullNameController,
-                                      emailController: _emailController,
-                                      addressController: _addressController,
-                                      passwordController: _passwordController,
-                                      onSubmit: _onRegister,
-                                    )
-                                  : _LoginForm(
-                                      isLoading: _isLoading,
-                                      rememberMe: _rememberMe,
-                                      onRememberMeChanged: () {
-                                        setState(() {
-                                          _rememberMe = !_rememberMe;
-                                        });
-                                      },
-                                      emailController: _emailController,
-                                      passwordController: _passwordController,
-                                      onForgotPassword: () => context.go(
-                                        AppRouter.forgotPasswordPath,
+                          Expanded(
+                            child: ClipRect(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                layoutBuilder: (
+                                  Widget? currentChild,
+                                  List<Widget> previousChildren,
+                                ) {
+                                  return Align(
+                                    alignment: Alignment.topCenter,
+                                    child: currentChild ?? const SizedBox.shrink(),
+                                  );
+                                },
+                                transitionBuilder: (
+                                  Widget child,
+                                  Animation<double> animation,
+                                ) {
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  );
+                                },
+                                child: _isRegisterMode
+                                    ? _RegisterForm(
+                                        key: const ValueKey<String>('register'),
+                                        isLoading: _isLoading,
+                                        fullNameController: _fullNameController,
+                                        emailController: _emailController,
+                                        addressController: _addressController,
+                                        passwordController: _passwordController,
+                                        onSubmit: _onRegister,
+                                      )
+                                    : _LoginForm(
+                                        key: const ValueKey<String>('login'),
+                                        isLoading: _isLoading,
+                                        rememberMe: _rememberMe,
+                                        onRememberMeChanged: () {
+                                          setState(() {
+                                            _rememberMe = !_rememberMe;
+                                          });
+                                        },
+                                        emailController: _emailController,
+                                        passwordController: _passwordController,
+                                        onForgotPassword: () => context.go(
+                                          AppRouter.forgotPasswordPath,
+                                        ),
+                                        onSubmit: _onSignIn,
+                                        onGoogle: _signInWithGoogle,
                                       ),
-                                      onSubmit: _onSignIn,
-                                      onGoogle: _signInWithGoogle,
-                                    ),
+                              ),
                             ),
                           ),
                         ],
@@ -444,24 +461,24 @@ class _AuthTabs extends StatelessWidget {
             ),
           ),
           Row(
-        children: <Widget>[
-          Expanded(
-            child: _AuthTabLabel(
-              label: 'Login',
-              selected: !isRegisterMode,
-              onTap: onLogin,
-            ),
+            children: <Widget>[
+              Expanded(
+                child: _AuthTabLabel(
+                  label: 'Login',
+                  selected: !isRegisterMode,
+                  onTap: onLogin,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _AuthTabLabel(
+                  label: 'Register',
+                  selected: isRegisterMode,
+                  onTap: onRegister,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: _AuthTabLabel(
-              label: 'Register',
-              selected: isRegisterMode,
-              onTap: onRegister,
-            ),
-          ),
-        ],
-      ),
         ],
       ),
     );
@@ -513,6 +530,7 @@ class _AuthTabLabel extends StatelessWidget {
 
 class _LoginForm extends StatelessWidget {
   const _LoginForm({
+    super.key,
     required this.isLoading,
     required this.rememberMe,
     required this.onRememberMeChanged,
@@ -676,6 +694,7 @@ class _LoginForm extends StatelessWidget {
 
 class _RegisterForm extends StatelessWidget {
   const _RegisterForm({
+    super.key,
     required this.isLoading,
     required this.fullNameController,
     required this.emailController,
@@ -696,7 +715,7 @@ class _RegisterForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const SizedBox(height: AppSpacing.x2),
+        const SizedBox(height: AppSpacing.x4),
         TMZInput(
           label: 'Full Name',
           hint: 'John Doe',
@@ -704,7 +723,7 @@ class _RegisterForm extends StatelessWidget {
           controller: fullNameController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x2),
+        const SizedBox(height: AppSpacing.x3),
         TMZInput(
           label: 'Email',
           hint: 'name@company.com',
@@ -713,7 +732,7 @@ class _RegisterForm extends StatelessWidget {
           controller: emailController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x2),
+        const SizedBox(height: AppSpacing.x3),
         TMZInput(
           label: 'Address (optional)',
           hint: 'Your full address',
@@ -721,7 +740,7 @@ class _RegisterForm extends StatelessWidget {
           controller: addressController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x2),
+        const SizedBox(height: AppSpacing.x3),
         TMZInput(
           label: 'Password',
           hint: '••••••••',
@@ -730,7 +749,7 @@ class _RegisterForm extends StatelessWidget {
           controller: passwordController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x2),
+        const SizedBox(height: AppSpacing.x3),
         TMZButton(
           onPressed: isLoading ? null : onSubmit,
           label: 'Register',
