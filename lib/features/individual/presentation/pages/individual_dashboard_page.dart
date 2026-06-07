@@ -20,15 +20,6 @@ class IndividualDashboardPage extends ConsumerWidget {
         authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
             ? authAsync.value!.userProfile!.fullName!.trim()
             : 'User';
-    final String headerLine1 =
-        authAsync.value?.userProfile?.address?.trim().isNotEmpty == true
-            ? authAsync.value!.userProfile!.address!.trim()
-            : 'Individual Dashboard';
-    final String headerLine2 =
-        authAsync.value?.userProfile?.organizationName?.trim().isNotEmpty ==
-                true
-            ? authAsync.value!.userProfile!.organizationName!.trim()
-            : 'Individual Account';
 
     final double safeTop = MediaQuery.paddingOf(context).top;
 
@@ -79,7 +70,7 @@ class IndividualDashboardPage extends ConsumerWidget {
                           onAlertsTap: () =>
                               context.go(AppRouter.notificationsPath),
                           onProfileTap: () =>
-                              context.go(AppRouter.settingsPath),
+                              context.go(AppRouter.individualProfilePath),
                         ),
                       ),
                       Positioned(

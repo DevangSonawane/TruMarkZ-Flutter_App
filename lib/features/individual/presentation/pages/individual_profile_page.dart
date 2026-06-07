@@ -1,13 +1,13 @@
-import 'dart:ui';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/models/auth_models.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/file_picker_util.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
@@ -24,6 +24,11 @@ class _IndividualProfilePageState extends ConsumerState<IndividualProfilePage> {
   Uint8List? _profilePhotoBytes;
   PickedFile? _idDocument;
   PickedFile? _certificateDocument;
+  bool _profileVisible = true;
+
+  static const double _referenceWidth = 402;
+  static const Color _panelBg = Color(0xFFF7F9FC);
+  static const double _bottomNavBarHeight = 71.016;
 
   Future<void> _pickProfilePhoto() async {
     final PickedFile? picked = await FilePickerUtil.pickImage();
@@ -59,71 +64,103 @@ class _IndividualProfilePageState extends ConsumerState<IndividualProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    const Color pageSurface = Color(0xFFFAF8FF);
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final profile = authAsync.value?.userProfile;
     final String displayName =
-        authAsync.value?.userProfile?.fullName?.trim().isNotEmpty == true
-        ? authAsync.value!.userProfile!.fullName!.trim()
+        profile?.fullName?.trim().isNotEmpty == true
+        ? profile!.fullName!.trim()
         : 'User';
+    final String email = profile?.email ?? '';
+    final bool isVerified = profile?.isVerified == true;
     return Scaffold(
-      backgroundColor: pageSurface,
-      body: CustomScrollView(
-        slivers: <Widget>[
-          SliverAppBar(
-            pinned: true,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            backgroundColor: Colors.transparent,
-            automaticallyImplyLeading: false,
-            toolbarHeight: 64,
-            flexibleSpace: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.90),
-                    border: const Border(
-                      bottom: BorderSide(color: AppColors.blueTint, width: 1),
-                    ),
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double scale = (constraints.maxWidth / _referenceWidth)
+                .clamp(0.0, 1.0);
+            double s(double v) => v * scale;
+
+            return _FigmaScaleScope(
+              scale: scale,
+              child: Column(
+              children: <Widget>[
+                Padding(
+                  padding: EdgeInsets.fromLTRB(s(16), s(12), s(16), s(12)),
+                  child: Row(
+                    children: <Widget>[
+                      Text(
+                        'Account',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(21),
+                          fontWeight: FontWeight.w600,
+                          height: 19.5 / 21,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Spacer(),
+                      SvgPicture.asset(
+                        'assets/icons/figma/all_batches_bell.svg',
+                        width: s(24),
+                        height: s(24),
+                        colorFilter: const ColorFilter.mode(
+                          Colors.white,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
+                ),
+                SizedBox(height: s(16)),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _panelBg,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(s(20)),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        s(16),
+                        s(37),
+                        s(16),
+                        s(48) + bottomInset + _bottomNavBarHeight,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          InkWell(
-                            borderRadius: BorderRadius.circular(999),
-                            onTap: () =>
-                                context.go(AppRouter.individualIdentityPath),
-                            child: const Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Icon(
-                                Icons.arrow_back,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
+                          _ProfileHeaderCard(
+                            displayName: displayName,
+                            email: email,
+                            isVerified: isVerified,
+                            photoBytes: _profilePhotoBytes,
+                            onPickPhoto: _pickProfilePhoto,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Profile Page',
-                              style: AppTypography.heading1.copyWith(
-                                color: AppColors.brandBlue,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
+                          SizedBox(height: s(24)),
+                          _GeneralInfoCard(profile: profile),
+                          SizedBox(height: s(24)),
+                          _SecurityPrivacyCard(
+                            emailVerified: profile?.emailVerified == true,
+                            mobileVerified: profile?.mobileVerified == true,
+                            profileVisible: _profileVisible,
+                            onProfileVisibleChanged: (bool v) =>
+                                setState(() => _profileVisible = v),
                           ),
-                          InkWell(
-                            borderRadius: BorderRadius.circular(999),
-                            onTap: () {},
-                            child: const Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Icon(
-                                Icons.share_outlined,
-                                color: AppColors.textSecondary,
-                              ),
+                          SizedBox(height: s(24)),
+                          _IdentityRecordsCard(
+                            idDocumentName: _idDocument?.name,
+                            certificateName: _certificateDocument?.name,
+                            onUploadId: _pickIdDocument,
+                            onUploadCertificate: _pickCertificateDocument,
+                          ),
+                          SizedBox(height: s(24)),
+                          _LogoutCard(
+                            onLogout: () => context.go(
+                              AppRouter.roleSelectionPath,
                             ),
                           ),
                         ],
@@ -131,555 +168,404 @@ class _IndividualProfilePageState extends ConsumerState<IndividualProfilePage> {
                     ),
                   ),
                 ),
+              ],
               ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate.fixed(<Widget>[
-                _ProfileHeaderCard(
-                  displayName: displayName,
-                  photoBytes: _profilePhotoBytes,
-                  onPickPhoto: _pickProfilePhoto,
-                ),
-                const SizedBox(height: 24),
-                _DocumentsCard(
-                  idDocumentName: _idDocument?.name,
-                  certificateName: _certificateDocument?.name,
-                  onUploadId: _pickIdDocument,
-                  onUploadCertificate: _pickCertificateDocument,
-                ),
-                const SizedBox(height: 24),
-                const _SectionCard(
-                  title: 'Education',
-                  items: <_SectionItemData>[
-                    _SectionItemData(
-                      icon: Icons.school_outlined,
-                      title: 'M.S. Cyber Security',
-                      subtitle: 'Stanford University • 2021',
-                      status: _ItemStatus.verified,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                const _SectionCard(
-                  title: 'Experience',
-                  items: <_SectionItemData>[
-                    _SectionItemData(
-                      icon: Icons.work_outline,
-                      title: 'Senior Identity Architect',
-                      subtitle: 'AuthGlobal Corp • 2021 – Present',
-                      status: _ItemStatus.verified,
-                    ),
-                    _SectionItemData(
-                      icon: Icons.work_outline,
-                      title: 'Systems Analyst',
-                      subtitle: 'TechNexus Solutions • 2018 – 2021',
-                      status: _ItemStatus.pending,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                const _SectionCard(
-                  title: 'Certifications',
-                  items: <_SectionItemData>[
-                    _SectionItemData(
-                      icon: Icons.workspace_premium_outlined,
-                      title: 'CISSP Certification',
-                      subtitle: 'ISC2 • Issued May 2022',
-                      status: _ItemStatus.verified,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                const _AddAchievementCard(),
-                const SizedBox(height: 24),
-                _LogoutCard(
-                  onLogout: () => context.go(AppRouter.roleSelectionPath),
-                ),
-                SizedBox(height: 84 + bottomInset),
-              ]),
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }
+}
+
+class _FigmaScaleScope extends InheritedWidget {
+  const _FigmaScaleScope({required this.scale, required super.child});
+
+  final double scale;
+
+  static double of(BuildContext context) {
+    final scope = context.dependOnInheritedWidgetOfExactType<_FigmaScaleScope>();
+    return scope?.scale ?? 1.0;
+  }
+
+  @override
+  bool updateShouldNotify(_FigmaScaleScope oldWidget) =>
+      oldWidget.scale != scale;
 }
 
 class _ProfileHeaderCard extends StatelessWidget {
   const _ProfileHeaderCard({
     required this.displayName,
+    required this.email,
+    required this.isVerified,
     required this.photoBytes,
     required this.onPickPhoto,
   });
 
   final String displayName;
+  final String email;
+  final bool isVerified;
   final Uint8List? photoBytes;
   final VoidCallback onPickPhoto;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x142563EB),
-            blurRadius: 12,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: <Widget>[
-          Stack(
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              Container(
-                width: 96,
-                height: 96,
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x1A0F172A),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ClipOval(
-                  child: Container(
-                    color: AppColors.blueTint,
-                    alignment: Alignment.center,
-                    child: photoBytes == null
-                        ? const Icon(
-                            Icons.person_rounded,
-                            color: AppColors.brandBlue,
-                            size: 44,
-                          )
-                        : Image.memory(
-                            photoBytes!,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                          ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.brandBlue,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.verified,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: -2,
-                bottom: -2,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: onPickPhoto,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFD6E2FF)),
-                      boxShadow: const <BoxShadow>[
-                        BoxShadow(
-                          color: Color(0x142563EB),
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt_rounded,
-                      size: 18,
-                      color: AppColors.brandBlue,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            displayName,
-            textAlign: TextAlign.center,
-            style: AppTypography.display2.copyWith(
-              color: AppColors.textPrimary,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.blueTint,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFD6E2FF)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Icon(
-                  Icons.shield_outlined,
-                  size: 18,
-                  color: AppColors.brandBlue,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'TruMarkZ Verified',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
 
-enum _ItemStatus { verified, pending }
-
-class _SectionItemData {
-  const _SectionItemData({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.status,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final _ItemStatus status;
-}
-
-class _LogoutCard extends StatelessWidget {
-  const _LogoutCard({required this.onLogout});
-
-  final VoidCallback onLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x142563EB),
-            blurRadius: 12,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(
-            'Account',
-            style: AppTypography.heading2.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Log out to return to the login / signup screen.',
-            style: AppTypography.body2.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 14),
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: onLogout,
-            child: Container(
-              height: 52,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF1F2),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFFECACA)),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                'Log out',
-                style: AppTypography.body1.copyWith(
-                  color: const Color(0xFFB91C1C),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.items});
-
-  final String title;
-  final List<_SectionItemData> items;
-
-  @override
-  Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  title,
-                  style: AppTypography.heading2.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const Icon(Icons.edit_outlined, color: AppColors.textTertiary),
-            ],
+        _FigmaIndividualAvatar(
+          photoBytes: photoBytes,
+          isVerified: isVerified,
+          scale: scale,
+        ),
+        SizedBox(height: s(14)),
+        Text(
+          displayName,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(24),
+            fontWeight: FontWeight.w700,
+            height: 32 / 24,
+            color: const Color(0xFF0F172A),
           ),
         ),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x142563EB),
-                blurRadius: 12,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: <Widget>[
-                for (int i = 0; i < items.length; i++) ...<Widget>[
-                  _SectionItemRow(data: items[i]),
-                  if (i != items.length - 1) ...<Widget>[
-                    const SizedBox(height: 18),
-                    Container(height: 1, color: const Color(0xFFF1F5F9)),
-                    const SizedBox(height: 18),
-                  ],
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionItemRow extends StatelessWidget {
-  const _SectionItemRow({required this.data});
-
-  final _SectionItemData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.offWhite,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Icon(data.icon, color: AppColors.brandBlue),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      data.title,
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _StatusPill(status: data.status),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                data.subtitle,
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
-
-  final _ItemStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool verified = status == _ItemStatus.verified;
-    final Color bg = verified ? AppColors.successBg : const Color(0xFFFFFBEB);
-    final Color fg = verified ? const Color(0xFF047857) : AppColors.warning;
-    final Color border = verified
-        ? const Color(0xFFB7F7D0)
-        : AppColors.warningBg;
-    final IconData icon = verified
-        ? Icons.check_circle
-        : Icons.hourglass_bottom;
-    final String label = verified ? 'Verified' : 'Pending';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 12, color: fg),
-          const SizedBox(width: 4),
+        if (email.trim().isNotEmpty) ...<Widget>[
+          SizedBox(height: s(6)),
           Text(
-            label.toUpperCase(),
-            style: AppTypography.caption.copyWith(
-              color: fg,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.9,
+            email,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(14),
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0.02734375,
+              height: 20 / 14,
+              color: const Color(0xFF64748B),
             ),
           ),
         ],
-      ),
+        SizedBox(height: s(10)),
+        _VerificationPill(isVerified: isVerified),
+        SizedBox(height: s(24)),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPickPhoto,
+            borderRadius: BorderRadius.circular(16),
+            child: Ink(
+              height: s(60),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.brandBlue,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    SvgPicture.asset(
+                      'assets/icons/figma/account_edit_profile_icon.svg',
+                      width: s(24),
+                      height: s(24),
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    SizedBox(width: s(12)),
+                    Text(
+                      'Edit Profile',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(18),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.03515625,
+                        height: 28 / 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _AddAchievementCard extends StatelessWidget {
-  const _AddAchievementCard();
+class _VerificationPill extends StatelessWidget {
+  const _VerificationPill({required this.isVerified});
+
+  final bool isVerified;
 
   @override
   Widget build(BuildContext context) {
-    const double radius = 24;
-    return CustomPaint(
-      painter: _DashedRoundedRectPainter(
-        color: AppColors.border,
-        strokeWidth: 2,
-        radius: radius,
-        dashLength: 8,
-        dashGap: 6,
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final Color bg = isVerified
+        ? const Color(0xFFECFDF5)
+        : const Color(0xFFEFF6FF);
+    final Color border = isVerified
+        ? const Color(0x3316A34A)
+        : const Color(0xFF2563EB);
+    final Color fg = isVerified
+        ? const Color(0xFF16A34A)
+        : const Color(0xFF2563EB);
+    final String text = isVerified ? 'Verified' : 'Pending';
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(4)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(color: border, width: 1),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF3F3FE),
-            borderRadius: BorderRadius.circular(radius),
-          ),
-          child: Column(
-            children: <Widget>[
-              Container(
-                width: 56,
-                height: 56,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[Color(0xFF0053DB), AppColors.brandBlue],
-                  ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x332563EB),
-                      blurRadius: 16,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.add, color: Colors.white, size: 28),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Add your next achievement',
-                textAlign: TextAlign.center,
-                style: AppTypography.heading2.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 260),
-                child: Text(
-                  'Upload certificates or connect your professional accounts.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: s(12),
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.05859375,
+          height: 16 / 12,
+          color: fg,
         ),
       ),
     );
   }
 }
 
-class _DocumentsCard extends StatelessWidget {
-  const _DocumentsCard({
+class _FigmaIndividualAvatar extends StatelessWidget {
+  const _FigmaIndividualAvatar({
+    required this.photoBytes,
+    required this.isVerified,
+    required this.scale,
+  });
+
+  final Uint8List? photoBytes;
+  final bool isVerified;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+    final double size = s(129);
+    final double borderWidth = s(4.03125);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF3FF),
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.brandBlue, width: borderWidth),
+          ),
+          alignment: Alignment.center,
+          child: photoBytes == null
+              ? SvgPicture.asset(
+                  'assets/icons/figma/org_avatar_user_outline.svg',
+                  width: s(62),
+                  height: s(62),
+                )
+              : ClipOval(
+                  child: Image.memory(
+                    photoBytes!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: s(40),
+            height: s(40),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x40000000),
+                  blurRadius: 2,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              'assets/icons/figma/account_verified_rounded.svg',
+              width: s(23.33),
+              height: s(22.37),
+              colorFilter: isVerified
+                  ? null
+                  : const ColorFilter.mode(
+                      Color(0xFF2563EB),
+                      BlendMode.srcIn,
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GeneralInfoCard extends StatelessWidget {
+  const _GeneralInfoCard({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final String fullName = profile?.fullName?.trim().isNotEmpty == true
+        ? profile!.fullName!.trim()
+        : '—';
+    final String email = profile?.email.trim().isNotEmpty == true
+        ? profile!.email.trim()
+        : '—';
+    final String mobile = profile?.mobile?.trim().isNotEmpty == true
+        ? profile!.mobile!.trim()
+        : '—';
+    final String address = profile?.address?.trim().isNotEmpty == true
+        ? profile!.address!.trim()
+        : '—';
+    final String loginType = profile?.loginType.trim().isNotEmpty == true
+        ? profile!.loginType.trim()
+        : '—';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Text(
+              'GENERAL INFORMATION',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(12),
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.1833819,
+                height: 17.7507286 / 12,
+                color: const Color(0xFF323232),
+              ),
+            ),
+            const Spacer(),
+          ],
+        ),
+        SizedBox(height: s(12)),
+        _FigmaInfoCard(
+          rows: <_InfoRow>[
+            _InfoRow(label: 'Official Name', value: fullName),
+            _InfoRow(
+              label: 'Official Email',
+              value: email,
+              leadingSvg: 'assets/icons/figma/account_icon_globe.svg',
+            ),
+            _InfoRow(label: 'Mobile Number', value: mobile),
+            _InfoRow(
+              label: 'Address',
+              value: address,
+              leadingSvg: 'assets/icons/figma/account_icon_location.svg',
+            ),
+            _InfoRow(
+              label: 'Login Type',
+              value: loginType,
+              leadingSvg: 'assets/icons/figma/account_icon_industry.svg',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SecurityPrivacyCard extends StatelessWidget {
+  const _SecurityPrivacyCard({
+    required this.emailVerified,
+    required this.mobileVerified,
+    required this.profileVisible,
+    required this.onProfileVisibleChanged,
+  });
+
+  final bool emailVerified;
+  final bool mobileVerified;
+  final bool profileVisible;
+  final ValueChanged<bool> onProfileVisibleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'SECURITY & PRIVACY',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1833819,
+            height: 17.7507286 / 12,
+            color: const Color(0xFF323232),
+          ),
+        ),
+        SizedBox(height: s(12)),
+        _FigmaCard(
+          child: Column(
+            children: <Widget>[
+              _SecurityRow(
+                iconSvg: 'assets/icons/figma/account_icon_shield.svg',
+                title: 'Email Verification',
+                subtitle: emailVerified ? 'Email verified' : 'Email pending',
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              _SecurityRow(
+                iconSvg: 'assets/icons/figma/account_icon_audit_refresh.svg',
+                title: 'Mobile Verification',
+                subtitle: mobileVerified ? 'Mobile verified' : 'Mobile pending',
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              _SecurityRow(
+                iconSvg: 'assets/icons/figma/account_icon_toggle.svg',
+                title: 'Profile Visibility',
+                subtitle: 'Visible in verification workflows',
+                trailing: Transform.scale(
+                  scale: 0.9,
+                  child: Switch(
+                    value: profileVisible,
+                    onChanged: onProfileVisibleChanged,
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: AppColors.brandBlue,
+                    inactiveThumbColor: Colors.white,
+                    inactiveTrackColor: const Color(0xFFE2E8F0),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IdentityRecordsCard extends StatelessWidget {
+  const _IdentityRecordsCard({
     required this.idDocumentName,
     required this.certificateName,
     required this.onUploadId,
@@ -693,132 +579,151 @@ class _DocumentsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x142563EB),
-            blurRadius: 12,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Uploads',
-            style: AppTypography.heading2.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w900,
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Text(
+              'IDENTITY RECORDS',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(12),
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.1833819,
+                height: 17.7507286 / 12,
+                color: const Color(0xFF323232),
+              ),
             ),
+            const Spacer(),
+            TextButton(
+              onPressed: onUploadId,
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                foregroundColor: AppColors.brandBlue,
+              ),
+              child: Text(
+                'Upload',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: s(12)),
+        _FigmaCard(
+          child: Column(
+            children: <Widget>[
+              _RecordRow(
+                title: 'ID Document',
+                subtitle: (idDocumentName ?? '').trim().isEmpty
+                    ? 'Upload Aadhaar / PAN / Passport'
+                    : idDocumentName!.trim(),
+                icon: Icons.badge_outlined,
+                onTap: onUploadId,
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              _RecordRow(
+                title: 'Certificates',
+                subtitle: (certificateName ?? '').trim().isEmpty
+                    ? 'Upload degree / certificate PDFs'
+                    : certificateName!.trim(),
+                icon: Icons.workspace_premium_outlined,
+                onTap: onUploadCertificate,
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Add your photo and supporting documents.',
-            style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          _UploadTile(
-            title: 'ID Document',
-            subtitle: (idDocumentName ?? '').trim().isEmpty
-                ? 'Upload Aadhaar / PAN / Passport'
-                : idDocumentName!.trim(),
-            icon: Icons.badge_outlined,
-            uploaded: (idDocumentName ?? '').trim().isNotEmpty,
-            onTap: onUploadId,
-          ),
-          const SizedBox(height: 12),
-          _UploadTile(
-            title: 'Certificates',
-            subtitle: (certificateName ?? '').trim().isEmpty
-                ? 'Upload degree / certificate PDFs'
-                : certificateName!.trim(),
-            icon: Icons.workspace_premium_outlined,
-            uploaded: (certificateName ?? '').trim().isNotEmpty,
-            onTap: onUploadCertificate,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _UploadTile extends StatelessWidget {
-  const _UploadTile({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.uploaded,
-    required this.onTap,
-  });
+class _LogoutCard extends StatelessWidget {
+  const _LogoutCard({required this.onLogout});
 
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool uploaded;
-  final VoidCallback onTap;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
-    final Color badgeColor = uploaded ? AppColors.success : AppColors.brandBlue;
-    final Color badgeBg = uploaded
-        ? AppColors.successBg
-        : AppColors.brandBlue.withAlpha(14);
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
 
     return Material(
-      color: const Color(0xFFF8FAFF),
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
+        onTap: onLogout,
+        borderRadius: BorderRadius.circular(s(16)),
+        child: Ink(
+          height: s(60),
+          width: double.infinity,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(s(16))),
+          child: Stack(
             children: <Widget>[
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  uploaded ? Icons.check_circle_rounded : icon,
-                  color: badgeColor,
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0x00FFFFFF),
+                    borderRadius: BorderRadius.circular(s(16)),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: const Color(0x332563EB),
+                        blurRadius: s(15),
+                        spreadRadius: s(-3),
+                        offset: Offset(0, s(10)),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6EEF1),
+                    borderRadius: BorderRadius.circular(s(16)),
+                    border: Border.all(
+                      color: const Color(0xFFF2CFD1),
+                      width: 2,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textTertiary,
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: s(16)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      SvgPicture.asset(
+                        'assets/icons/figma/account_logout_figma.svg',
+                        width: s(24),
+                        height: s(24),
+                      ),
+                      SizedBox(width: s(12)),
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(18),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.03515625,
+                          height: 28 / 18,
+                          color: const Color(0xFFDC2626),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -828,52 +733,288 @@ class _UploadTile extends StatelessWidget {
   }
 }
 
-class _DashedRoundedRectPainter extends CustomPainter {
-  const _DashedRoundedRectPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.radius,
-    required this.dashLength,
-    required this.dashGap,
+class _InfoRow {
+  const _InfoRow({required this.label, required this.value, this.leadingSvg});
+
+  final String label;
+  final String value;
+  final String? leadingSvg;
+}
+
+class _FigmaCard extends StatelessWidget {
+  const _FigmaCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(16)),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _FigmaInfoCard extends StatelessWidget {
+  const _FigmaInfoCard({required this.rows});
+
+  final List<_InfoRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FigmaCard(
+      child: Column(
+        children: <Widget>[
+          for (int i = 0; i < rows.length; i++) ...<Widget>[
+            _InfoRowTile(row: rows[i]),
+            if (i != rows.length - 1)
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRowTile extends StatelessWidget {
+  const _InfoRowTile({required this.row});
+
+  final _InfoRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final Widget labelValue = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Text(
+          row.label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w500,
+            height: 16 / 12,
+            color: const Color(0xFF94A3B8),
+          ),
+        ),
+        Text(
+          row.value,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(14),
+            fontWeight: FontWeight.w600,
+            height: 20 / 14,
+            color: const Color(0xFF323232),
+          ),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+      child: Row(
+        children: <Widget>[
+          if (row.leadingSvg != null) ...<Widget>[
+            Container(
+              width: s(40),
+              height: s(40),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(s(12)),
+              ),
+              alignment: Alignment.center,
+              child: SvgPicture.asset(
+                row.leadingSvg!,
+                width: s(16),
+                height: s(16),
+                colorFilter: const ColorFilter.mode(
+                  Color(0xFF94A3B8),
+                  BlendMode.srcIn,
+                ),
+              ),
+            ),
+            SizedBox(width: s(16)),
+          ],
+          Expanded(child: labelValue),
+        ],
+      ),
+    );
+  }
+}
+
+class _SecurityRow extends StatelessWidget {
+  const _SecurityRow({
+    required this.iconSvg,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
   });
 
-  final Color color;
-  final double strokeWidth;
-  final double radius;
-  final double dashLength;
-  final double dashGap;
+  final String iconSvg;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final Rect rect = Offset.zero & size;
-    final RRect rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-    final Path path = Path()..addRRect(rrect);
-    final PathMetrics metrics = path.computeMetrics();
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
 
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-
-    for (final PathMetric metric in metrics) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final double next = distance + dashLength;
-        canvas.drawPath(
-          metric.extractPath(distance, next.clamp(0, metric.length)),
-          paint,
-        );
-        distance = next + dashGap;
-      }
-    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: s(40),
+            height: s(40),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(s(12)),
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              iconSvg,
+              width: s(16),
+              height: s(16),
+              colorFilter: const ColorFilter.mode(
+                Color(0xFF94A3B8),
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+          SizedBox(width: s(16)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.013671875,
+                    height: 20 / 14,
+                    color: const Color(0xFF1E293B),
+                  ),
+                ),
+                SizedBox(height: s(2)),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(11),
+                    fontWeight: FontWeight.w400,
+                    height: 16.5 / 11,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...<Widget>[trailing!],
+        ],
+      ),
+    );
   }
+}
+
+class _RecordRow extends StatelessWidget {
+  const _RecordRow({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
-  bool shouldRepaint(_DashedRoundedRectPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.radius != radius ||
-        oldDelegate.dashLength != dashLength ||
-        oldDelegate.dashGap != dashGap;
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: s(40),
+                height: s(40),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(s(12)),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  color: const Color(0xFF94A3B8),
+                  size: s(16),
+                ),
+              ),
+              SizedBox(width: s(16)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.013671875,
+                        height: 20 / 14,
+                        color: const Color(0xFF1E293B),
+                      ),
+                    ),
+                    SizedBox(height: s(2)),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(11),
+                        fontWeight: FontWeight.w400,
+                        height: 16.5 / 11,
+                        color: const Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: const Color(0xFF94A3B8),
+                size: s(24),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
