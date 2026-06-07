@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
-import 'batch_created_success_view.dart';
+import 'org_verification_completion_view.dart';
 
 class BatchCreatedSuccessPage extends StatelessWidget {
   const BatchCreatedSuccessPage({super.key});
@@ -24,18 +24,18 @@ class BatchCreatedSuccessPage extends StatelessWidget {
     final int errors = _tryParseInt(qp['errors'], fallback: 0);
     final String batchName = (qp['batch'] ?? 'New Batch').trim();
 
-    return BatchCreatedSuccessView(
-      heroAssetPath: 'assets/batch_created_Success.svg',
-      title: 'Batch Created!',
+    return OrgVerificationCompletionView(
+      headerTitle: 'Verification Submitted',
+      title: 'Verification Submitted',
       subtitle:
-          'Your bulk upload was received. Verification tasks will be created shortly.',
-      batchName: batchName,
-      batchIdLabel: 'Batch ID',
-      batchIdValue: batchId,
-      metrics: <BatchCreatedMetric>[
-        BatchCreatedMetric(label: 'Uploaded', value: uploaded.toString()),
-        BatchCreatedMetric(label: 'Skipped', value: skipped.toString()),
-        BatchCreatedMetric(label: 'Errors', value: errors.toString()),
+          'Your human verification batch was received. The review is now pending.',
+      subjectName: batchName,
+      subjectIdLabel: 'Batch ID',
+      subjectIdValue: batchId,
+      metrics: <OrgCompletionMetric>[
+        OrgCompletionMetric(label: 'Uploaded', value: uploaded.toString()),
+        OrgCompletionMetric(label: 'Skipped', value: skipped.toString()),
+        OrgCompletionMetric(label: 'Errors', value: errors.toString()),
       ],
       primaryActionLabel: 'View Batch',
       primaryAction: batchId.trim().isEmpty

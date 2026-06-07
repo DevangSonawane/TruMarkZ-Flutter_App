@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
-import 'batch_created_success_view.dart';
+import 'org_verification_completion_view.dart';
 
 class ProductBatchCreatedPage extends StatelessWidget {
   const ProductBatchCreatedPage({super.key});
@@ -28,18 +28,18 @@ class ProductBatchCreatedPage extends StatelessWidget {
         ? extra
         : null;
 
-    return BatchCreatedSuccessView(
-      heroAssetPath: 'assets/batch_created_Success.svg',
-      title: 'Batch Created!',
+    return OrgVerificationCompletionView(
+      headerTitle: 'Verification Submitted',
+      title: 'Verification Submitted',
       subtitle:
-          'Your product verification batch has been queued. Certificates will be generated and stored on blockchain.',
-      batchName: (qp['batch'] ?? 'New Product Batch').trim(),
-      batchIdLabel: 'Batch ID',
-      batchIdValue: batchId,
-      metrics: <BatchCreatedMetric>[
-        BatchCreatedMetric(label: 'Products', value: records.toString()),
-        BatchCreatedMetric(label: 'Skipped', value: skipped.toString()),
-        BatchCreatedMetric(
+          'Your product verification batch has been queued. Review is now pending.',
+      subjectName: (qp['batch'] ?? 'New Product Batch').trim(),
+      subjectIdLabel: 'Batch ID',
+      subjectIdValue: batchId,
+      metrics: <OrgCompletionMetric>[
+        OrgCompletionMetric(label: 'Products', value: records.toString()),
+        OrgCompletionMetric(label: 'Skipped', value: skipped.toString()),
+        OrgCompletionMetric(
           label: 'Errors',
           value: (report?.errors.length ?? 0).toString(),
         ),

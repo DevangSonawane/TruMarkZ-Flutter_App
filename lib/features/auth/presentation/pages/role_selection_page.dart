@@ -140,9 +140,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                   'Simple one-user experience',
                                 ],
                                 selected: _selected == _Role.individual,
-                                onTap: () => setState(
-                                  () => _selected = _Role.individual,
-                                ),
+                                onTap: () =>
+                                    _continue(context, _Role.individual),
                                 onPressed: () =>
                                     _continue(context, _Role.individual),
                               ),
@@ -160,9 +159,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                                   'Verification workflow management',
                                 ],
                                 selected: _selected == _Role.organisation,
-                                onTap: () => setState(
-                                  () => _selected = _Role.organisation,
-                                ),
+                                onTap: () =>
+                                    _continue(context, _Role.organisation),
                                 onPressed: () =>
                                     _continue(context, _Role.organisation),
                               ),
