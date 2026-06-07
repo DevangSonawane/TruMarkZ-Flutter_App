@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
-import '../../../../orgs/verification_flow/presentation/pages/flow_step_progress.dart';
 import '../../../../orgs/verification_flow/presentation/pages/human_verification_checks_catalog.dart';
 import 'individual_industry_label_utils.dart';
 
