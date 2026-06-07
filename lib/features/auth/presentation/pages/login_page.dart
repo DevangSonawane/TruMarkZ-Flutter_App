@@ -300,14 +300,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           color: Colors.white,
                         ),
                       ).animate().fadeIn(duration: 220.ms),
-                      const SizedBox(height: AppSpacing.x1),
-                      Text(
-                        'Sign in to continue with your account.',
-                        style: AppTypography.body2.copyWith(
-                          color: Colors.white.withAlpha(178),
-                          height: 1.45,
-                        ),
-                      ).animate().fadeIn(delay: 40.ms, duration: 220.ms),
                     ],
                   ),
                 ),
@@ -316,8 +308,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 flex: _isRegisterMode ? 4 : 3,
                 child: TweenAnimationBuilder<double>(
                   tween: Tween<double>(
-                    begin: _isRegisterMode ? -56 : 16,
-                    end: _isRegisterMode ? -76 : 16,
+                    begin: _isRegisterMode ? 22 : 16,
+                    end: _isRegisterMode ? 16 : 16,
                   ),
                   duration: const Duration(milliseconds: 260),
                   curve: Curves.easeOutCubic,
@@ -352,7 +344,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             onRegister: () => _setRegisterMode(true),
                           ),
                           SizedBox(
-                            height: _isRegisterMode ? AppSpacing.x3 : AppSpacing.x2,
+                            height: _isRegisterMode ? AppSpacing.x2 : AppSpacing.x2,
                           ),
                           AnimatedSlide(
                             duration: const Duration(milliseconds: 220),
@@ -424,10 +416,37 @@ class _AuthTabs extends StatelessWidget {
         color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(
+      child: Stack(
+        children: <Widget>[
+          AnimatedAlign(
+            alignment: isRegisterMode
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              child: Container(
+                height: 48,
+                margin: const EdgeInsets.symmetric(horizontal: 0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withAlpha(12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Row(
         children: <Widget>[
           Expanded(
-            child: _AuthTabButton(
+            child: _AuthTabLabel(
               label: 'Login',
               selected: !isRegisterMode,
               onTap: onLogin,
@@ -435,7 +454,7 @@ class _AuthTabs extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: _AuthTabButton(
+            child: _AuthTabLabel(
               label: 'Register',
               selected: isRegisterMode,
               onTap: onRegister,
@@ -443,12 +462,14 @@ class _AuthTabs extends StatelessWidget {
           ),
         ],
       ),
+        ],
+      ),
     );
   }
 }
 
-class _AuthTabButton extends StatelessWidget {
-  const _AuthTabButton({
+class _AuthTabLabel extends StatelessWidget {
+  const _AuthTabLabel({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -461,31 +482,27 @@ class _AuthTabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? Colors.white : Colors.transparent,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        child: Container(
+        child: SizedBox(
           height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: selected
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withAlpha(10),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : const <BoxShadow>[],
-          ),
-          child: Text(
-            label,
-            style: AppTypography.body2.copyWith(
-              color: selected ? AppColors.textPrimary : AppColors.textTertiary,
-              fontWeight: FontWeight.w700,
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              style: AppTypography.body2.copyWith(
+                color: selected ? AppColors.textPrimary : AppColors.textTertiary,
+                fontWeight: FontWeight.w700,
+              ),
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                scale: selected ? 1.0 : 0.98,
+                child: Text(label),
+              ),
             ),
           ),
         ),
@@ -679,6 +696,7 @@ class _RegisterForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        const SizedBox(height: AppSpacing.x2),
         TMZInput(
           label: 'Full Name',
           hint: 'John Doe',
@@ -686,7 +704,7 @@ class _RegisterForm extends StatelessWidget {
           controller: fullNameController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x4),
+        const SizedBox(height: AppSpacing.x2),
         TMZInput(
           label: 'Email',
           hint: 'name@company.com',
@@ -695,7 +713,7 @@ class _RegisterForm extends StatelessWidget {
           controller: emailController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x4),
+        const SizedBox(height: AppSpacing.x2),
         TMZInput(
           label: 'Address (optional)',
           hint: 'Your full address',
@@ -703,7 +721,7 @@ class _RegisterForm extends StatelessWidget {
           controller: addressController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x4),
+        const SizedBox(height: AppSpacing.x2),
         TMZInput(
           label: 'Password',
           hint: '••••••••',
@@ -712,35 +730,11 @@ class _RegisterForm extends StatelessWidget {
           controller: passwordController,
           enabled: !isLoading,
         ),
-        const SizedBox(height: AppSpacing.x6),
+        const SizedBox(height: AppSpacing.x2),
         TMZButton(
           onPressed: isLoading ? null : onSubmit,
           label: 'Register',
           isLoading: isLoading,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'Already have an account? ',
-              style: AppTypography.body2.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            InkWell(
-              onTap: () => context.go(
-                '${AppRouter.loginPath}?type=individual&force=true',
-              ),
-              child: Text(
-                'Sign In',
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.brandBlue,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
         ),
       ],
     );
