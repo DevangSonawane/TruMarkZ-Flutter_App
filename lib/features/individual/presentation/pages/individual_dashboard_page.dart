@@ -346,37 +346,40 @@ class _IdentityHeroCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          SizedBox(
-            width: 314,
-            height: 63.7505,
-            child: Stack(
-              children: <Widget>[
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  width: 145.3504,
-                  child: _MetricTile(
-                    label: 'Verified',
-                    value: 12,
-                    indicatorColor: const Color(0xFF00DDA3),
-                    trackColor: const Color(0xFF323232),
-                    fraction: 0.7719299258572772,
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double availableWidth = constraints.maxWidth;
+              const double figmaRowWidth = 314;
+              const double figmaGap = 22.5226;
+              final double scale = availableWidth < figmaRowWidth
+                  ? availableWidth / figmaRowWidth
+                  : 1.0;
+              final double gap = figmaGap * scale;
+
+              return Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'Verified',
+                      value: 12,
+                      indicatorColor: const Color(0xFF00DDA3),
+                      trackColor: const Color(0xFF323232),
+                      fraction: 0.7719299258572772,
+                    ),
                   ),
-                ),
-                Positioned(
-                  left: 167.873,
-                  top: 0,
-                  width: 145.3504,
-                  child: _MetricTile(
-                    label: 'Pending',
-                    value: 2,
-                    indicatorColor: const Color(0xFFF59E0B),
-                    trackColor: const Color(0xFF323232),
-                    fraction: 0.32631579555143664,
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'Pending',
+                      value: 2,
+                      indicatorColor: const Color(0xFFF59E0B),
+                      trackColor: const Color(0xFF323232),
+                      fraction: 0.32631579555143664,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 31),
           Align(
@@ -460,62 +463,60 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     const double barHeight = 6.12002;
     const double barRadius = 3.06001;
-    const double tileWidth = 145.3504;
 
-    return SizedBox(
-      width: tileWidth,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 14.2800,
-              height: 17.2821 / 14.2800,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF323232),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14.2800,
+            height: 17.2821 / 14.2800,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF323232),
           ),
-          Text(
-            value.toString(),
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 20,
-              height: 24 / 20,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0B0F19),
-            ),
+        ),
+        Text(
+          value.toString(),
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 20,
+            height: 24 / 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0B0F19),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: tileWidth,
-            height: barHeight,
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: barHeight,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(barRadius),
             child: Stack(
-              clipBehavior: Clip.hardEdge,
               children: <Widget>[
-                Container(
-                  height: barHeight,
-                  width: tileWidth,
-                  decoration: BoxDecoration(
-                    color: trackColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(barRadius),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: trackColor.withValues(alpha: 0.2),
+                    ),
                   ),
                 ),
-                Container(
-                  height: barHeight,
-                  width: (tileWidth * fraction).clamp(0, tileWidth),
-                  decoration: BoxDecoration(
-                    color: indicatorColor.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(barRadius),
+                FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: fraction.clamp(0.0, 1.0),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: indicatorColor.withValues(alpha: 0.8),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
