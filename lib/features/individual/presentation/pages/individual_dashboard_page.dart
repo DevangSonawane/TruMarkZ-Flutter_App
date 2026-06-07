@@ -69,7 +69,9 @@ class IndividualDashboardPage extends ConsumerWidget {
                           locationLine2: 'Asynk Pvt Ltd',
                           avatarAssetPath: 'assets/icons/dashbaord/profile.png',
                           onAlertsTap: () =>
-                              context.go(AppRouter.notificationsPath),
+                              context.go(
+                                '${AppRouter.notificationsPath}?flow=individual',
+                              ),
                           onProfileTap: () =>
                               context.go(AppRouter.individualProfilePath),
                         ),

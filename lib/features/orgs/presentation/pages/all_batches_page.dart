@@ -136,7 +136,9 @@ class _AllBatchesPageState extends ConsumerState<AllBatchesPage> {
                                   avatarAssetPath:
                                       'assets/icons/dashbaord/profile.png',
                                   onAlertsTap: () =>
-                                      context.push(AppRouter.notificationsPath),
+                                      context.push(
+                                        '${AppRouter.notificationsPath}?flow=org',
+                                      ),
                                   onProfileTap: () =>
                                       context.push(AppRouter.settingsPath),
                                 ),

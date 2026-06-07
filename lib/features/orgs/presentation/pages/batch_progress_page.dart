@@ -96,8 +96,9 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
                       }
                       context.go(AppRouter.dashboardPath);
                     },
-                    onAlertsTap: () =>
-                        context.push(AppRouter.notificationsPath),
+                    onAlertsTap: () => context.push(
+                      '${AppRouter.notificationsPath}?flow=org',
+                    ),
                     onProfileTap: () => context.push(AppRouter.settingsPath),
                   ),
                 ),

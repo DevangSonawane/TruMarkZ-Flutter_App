@@ -117,7 +117,9 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                           locationLine2: 'Asynk Pvt Ltd',
                           avatarAssetPath: 'assets/icons/dashbaord/profile.png',
                           onAlertsTap: () =>
-                              context.go(AppRouter.notificationsPath),
+                              context.go(
+                                '${AppRouter.notificationsPath}?flow=org',
+                              ),
                           onProfileTap: () =>
                               context.go(AppRouter.settingsPath),
                         ),

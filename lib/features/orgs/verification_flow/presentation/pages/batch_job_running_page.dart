@@ -106,7 +106,9 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
         actions: <Widget>[
           IconButton(
             tooltip: 'Notifications',
-            onPressed: () => context.push(AppRouter.notificationsPath),
+            onPressed: () => context.push(
+              '${AppRouter.notificationsPath}?flow=org',
+            ),
             icon: const Icon(
               Icons.notifications_rounded,
               color: AppColors.brandBlue,
