@@ -12,6 +12,7 @@ import '../../../auth/application/auth_state.dart';
 
 class IndividualDashboardPage extends ConsumerWidget {
   const IndividualDashboardPage({super.key});
+  static const double _sectionHeaderToCardGap = 12;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -118,7 +119,7 @@ class IndividualDashboardPage extends ConsumerWidget {
                           color: Color(0xFF323232),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: _sectionHeaderToCardGap),
                       _VerificationStatusCard(
                         onStart: () {
                           ScaffoldMessenger.of(context).showSnackBar(

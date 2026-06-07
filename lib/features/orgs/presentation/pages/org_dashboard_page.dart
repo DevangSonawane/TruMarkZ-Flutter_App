@@ -24,6 +24,7 @@ class OrgDashboardPage extends ConsumerStatefulWidget {
 
 class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
   bool _didLoad = false;
+  static const double _sectionHeaderToCardGap = 12;
 
   @override
   void didChangeDependencies() {
@@ -192,7 +193,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                   color: AppColors.pageBg,
                   padding: EdgeInsets.fromLTRB(
                     sideInset + 16,
-                    12,
+                    _sectionHeaderToCardGap,
                     sideInset + 16,
                     0,
                   ),
