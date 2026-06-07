@@ -21,8 +21,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
 
   _Role? _selected = _Role.individual;
 
-  void _continue(BuildContext context, _Role role) {
+  Future<void> _continue(BuildContext context, _Role role) async {
     setState(() => _selected = role);
+    await Future<void>.delayed(const Duration(milliseconds: 1000));
+    if (!context.mounted) return;
 
     if (role == _Role.organisation) {
       context.go('${AppRouter.loginPath}?type=organization&force=true');
