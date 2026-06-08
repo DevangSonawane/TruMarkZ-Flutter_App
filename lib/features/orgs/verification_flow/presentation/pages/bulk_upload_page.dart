@@ -1730,6 +1730,13 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
+      final List<VerificationTypeDefinition> verificationTypes =
+          await ref.read(verificationTypesProvider('human').future);
+      final Map<String, VerificationTypeDefinition> verificationTypesById =
+          <String, VerificationTypeDefinition>{
+            for (final VerificationTypeDefinition item in verificationTypes)
+              item.id: item,
+          };
       final List<String> sortedChecks = widget.selectedChecks.toList()..sort();
       final List<String> headers = <String>[
         for (final String header in _headers)
@@ -1746,6 +1753,11 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       );
       if (!mounted) return;
 
+      final Uint8List templateBytes = _replaceVerificationIdsWithNames(
+        res.bytes,
+        verificationTypesById,
+      );
+
       String savedUri = '';
       try {
         savedUri =
@@ -1755,7 +1767,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
               'fileName': res.filename,
               'mimeType':
                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-              'bytes': res.bytes,
+              'bytes': templateBytes,
             }) ??
             '';
       } on MissingPluginException catch (e) {
@@ -1776,7 +1788,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
               onPressed: () async {
                 await Share.shareXFiles(<XFile>[
                   XFile.fromData(
-                    res.bytes,
+                    templateBytes,
                     name: fallbackName,
                     mimeType:
                         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1791,7 +1803,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       await _showTemplateActions(
         filePath: savedUri,
         fileName: res.filename,
-        fileBytes: res.bytes,
+        fileBytes: templateBytes,
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -1877,6 +1889,92 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
         );
       },
     );
+  }
+
+  Uint8List _replaceVerificationIdsWithNames(
+    Uint8List bytes,
+    Map<String, VerificationTypeDefinition> verificationTypesById,
+  ) {
+    if (verificationTypesById.isEmpty) return bytes;
+
+    final Map<String, String> replacements = <String, String>{
+      for (final MapEntry<String, VerificationTypeDefinition> entry
+          in verificationTypesById.entries)
+        entry.key.trim().toLowerCase(): entry.value.name.trim(),
+    }..removeWhere((String key, String value) => key.isEmpty || value.isEmpty);
+
+    if (replacements.isEmpty) return bytes;
+
+    try {
+      final Excel excel = Excel.decodeBytes(bytes);
+      for (final String sheetName in excel.tables.keys) {
+        final Sheet? sheet = excel.tables[sheetName];
+        if (sheet == null) continue;
+
+        final List<List<Data?>> rows = sheet.rows;
+        for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+          final List<Data?> row = rows[rowIndex];
+          for (int columnIndex = 0; columnIndex < row.length; columnIndex++) {
+            final Data? cell = row[columnIndex];
+            if (cell == null) continue;
+
+            final String raw = (cell.value?.toString() ?? '').trim();
+            if (raw.isEmpty) continue;
+
+            final String? replacement = _remapVerificationCell(
+              raw,
+              replacements,
+            );
+            if (replacement == null || replacement == raw) continue;
+
+            sheet.updateCell(
+              CellIndex.indexByColumnRow(
+                columnIndex: columnIndex,
+                rowIndex: rowIndex,
+              ),
+              TextCellValue(replacement),
+            );
+          }
+        }
+      }
+
+      final List<int>? encoded = excel.encode();
+      if (encoded == null || encoded.isEmpty) return bytes;
+      return Uint8List.fromList(encoded);
+    } catch (e) {
+      debugPrint('[HumanTemplate] could not remap verification names: $e');
+      return bytes;
+    }
+  }
+
+  String? _remapVerificationCell(
+    String raw,
+    Map<String, String> replacements,
+  ) {
+    final String normalized = raw.trim();
+    final String? direct = replacements[normalized.toLowerCase()];
+    if (direct != null) return direct;
+
+    if (!normalized.contains(',')) return null;
+
+    final List<String> parts = normalized.split(',');
+    bool changed = false;
+    final List<String> mapped = <String>[];
+
+    for (final String part in parts) {
+      final String token = part.trim();
+      if (token.isEmpty) continue;
+      final String? replacement = replacements[token.toLowerCase()];
+      if (replacement != null) {
+        mapped.add(replacement);
+        changed = true;
+      } else {
+        mapped.add(token);
+      }
+    }
+
+    if (!changed) return null;
+    return mapped.join(', ');
   }
 
   @override
