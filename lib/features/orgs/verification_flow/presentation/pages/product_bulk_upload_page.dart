@@ -16,7 +16,6 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
-import '../../../../../core/utils/spreadsheet_preview_util.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
@@ -48,8 +47,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   PickedFile? _pickedFile;
   bool _creating = false;
   List<String> _savedTemplateHeaders = <String>[];
-
-  String _selectedCategoryName() => _sector.trim();
   String get _resolvedBatchName {
     final String typed = _batchNameController.text.trim();
     return typed.isNotEmpty ? typed : _batchName.trim();
@@ -204,21 +201,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       return;
     }
     if (pickedFile != null) {
-      final String? missing = _missingRequiredColumns(pickedFile);
-      if (missing != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(missing)));
-        return;
-      }
-      final String? categoryIssue = await _validateCategoryValues(pickedFile);
-      if (categoryIssue != null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(categoryIssue)));
-        return;
-      }
+      // Product uploads should follow the same lightweight client-side flow as
+      // human bulk uploads: let the backend validate the spreadsheet.
     }
     final List<String> columns = _columns();
     final String resolvedIndustry = _effectiveIndustry();
@@ -266,7 +250,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           : 'Verification';
       final res = await repo.bulkUploadProducts(
         batchName: _resolvedBatchName,
+        categoryId: _categoryId,
         description: '$_sector • $modeLabel',
+        verificationTypes: _checks.join(','),
+        credentialVisibility: _access,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
@@ -304,95 +291,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       );
     } finally {
       if (mounted) setState(() => _creating = false);
-    }
-  }
-
-  String? _missingRequiredColumns(PickedFile file) {
-    String norm(String s) => s.trim().toLowerCase().replaceAll(' ', '_');
-    SpreadsheetPreview preview;
-    try {
-      preview = SpreadsheetPreviewUtil.parse(
-        bytes: file.bytes,
-        extension: file.extension,
-        maxColumns: 60,
-        maxRows: 1,
-      );
-    } on FormatException catch (e) {
-      return e.message;
-    } catch (_) {
-      return 'Unable to read this file. Please upload a valid .xlsx or .csv.';
-    }
-
-    final Set<String> cols = preview.columns.map(norm).toSet();
-    final List<String> required = <String>['product_name', 'category'];
-    final List<String> missing = required
-        .where((r) => !cols.contains(r))
-        .toList();
-    if (missing.isEmpty) return null;
-    final String available = preview.columns.take(12).join(', ');
-    return 'Missing required columns: ${missing.join(', ')}. '
-        'Your file headers: $available';
-  }
-
-  Future<String?> _validateCategoryValues(PickedFile file) async {
-    String norm(String s) => s.trim().toLowerCase().replaceAll(' ', '_');
-    SpreadsheetPreview preview;
-    try {
-      preview = SpreadsheetPreviewUtil.parse(
-        bytes: file.bytes,
-        extension: file.extension,
-        maxColumns: 60,
-        maxRows: 25,
-      );
-    } on FormatException catch (e) {
-      return e.message;
-    } catch (_) {
-      return 'Unable to read this file. Please upload a valid .xlsx or .csv.';
-    }
-
-    final int categoryIndex = preview.columns.indexWhere(
-      (String c) => norm(c) == 'category',
-    );
-    if (categoryIndex == -1) return null;
-
-    final Set<String> seen = <String>{};
-    for (final List<String> row in preview.rows) {
-      if (categoryIndex >= row.length) continue;
-      final String v = row[categoryIndex].trim();
-      if (v.isNotEmpty) seen.add(v);
-      if (seen.length >= 8) break;
-    }
-    if (seen.isEmpty) {
-      return 'Column "category" is empty. Use a valid category name from the Sector list (e.g. "${_selectedCategoryName()}").';
-    }
-
-    // Backend validates `category` by name (category_name), not by id.
-    // Use categories API to show accurate allowed values.
-    try {
-      final VerificationRepository repo = ref.read(
-        verificationRepositoryProvider,
-      );
-      final categories = await repo.getProductCategories();
-      final Set<String> allowed = categories
-          .map((c) => c.categoryName.trim())
-          .where((s) => s.isNotEmpty)
-          .toSet();
-
-      final List<String> invalid = seen
-          .where((v) => !allowed.contains(v))
-          .toList();
-      if (invalid.isEmpty) return null;
-
-      final String selectedName = _selectedCategoryName();
-      final bool selectedIsAllowed =
-          selectedName.isNotEmpty && allowed.contains(selectedName);
-      final String sample = invalid.take(3).join(', ');
-      return 'Invalid category value(s) in your file: $sample. '
-          'The "category" column must match a Sector name exactly (from /verification/categories), '
-          '${selectedIsAllowed ? 'for this batch use "$selectedName".' : 'please pick a valid sector name.'}';
-    } catch (_) {
-      // If the categories API fails, don't block upload.
-      return null;
     }
   }
 
@@ -541,10 +439,15 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                             ),
                           ),
                           const Spacer(),
-                          _IndustryPill(
-                            scale: scale,
-                            label: displayIndustry,
-                            onTap: () {},
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: contentWidth * 0.42,
+                            ),
+                            child: _IndustryPill(
+                              scale: scale,
+                              label: displayIndustry,
+                              onTap: () {},
+                            ),
                           ),
                         ],
                       ),
@@ -1388,17 +1291,19 @@ class _IndustryPill extends StatelessWidget {
               ),
             ),
             SizedBox(width: s(8)),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(11),
-                fontWeight: FontWeight.w600,
-                letterSpacing: s(0.0644531),
-                height: 16.5 / 11,
-                color: AppColors.brandBlue,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(11),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: s(0.0644531),
+                  height: 16.5 / 11,
+                  color: AppColors.brandBlue,
+                ),
               ),
             ),
             SizedBox(width: s(8)),

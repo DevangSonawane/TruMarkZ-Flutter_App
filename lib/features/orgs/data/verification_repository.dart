@@ -146,6 +146,7 @@ class VerificationRepository {
 
   Future<BulkUploadResponse> bulkUploadProducts({
     required String batchName,
+    required String categoryId,
     String? description,
     String? industryType,
     String? verificationTypes,
@@ -166,6 +167,7 @@ class VerificationRepository {
     };
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
+      'category_id': categoryId.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
       if (industryType != null && industryType.trim().isNotEmpty)

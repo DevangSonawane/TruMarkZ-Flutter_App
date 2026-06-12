@@ -416,12 +416,20 @@ class _SwipeableCertificateCards extends StatelessWidget {
         (asset: 'assets/images/warehouse.png', aspectRatio: 1054 / 1492),
       ];
 
+  static const List<({String asset, double aspectRatio})>
+  _productCertificateImages = <({String asset, double aspectRatio})>[
+    (asset: 'assets/products/product_preview_1.png', aspectRatio: 1086 / 1448),
+    (asset: 'assets/products/product_preview_2.png', aspectRatio: 1024 / 1536),
+    (asset: 'assets/products/product_preview_3.png', aspectRatio: 1086 / 1448),
+  ];
+
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    final List<({String asset, double aspectRatio})> images =
-        _certificateImages;
+    final List<({String asset, double aspectRatio})> images = isProductFlow
+        ? _productCertificateImages
+        : _certificateImages;
 
     final double h = s(220);
     final double sidePadding = s(16);
@@ -558,14 +566,18 @@ class _MiniInfoCard extends StatelessWidget {
             children: <Widget>[
               icon,
               SizedBox(width: s(8)),
-              Text(
-                value,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(14),
-                  fontWeight: FontWeight.w600,
-                  height: 21 / 14,
-                  color: const Color(0xFF0F172A),
+              Expanded(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w600,
+                    height: 21 / 14,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
               ),
             ],
