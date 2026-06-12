@@ -93,9 +93,13 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
     );
   }
 
-  void _addFieldGroup() {
+  void _addFieldGroup([int insertAfterIndex = -1]) {
     setState(() {
-      _steps[_activeStep].entries.add(_SkillEntryDraft());
+      final List<_SkillEntryDraft> entries = _steps[_activeStep].entries;
+      final int insertIndex = insertAfterIndex < 0
+          ? entries.length
+          : (insertAfterIndex + 1).clamp(0, entries.length);
+      entries.insert(insertIndex, _SkillEntryDraft());
     });
     _scrollToBottom();
   }
@@ -220,7 +224,7 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
                           SizedBox(width: s(12)),
                           Expanded(
                             child: Text(
-                              'Skill Tree',
+                              'Skills',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -231,10 +235,6 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
                                 color: Colors.white,
                               ),
                             ),
-                          ),
-                          _TopAddButton(
-                            scale: scale,
-                            onTap: _addFieldGroup,
                           ),
                         ],
                       ),
@@ -295,126 +295,6 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
                                       ),
                                     ),
                                     SizedBox(height: s(20)),
-                                    Container(
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(
-                                          s(18),
-                                        ),
-                                        border: Border.all(
-                                          color: const Color(0xFFE5E7EB),
-                                        ),
-                                        boxShadow: <BoxShadow>[
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.03,
-                                            ),
-                                            blurRadius: 18,
-                                            offset: const Offset(0, 6),
-                                          ),
-                                        ],
-                                      ),
-                                      padding: EdgeInsets.all(s(14)),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: <Widget>[
-                                          Container(
-                                            width: s(42),
-                                            height: s(42),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.brandBlue
-                                                  .withValues(alpha: 0.10),
-                                              borderRadius:
-                                                  BorderRadius.circular(s(14)),
-                                            ),
-                                            child: Icon(
-                                              Icons.auto_awesome_rounded,
-                                              size: s(22),
-                                              color: AppColors.brandBlue,
-                                            ),
-                                          ),
-                                          SizedBox(width: s(12)),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: <Widget>[
-                                                Text(
-                                                  step.title,
-                                                  style: TextStyle(
-                                                    fontFamily: 'Inter',
-                                                    fontSize: s(14),
-                                                    fontWeight: FontWeight.w700,
-                                                    height: 20 / 14,
-                                                    color: const Color(
-                                                      0xFF0F172A,
-                                                    ),
-                                                  ),
-                                                ),
-                                                SizedBox(height: s(4)),
-                                                Text(
-                                                  step.hint,
-                                                  style: TextStyle(
-                                                    fontFamily: 'Inter',
-                                                    fontSize: s(11),
-                                                    fontWeight: FontWeight.w500,
-                                                    height: 16 / 11,
-                                                    color: const Color(
-                                                      0xFF64748B,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          SizedBox(width: s(12)),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: <Widget>[
-                                              Text(
-                                                '${step.entries.length} field${step.entries.length == 1 ? '' : 's'}',
-                                                style: TextStyle(
-                                                  fontFamily: 'Inter',
-                                                  fontSize: s(11),
-                                                  fontWeight: FontWeight.w700,
-                                                  height: 16 / 11,
-                                                  color: AppColors.brandBlue,
-                                                ),
-                                              ),
-                                              SizedBox(height: s(8)),
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: s(10),
-                                                  vertical: s(5),
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFF0F7FF),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                    s(999),
-                                                  ),
-                                                ),
-                                                child: Text(
-                                                  step.title,
-                                                  style: TextStyle(
-                                                    fontFamily: 'Inter',
-                                                    fontSize: s(10),
-                                                    fontWeight: FontWeight.w700,
-                                                    height: 14 / 10,
-                                                    letterSpacing: s(0.5),
-                                                    color: AppColors.brandBlue,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(height: s(20)),
                                     AnimatedSwitcher(
                                       duration:
                                           const Duration(milliseconds: 180),
@@ -438,6 +318,8 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
                                                   _removeEntry(i),
                                               onPickDocument: () =>
                                                   _pickDocument(i),
+                                              onAddBelow: () =>
+                                                  _addFieldGroup(i),
                                               fieldDecoration: _fieldDecoration,
                                             ),
                                             if (i != step.entries.length - 1)
@@ -512,60 +394,6 @@ class _SkillEntryDraft {
   }
 }
 
-class _TopAddButton extends StatelessWidget {
-  const _TopAddButton({
-    required this.scale,
-    required this.onTap,
-  });
-
-  final double scale;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(s(18)),
-        child: Container(
-          height: s(36),
-          padding: EdgeInsets.symmetric(horizontal: s(12)),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(s(18)),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.22),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(
-                Icons.add_rounded,
-                size: s(18),
-                color: Colors.white,
-              ),
-              SizedBox(width: s(6)),
-              Text(
-                'Fields',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  height: 16 / 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SkillEntryCard extends StatelessWidget {
   const _SkillEntryCard({
     required this.scale,
@@ -574,6 +402,7 @@ class _SkillEntryCard extends StatelessWidget {
     required this.entry,
     required this.onRemove,
     required this.onPickDocument,
+    required this.onAddBelow,
     required this.fieldDecoration,
   });
 
@@ -583,6 +412,7 @@ class _SkillEntryCard extends StatelessWidget {
   final _SkillEntryDraft entry;
   final VoidCallback onRemove;
   final VoidCallback onPickDocument;
+  final VoidCallback onAddBelow;
   final InputDecoration Function({
     required String hint,
     int? minLines,
@@ -851,6 +681,38 @@ class _SkillEntryCard extends StatelessWidget {
                       color: const Color(0xFFCBD5E1),
                     ),
                 ],
+              ),
+            ),
+          ),
+          SizedBox(height: s(14)),
+          SizedBox(
+            width: double.infinity,
+            height: s(48),
+            child: OutlinedButton.icon(
+              onPressed: onAddBelow,
+              icon: Icon(
+                Icons.add_rounded,
+                size: s(18),
+                color: AppColors.brandBlue,
+              ),
+              label: Text(
+                'Add Fields',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(14),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandBlue,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: AppColors.brandBlue.withValues(alpha: 0.20),
+                  width: 1.25,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(s(16)),
+                ),
+                backgroundColor: const Color(0xFFF8FBFF),
               ),
             ),
           ),
