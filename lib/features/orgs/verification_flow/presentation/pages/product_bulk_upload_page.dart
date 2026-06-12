@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/models/verification_models.dart';
@@ -34,7 +35,7 @@ class ProductBulkUploadPage extends ConsumerStatefulWidget {
 class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   String? _lastRouteSignature;
   bool _didInitFromRoute = false;
-  final GlobalKey _menuKey = GlobalKey();
+  late final TextEditingController _batchNameController;
 
   String _industry = '';
   String _sector = 'Consumer Goods & Warranty';
@@ -47,10 +48,18 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   PickedFile? _pickedFile;
   bool _creating = false;
   List<String> _savedTemplateHeaders = <String>[];
-  final TextEditingController _templateHeadersController =
-      TextEditingController();
 
   String _selectedCategoryName() => _sector.trim();
+  String get _resolvedBatchName {
+    final String typed = _batchNameController.text.trim();
+    return typed.isNotEmpty ? typed : _batchName.trim();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _batchNameController = TextEditingController(text: _batchName);
+  }
 
   void _goBack(BuildContext context) {
     final GoRouter router = GoRouter.of(context);
@@ -58,6 +67,18 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       context.pop();
     } else {
       context.go(AppRouter.dashboardPath);
+    }
+  }
+
+  void _syncBatchName(String value) {
+    final String cleaned = value.trim();
+    if (cleaned.isEmpty) return;
+    _batchName = cleaned;
+    if (_batchNameController.text.trim() != cleaned) {
+      _batchNameController.value = TextEditingValue(
+        text: cleaned,
+        selection: TextSelection.collapsed(offset: cleaned.length),
+      );
     }
   }
 
@@ -94,7 +115,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
     final String? batch = qp['batch'];
     if (batch != null && batch.trim().isNotEmpty) {
-      _batchName = batch.trim();
+      _syncBatchName(batch.trim());
     }
 
     final String mode = (qp['mode'] ?? 'verification').trim().toLowerCase();
@@ -119,276 +140,47 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   @override
   void dispose() {
-    _templateHeadersController.dispose();
+    _batchNameController.dispose();
     super.dispose();
   }
 
+  List<String> _defaultTemplateHeaders() {
+    if (_mode == 'warranty') {
+      return <String>[
+        'product_name',
+        'serial_number',
+        'warranty_start_date',
+        'warranty_end_date',
+        'invoice_number',
+      ];
+    }
+    return <String>[
+      'product_name',
+      'serial_number',
+      'model',
+      'batch_number',
+      'certificate_number',
+    ];
+  }
+
   Future<void> _downloadTemplate() async {
-    final String suggested = _savedTemplateHeaders.isNotEmpty
-        ? _savedTemplateHeaders.join(', ')
-        : (_templateHeadersController.text.trim().isNotEmpty
-              ? _templateHeadersController.text.trim()
-              : 'product_name,category,serial_number,model');
-    _templateHeadersController.text = suggested;
+    final List<String> initialHeaders = _savedTemplateHeaders.isNotEmpty
+        ? List<String>.from(_savedTemplateHeaders)
+        : _defaultTemplateHeaders();
 
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (BuildContext ctx) {
-        final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(ctx);
-        List<String> savedHeaders = List<String>.from(_savedTemplateHeaders);
-        return StatefulBuilder(
-          builder: (BuildContext context, void Function(void Function()) setSheetState) {
-            final double scale = MediaQuery.sizeOf(context).width / 402;
-            double s(double v) => v * scale;
-            return SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
-                  AppSpacing.x4 + viewInsets.bottom,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Download Template',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(16),
-                        fontWeight: FontWeight.w700,
-                        height: 24 / 16,
-                        color: const Color(0xFF111827),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x2),
-                    Text(
-                      'Enter column headers (comma-separated). Save them first, then generate the Excel template.',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(12),
-                        fontWeight: FontWeight.w500,
-                        height: 18 / 12,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    TextField(
-                      controller: _templateHeadersController,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(14),
-                        fontWeight: FontWeight.w400,
-                        height: 20 / 14,
-                        color: const Color(0xFF0F172A),
-                      ),
-                      cursorColor: AppColors.brandBlue,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: 'product_name, serial_number, model, ...',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x4),
-                    if (savedHeaders.isNotEmpty) ...<Widget>[
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: <Widget>[
-                          for (final String header in savedHeaders)
-                            Chip(
-                              label: Text(header),
-                              backgroundColor: AppColors.brandBlue.withAlpha(
-                                14,
-                              ),
-                              labelStyle: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: s(12),
-                                fontWeight: FontWeight.w600,
-                                height: 16.5 / 12,
-                                color: AppColors.brandBlue,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.x3),
-                    ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                final List<String> headers =
-                                    _templateHeadersController.text
-                                        .split(',')
-                                        .map((String s) => s.trim())
-                                        .where((String s) => s.isNotEmpty)
-                                        .toList();
-                                if (headers.isEmpty) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Please enter at least 1 header.',
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                final Set<String> normalized = headers
-                                    .map(
-                                      (String s) => s
-                                          .trim()
-                                          .toLowerCase()
-                                          .replaceAll(' ', '_'),
-                                    )
-                                    .toSet();
-                                if (!normalized.contains('product_name') ||
-                                    !normalized.contains('category')) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Template must include required columns: product_name, category',
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                setSheetState(() {
-                                  savedHeaders = headers;
-                                });
-                                setState(() {
-                                  _savedTemplateHeaders = headers;
-                                });
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Headers saved for template generation.',
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.save_rounded),
-                              label: Text(
-                                'Save Headers',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: s(14),
-                                  fontWeight: FontWeight.w700,
-                                  height: 20 / 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.x3),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: savedHeaders.isEmpty
-                                  ? null
-                                  : () async {
-                                      final ScaffoldMessengerState messenger =
-                                          ScaffoldMessenger.of(ctx);
-                                      final List<String> headers =
-                                          List<String>.from(savedHeaders);
-                                      try {
-                                        final VerificationRepository repo = ref
-                                            .read(
-                                              verificationRepositoryProvider,
-                                            );
-                                        final String res = await repo
-                                            .generateProductsTemplate(
-                                              categoryId: _categoryId,
-                                              headers: headers,
-                                            );
-                                        if (!ctx.mounted) return;
-                                        Navigator.of(ctx).pop();
-
-                                        final String out = res.trim();
-                                        if (out.startsWith('http://') ||
-                                            out.startsWith('https://')) {
-                                          final Uri uri = Uri.parse(out);
-                                          final bool ok = await launchUrl(
-                                            uri,
-                                            mode:
-                                                LaunchMode.externalApplication,
-                                          );
-                                          if (!mounted) return;
-                                          if (!ok) {
-                                            messenger.showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Could not open template link.',
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return;
-                                        }
-
-                                        if (out.isNotEmpty) {
-                                          await Clipboard.setData(
-                                            ClipboardData(text: out),
-                                          );
-                                        }
-                                        if (!mounted) return;
-                                        messenger.showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              out.isEmpty
-                                                  ? 'Template generated.'
-                                                  : 'Template generated (response copied).',
-                                            ),
-                                          ),
-                                        );
-                                      } on ApiException catch (e) {
-                                        if (!ctx.mounted) return;
-                                        ScaffoldMessenger.of(ctx).showSnackBar(
-                                          SnackBar(content: Text(e.message)),
-                                        );
-                                      } catch (_) {
-                                        if (!ctx.mounted) return;
-                                        ScaffoldMessenger.of(ctx).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Something went wrong. Please try again.',
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
-                              icon: const Icon(Icons.download_rounded),
-                              label: Text(
-                                'Generate',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: s(14),
-                                  fontWeight: FontWeight.w700,
-                                  height: 20 / 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
+      builder: (BuildContext dialogContext) {
+        return _ProductTemplateDialog(
+          initialHeaders: initialHeaders,
+          categoryId: _categoryId,
+          serviceLabel: _mode == 'warranty'
+              ? 'Warranty'
+              : 'Product Verification',
+          onSave: (List<String> headers) {
+            setState(() {
+              _savedTemplateHeaders = List<String>.from(headers);
+            });
           },
         );
       },
@@ -445,7 +237,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         if (_categoryId.trim().isNotEmpty) 'category_id': _categoryId.trim(),
         if (_sector.trim().isNotEmpty) 'sector': _sector.trim(),
         if (_mode == 'warranty') 'supports_warranty': 'true',
-        'batch': _batchName,
+        'batch': _resolvedBatchName,
         'desc': '$_sector • $modeLabel',
       },
     );
@@ -458,32 +250,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     if (_creating) return;
     final PickedFile? pickedFile = _pickedFile;
     if (pickedFile == null) {
-      final BulkUploadResponse report = BulkUploadResponse(
-        message: 'Test batch created',
-        batchId: 'TEST-${DateTime.now().millisecondsSinceEpoch}',
-        totalUploaded: 0,
-        totalSkipped: 0,
-        successfulUsers: const <BulkUploadSuccessUser>[],
-        skippedUsers: const <BulkUploadSkippedUser>[],
-        errors: const <BulkUploadErrorRow>[],
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload an Excel file first.')),
       );
-      if (!mounted) return;
-      final Uri uri = Uri(
-        path: AppRouter.productBatchCreatedPath,
-        queryParameters: <String, String>{
-          'sector': _sector,
-          'batch': _batchName,
-          'records': '0',
-          'skipped': '0',
-          'batchId': report.batchId,
-          if (columns.isNotEmpty) 'columns': columns.join(','),
-          if (_checks.isNotEmpty) 'checks': _checks.join(','),
-          'access': _access,
-          'flow': 'product',
-          'mode': _mode,
-        },
-      );
-      context.go(uri.toString(), extra: report);
       return;
     }
 
@@ -496,20 +265,20 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           ? 'Warranty'
           : 'Verification';
       final res = await repo.bulkUploadProducts(
-        batchName: _batchName,
+        batchName: _resolvedBatchName,
         description: '$_sector • $modeLabel',
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
       await ref
           .read(batchNameStoreProvider.notifier)
-          .setBatchName(res.batchId, _batchName);
+          .setBatchName(res.batchId, _resolvedBatchName);
       if (!mounted) return;
       final Uri uri = Uri(
         path: AppRouter.productBatchCreatedPath,
         queryParameters: <String, String>{
           'sector': _sector,
-          'batch': _batchName,
+          'batch': _resolvedBatchName,
           'records': res.totalUploaded.toString(),
           'skipped': res.totalSkipped.toString(),
           'batchId': res.batchId,
@@ -628,11 +397,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   }
 
   List<String> _columns() {
-    final String raw = _savedTemplateHeaders.isNotEmpty
-        ? _savedTemplateHeaders.join(',')
-        : _templateHeadersController.text;
-    final List<String> out = raw
-        .split(',')
+    final List<String> source = _savedTemplateHeaders.isNotEmpty
+        ? _savedTemplateHeaders
+        : _defaultTemplateHeaders();
+    final List<String> out = source
         .map((String s) => s.trim())
         .where((String s) => s.isNotEmpty)
         .toList();
@@ -711,181 +479,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               : '${token[0].toUpperCase()}${token.substring(1).toLowerCase()}',
         )
         .join(' ');
-  }
-
-  Future<void> _openMoreMenu({required double scale}) async {
-    final BuildContext? ctx = _menuKey.currentContext;
-    if (ctx == null) return;
-
-    final RenderBox button = ctx.findRenderObject()! as RenderBox;
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final Offset buttonTopLeft = button.localToGlobal(
-      Offset.zero,
-      ancestor: overlay,
-    );
-    final Offset buttonBottomRight = button.localToGlobal(
-      button.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(buttonTopLeft, buttonBottomRight),
-      Offset.zero & overlay.size,
-    );
-
-    final _MoreAction? picked = await showMenu<_MoreAction>(
-      context: context,
-      position: position.shift(Offset(0, button.size.height * 0.6)),
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6 * scale),
-        side: BorderSide(color: const Color(0xFFE5E7EB), width: 1 * scale),
-      ),
-      items: <PopupMenuEntry<_MoreAction>>[
-        PopupMenuItem<_MoreAction>(
-          value: _MoreAction.downloadTemplate,
-          height: 40 * scale,
-          child: Center(
-            child: Text(
-              'Download Template',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12 * scale,
-                fontWeight: FontWeight.w600,
-                height: 18 / 12,
-                color: AppColors.brandBlue,
-              ),
-            ),
-          ),
-        ),
-        const PopupMenuDivider(height: 1),
-        PopupMenuItem<_MoreAction>(
-          value: _MoreAction.viewTemplateColumns,
-          height: 40 * scale,
-          child: Center(
-            child: Text(
-              'View Template Columns',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12 * scale,
-                fontWeight: FontWeight.w600,
-                height: 18 / 12,
-                color: AppColors.brandBlue,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-
-    if (!mounted || picked == null) return;
-
-    switch (picked) {
-      case _MoreAction.downloadTemplate:
-        await _downloadTemplate();
-      case _MoreAction.viewTemplateColumns:
-        await _showTemplateColumnsDialog(scale: scale, columns: _columns());
-    }
-  }
-
-  Future<void> _showTemplateColumnsDialog({
-    required double scale,
-    required List<String> columns,
-  }) async {
-    double s(double v) => v * scale;
-
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(s(16)),
-            side: BorderSide(color: const Color(0xFFE5E7EB), width: s(1)),
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Text(
-                      'Template Columns',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(16),
-                        fontWeight: FontWeight.w700,
-                        height: 24 / 16,
-                        color: const Color(0xFF111827),
-                      ),
-                    ),
-                    const Spacer(),
-                    InkResponse(
-                      onTap: () => Navigator.of(context).pop(),
-                      radius: s(18),
-                      child: SvgPicture.asset(
-                        'assets/icons/figma/bulk_close_x.svg',
-                        width: s(18),
-                        height: s(18),
-                        colorFilter: const ColorFilter.mode(
-                          Color(0xFF9CA3AF),
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: s(12)),
-                Wrap(
-                  spacing: s(8),
-                  runSpacing: s(8),
-                  children: <Widget>[
-                    for (final String c in columns)
-                      Container(
-                        padding: EdgeInsets.fromLTRB(s(10), s(6), s(10), s(6)),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEEF3FF),
-                          borderRadius: BorderRadius.circular(s(999)),
-                        ),
-                        child: Text(
-                          c,
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: s(12),
-                            fontWeight: FontWeight.w600,
-                            height: 16 / 12,
-                            color: AppColors.brandBlue,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                SizedBox(height: s(14)),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Close',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(13),
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.brandBlue,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   @override
@@ -997,37 +590,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                       ),
                                     ),
                                     SizedBox(height: s(12)),
-                                    Container(
-                                      width: double.infinity,
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: s(16),
-                                        vertical: s(14),
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(
-                                          s(18),
-                                        ),
-                                        border: Border.all(
-                                          color: const Color(
-                                            0xFFCBD5E1,
-                                          ).withAlpha(160),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        _batchName,
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: s(14),
-                                          fontWeight: FontWeight.w600,
-                                          height: 20 / 14,
-                                          color: const Color(0xFF111827),
-                                        ),
-                                      ),
+                                    _ProductBatchNameField(
+                                      scale: scale,
+                                      controller: _batchNameController,
+                                      onChanged: () => setState(() {}),
                                     ),
                                     SizedBox(height: s(10)),
                                     Text(
-                                      'Assigned from the previous step. This batch name will be used for tracking.',
+                                      'Assign a unique name to easily track this upload later.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(11),
@@ -1108,18 +678,28 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                             ),
                                           ),
                                         ),
-                                        InkResponse(
-                                          key: _menuKey,
-                                          onTap: () =>
-                                              _openMoreMenu(scale: scale),
-                                          radius: s(22),
-                                          child: SvgPicture.asset(
-                                            'assets/icons/figma/bulk_upload_icon_more.svg',
-                                            width: s(22),
-                                            height: s(22),
-                                            colorFilter: const ColorFilter.mode(
-                                              AppColors.brandBlue,
-                                              BlendMode.srcIn,
+                                        TextButton(
+                                          onPressed: _downloadTemplate,
+                                          style: TextButton.styleFrom(
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: Size.zero,
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            foregroundColor:
+                                                AppColors.brandBlue,
+                                            textStyle: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(12),
+                                              fontWeight: FontWeight.w600,
+                                              height: 18 / 12,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Download Template',
+                                            style: TextStyle(
+                                              color: AppColors.brandBlue,
                                             ),
                                           ),
                                         ),
@@ -1175,7 +755,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                               child: _UploadButton(
                                 scale: scale,
                                 isLoading: _creating,
-                                enabled: !_creating,
+                                enabled:
+                                    !_creating &&
+                                    _pickedFile != null &&
+                                    _resolvedBatchName.isNotEmpty,
                                 onTap: _confirmAndCreateBatch,
                                 label: 'Create Batch',
                               ),
@@ -1195,7 +778,576 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   }
 }
 
-enum _MoreAction { downloadTemplate, viewTemplateColumns }
+class _ProductBatchNameField extends StatelessWidget {
+  const _ProductBatchNameField({
+    required this.scale,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final double scale;
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return TextField(
+      controller: controller,
+      onChanged: (_) => onChanged(),
+      decoration: InputDecoration(
+        hintText: 'Enter a batch name, Ex. Product Verification Q1',
+        hintStyle: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: s(14),
+          fontWeight: FontWeight.w500,
+          height: 20 / 14,
+          color: const Color(0xFFC7D2E1),
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF7F9FC),
+        contentPadding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(s(18)),
+          borderSide: BorderSide(
+            color: const Color(0xFFCBD5E1).withAlpha(160),
+            width: s(1),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(s(18)),
+          borderSide: BorderSide(
+            color: const Color(0xFFCBD5E1).withAlpha(160),
+            width: s(1),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(s(18)),
+          borderSide: BorderSide(
+            color: AppColors.brandBlue.withAlpha(200),
+            width: s(1.2),
+          ),
+        ),
+      ),
+      style: TextStyle(
+        fontFamily: 'Inter',
+        fontSize: s(14),
+        fontWeight: FontWeight.w600,
+        height: 20 / 14,
+        color: const Color(0xFF111827),
+      ),
+      textInputAction: TextInputAction.done,
+    );
+  }
+}
+
+class _ProductTemplateDialog extends ConsumerStatefulWidget {
+  const _ProductTemplateDialog({
+    required this.initialHeaders,
+    required this.categoryId,
+    required this.serviceLabel,
+    required this.onSave,
+  });
+
+  final List<String> initialHeaders;
+  final String categoryId;
+  final String serviceLabel;
+  final ValueChanged<List<String>> onSave;
+
+  @override
+  ConsumerState<_ProductTemplateDialog> createState() =>
+      _ProductTemplateDialogState();
+}
+
+class _ProductTemplateDialogState
+    extends ConsumerState<_ProductTemplateDialog> {
+  static const MethodChannel _downloadsChannel = MethodChannel(
+    'trumarkz/downloads',
+  );
+
+  late final TextEditingController _headerInputController;
+  late List<String> _headers;
+  bool _isGenerating = false;
+  bool _headersSaved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _headerInputController = TextEditingController();
+    _headers = _normalizeHeaders(widget.initialHeaders);
+    _headersSaved = _headers.isNotEmpty;
+  }
+
+  @override
+  void dispose() {
+    _headerInputController.dispose();
+    super.dispose();
+  }
+
+  List<String> _normalizeHeaders(List<String> headers) {
+    final List<String> merged = <String>[];
+    final Set<String> seen = <String>{};
+
+    for (final String raw in headers) {
+      final String cleaned = raw.trim();
+      if (cleaned.isEmpty) continue;
+      final String key = cleaned.toLowerCase();
+      if (seen.add(key)) {
+        merged.add(cleaned);
+      }
+    }
+    return merged;
+  }
+
+  void _addHeader() {
+    final String cleaned = _headerInputController.text.trim();
+    if (cleaned.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a header first.')),
+      );
+      return;
+    }
+    setState(() {
+      _headers = _normalizeHeaders(<String>[..._headers, cleaned]);
+      _headersSaved = true;
+    });
+    widget.onSave(List<String>.from(_headers));
+    _headerInputController.clear();
+  }
+
+  void _removeHeader(String header) {
+    setState(() {
+      _headers = List<String>.from(_headers)
+        ..removeWhere(
+          (String value) => value.toLowerCase() == header.toLowerCase(),
+        );
+      _headersSaved = _headers.isNotEmpty;
+    });
+    widget.onSave(List<String>.from(_headers));
+  }
+
+  Future<void> _generateTemplate() async {
+    if (_headers.isEmpty || _isGenerating) return;
+    if (widget.categoryId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Missing sector category. Please go back and reselect.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+    });
+
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final List<String> headers = <String>[
+        for (final String header in _headers)
+          if (header.trim().isNotEmpty) header.trim().toLowerCase().replaceAll(
+                RegExp(r'\s+'),
+                '_',
+              ),
+      ];
+      final VerificationBinaryResponse res = await repo.generateProductsTemplate(
+        categoryId: widget.categoryId,
+        headers: headers,
+      );
+      if (!mounted) return;
+
+      final Uint8List templateBytes = res.bytes;
+      String savedUri = '';
+      try {
+        savedUri =
+            await _downloadsChannel.invokeMethod<String>(
+              'saveFileToDownloads',
+              <String, dynamic>{
+                'fileName': res.filename,
+                'mimeType':
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'bytes': templateBytes,
+              },
+            ) ??
+            '';
+      } on MissingPluginException catch (e) {
+        debugPrint('[ProductTemplate] downloads channel missing: $e');
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      if (savedUri.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Template generated. Restart the app once to enable Downloads save, or use Share now.',
+            ),
+            action: SnackBarAction(
+              label: 'Share',
+              onPressed: () async {
+                await Share.shareXFiles(<XFile>[
+                  XFile.fromData(
+                    templateBytes,
+                    name: res.filename,
+                    mimeType:
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  ),
+                ]);
+              },
+            ),
+          ),
+        );
+        return;
+      }
+      await _showTemplateActions(
+        filePath: savedUri,
+        fileName: res.filename,
+        fileBytes: templateBytes,
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      debugPrint('[ProductTemplate] unexpected failure: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGenerating = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final MediaQueryData mediaQuery = MediaQuery.of(context);
+    final bool keyboardOpen = mediaQuery.viewInsets.bottom > 0;
+    final double scale = mediaQuery.size.width / 402;
+    double s(double v) => v * scale;
+
+    return Dialog.fullscreen(
+      backgroundColor: const Color(0xFFF8FAFC),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFF8FAFC),
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: Text(
+            'Download Template',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(16),
+              fontWeight: FontWeight.w700,
+              height: 24 / 16,
+              color: const Color(0xFF111827),
+            ),
+          ),
+          centerTitle: false,
+        ),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.x4,
+            AppSpacing.x2,
+            AppSpacing.x4,
+            AppSpacing.x4 + AppSpacing.x8,
+          ),
+          children: <Widget>[
+            Text(
+              'Add headers one at a time. Added headers are saved automatically, then generate the product template.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(12),
+                fontWeight: FontWeight.w500,
+                height: 18 / 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x4),
+            Text(
+              'Default product fields',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(12),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+                height: 18 / 12,
+                color: const Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x2),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                for (final String header in widget.initialHeaders)
+                  Chip(
+                    label: Text(header),
+                    backgroundColor: AppColors.brandBlue.withAlpha(20),
+                    labelStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w600,
+                      height: 16.5 / 12,
+                      color: AppColors.brandBlue,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.x4),
+            TextField(
+              controller: _headerInputController,
+              onSubmitted: (_) => _addHeader(),
+              textInputAction: TextInputAction.done,
+              scrollPadding: const EdgeInsets.only(bottom: 180),
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(14),
+                fontWeight: FontWeight.w400,
+                height: 20 / 14,
+                color: const Color(0xFF0F172A),
+              ),
+              cursorColor: AppColors.brandBlue,
+              decoration: InputDecoration(
+                hintText: 'Enter header name',
+                hintStyle: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(14),
+                  fontWeight: FontWeight.w400,
+                  height: 20 / 14,
+                  color: const Color(0xFF94A3B8),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: AppColors.brandBlue,
+                    width: s(1.2),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x3),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _addHeader,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brandBlue,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: EdgeInsets.symmetric(vertical: s(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(
+                  'Add New',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w700,
+                    height: 20 / 14,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x4),
+            Text(
+              'Saved headers',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(12),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+                height: 18 / 12,
+                color: const Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x2),
+            if (_headers.isEmpty)
+              Text(
+                'No headers added yet.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w500,
+                  height: 18 / 12,
+                  color: const Color(0xFF64748B),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  for (final String header in _headers)
+                    InputChip(
+                      label: Text(header),
+                      backgroundColor: AppColors.brandBlue,
+                      deleteIcon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
+                      onDeleted: () => _removeHeader(header),
+                      labelStyle: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w600,
+                        height: 16.5 / 12,
+                        color: Colors.white,
+                      ),
+                      deleteIconColor: Colors.white,
+                    ),
+                ],
+              ),
+            const SizedBox(height: AppSpacing.x8),
+            if (_headersSaved)
+              Text(
+                'Headers saved. You can generate the template now.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w600,
+                  height: 18 / 12,
+                  color: const Color(0xFF0F766E),
+                ),
+              ),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: keyboardOpen
+              ? const SizedBox.shrink()
+              : AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.x4,
+                    AppSpacing.x2,
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8FAFC),
+                    border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _headers.isNotEmpty && !_isGenerating
+                          ? _generateTemplate
+                          : null,
+                      icon: _isGenerating
+                          ? SizedBox(
+                              width: s(16),
+                              height: s(16),
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.download_rounded),
+                      label: Text(
+                        _isGenerating
+                            ? 'Generating...'
+                            : 'Generate Product Template',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: EdgeInsets.symmetric(vertical: s(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        textStyle: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(14),
+                          fontWeight: FontWeight.w700,
+                          height: 20 / 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTemplateActions({
+    required String filePath,
+    required String fileName,
+    required Uint8List fileBytes,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Template ready'),
+          content: const Text('Your Excel template has been generated.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () async {
+                try {
+                  await launchUrl(
+                    Uri.parse(filePath),
+                    mode: LaunchMode.externalApplication,
+                  );
+                } catch (e) {
+                  debugPrint('[ProductTemplate] open failed: $e');
+                }
+                if (context.mounted) Navigator.of(context).pop();
+              },
+              child: const Text('Open file'),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await Share.shareXFiles(<XFile>[
+                    XFile.fromData(fileBytes, name: fileName),
+                  ]);
+                } catch (e) {
+                  debugPrint('[ProductTemplate] share failed: $e');
+                }
+                if (context.mounted) Navigator.of(context).pop();
+              },
+              child: const Text('Share file'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
 
 class _IndustryPill extends StatelessWidget {
   const _IndustryPill({

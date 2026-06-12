@@ -190,7 +190,7 @@ class VerificationRepository {
     return BulkUploadResponse.fromJson(res);
   }
 
-  Future<String> generateProductsTemplate({
+  Future<VerificationBinaryResponse> generateProductsTemplate({
     required String categoryId,
     required List<String> headers,
   }) async {
@@ -199,7 +199,7 @@ class VerificationRepository {
         .where((String h) => h.isNotEmpty)
         .toList();
     final String headersCsv = cleanHeaders.join(',');
-    final String template = await _api.verificationPostFormUrlEncodedString(
+    return _api.verificationPostFormUrlEncodedBinary(
       '/verification/products/template',
       data: <String, dynamic>{
         'category_id': categoryId.trim(),
@@ -207,7 +207,6 @@ class VerificationRepository {
         'headers': headersCsv,
       },
     );
-    return template.trim();
   }
 
   Future<VerificationBinaryResponse> generateHumanTemplate({
