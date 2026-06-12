@@ -51,7 +51,8 @@ class IndividualShellPage extends StatelessWidget {
           AppRouter.individualVerificationCertificatePreviewPath,
         ) ||
         location.startsWith(AppRouter.individualVerificationCostBreakdownPath) ||
-        location.startsWith(AppRouter.individualVerificationCompletionPath);
+        location.startsWith(AppRouter.individualVerificationCompletionPath) ||
+        location.startsWith(AppRouter.individualScanPath);
 
     return PopScope(
       canPop: GoRouter.of(context).canPop(),
