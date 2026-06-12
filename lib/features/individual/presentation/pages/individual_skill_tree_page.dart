@@ -696,7 +696,7 @@ class _SkillEntryCard extends StatelessWidget {
                 color: AppColors.brandBlue,
               ),
               label: Text(
-                'Add Fields',
+                'Add Skills',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(14),
