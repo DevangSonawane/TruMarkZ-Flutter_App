@@ -119,22 +119,31 @@ class _ProductServiceTypeSelectorPageState
                             ),
                           ),
                           SizedBox(width: s(12)),
-                          Text(
-                            'Product Service',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
+                          Expanded(
+                            child: Text(
+                              'Product Service',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: s(21),
+                                fontWeight: FontWeight.w600,
+                                height: 19.5 / 21,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                          const Spacer(),
-                          _OrgTypePill(
-                            scale: scale,
-                            label: _sector.trim().isEmpty
-                                ? 'Product'
-                                : _sector.trim(),
+                          SizedBox(width: s(8)),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: constraints.maxWidth * 0.42,
+                            ),
+                            child: _OrgTypePill(
+                              scale: scale,
+                              label: _sector.trim().isEmpty
+                                  ? 'Product'
+                                  : _sector.trim(),
+                            ),
                           ),
                         ],
                       ),
@@ -475,17 +484,19 @@ class _OrgTypePill extends StatelessWidget {
             ),
           ),
           SizedBox(width: s(8)),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.0644531),
-              height: 16.5 / 11,
-              color: AppColors.brandBlue,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w600,
+                letterSpacing: s(0.0644531),
+                height: 16.5 / 11,
+                color: AppColors.brandBlue,
+              ),
             ),
           ),
           SizedBox(width: s(8)),
