@@ -42,7 +42,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
       case _BatchType.human:
         context.push(AppRouter.verificationChecksPath);
       case _BatchType.product:
-        context.push(AppRouter.productServiceTypeSelectorPath);
+        context.push(AppRouter.productSectorSelectorPath);
     }
   }
 

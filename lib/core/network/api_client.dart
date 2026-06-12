@@ -183,14 +183,23 @@ class ApiClient {
   }
 
   // For endpoints that return a JSON array (or non-map JSON).
-  Future<dynamic> verificationGetAny(String path) async {
+  Future<dynamic> verificationGetAny(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
     try {
-      final Response<dynamic> res = await _verificationDio.get<dynamic>(path);
+      final Response<dynamic> res = await _verificationDio.get<dynamic>(
+        path,
+        queryParameters: queryParameters,
+      );
       return res.data;
     } on DioException catch (e) {
       if (_shouldRetryOnPrimary(e)) {
         try {
-          final Response<dynamic> res = await _dio.get<dynamic>(path);
+          final Response<dynamic> res = await _dio.get<dynamic>(
+            path,
+            queryParameters: queryParameters,
+          );
           return res.data;
         } on DioException catch (e2) {
           throw _toApiException(e2);

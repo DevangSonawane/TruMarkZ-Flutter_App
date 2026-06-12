@@ -12,6 +12,70 @@ import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../data/verification_repository.dart';
 
+class _ProductSectorDef {
+  const _ProductSectorDef({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.aliases,
+    required this.fallbackWarranty,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final List<String> aliases;
+  final String fallbackWarranty;
+}
+
+class _ProductSectorCardData {
+  const _ProductSectorCardData({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.category,
+    required this.categoryId,
+    required this.categoryName,
+    required this.warrantySupport,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final VerificationCategory? category;
+  final String categoryId;
+  final String categoryName;
+  final String warrantySupport;
+}
+
+const List<_ProductSectorDef> _productSectorDefs = <_ProductSectorDef>[
+  _ProductSectorDef(
+    id: 'electronics_appliances',
+    title: 'Electronics',
+    description:
+        'Warranty and serial-based certificates for devices and appliances.',
+    aliases: <String>[
+      'electronics & appliances',
+      'electronics',
+      'appliances',
+    ],
+    fallbackWarranty: 'required',
+  ),
+  _ProductSectorDef(
+    id: 'beauty_cosmetics',
+    title: 'Beauty & Cosmetics',
+    description:
+        'Authenticity certificates with lab reports and batch proofs.',
+    aliases: <String>[
+      'beauty & cosmetics',
+      'beauty products',
+      'cosmetics',
+      'personal care',
+    ],
+    fallbackWarranty: 'disabled',
+  ),
+];
+
 class ProductSectorSelectorPage extends ConsumerStatefulWidget {
   const ProductSectorSelectorPage({super.key});
 
@@ -22,10 +86,38 @@ class ProductSectorSelectorPage extends ConsumerStatefulWidget {
 
 class _ProductSectorSelectorPageState
     extends ConsumerState<ProductSectorSelectorPage> {
-  VerificationCategory? _selectedCategory;
+  _ProductSectorCardData? _selectedSector;
   bool _loading = true;
   String? _error;
   List<VerificationCategory> _categories = const <VerificationCategory>[];
+
+  static String _normalizeName(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('&', 'and')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+  }
+
+  static VerificationCategory? _matchCategory(
+    _ProductSectorDef sector,
+    List<VerificationCategory> categories,
+  ) {
+    final List<String> aliases = <String>[
+      sector.title,
+      ...sector.aliases,
+    ].map(_normalizeName).toList();
+
+    for (final VerificationCategory category in categories) {
+      final String name = _normalizeName(category.categoryName);
+      if (aliases.any(
+        (String alias) => name.contains(alias) || alias.contains(name),
+      )) {
+        return category;
+      }
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -65,16 +157,23 @@ class _ProductSectorSelectorPageState
   }
 
   void _continue(BuildContext context) {
-    final VerificationCategory? category = _selectedCategory;
-    if (category == null) return;
-    final String sector = category.categoryName.trim();
-    final String categoryId = category.id.trim();
+    final _ProductSectorCardData? sectorCard = _selectedSector;
+    if (sectorCard == null) return;
+    final String sector = sectorCard.categoryName.trim();
+    final String categoryId = sectorCard.categoryId.trim();
+    final String warranty = sectorCard.warrantySupport.trim().toLowerCase();
+    final bool supportsWarranty = warranty.isNotEmpty && warranty != 'disabled';
     final Uri uri = Uri(
-      path: AppRouter.productServiceTypeSelectorPath,
+      path: AppRouter.verificationChecksPath,
       queryParameters: <String, String>{
+        'flow': 'product',
+        'mode': 'verification',
         'sector': sector,
+        'sector_title': sectorCard.title.trim(),
+        'industry': sector,
         'category_id': categoryId,
-        'supports_warranty': category.supportsWarranty ? 'true' : 'false',
+        'warranty_support': sectorCard.warrantySupport.trim(),
+        'supports_warranty': supportsWarranty ? 'true' : 'false',
       },
     );
     context.push(uri.toString(), extra: sector);
@@ -82,7 +181,23 @@ class _ProductSectorSelectorPageState
 
   @override
   Widget build(BuildContext context) {
-    final List<VerificationCategory> categories = _categories;
+    final List<_ProductSectorCardData> sectors = _productSectorDefs.map((
+      _ProductSectorDef def,
+    ) {
+      final VerificationCategory? category = _matchCategory(def, _categories);
+      return _ProductSectorCardData(
+        id: def.id,
+        title: def.title,
+        description: def.description,
+        category: category,
+        categoryId: category?.id.trim() ?? '',
+        categoryName: category?.categoryName.trim() ?? def.title,
+        warrantySupport:
+            category?.warrantySupport.trim().isNotEmpty == true
+            ? category!.warrantySupport
+            : def.fallbackWarranty,
+      );
+    }).toList();
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -222,7 +337,7 @@ class _ProductSectorSelectorPageState
                                                   ? 3
                                                   : 2;
                                               return GridView.builder(
-                                                itemCount: categories.length,
+                                                itemCount: sectors.length,
                                                 shrinkWrap: true,
                                                 physics:
                                                     const NeverScrollableScrollPhysics(),
@@ -240,27 +355,24 @@ class _ProductSectorSelectorPageState
                                                       BuildContext context,
                                                       int index,
                                                     ) {
-                                                      final VerificationCategory
-                                                      cat = categories[index];
+                                                      final _ProductSectorCardData
+                                                      sector = sectors[index];
                                                       final bool selected =
-                                                          _selectedCategory
-                                                              ?.id ==
-                                                          cat.id;
+                                                          _selectedSector?.id ==
+                                                          sector.id;
                                                       return _SectorCard(
-                                                        title: cat.categoryName,
+                                                        title: sector.title,
                                                         description:
-                                                            cat.description,
-                                                        icon: _iconForCategory(
-                                                          cat.categoryName,
+                                                            sector.description,
+                                                        icon: _iconForSector(
+                                                          sector.id,
                                                         ),
                                                         selected: selected,
                                                         onTap: () {
-                                                          setState(
-                                                            () =>
-                                                                _selectedCategory =
-                                                                    cat,
-                                                          );
-                                                          _continue(context);
+                                                          setState(() {
+                                                            _selectedSector =
+                                                                sector;
+                                                          });
                                                         },
                                                       );
                                                     },
@@ -277,7 +389,7 @@ class _ProductSectorSelectorPageState
                                 scale: scale,
                                 label: 'Continue',
                                 icon: Icons.arrow_forward_rounded,
-                                enabled: _selectedCategory != null,
+                                enabled: _selectedSector != null,
                                 onPressed: () => _continue(context),
                               ),
                             ),
@@ -296,40 +408,15 @@ class _ProductSectorSelectorPageState
   }
 }
 
-IconData _iconForCategory(String name) {
-  final String n = name.trim().toLowerCase();
-  if (n.contains('agri') || n.contains('farm') || n.contains('crop')) {
-    return Icons.agriculture_rounded;
+IconData _iconForSector(String id) {
+  switch (id) {
+    case 'electronics_appliances':
+      return Icons.electrical_services_rounded;
+    case 'beauty_cosmetics':
+      return Icons.spa_rounded;
+    default:
+      return Icons.inventory_rounded;
   }
-  if (n.contains('beauty') || n.contains('cosmetic') || n.contains('spa')) {
-    return Icons.spa_rounded;
-  }
-  if (n.contains('consumer') || n.contains('goods') || n.contains('fmcg')) {
-    return Icons.shopping_bag_rounded;
-  }
-  if (n.contains('electronic') ||
-      n.contains('appliance') ||
-      n.contains('device')) {
-    return Icons.devices_other_rounded;
-  }
-  if (n.contains('auto') || n.contains('vehicle') || n.contains('ev')) {
-    return Icons.electric_car_rounded;
-  }
-  if (n.contains('health') || n.contains('pharma') || n.contains('medical')) {
-    return Icons.medical_services_rounded;
-  }
-  if (n.contains('insurance') || n.contains('policy')) {
-    return Icons.policy_rounded;
-  }
-  if (n.contains('luxury') || n.contains('jewel') || n.contains('diamond')) {
-    return Icons.diamond_rounded;
-  }
-  if (n.contains('industrial') ||
-      n.contains('equipment') ||
-      n.contains('machine')) {
-    return Icons.precision_manufacturing_rounded;
-  }
-  return Icons.inventory_rounded;
 }
 
 class _SectorCard extends StatelessWidget {

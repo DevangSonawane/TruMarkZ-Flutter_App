@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +18,38 @@ final verificationTypesProvider =
         final VerificationRepository repo = ref.read(
           verificationRepositoryProvider,
         );
-        return repo.getVerificationTypes(category: category);
+        final List<String> parts = category.split('::');
+        final String normalizedCategory = parts.isNotEmpty
+            ? parts.first.trim()
+            : '';
+        final String rawIndustryTypes = parts.length > 1
+            ? parts.sublist(1).join('::').trim()
+            : '';
+        final List<String> industryTypes = () {
+          if (rawIndustryTypes.isEmpty) return const <String>[];
+          if (rawIndustryTypes.startsWith('[')) {
+            try {
+              final dynamic decoded = jsonDecode(rawIndustryTypes);
+              if (decoded is List) {
+                return decoded
+                    .map((dynamic e) => e?.toString().trim() ?? '')
+                    .where((String s) => s.isNotEmpty)
+                    .toList();
+              }
+            } catch (_) {
+              // Fall through to comma-separated parsing.
+            }
+          }
+          return rawIndustryTypes
+              .split(',')
+              .map((String s) => s.trim())
+              .where((String s) => s.isNotEmpty)
+              .toList();
+        }();
+        return repo.getVerificationTypes(
+          category: normalizedCategory,
+          industryTypes: industryTypes.isEmpty ? null : industryTypes,
+        );
       },
     );
 
@@ -28,9 +60,18 @@ class VerificationRepository {
 
   Future<List<VerificationTypeDefinition>> getVerificationTypes({
     String? category,
+    List<String>? industryTypes,
   }) async {
+    final Map<String, dynamic> queryParameters = <String, dynamic>{};
+    if (category != null && category.trim().isNotEmpty) {
+      queryParameters['category'] = category.trim();
+    }
+    if (industryTypes != null && industryTypes.isNotEmpty) {
+      queryParameters['industry_type'] = jsonEncode(industryTypes);
+    }
     final dynamic res = await _api.verificationGetAny(
       '/verification/verification-types',
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
     );
 
     Iterable<dynamic> rawItems;

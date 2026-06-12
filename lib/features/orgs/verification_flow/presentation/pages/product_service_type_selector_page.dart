@@ -22,7 +22,9 @@ class _ProductServiceTypeSelectorPageState
   bool _didInit = false;
   String _sector = '';
   String _categoryId = '';
+  String _warrantySupport = '';
   bool _supportsWarranty = true;
+  String _checks = '';
   ProductServiceType? _selected;
 
   @override
@@ -33,12 +35,20 @@ class _ProductServiceTypeSelectorPageState
     final GoRouterState state = GoRouterState.of(context);
     final Object? extra = state.extra;
     final String? extraSector = extra is String ? extra : null;
-    _sector = (extraSector ?? state.uri.queryParameters['sector'] ?? '').trim();
+    _sector = (extraSector ??
+            state.uri.queryParameters['sector'] ??
+            state.uri.queryParameters['industry'] ??
+            '')
+        .trim();
     _categoryId = (state.uri.queryParameters['category_id'] ?? '').trim();
+    _warrantySupport = (state.uri.queryParameters['warranty_support'] ?? '').trim();
+    _checks = (state.uri.queryParameters['checks'] ?? '').trim();
     final String supports =
         (state.uri.queryParameters['supports_warranty'] ?? '').trim();
     if (supports.isNotEmpty) {
       _supportsWarranty = supports.toLowerCase() == 'true';
+    } else {
+      _supportsWarranty = _warrantySupport.toLowerCase() != 'disabled';
     }
   }
 
@@ -55,12 +65,15 @@ class _ProductServiceTypeSelectorPageState
     final ProductServiceType? selected = _selected;
     if (selected == null) return;
     final Uri uri = Uri(
-      path: AppRouter.verificationChecksPath,
+      path: AppRouter.productBulkUploadPath,
       queryParameters: <String, String>{
         'flow': 'product',
         'mode': selected.name,
         if (_sector.trim().isNotEmpty) 'industry': _sector.trim(),
         if (_categoryId.trim().isNotEmpty) 'category_id': _categoryId.trim(),
+        if (_warrantySupport.trim().isNotEmpty)
+          'warranty_support': _warrantySupport.trim(),
+        if (_checks.trim().isNotEmpty) 'checks': _checks.trim(),
         if (_supportsWarranty) 'supports_warranty': 'true',
       },
     );
@@ -241,24 +254,35 @@ class _ProductServiceTypeSelectorPageState
                                             ProductServiceType.verification,
                                       ),
                                     ),
-                                    SizedBox(height: s(16)),
-                                    _ServiceCard(
-                                      scale: scale,
-                                      title: 'Warranty',
-                                      subtitle: _supportsWarranty
-                                          ? 'Create warranty certificates linked to serial numbers.'
-                                          : 'Not supported for this category.',
-                                      icon: Icons.verified_outlined,
-                                      selected:
-                                          _selected ==
-                                          ProductServiceType.warranty,
-                                      onTap: _supportsWarranty
-                                          ? () => setState(
-                                              () => _selected =
-                                                  ProductServiceType.warranty,
-                                            )
-                                          : () {},
-                                    ),
+                                    if (_supportsWarranty) ...<Widget>[
+                                      SizedBox(height: s(16)),
+                                      _ServiceCard(
+                                        scale: scale,
+                                        title: 'Warranty',
+                                        subtitle:
+                                            'Create warranty certificates linked to serial numbers.',
+                                        icon: Icons.verified_outlined,
+                                        selected:
+                                            _selected ==
+                                            ProductServiceType.warranty,
+                                        onTap: () => setState(
+                                          () => _selected =
+                                              ProductServiceType.warranty,
+                                        ),
+                                      ),
+                                    ] else ...<Widget>[
+                                      SizedBox(height: s(14)),
+                                      Text(
+                                        'Warranty is not available for this sector.',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(12),
+                                          fontWeight: FontWeight.w500,
+                                          color: const Color(0xFF94A3B8),
+                                          height: 17.75 / 12,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

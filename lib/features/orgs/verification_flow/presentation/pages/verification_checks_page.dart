@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -31,7 +32,9 @@ class _VerificationChecksPageState
   String _flow = 'human';
   String _mode = 'verification';
   String _industry = '';
+  String _sectorTitle = '';
   String _categoryId = '';
+  String _warrantySupport = 'required';
   bool _supportsWarranty = true;
 
   final Set<String> _selected = <String>{};
@@ -111,6 +114,8 @@ class _VerificationChecksPageState
     final String nextFlow = (qp['flow'] ?? '').trim().toLowerCase();
     final String nextMode = (qp['mode'] ?? 'verification').trim().toLowerCase();
     final String nextCategoryId = (qp['category_id'] ?? '').trim();
+    final String nextSectorTitle = (qp['sector_title'] ?? '').trim();
+    final String nextWarrantySupport = (qp['warranty_support'] ?? '').trim().toLowerCase();
     final bool nextSupportsWarranty =
         (qp['supports_warranty'] ?? '').trim().toLowerCase() == 'true';
     final Set<String> nextChecks = <String>{};
@@ -139,13 +144,19 @@ class _VerificationChecksPageState
         nextFlow != _flow ||
         nextMode != _mode ||
         nextCategoryId != _categoryId ||
+        nextSectorTitle != _sectorTitle ||
+        nextWarrantySupport != _warrantySupport ||
         nextSupportsWarranty != _supportsWarranty;
     if (needsFlowRefresh) {
       setState(() {
         _flow = nextFlow.isEmpty ? 'human' : nextFlow;
         _mode = nextMode;
         _categoryId = nextCategoryId;
-        _supportsWarranty = nextSupportsWarranty;
+        _sectorTitle = nextSectorTitle;
+        _warrantySupport = nextWarrantySupport.isEmpty
+            ? (nextSupportsWarranty ? 'required' : 'disabled')
+            : nextWarrantySupport;
+        _supportsWarranty = _warrantySupport != 'disabled';
         _selected
           ..clear()
           ..addAll(nextChecks);
@@ -154,7 +165,16 @@ class _VerificationChecksPageState
   }
 
   String _verificationCategoryForFlow() {
-    if (_flow == 'product') return 'product';
+    if (_flow == 'product') {
+      final List<String> industryTypes = <String>[
+        _industry.trim(),
+        _sectorTitle.trim(),
+      ].where((String value) => value.isNotEmpty).toList();
+      if (industryTypes.isNotEmpty) {
+        return 'product::${jsonEncode(industryTypes)}';
+      }
+      return 'product';
+    }
     return 'human';
   }
 
@@ -532,8 +552,19 @@ class _VerificationChecksPageState
                                   if (_flow == 'product') {
                                     qp['flow'] = 'product';
                                     qp['mode'] = _mode;
+                                    if (_industry.trim().isNotEmpty) {
+                                      qp['sector'] = _industry.trim();
+                                      qp['industry'] = _industry.trim();
+                                    }
+                                    if (_sectorTitle.trim().isNotEmpty) {
+                                      qp['sector_title'] = _sectorTitle.trim();
+                                    }
                                     if (_categoryId.trim().isNotEmpty) {
                                       qp['category_id'] = _categoryId.trim();
+                                    }
+                                    if (_warrantySupport.trim().isNotEmpty) {
+                                      qp['warranty_support'] =
+                                          _warrantySupport.trim();
                                     }
                                     if (_supportsWarranty) {
                                       qp['supports_warranty'] = 'true';
@@ -542,11 +573,14 @@ class _VerificationChecksPageState
                                   }
                                   final Uri uri = Uri(
                                     path: _flow == 'product'
-                                        ? AppRouter.productBulkUploadPath
+                                        ? AppRouter.productServiceTypeSelectorPath
                                         : AppRouter.verificationPermissionsPath,
                                     queryParameters: qp,
                                   );
-                                  context.push(uri.toString());
+                                  context.push(
+                                    uri.toString(),
+                                    extra: _flow == 'product' ? _industry : null,
+                                  );
                                 },
                               ),
                             ),
