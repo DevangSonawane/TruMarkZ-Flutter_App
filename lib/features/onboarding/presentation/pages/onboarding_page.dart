@@ -232,11 +232,14 @@ class _OnboardingHero extends StatelessWidget {
             Align(
               alignment: Alignment.center,
               child: Transform.translate(
-                offset: const Offset(0, 50),
-                child: Image.asset(
-                  'assets/onboadring/onboarding1.png',
-                  height: availableHeight * 0.65,
-                  fit: BoxFit.contain,
+                offset: const Offset(0, 20),
+                child: Transform.scale(
+                  scale: 1.55,
+                  child: Image.asset(
+                    'assets/onboadring/Untitled design (9).png',
+                    height: availableHeight * 10.5,
+                    fit: BoxFit.contain,
+                  ),
                 ).animate().fadeIn(duration: 250.ms).scale(
                       begin: const Offset(0.96, 0.96),
                       end: const Offset(1, 1),
