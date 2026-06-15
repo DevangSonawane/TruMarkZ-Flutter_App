@@ -29,7 +29,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
@@ -69,9 +68,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         children: <Widget>[
                           _OnboardingHero(
                             badgeLabel: '',
-                            title: 'Verify Anyone.\nAnything.',
+                            title: 'Verifiable Credentials.\nAutonomous Discovery.',
                             description:
-                                'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.',
+                                'Secure, Blockchain backed credentials for\nHumans, Products and Services.',
                           ),
                           const _OnboardingHero(
                             badgeLabel: 'INSTANT CHECKS',
@@ -93,8 +92,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
               ),
               Align(
                 alignment: Alignment.bottomCenter,
-                child:
-                    Container(
+                child: Transform.translate(
+                  offset: const Offset(0, 35),
+                  child: Container(
                           padding: EdgeInsets.fromLTRB(
                             AppSpacing.x6,
                             AppSpacing.x8,
@@ -124,17 +124,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                   text: TextSpan(
                                     style: AppTypography.display2.copyWith(
                                       color: AppColors.textPrimary,
-                                      fontSize: 30,
+                                      fontSize: 28,
+                                      height: 1.08,
                                     ),
                                     children: <InlineSpan>[
-                                      const TextSpan(text: 'Verify Anyone.\n'),
+                                      const TextSpan(
+                                        text: 'Verifiable Credentials.\n',
+                                      ),
                                       TextSpan(
-                                        text: 'Anything.',
+                                        text: 'Autonomous Discovery.',
                                         style: AppTypography.display2.copyWith(
-                                          fontSize: 30,
-                                          color: AppColors.brandBlue.withAlpha(
-                                            190,
-                                          ),
+                                          fontSize: 24,
+                                          height: 1.08,
+                                          color: AppColors.brandBlue
+                                              .withAlpha(185),
                                         ),
                                       ),
                                     ],
@@ -154,7 +157,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                               const SizedBox(height: AppSpacing.x3),
                               Text(
                                 _pageIndex == 0
-                                    ? 'Secure, blockchain-backed credentials for\nworkers, products and services — all in one\nplace.'
+                                    ? 'Secure, Blockchain backed credentials for\nHumans, Products and Services.'
                                     : _pageIndex == 1
                                     ? 'Use QR scanning to validate credentials and\nsee proofs instantly.'
                                     : 'Run bulk verification workflows and keep\ncompliance at 99.99%.',
@@ -164,7 +167,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                   height: 1.35,
                                 ),
                               ),
-                              const SizedBox(height: AppSpacing.x4),
+                              const SizedBox(height: AppSpacing.x8),
                               SizedBox(
                                 width: double.infinity,
                                 child: TMZButton(
@@ -174,38 +177,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                 ),
                               ),
                               const SizedBox(height: AppSpacing.x4),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: <Widget>[
-                                  Text(
-                                    'Already have an account? ',
-                                    style: AppTypography.body2.copyWith(
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                  InkWell(
-                                    onTap: () =>
-                                        context.go(AppRouter.roleSelectionPath),
-                                    child: Text(
-                                      'Sign In',
-                                      style: AppTypography.body2.copyWith(
-                                        color: scheme.primary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ],
                           ),
                         )
                         .animate()
                         .fadeIn(delay: 100.ms, duration: 220.ms)
-                        .slideY(
+                          .slideY(
                           begin: 0.04,
                           duration: 220.ms,
                           curve: Curves.easeOutCubic,
                         ),
+                ),
               ),
             ],
           ),
