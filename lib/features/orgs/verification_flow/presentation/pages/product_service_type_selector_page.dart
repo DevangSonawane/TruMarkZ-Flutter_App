@@ -24,7 +24,6 @@ class _ProductServiceTypeSelectorPageState
   String _categoryId = '';
   String _warrantySupport = '';
   bool _supportsWarranty = true;
-  String _checks = '';
   ProductServiceType? _selected;
 
   @override
@@ -35,14 +34,15 @@ class _ProductServiceTypeSelectorPageState
     final GoRouterState state = GoRouterState.of(context);
     final Object? extra = state.extra;
     final String? extraSector = extra is String ? extra : null;
-    _sector = (extraSector ??
-            state.uri.queryParameters['sector'] ??
-            state.uri.queryParameters['industry'] ??
-            '')
-        .trim();
+    _sector =
+        (extraSector ??
+                state.uri.queryParameters['sector'] ??
+                state.uri.queryParameters['industry'] ??
+                '')
+            .trim();
     _categoryId = (state.uri.queryParameters['category_id'] ?? '').trim();
-    _warrantySupport = (state.uri.queryParameters['warranty_support'] ?? '').trim();
-    _checks = (state.uri.queryParameters['checks'] ?? '').trim();
+    _warrantySupport = (state.uri.queryParameters['warranty_support'] ?? '')
+        .trim();
     final String supports =
         (state.uri.queryParameters['supports_warranty'] ?? '').trim();
     if (supports.isNotEmpty) {
@@ -64,24 +64,33 @@ class _ProductServiceTypeSelectorPageState
   void _continue(BuildContext context) {
     final ProductServiceType? selected = _selected;
     if (selected == null) return;
+    final Map<String, String> queryParameters = <String, String>{
+      'flow': 'product',
+      'mode': selected.name,
+      if (_sector.trim().isNotEmpty) 'industry': _sector.trim(),
+      if (_categoryId.trim().isNotEmpty) 'category_id': _categoryId.trim(),
+      if (_warrantySupport.trim().isNotEmpty)
+        'warranty_support': _warrantySupport.trim(),
+      if (_supportsWarranty) 'supports_warranty': 'true',
+    };
     final Uri uri = Uri(
-      path: AppRouter.productBulkUploadPath,
-      queryParameters: <String, String>{
-        'flow': 'product',
-        'mode': selected.name,
-        if (_sector.trim().isNotEmpty) 'industry': _sector.trim(),
-        if (_categoryId.trim().isNotEmpty) 'category_id': _categoryId.trim(),
-        if (_warrantySupport.trim().isNotEmpty)
-          'warranty_support': _warrantySupport.trim(),
-        if (_checks.trim().isNotEmpty) 'checks': _checks.trim(),
-        if (_supportsWarranty) 'supports_warranty': 'true',
-      },
+      path: selected == ProductServiceType.verification
+          ? AppRouter.verificationChecksPath
+          : AppRouter.productBulkUploadPath,
+      queryParameters: queryParameters,
     );
     context.push(uri.toString(), extra: _sector);
   }
 
   @override
   Widget build(BuildContext context) {
+    final int totalSteps = 6;
+    final int currentStep = 2;
+    final String stepText = 'STEP $currentStep OF $totalSteps';
+    final String progressText =
+        '${((currentStep / totalSteps) * 100).round()}%';
+    final double progressFactor = currentStep / totalSteps;
+
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -173,7 +182,7 @@ class _ProductServiceTypeSelectorPageState
                                     Row(
                                       children: <Widget>[
                                         Text(
-                                          'STEP 1 OF 6',
+                                          stepText,
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -185,7 +194,7 @@ class _ProductServiceTypeSelectorPageState
                                         ),
                                         const Spacer(),
                                         Text(
-                                          '17%',
+                                          progressText,
                                           style: TextStyle(
                                             fontFamily: 'Inter',
                                             fontSize: s(10),
@@ -209,11 +218,11 @@ class _ProductServiceTypeSelectorPageState
                                             const DecoratedBox(
                                               decoration: BoxDecoration(
                                                 color: Color(0xFFE5E7EB),
+                                              ),
                                             ),
-                                          ),
-                                          FractionallySizedBox(
-                                            alignment: Alignment.centerLeft,
-                                              widthFactor: 0.1667,
+                                            FractionallySizedBox(
+                                              alignment: Alignment.centerLeft,
+                                              widthFactor: progressFactor,
                                               child: const DecoratedBox(
                                                 decoration: BoxDecoration(
                                                   color: AppColors.brandBlue,

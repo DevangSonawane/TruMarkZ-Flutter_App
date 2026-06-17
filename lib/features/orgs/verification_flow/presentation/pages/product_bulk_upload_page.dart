@@ -130,7 +130,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       _checks
         ..clear()
         ..addAll(
-          checks.split(',').map((String s) => s.trim()).where((String s) => s.isNotEmpty),
+          checks
+              .split(',')
+              .map((String s) => s.trim())
+              .where((String s) => s.isNotEmpty),
         );
     }
   }
@@ -207,7 +210,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final List<String> columns = _columns();
     final String resolvedIndustry = _effectiveIndustry();
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
-    final String modeLabel = _mode == 'warranty' ? 'Warranty' : 'Product Verification';
+    final String modeLabel = _mode == 'warranty'
+        ? 'Warranty'
+        : 'Product Verification';
     final Uri previewUri = Uri(
       path: AppRouter.certificatePreviewPath,
       queryParameters: <String, String>{
@@ -384,14 +389,21 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final double referenceWidth = 402;
     final String resolvedIndustry = _effectiveIndustry();
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
-    final AsyncValue<List<VerificationTypeDefinition>> productTypesAsync =
-        ref.watch(verificationTypesProvider('product'));
+    final AsyncValue<List<VerificationTypeDefinition>> productTypesAsync = ref
+        .watch(verificationTypesProvider('product'));
     final Map<String, VerificationTypeDefinition> productTypesById =
         <String, VerificationTypeDefinition>{
           for (final VerificationTypeDefinition item
-              in productTypesAsync.valueOrNull ?? <VerificationTypeDefinition>[])
+              in productTypesAsync.valueOrNull ??
+                  <VerificationTypeDefinition>[])
             item.id: item,
         };
+    final bool isWarranty = _mode == 'warranty';
+    final int currentStep = isWarranty ? 3 : 4;
+    final int totalSteps = isWarranty ? 5 : 6;
+    final String stepLabel = 'STEP $currentStep OF $totalSteps';
+    final String progressLabel =
+        '${((currentStep / totalSteps) * 100).round()}%';
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -476,9 +488,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                   children: <Widget>[
                                     FlowStepProgress(
                                       scale: scale,
-                                      stepLabel: 'STEP 3 OF 6',
-                                      progressLabel: '50%',
-                                      fillFactor: 0.5,
+                                      stepLabel: stepLabel,
+                                      progressLabel: progressLabel,
+                                      fillFactor: currentStep / totalSteps,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
@@ -524,8 +536,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                       ),
                                       SizedBox(height: s(10)),
                                       if (productTypesAsync.isLoading &&
-                                          productTypesAsync.valueOrNull ==
-                                              null)
+                                          productTypesAsync.valueOrNull == null)
                                         Text(
                                           'Loading verification types...',
                                           style: TextStyle(
@@ -549,9 +560,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                                           ?.name ??
                                                       check,
                                                 ),
-                                                backgroundColor:
-                                                    AppColors.brandBlue
-                                                        .withAlpha(18),
+                                                backgroundColor: AppColors
+                                                    .brandBlue
+                                                    .withAlpha(18),
                                                 labelStyle: TextStyle(
                                                   fontFamily: 'Inter',
                                                   fontSize: s(12),
@@ -835,7 +846,9 @@ class _ProductTemplateDialogState
     if (widget.categoryId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Missing sector category. Please go back and reselect.'),
+          content: Text(
+            'Missing sector category. Please go back and reselect.',
+          ),
         ),
       );
       return;
@@ -851,30 +864,28 @@ class _ProductTemplateDialogState
       );
       final List<String> headers = <String>[
         for (final String header in _headers)
-          if (header.trim().isNotEmpty) header.trim().toLowerCase().replaceAll(
-                RegExp(r'\s+'),
-                '_',
-              ),
+          if (header.trim().isNotEmpty)
+            header.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_'),
       ];
-      final VerificationBinaryResponse res = await repo.generateProductsTemplate(
-        categoryId: widget.categoryId,
-        headers: headers,
-      );
+      final VerificationBinaryResponse res = await repo
+          .generateProductsTemplate(
+            categoryId: widget.categoryId,
+            headers: headers,
+          );
       if (!mounted) return;
 
       final Uint8List templateBytes = res.bytes;
       String savedUri = '';
       try {
         savedUri =
-            await _downloadsChannel.invokeMethod<String>(
-              'saveFileToDownloads',
-              <String, dynamic>{
-                'fileName': res.filename,
-                'mimeType':
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'bytes': templateBytes,
-              },
-            ) ??
+            await _downloadsChannel.invokeMethod<
+              String
+            >('saveFileToDownloads', <String, dynamic>{
+              'fileName': res.filename,
+              'mimeType':
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'bytes': templateBytes,
+            }) ??
             '';
       } on MissingPluginException catch (e) {
         debugPrint('[ProductTemplate] downloads channel missing: $e');

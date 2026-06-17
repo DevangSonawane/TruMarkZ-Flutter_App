@@ -11,6 +11,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../data/verification_repository.dart';
+import 'flow_step_progress.dart';
 
 class _ProductSectorDef {
   const _ProductSectorDef({
@@ -54,18 +55,13 @@ const List<_ProductSectorDef> _productSectorDefs = <_ProductSectorDef>[
     title: 'Electronics',
     description:
         'Warranty and serial-based certificates for devices and appliances.',
-    aliases: <String>[
-      'electronics & appliances',
-      'electronics',
-      'appliances',
-    ],
+    aliases: <String>['electronics & appliances', 'electronics', 'appliances'],
     fallbackWarranty: 'required',
   ),
   _ProductSectorDef(
     id: 'beauty_cosmetics',
     title: 'Beauty & Cosmetics',
-    description:
-        'Authenticity certificates with lab reports and batch proofs.',
+    description: 'Authenticity certificates with lab reports and batch proofs.',
     aliases: <String>[
       'beauty & cosmetics',
       'beauty products',
@@ -164,10 +160,9 @@ class _ProductSectorSelectorPageState
     final String warranty = sectorCard.warrantySupport.trim().toLowerCase();
     final bool supportsWarranty = warranty.isNotEmpty && warranty != 'disabled';
     final Uri uri = Uri(
-      path: AppRouter.verificationChecksPath,
+      path: AppRouter.productServiceTypeSelectorPath,
       queryParameters: <String, String>{
         'flow': 'product',
-        'mode': 'verification',
         'sector': sector,
         'sector_title': sectorCard.title.trim(),
         'industry': sector,
@@ -192,8 +187,7 @@ class _ProductSectorSelectorPageState
         category: category,
         categoryId: category?.id.trim() ?? '',
         categoryName: category?.categoryName.trim() ?? def.title,
-        warrantySupport:
-            category?.warrantySupport.trim().isNotEmpty == true
+        warrantySupport: category?.warrantySupport.trim().isNotEmpty == true
             ? category!.warrantySupport
             : def.fallbackWarranty,
       );
@@ -237,7 +231,7 @@ class _ProductSectorSelectorPageState
                           ),
                           SizedBox(width: s(12)),
                           Text(
-                            'Bulk Upload',
+                            'Product Verification',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: s(21),
@@ -271,10 +265,11 @@ class _ProductSectorSelectorPageState
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    _ProductFlowStepper(
+                                    FlowStepProgress(
                                       scale: scale,
-                                      stepIndex: 0,
-                                      totalSteps: 4,
+                                      stepLabel: 'STEP 1 OF 6',
+                                      progressLabel: '17%',
+                                      fillFactor: 0.1667,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(
@@ -529,113 +524,6 @@ class _SectorCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ProductFlowStepper extends StatelessWidget {
-  const _ProductFlowStepper({
-    required this.scale,
-    required this.stepIndex,
-    required this.totalSteps,
-  });
-
-  final double scale;
-  final int stepIndex;
-  final int totalSteps;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    final int currentStep = stepIndex.clamp(0, totalSteps - 1) + 1;
-    final int progressPercent = ((currentStep / totalSteps) * 100).round();
-    final double progress = stepIndex / (totalSteps - 1);
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(12)),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(16)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.brandBlue.withAlpha(14),
-            blurRadius: s(14),
-            offset: Offset(0, s(8)),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SizedBox(
-            height: s(8),
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints c) {
-                final double width = c.maxWidth;
-                return Stack(
-                  children: <Widget>[
-                    Container(
-                      width: width,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(s(99)),
-                      ),
-                    ),
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0, end: progress.clamp(0, 1)),
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeOutCubic,
-                      builder: (BuildContext context, double t, Widget? child) {
-                        return Container(
-                          width: width * t,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: <Color>[
-                                AppColors.brandBlue,
-                                AppColors.deepNavy,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(s(99)),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          SizedBox(height: s(10)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Text(
-                'STEP $currentStep OF $totalSteps',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(10),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: s(1),
-                  height: 15 / 10,
-                  color: const Color(0xFF94A3B8),
-                ),
-              ),
-              Text(
-                '$progressPercent%',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(10),
-                  fontWeight: FontWeight.w700,
-                  height: 15 / 10,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

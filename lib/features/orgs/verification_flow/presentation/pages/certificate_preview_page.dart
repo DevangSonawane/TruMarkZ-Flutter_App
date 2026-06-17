@@ -67,9 +67,14 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final String industryLabel = _industryLabel(context);
     final String identityTypeLabel = _identityTypeLabel(context);
     final bool isProductFlow = _isProductFlow(context);
+    final bool isWarrantyFlow =
+        isProductFlow && (qp['mode'] ?? '').trim().toLowerCase() == 'warranty';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -151,6 +156,7 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                       child: _StepProgress(
                                         scale: scale,
                                         isProductFlow: isProductFlow,
+                                        isWarrantyFlow: isWarrantyFlow,
                                       ),
                                     ),
                                     SizedBox(height: s(24)),
@@ -316,10 +322,12 @@ class _StepProgress extends StatelessWidget {
   const _StepProgress({
     required this.scale,
     required this.isProductFlow,
+    required this.isWarrantyFlow,
   });
 
   final double scale;
   final bool isProductFlow;
+  final bool isWarrantyFlow;
 
   @override
   Widget build(BuildContext context) {
@@ -332,7 +340,9 @@ class _StepProgress extends StatelessWidget {
             Padding(
               padding: EdgeInsets.only(left: s(4)),
               child: Text(
-                'STEP 4 OF 6',
+                isProductFlow
+                    ? (isWarrantyFlow ? 'STEP 4 OF 5' : 'STEP 5 OF 6')
+                    : 'STEP 4 OF 6',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(10),
@@ -345,7 +355,7 @@ class _StepProgress extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              isProductFlow ? '67%' : '90%',
+              isProductFlow ? (isWarrantyFlow ? '80%' : '83%') : '90%',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: s(10),
@@ -376,7 +386,9 @@ class _StepProgress extends StatelessWidget {
                   left: 0,
                   top: 0,
                   bottom: 0,
-                    width: isProductFlow ? s(247) : s(333),
+                  width: isProductFlow
+                      ? (isWarrantyFlow ? s(296) : s(309))
+                      : s(333),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: const Color(0xFF2563EB),

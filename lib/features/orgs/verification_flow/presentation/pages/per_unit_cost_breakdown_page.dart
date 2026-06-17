@@ -65,10 +65,7 @@ class _PerUnitCostBreakdownPageState
     return ids;
   }
 
-  int _totalCostInr(
-    Iterable<String> ids,
-    Map<String, _CheckPricing> pricing,
-  ) {
+  int _totalCostInr(Iterable<String> ids, Map<String, _CheckPricing> pricing) {
     int total = 0;
     for (final String id in ids) {
       total += pricing[id]?.costInr ?? 0;
@@ -119,9 +116,14 @@ class _PerUnitCostBreakdownPageState
 
   @override
   Widget build(BuildContext context) {
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     final List<String> ids = _selectedChecks(context);
     final int userCount = _userCount(context);
     final bool isProductFlow = _isProductFlow();
+    final bool isWarrantyFlow =
+        isProductFlow && (qp['mode'] ?? '').trim().toLowerCase() == 'warranty';
     final AsyncValue<List<VerificationTypeDefinition>> typesAsync = ref.watch(
       verificationTypesProvider(isProductFlow ? 'product' : 'human'),
     );
@@ -133,7 +135,9 @@ class _PerUnitCostBreakdownPageState
     final Object? extra = GoRouterState.of(context).extra;
     final VerificationFlowConfirmAction? action =
         extra is VerificationFlowConfirmAction ? extra : null;
-    final String stepText = 'STEP 5 OF 6';
+    final String stepText = isProductFlow
+        ? (isWarrantyFlow ? 'STEP 5 OF 5' : 'STEP 6 OF 6')
+        : 'STEP 5 OF 6';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -210,9 +214,9 @@ class _PerUnitCostBreakdownPageState
                                       scale: scale,
                                       stepLabel: stepText,
                                       progressLabel: isProductFlow
-                                          ? '83%'
+                                          ? '100%'
                                           : '67%',
-                                      fillFactor: isProductFlow ? 0.8333 : 0.67,
+                                      fillFactor: isProductFlow ? 1 : 0.67,
                                     ),
                                     SizedBox(height: s(24)),
                                     Text(

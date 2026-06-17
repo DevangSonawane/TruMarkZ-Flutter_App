@@ -21,7 +21,6 @@ class _VerificationPermissionsPageState
   static const Color _panelBg = Color(0xFFF7F9FC);
 
   _AccessMode _mode = _AccessMode.publicSearchable;
-  bool _redirectedProductFlow = false;
 
   List<String> get _checksFromRoute {
     final Map<String, String> qp = GoRouterState.of(
@@ -39,33 +38,14 @@ class _VerificationPermissionsPageState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    if (_redirectedProductFlow) return;
-
-    final Map<String, String> qp = GoRouterState.of(
-      context,
-    ).uri.queryParameters;
-    final bool isProductFlow =
-        (qp['flow'] ?? '').trim().toLowerCase() == 'product';
-    if (!isProductFlow) return;
-
-    _redirectedProductFlow = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.go(
-        Uri(
-          path: AppRouter.productBulkUploadPath,
-          queryParameters: qp,
-        ).toString(),
-      );
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     final Uri uri = GoRouterState.of(context).uri;
     final Map<String, String> qp = uri.queryParameters;
-    final bool isProductFlow = (qp['flow'] ?? '').trim().toLowerCase() == 'product';
+    final bool isProductFlow =
+        (qp['flow'] ?? '').trim().toLowerCase() == 'product';
     final String stepText = isProductFlow ? 'STEP 3 OF 4' : 'STEP 2 OF 6';
     final String progressText = isProductFlow ? '75%' : '33%';
     final double progressFactor = isProductFlow ? 0.75 : 0.3333;
@@ -264,16 +244,14 @@ class _VerificationPermissionsPageState
                                 onTap: () {
                                   final List<String> checks = _checksFromRoute;
                                   final Map<String, String> qp =
-                                      GoRouterState.of(context)
-                                          .uri
-                                          .queryParameters;
-                                  final String industry =
-                                      (qp['industry'] ?? '').trim();
+                                      GoRouterState.of(
+                                        context,
+                                      ).uri.queryParameters;
+                                  final String industry = (qp['industry'] ?? '')
+                                      .trim();
                                   final bool isProductFlow =
-                                      (qp['flow'] ?? '')
-                                              .trim()
-                                              .toLowerCase() ==
-                                          'product';
+                                      (qp['flow'] ?? '').trim().toLowerCase() ==
+                                      'product';
                                   final Map<String, String> nextQp =
                                       <String, String>{};
                                   if (checks.isNotEmpty) {
@@ -285,8 +263,8 @@ class _VerificationPermissionsPageState
                                   }
                                   if (isProductFlow) {
                                     nextQp['flow'] = 'product';
-                                    final String mode =
-                                        (qp['mode'] ?? '').trim();
+                                    final String mode = (qp['mode'] ?? '')
+                                        .trim();
                                     if (mode.isNotEmpty) {
                                       nextQp['mode'] = mode;
                                     }

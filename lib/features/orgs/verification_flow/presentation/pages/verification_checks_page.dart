@@ -115,7 +115,9 @@ class _VerificationChecksPageState
     final String nextMode = (qp['mode'] ?? 'verification').trim().toLowerCase();
     final String nextCategoryId = (qp['category_id'] ?? '').trim();
     final String nextSectorTitle = (qp['sector_title'] ?? '').trim();
-    final String nextWarrantySupport = (qp['warranty_support'] ?? '').trim().toLowerCase();
+    final String nextWarrantySupport = (qp['warranty_support'] ?? '')
+        .trim()
+        .toLowerCase();
     final bool nextSupportsWarranty =
         (qp['supports_warranty'] ?? '').trim().toLowerCase() == 'true';
     final Set<String> nextChecks = <String>{};
@@ -229,9 +231,7 @@ class _VerificationChecksPageState
     });
   }
 
-  static String _subtitleForVerificationType(
-    VerificationTypeDefinition item,
-  ) {
+  static String _subtitleForVerificationType(VerificationTypeDefinition item) {
     final String timeline = item.timeline?.trim() ?? '';
     final int? price = item.price;
     final String email = item.emailAddress?.trim() ?? '';
@@ -248,8 +248,7 @@ class _VerificationChecksPageState
   }
 
   static IconData _iconForVerificationType(VerificationTypeDefinition item) {
-    final String key = '${item.category}-${item.name}-${item.id}'
-        .toLowerCase();
+    final String key = '${item.category}-${item.name}-${item.id}'.toLowerCase();
     if (key.contains('dob')) return Icons.cake_rounded;
     if (key.contains('address')) return Icons.location_on_rounded;
     if (key.contains('education')) return Icons.school_rounded;
@@ -298,19 +297,20 @@ class _VerificationChecksPageState
     final bool isProductFlow = _flow == 'product';
     final AsyncValue<List<VerificationTypeDefinition>> verificationTypesAsync =
         _mode == 'warranty'
-            ? const AsyncData<List<VerificationTypeDefinition>>(
-                <VerificationTypeDefinition>[],
-              )
-            : ref.watch(
-                verificationTypesProvider(_verificationCategoryForFlow()),
-              );
+        ? const AsyncData<List<VerificationTypeDefinition>>(
+            <VerificationTypeDefinition>[],
+          )
+        : ref.watch(verificationTypesProvider(_verificationCategoryForFlow()));
     final List<_CheckItem> apiItems = _mode == 'warranty'
         ? _productWarrantyItems()
-        : _buildItems(verificationTypesAsync.valueOrNull ?? <VerificationTypeDefinition>[]);
+        : _buildItems(
+            verificationTypesAsync.valueOrNull ??
+                <VerificationTypeDefinition>[],
+          );
     _ensureDefaultSelection(apiItems);
-    final String stepText = isProductFlow ? 'STEP 2 OF 6' : 'STEP 1 OF 6';
-    final String progressText = isProductFlow ? '33%' : '17%';
-    final double progressFactor = isProductFlow ? 0.3333 : 0.1667;
+    final String stepText = isProductFlow ? 'STEP 3 OF 6' : 'STEP 1 OF 6';
+    final String progressText = isProductFlow ? '50%' : '17%';
+    final double progressFactor = isProductFlow ? 0.5 : 0.1667;
     final String fallbackIndustryLabel = isProductFlow
         ? 'Product'
         : 'Real Estate';
@@ -481,7 +481,8 @@ class _VerificationChecksPageState
                                     ),
                                     SizedBox(height: s(24)),
                                     Expanded(
-                                      child: verificationTypesAsync.isLoading &&
+                                      child:
+                                          verificationTypesAsync.isLoading &&
                                               apiItems.isEmpty
                                           ? const Center(
                                               child:
@@ -525,8 +526,7 @@ class _VerificationChecksPageState
                                                   (
                                                     BuildContext context,
                                                     int i,
-                                                  ) =>
-                                                      SizedBox(height: s(16)),
+                                                  ) => SizedBox(height: s(16)),
                                               itemCount: apiItems.length,
                                             ),
                                     ),
@@ -563,23 +563,24 @@ class _VerificationChecksPageState
                                       qp['category_id'] = _categoryId.trim();
                                     }
                                     if (_warrantySupport.trim().isNotEmpty) {
-                                      qp['warranty_support'] =
-                                          _warrantySupport.trim();
+                                      qp['warranty_support'] = _warrantySupport
+                                          .trim();
                                     }
                                     if (_supportsWarranty) {
                                       qp['supports_warranty'] = 'true';
                                     }
-                                    qp['access'] = 'public_searchable';
                                   }
                                   final Uri uri = Uri(
                                     path: _flow == 'product'
-                                        ? AppRouter.productServiceTypeSelectorPath
+                                        ? AppRouter.productBulkUploadPath
                                         : AppRouter.verificationPermissionsPath,
                                     queryParameters: qp,
                                   );
                                   context.push(
                                     uri.toString(),
-                                    extra: _flow == 'product' ? _industry : null,
+                                    extra: _flow == 'product'
+                                        ? _industry
+                                        : null,
                                   );
                                 },
                               ),
