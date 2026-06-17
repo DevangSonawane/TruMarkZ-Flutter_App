@@ -155,7 +155,7 @@ class _ProductSectorSelectorPageState
   void _continue(BuildContext context) {
     final _ProductSectorCardData? sectorCard = _selectedSector;
     if (sectorCard == null) return;
-    final String sector = sectorCard.categoryName.trim();
+    final String sector = sectorCard.title.trim();
     final String categoryId = sectorCard.categoryId.trim();
     final String warranty = sectorCard.warrantySupport.trim().toLowerCase();
     final bool supportsWarranty = warranty.isNotEmpty && warranty != 'disabled';
