@@ -33,7 +33,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     final String email = _emailController.text.trim();
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email or mobile.')),
+        const SnackBar(content: Text('Please enter your email.')),
       );
       return;
     }
@@ -43,18 +43,14 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
       final Map<String, String> qp =
           GoRouterState.of(context).uri.queryParameters;
       final String loginType = (qp['type'] ?? '').trim();
-      final String? token = await ref.read(authRepositoryProvider).forgotPassword(email);
+      await ref.read(authRepositoryProvider).forgotPassword(email);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('If this account exists, a reset link has been sent.'),
-        ),
+        const SnackBar(content: Text('If this account exists, an OTP has been sent.')),
       );
-      if (token != null && token.trim().isNotEmpty) {
-        context.go(
-          '${AppRouter.resetPasswordPath}?token=${Uri.encodeComponent(token)}${loginType.isEmpty ? '' : '&type=${Uri.encodeComponent(loginType)}'}&force=true',
-        );
-      }
+      context.go(
+        '${AppRouter.resetPasswordPath}?email=${Uri.encodeComponent(email)}${loginType.isEmpty ? '' : '&type=${Uri.encodeComponent(loginType)}'}&force=true',
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -170,14 +166,14 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                       ),
                       const SizedBox(height: AppSpacing.x1),
                       Text(
-                        'Enter your email or mobile and we’ll send a reset link/code.',
+                        'Enter your email and we’ll send a reset OTP.',
                         style: AppTypography.body2.copyWith(
                           color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.x5),
                       TMZInput(
-                        label: 'Email / Mobile',
+                        label: 'Email',
                         hint: 'name@company.com',
                         keyboardType: TextInputType.emailAddress,
                         prefixIcon: Icons.mail_outline_rounded,

@@ -190,25 +190,25 @@ class AuthRepository {
     return value.isEmpty ? null : value;
   }
 
-  Future<String?> forgotPassword(String emailOrMobile) async {
-    final Map<String, dynamic> res = await _api.post(
+  Future<void> forgotPassword(String email) async {
+    await _api.post(
       '/auth/forgot-password',
-      data: <String, dynamic>{'email_or_mobile': emailOrMobile},
+      data: <String, dynamic>{'email': email},
     );
-    final dynamic data = res['data'];
-    final String token = data is Map
-        ? (data['reset_token'] ?? '').toString()
-        : '';
-    return token.trim().isEmpty ? null : token;
   }
 
   Future<void> resetPassword({
-    required String token,
+    required String email,
+    required String otpCode,
     required String newPassword,
   }) async {
     await _api.post(
       '/auth/reset-password',
-      data: <String, dynamic>{'token': token, 'new_password': newPassword},
+      data: <String, dynamic>{
+        'email': email,
+        'otp_code': otpCode,
+        'new_password': newPassword,
+      },
     );
   }
 

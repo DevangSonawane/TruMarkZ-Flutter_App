@@ -20,21 +20,39 @@ class ResetPasswordPage extends ConsumerStatefulWidget {
 }
 
 class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
+    _emailController.dispose();
+    _otpController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
-  Future<void> _onReset(String token) async {
+  Future<void> _onReset() async {
+    final String email = _emailController.text.trim();
+    final String otpCode = _otpController.text.trim();
     final String newPassword = _passwordController.text;
     final String confirm = _confirmController.text;
 
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email.')),
+      );
+      return;
+    }
+    if (otpCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter the OTP code.')),
+      );
+      return;
+    }
     if (newPassword.trim().length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password must be at least 8 characters.')),
@@ -52,7 +70,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
     try {
       await ref
           .read(authRepositoryProvider)
-          .resetPassword(token: token, newPassword: newPassword);
+          .resetPassword(email: email, otpCode: otpCode, newPassword: newPassword);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password reset successfully. Please log in.')),
@@ -76,8 +94,12 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
     final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
-    final String token = (qp['token'] ?? '').trim();
+    final String email = (qp['email'] ?? '').trim();
     final String loginType = (qp['type'] ?? '').trim();
+
+    if (_emailController.text.trim().isEmpty && email.isNotEmpty) {
+      _emailController.text = email;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -186,12 +208,30 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                       ),
                       const SizedBox(height: AppSpacing.x1),
                       Text(
-                        'Create a new password for your account.',
+                        'Enter your email, the OTP you received, and your new password.',
                         style: AppTypography.body2.copyWith(
                           color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.x5),
+                      TMZInput(
+                        label: 'Email',
+                        hint: 'name@company.com',
+                        keyboardType: TextInputType.emailAddress,
+                        prefixIcon: Icons.mail_outline_rounded,
+                        controller: _emailController,
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: AppSpacing.x4),
+                      TMZInput(
+                        label: 'OTP Code',
+                        hint: '123456',
+                        keyboardType: TextInputType.number,
+                        prefixIcon: Icons.verified_user_outlined,
+                        controller: _otpController,
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: AppSpacing.x4),
                       TMZInput(
                         label: 'New Password',
                         hint: '••••••••',
@@ -211,20 +251,10 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                       ),
                       const SizedBox(height: AppSpacing.x6),
                       TMZButton(
-                        onPressed: _isLoading || token.isEmpty ? null : () => _onReset(token),
+                        onPressed: _isLoading ? null : _onReset,
                         label: 'Reset Password',
                         isLoading: _isLoading,
                       ),
-                      if (token.isEmpty) ...<Widget>[
-                        const SizedBox(height: AppSpacing.x3),
-                        Text(
-                          'Missing reset token. Please request a new reset link.',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),

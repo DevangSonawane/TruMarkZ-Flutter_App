@@ -228,9 +228,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
-  Future<bool> forgotPassword(String emailOrMobile) async {
+  Future<bool> forgotPassword(String email) async {
     try {
-      await _repo.forgotPassword(emailOrMobile);
+      await _repo.forgotPassword(email);
       return true;
     } on ApiException {
       return false;
