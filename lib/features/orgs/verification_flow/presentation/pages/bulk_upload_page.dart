@@ -1192,7 +1192,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                       children: <Widget>[
                                         Expanded(
                                           child: Text(
-                                            'Upload CSV',
+                                            'Upload Excel',
                                             style: TextStyle(
                                               fontFamily: 'Inter',
                                               fontSize: s(32),
@@ -1222,7 +1222,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                             ),
                                           ),
                                           child: Text(
-                                            'Download Template',
+                                            'Download Excel',
                                             style: const TextStyle(
                                               color: AppColors.brandBlue,
                                             ),
@@ -1232,7 +1232,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                     ),
                                     SizedBox(height: s(14)),
                                     Text(
-                                      'Download template based on your selected checks.\nUpload your Excel/CSV, then Confirm the batch.',
+                                      'Download template based on your selected checks.\nUpload your Excel, then Confirm the batch.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -2005,7 +2005,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: Text(
-            'Download Template',
+            'Download Excel',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(16),
@@ -2418,7 +2418,7 @@ class _DropZone extends StatelessWidget {
                 ),
                 SizedBox(height: s(8)),
                 Text(
-                  'Upload your Excel or CSV file here',
+                  'Upload your Excel file here',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(12),
