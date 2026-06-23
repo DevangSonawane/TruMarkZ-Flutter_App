@@ -232,12 +232,12 @@ class _OnboardingHero extends StatelessWidget {
             Align(
               alignment: Alignment.center,
               child: Transform.translate(
-                offset: const Offset(0, 20),
-                child: Transform.scale(
-                  scale: 1.55,
+                offset: const Offset(0, -12),
+              child: Transform.scale(
+                  scale: 1.08,
                   child: Image.asset(
-                    'assets/onboadring/Untitled design (9).png',
-                    height: availableHeight * 10.5,
+                    'assets/onboadring/ChatGPT Image Jun 23, 2026, 05_04_24 PM.png',
+                    height: availableHeight * 7.2,
                     fit: BoxFit.contain,
                   ),
                 ).animate().fadeIn(duration: 250.ms).scale(
