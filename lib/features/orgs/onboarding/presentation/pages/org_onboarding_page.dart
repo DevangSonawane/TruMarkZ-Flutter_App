@@ -44,14 +44,14 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
   ];
 
   static const List<String> _productCategories = <String>[
-    'Consumer Goods',
+    'Agriculture Products',
     'Beauty & Cosmetics',
+    'Consumer Goods',
     'Electronics & Appliances',
     'EV & Automotive',
-    'Insurance Policies',
     'Healthcare Products',
     'Industrial Equipment',
-    'Agriculture Products',
+    'Insurance Policies',
     'Luxury Products',
     'Others',
   ];

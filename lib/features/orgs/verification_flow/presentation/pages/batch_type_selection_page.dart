@@ -178,9 +178,9 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                           'assets/icons/figma/new_batch_product.svg',
                                       tags: const <String>[
                                         'Consumer Goods',
-                                        'Cosmetics',
-                                        'Electronics',
-                                        'Automotive',
+                                        'Beauty & Cosmetics',
+                                        'Electronics & Appliances',
+                                        'EV & Automotive',
                                       ],
                                       selected: _selected == _BatchType.product,
                                       showLeftStrip:

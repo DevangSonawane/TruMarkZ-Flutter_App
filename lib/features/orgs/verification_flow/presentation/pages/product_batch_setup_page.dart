@@ -21,7 +21,7 @@ class ProductBatchSetupPage extends StatefulWidget {
 
 class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
   bool _didInitFromRoute = false;
-  String _sector = 'Consumer Goods & Warranty';
+  String _sector = 'Consumer Goods';
   String _categoryId = '';
   String _mode = 'verification'; // 'verification' | 'warranty'
 
