@@ -119,11 +119,13 @@ class _PerUnitCostBreakdownPageState
     final Map<String, String> qp = GoRouterState.of(
       context,
     ).uri.queryParameters;
-    final List<String> ids = _selectedChecks(context);
-    final int userCount = _userCount(context);
     final bool isProductFlow = _isProductFlow();
     final bool isWarrantyFlow =
         isProductFlow && (qp['mode'] ?? '').trim().toLowerCase() == 'warranty';
+    final List<String> ids = isWarrantyFlow
+        ? const <String>[]
+        : _selectedChecks(context);
+    final int userCount = _userCount(context);
     final AsyncValue<List<VerificationTypeDefinition>> typesAsync = ref.watch(
       verificationTypesProvider(isProductFlow ? 'product' : 'human'),
     );
@@ -131,7 +133,7 @@ class _PerUnitCostBreakdownPageState
       typesAsync.valueOrNull ?? <VerificationTypeDefinition>[],
       isProductFlow,
     );
-    final int total = _totalCostInr(ids, pricing) * userCount;
+    final int total = isWarrantyFlow ? 0 : _totalCostInr(ids, pricing) * userCount;
     final Object? extra = GoRouterState.of(context).extra;
     final VerificationFlowConfirmAction? action =
         extra is VerificationFlowConfirmAction ? extra : null;
@@ -232,7 +234,9 @@ class _PerUnitCostBreakdownPageState
                                     ),
                                     SizedBox(height: s(12)),
                                     Text(
-                                      'Determine the total verification cost for all users in the Excel file.',
+                                      isWarrantyFlow
+                                          ? 'Warranty batches do not use verification checks, so the cost breakdown stays at zero and you can continue.'
+                                          : 'Determine the total verification cost for all users in the Excel file.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -260,6 +264,7 @@ class _PerUnitCostBreakdownPageState
                                       totalInr: total,
                                       checksCount: ids.length,
                                       userCount: userCount,
+                                      hasWarrantyChecksDisabled: isWarrantyFlow,
                                     ),
                                     SizedBox(height: s(18)),
                                     _AgreementTile(
@@ -277,7 +282,9 @@ class _PerUnitCostBreakdownPageState
                               child: _ConfirmButton(
                                 scale: scale,
                                 enabled:
-                                    _agreed && ids.isNotEmpty && !_isSubmitting,
+                                    _agreed &&
+                                    (isWarrantyFlow || ids.isNotEmpty) &&
+                                    !_isSubmitting,
                                 isLoading: _isSubmitting,
                                 onTap: () => _confirmAndSubmit(action),
                               ),
@@ -316,6 +323,7 @@ class _CostSummaryCard extends StatelessWidget {
     required this.totalInr,
     required this.checksCount,
     required this.userCount,
+    required this.hasWarrantyChecksDisabled,
   });
 
   final double scale;
@@ -323,20 +331,13 @@ class _CostSummaryCard extends StatelessWidget {
   final int totalInr;
   final int checksCount;
   final int userCount;
+  final bool hasWarrantyChecksDisabled;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
 
-    final List<_CostRow> safeRows = rows.isEmpty
-        ? const <_CostRow>[
-            _CostRow(
-              title: 'Identity Verification',
-              unitCostInr: 0,
-              totalInr: 0,
-            ),
-          ]
-        : rows;
+    final bool hasRows = rows.isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -389,14 +390,28 @@ class _CostSummaryCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: s(16)),
-          for (int i = 0; i < safeRows.length; i++) ...<Widget>[
-            _SummaryRow(scale: scale, row: safeRows[i], userCount: userCount),
-            if (i != safeRows.length - 1) ...<Widget>[
-              SizedBox(height: s(12)),
-              Divider(height: s(1), color: const Color(0xFFF1F5F9)),
-              SizedBox(height: s(12)),
-            ],
-          ],
+          if (hasRows)
+            for (int i = 0; i < rows.length; i++) ...<Widget>[
+              _SummaryRow(scale: scale, row: rows[i], userCount: userCount),
+              if (i != rows.length - 1) ...<Widget>[
+                SizedBox(height: s(12)),
+                Divider(height: s(1), color: const Color(0xFFF1F5F9)),
+                SizedBox(height: s(12)),
+              ],
+            ]
+          else
+            Text(
+              hasWarrantyChecksDisabled
+                  ? 'Warranty uploads do not include verification checks.'
+                  : 'No cost items selected.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(13),
+                fontWeight: FontWeight.w500,
+                height: 18 / 13,
+                color: const Color(0xFF64748B),
+              ),
+            ),
           SizedBox(height: s(16)),
           Divider(height: s(1), color: const Color(0xFFF1F5F9)),
           SizedBox(height: s(14)),
@@ -433,12 +448,14 @@ class _CostSummaryCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFFEEF3FF),
                       borderRadius: BorderRadius.circular(s(999)),
-                    ),
-                    child: Text(
-                      '$checksCount Checks',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(12),
+                  ),
+                  child: Text(
+                    hasWarrantyChecksDisabled
+                        ? 'No Checks'
+                        : '$checksCount Checks',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
                         fontWeight: FontWeight.w600,
                         height: 16 / 12,
                         color: AppColors.brandBlue,
@@ -588,7 +605,7 @@ class _AgreementTile extends StatelessWidget {
             SizedBox(width: s(12)),
             Expanded(
               child: Text(
-                'I agree to the total cost breakdown and\nthe terms of service for these verification\nchecks.',
+                'I agree to the total cost breakdown and\nthe terms of service for this flow.',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(12),

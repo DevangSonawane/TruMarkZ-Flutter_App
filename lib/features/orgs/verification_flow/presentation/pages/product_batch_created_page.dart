@@ -23,16 +23,20 @@ class ProductBatchCreatedPage extends StatelessWidget {
     final int records = _tryParseInt(qp['records'], fallback: 0);
     final int skipped = _tryParseInt(qp['skipped'], fallback: 0);
     final String batchId = (qp['batchId'] ?? '').trim();
+    final String mode = (qp['mode'] ?? '').trim().toLowerCase();
     final Object? extra = GoRouterState.of(context).extra;
     final BulkUploadResponse? report = extra is BulkUploadResponse
         ? extra
         : null;
 
     return OrgVerificationCompletionView(
-      headerTitle: 'Verification Submitted',
-      title: 'Verification Submitted',
-      subtitle:
-          'Your product verification batch has been queued. Review is now pending.',
+      headerTitle: mode == 'warranty'
+          ? 'Warranty Submitted'
+          : 'Verification Submitted',
+      title: mode == 'warranty' ? 'Warranty Submitted' : 'Verification Submitted',
+      subtitle: mode == 'warranty'
+          ? 'Your product warranty batch has been queued. Review is now pending.'
+          : 'Your product verification batch has been queued. Review is now pending.',
       subjectName: (qp['batch'] ?? 'New Product Batch').trim(),
       subjectIdLabel: 'Batch ID',
       subjectIdValue: batchId,
@@ -48,7 +52,7 @@ class ProductBatchCreatedPage extends StatelessWidget {
       primaryAction: batchId.trim().isEmpty
           ? () => context.go(AppRouter.appBatchesPath)
           : () => context.go(
-              '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
+              '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}${mode == 'warranty' ? '&mode=warranty' : ''}',
             ),
       secondaryActionLabel: 'Dashboard',
       secondaryAction: () => context.go(AppRouter.dashboardPath),

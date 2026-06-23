@@ -23,8 +23,10 @@ class _BatchTrackingDetailPageState
     extends ConsumerState<BatchTrackingDetailPage> {
   bool _didInit = false;
   String _batchId = '';
+  String _mode = 'verification';
 
   AsyncValue<VerificationListResponse> _data = const AsyncLoading();
+  AsyncValue<WarrantyBatchStatusResponse> _warrantyData = const AsyncLoading();
 
   @override
   void didChangeDependencies() {
@@ -33,30 +35,54 @@ class _BatchTrackingDetailPageState
     _didInit = true;
     _batchId = (GoRouterState.of(context).uri.queryParameters['batch_id'] ?? '')
         .trim();
+    _mode = (GoRouterState.of(context).uri.queryParameters['mode'] ?? '')
+        .trim()
+        .toLowerCase();
     _load();
   }
 
   Future<void> _load() async {
-    setState(() => _data = const AsyncLoading());
+    if (_isWarrantyMode) {
+      setState(() => _warrantyData = const AsyncLoading());
+    } else {
+      setState(() => _data = const AsyncLoading());
+    }
     try {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final VerificationListResponse res = await repo.getAllVerifications(
-        batchId: _batchId,
-        limit: 500,
-        offset: 0,
-      );
-      if (!mounted) return;
-      setState(() => _data = AsyncData(res));
+      if (_isWarrantyMode) {
+        final WarrantyBatchStatusResponse res = await repo
+            .getWarrantyBatchStatus(_batchId);
+        if (!mounted) return;
+        setState(() => _warrantyData = AsyncData(res));
+      } else {
+        final VerificationListResponse res = await repo.getAllVerifications(
+          batchId: _batchId,
+          limit: 500,
+          offset: 0,
+        );
+        if (!mounted) return;
+        setState(() => _data = AsyncData(res));
+      }
     } on ApiException catch (e, st) {
       if (!mounted) return;
-      setState(() => _data = AsyncError(e, st));
+      if (_isWarrantyMode) {
+        setState(() => _warrantyData = AsyncError(e, st));
+      } else {
+        setState(() => _data = AsyncError(e, st));
+      }
     } catch (e, st) {
       if (!mounted) return;
-      setState(() => _data = AsyncError(e, st));
+      if (_isWarrantyMode) {
+        setState(() => _warrantyData = AsyncError(e, st));
+      } else {
+        setState(() => _data = AsyncError(e, st));
+      }
     }
   }
+
+  bool get _isWarrantyMode => _mode == 'warranty';
 
   void _goBack(BuildContext context) {
     final GoRouter router = GoRouter.of(context);
@@ -116,82 +142,162 @@ class _BatchTrackingDetailPageState
                   color: Color(0xFFF7F9FC),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                child: _data.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (Object err, _) => Padding(
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Unable to load batch',
-                          style: AppTypography.display2,
+                child: _isWarrantyMode
+                    ? _warrantyData.when(
+                        loading: () => const Center(
+                          child: CircularProgressIndicator(),
                         ),
-                        const SizedBox(height: AppSpacing.x2),
-                        Text(
-                          err.toString(),
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.x4),
-                        ElevatedButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  data: (VerificationListResponse res) {
-                    return ListView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.x4,
-                        AppSpacing.x4,
-                        AppSpacing.x4,
-                        AppSpacing.x6 +
-                            MediaQuery.viewPaddingOf(context).bottom +
-                            navBarHeight,
-                      ),
-                      children: <Widget>[
-                        _SummarySection(
-                          verified: res.verified,
-                          pending: res.pending,
-                          failed: res.failed,
-                        ),
-                        const SizedBox(height: AppSpacing.x4),
-                        const _SectionHeader(
-                          title: 'RECORDS',
-                          subtitle: 'People in this batch',
-                        ),
-                        const SizedBox(height: AppSpacing.x3),
-                        for (final VerificationUser u in res.users) ...<Widget>[
-                          _UserTile(
-                            user: u,
-                            onTap: () => context.push(
-                              '${AppRouter.individualRecordDetailPath}?user_id=${Uri.encodeQueryComponent(u.id)}',
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.x2),
-                        ],
-                        if (res.users.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: AppSpacing.x6),
-                            child: Center(
-                              child: Text(
-                                'No records found.',
+                        error: (Object err, _) => Padding(
+                          padding: const EdgeInsets.all(AppSpacing.x4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Unable to load batch',
+                                style: AppTypography.display2,
+                              ),
+                              const SizedBox(height: AppSpacing.x2),
+                              Text(
+                                err.toString(),
                                 style: AppTypography.body2.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
                               ),
-                            ),
+                              const SizedBox(height: AppSpacing.x4),
+                              ElevatedButton.icon(
+                                onPressed: _load,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry'),
+                              ),
+                            ],
                           ),
-                      ],
-                    );
-                  },
-                ),
+                        ),
+                        data: (WarrantyBatchStatusResponse res) {
+                          return ListView(
+                            physics: const BouncingScrollPhysics(),
+                            padding: EdgeInsets.fromLTRB(
+                              AppSpacing.x4,
+                              AppSpacing.x4,
+                              AppSpacing.x4,
+                              AppSpacing.x6 +
+                                  MediaQuery.viewPaddingOf(context).bottom +
+                                  navBarHeight,
+                            ),
+                            children: <Widget>[
+                              _WarrantySummarySection(
+                                pending: res.pending,
+                                approved: res.approved,
+                                rejected: res.rejected,
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              const _SectionHeader(
+                                title: 'PRODUCTS',
+                                subtitle: 'Warranty records in this batch',
+                              ),
+                              const SizedBox(height: AppSpacing.x3),
+                              for (final WarrantyBatchProduct product
+                                  in res.products) ...<Widget>[
+                                _WarrantyProductTile(product: product),
+                                const SizedBox(height: AppSpacing.x2),
+                              ],
+                              if (res.products.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: AppSpacing.x6,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'No records found.',
+                                      style: AppTypography.body2.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      )
+                    : _data.when(
+                        loading: () => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                        error: (Object err, _) => Padding(
+                          padding: const EdgeInsets.all(AppSpacing.x4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Unable to load batch',
+                                style: AppTypography.display2,
+                              ),
+                              const SizedBox(height: AppSpacing.x2),
+                              Text(
+                                err.toString(),
+                                style: AppTypography.body2.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              ElevatedButton.icon(
+                                onPressed: _load,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        data: (VerificationListResponse res) {
+                          return ListView(
+                            physics: const BouncingScrollPhysics(),
+                            padding: EdgeInsets.fromLTRB(
+                              AppSpacing.x4,
+                              AppSpacing.x4,
+                              AppSpacing.x4,
+                              AppSpacing.x6 +
+                                  MediaQuery.viewPaddingOf(context).bottom +
+                                  navBarHeight,
+                            ),
+                            children: <Widget>[
+                              _SummarySection(
+                                verified: res.verified,
+                                pending: res.pending,
+                                failed: res.failed,
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              const _SectionHeader(
+                                title: 'RECORDS',
+                                subtitle: 'People in this batch',
+                              ),
+                              const SizedBox(height: AppSpacing.x3),
+                              for (final VerificationUser u in res.users)
+                                ...<Widget>[
+                                  _UserTile(
+                                    user: u,
+                                    onTap: () => context.push(
+                                      '${AppRouter.individualRecordDetailPath}?user_id=${Uri.encodeQueryComponent(u.id)}',
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.x2),
+                                ],
+                              if (res.users.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: AppSpacing.x6,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'No records found.',
+                                      style: AppTypography.body2.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
               ),
             ),
           ],
@@ -242,6 +348,58 @@ class _SummarySection extends StatelessWidget {
           child: _FigmaStatCard(
             label: 'Failed',
             value: failed.toString(),
+            labelColor: const Color(0xFFEF4444),
+            labelLetterSpacing: 0.12641217559576035,
+            valueColor: const Color(0xFF0B0F19),
+            compact: true,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WarrantySummarySection extends StatelessWidget {
+  const _WarrantySummarySection({
+    required this.pending,
+    required this.approved,
+    required this.rejected,
+  });
+
+  final int pending;
+  final int approved;
+  final int rejected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _FigmaStatCard(
+            label: 'Pending',
+            value: pending.toString(),
+            labelColor: const Color(0xFFF59E0B),
+            labelLetterSpacing: 0.15169461071491241,
+            valueColor: const Color(0xFF0B0F19),
+            compact: true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _FigmaStatCard(
+            label: 'Approved',
+            value: approved.toString(),
+            labelColor: const Color(0xFF10B981),
+            labelLetterSpacing: 0.08848852291703224,
+            valueColor: const Color(0xFF0B0F19),
+            compact: true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _FigmaStatCard(
+            label: 'Rejected',
+            value: rejected.toString(),
             labelColor: const Color(0xFFEF4444),
             labelLetterSpacing: 0.12641217559576035,
             valueColor: const Color(0xFF0B0F19),
@@ -475,6 +633,125 @@ class _UserTile extends StatelessWidget {
       default:
         return (const _StatusStyle.pending(), 'Pending');
     }
+  }
+}
+
+class _WarrantyProductTile extends StatelessWidget {
+  const _WarrantyProductTile({required this.product});
+
+  final WarrantyBatchProduct product;
+
+  @override
+  Widget build(BuildContext context) {
+    final (_StatusStyle style, String label) = _warrantyStatusStyle(
+      product.warrantyStatus,
+    );
+
+    return TMZCard(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  product.productName.trim().isEmpty
+                      ? 'Unnamed product'
+                      : product.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 16,
+                    height: 22 / 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              _StatusBadge(label: label, style: style),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            product.category.trim().isEmpty
+                ? product.serialNumber.trim()
+                : '${product.category} • ${product.serialNumber}'.trim(),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              height: 18 / 13,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Wrap(
+            spacing: AppSpacing.x2,
+            runSpacing: AppSpacing.x2,
+            children: <Widget>[
+              _WarrantyMetaChip(
+                label: 'Purchase',
+                value: product.purchaseDate,
+              ),
+              _WarrantyMetaChip(
+                label: 'Start',
+                value: product.warrantyStartDate,
+              ),
+              _WarrantyMetaChip(
+                label: 'End',
+                value: product.warrantyEndDate,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static (_StatusStyle, String) _warrantyStatusStyle(String raw) {
+    switch (raw.trim().toLowerCase()) {
+      case 'approved':
+      case 'verified':
+      case 'active':
+        return (const _StatusStyle.verified(), 'Approved');
+      case 'rejected':
+      case 'failed':
+        return (const _StatusStyle.failed(), 'Rejected');
+      default:
+        return (const _StatusStyle.pending(), 'Pending');
+    }
+  }
+}
+
+class _WarrantyMetaChip extends StatelessWidget {
+  const _WarrantyMetaChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        '$label: ${value.trim().isEmpty ? '—' : value}',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          height: 15 / 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
   }
 }
 

@@ -146,12 +146,8 @@ class VerificationRepository {
 
   Future<BulkUploadResponse> bulkUploadProducts({
     required String batchName,
-    required String categoryId,
     String? description,
-    String? industryType,
     String? verificationTypes,
-    String? credentialVisibility,
-    String? templateId,
     required Uint8List fileBytes,
     required String fileName,
   }) async {
@@ -167,18 +163,10 @@ class VerificationRepository {
     };
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
-      'category_id': categoryId.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
-      if (industryType != null && industryType.trim().isNotEmpty)
-        'industry_type': industryType.trim(),
       if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
         'verification_types': verificationTypes.trim(),
-      if (credentialVisibility != null &&
-          credentialVisibility.trim().isNotEmpty)
-        'credential_visibility': credentialVisibility.trim(),
-      if (templateId != null && templateId.trim().isNotEmpty)
-        'template_id': templateId.trim(),
       'file': MultipartFile.fromBytes(
         fileBytes,
         filename: safeName,
@@ -209,6 +197,10 @@ class VerificationRepository {
         'headers': headersCsv,
       },
     );
+  }
+
+  Future<VerificationBinaryResponse> generateWarrantyTemplate() async {
+    return _api.verificationGetBinary('/verification/products/warranty-template');
   }
 
   Future<VerificationBinaryResponse> generateHumanTemplate({
@@ -310,6 +302,48 @@ class VerificationRepository {
       formData,
     );
     return BulkUploadResponse.fromJson(res);
+  }
+
+  Future<BulkUploadResponse> uploadWarrantyProducts({
+    required String batchName,
+    String? description,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final String safeName = fileName.trim().isEmpty ? 'warranty.xlsx' : fileName;
+    final String ext = safeName.split('.').last.toLowerCase();
+    final MediaType contentType = switch (ext) {
+      'csv' => MediaType('text', 'csv'),
+      'xls' => MediaType('application', 'vnd.ms-excel'),
+      _ => MediaType(
+        'application',
+        'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ),
+    };
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'batch_name': batchName.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+      'file': MultipartFile.fromBytes(
+        fileBytes,
+        filename: safeName,
+        contentType: contentType,
+      ),
+    });
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/products/warranty-upload',
+      formData,
+    );
+    return BulkUploadResponse.fromJson(res);
+  }
+
+  Future<WarrantyBatchStatusResponse> getWarrantyBatchStatus(
+    String batchId,
+  ) async {
+    final Map<String, dynamic> res = await _api.verificationGet(
+      '/verification/products/warranty/${Uri.encodeComponent(batchId)}',
+    );
+    return WarrantyBatchStatusResponse.fromJson(res);
   }
 
   Future<VerificationListResponse> getAllVerifications({

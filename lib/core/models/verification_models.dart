@@ -335,6 +335,112 @@ class VerificationCategory {
   }
 }
 
+class WarrantyBatchProduct {
+  const WarrantyBatchProduct({
+    required this.id,
+    required this.productName,
+    required this.category,
+    required this.serialNumber,
+    required this.purchaseDate,
+    required this.warrantyStartDate,
+    required this.warrantyEndDate,
+    required this.warrantyStatus,
+    required this.reason,
+  });
+
+  final String id;
+  final String productName;
+  final String category;
+  final String serialNumber;
+  final String purchaseDate;
+  final String warrantyStartDate;
+  final String warrantyEndDate;
+  final String warrantyStatus;
+  final String? reason;
+
+  factory WarrantyBatchProduct.fromJson(Map<String, dynamic> json) {
+    String readString(dynamic v) => (v ?? '').toString().trim();
+
+    return WarrantyBatchProduct(
+      id: readString(json['id']),
+      productName: readString(
+        json['product_name'] ?? json['productName'] ?? json['name'],
+      ),
+      category: readString(json['category'] ?? json['category_name']),
+      serialNumber: readString(
+        json['serial_number'] ?? json['serialNumber'] ?? json['serial'],
+      ),
+      purchaseDate: readString(
+        json['purchase_date'] ?? json['purchaseDate'],
+      ),
+      warrantyStartDate: readString(
+        json['warranty_start_date'] ?? json['warrantyStartDate'],
+      ),
+      warrantyEndDate: readString(
+        json['warranty_end_date'] ?? json['warrantyEndDate'],
+      ),
+      warrantyStatus: readString(
+        json['warranty_status'] ?? json['status'] ?? json['approval_status'],
+      ),
+      reason: json['reason']?.toString(),
+    );
+  }
+}
+
+class WarrantyBatchStatusResponse {
+  const WarrantyBatchStatusResponse({
+    required this.batchId,
+    required this.total,
+    required this.pending,
+    required this.approved,
+    required this.rejected,
+    required this.products,
+  });
+
+  final String batchId;
+  final int total;
+  final int pending;
+  final int approved;
+  final int rejected;
+  final List<WarrantyBatchProduct> products;
+
+  factory WarrantyBatchStatusResponse.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic> summary = json['summary'] is Map
+        ? Map<String, dynamic>.from(json['summary'] as Map)
+        : <String, dynamic>{};
+    final dynamic productsRaw =
+        json['products'] ?? json['warranty_products'] ?? json['items'];
+    final List<WarrantyBatchProduct> products = productsRaw is List
+        ? productsRaw
+              .whereType<Map>()
+              .map(
+                (Map e) => WarrantyBatchProduct.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
+        : const <WarrantyBatchProduct>[];
+
+    int readCount(List<String> keys, int fallback) {
+      for (final String key in keys) {
+        final dynamic raw = json[key] ?? summary[key];
+        final int? parsed = int.tryParse((raw ?? '').toString());
+        if (parsed != null) return parsed;
+      }
+      return fallback;
+    }
+
+    return WarrantyBatchStatusResponse(
+      batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
+      total: readCount(<String>['total', 'count'], products.length),
+      pending: readCount(<String>['pending', 'pending_count'], 0),
+      approved: readCount(<String>['approved', 'approved_count'], 0),
+      rejected: readCount(<String>['rejected', 'rejected_count'], 0),
+      products: products,
+    );
+  }
+}
+
 class VerificationTemplate {
   const VerificationTemplate({
     required this.id,

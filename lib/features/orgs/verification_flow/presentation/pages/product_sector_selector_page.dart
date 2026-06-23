@@ -13,64 +13,21 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../data/verification_repository.dart';
 import 'flow_step_progress.dart';
 
-class _ProductSectorDef {
-  const _ProductSectorDef({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.aliases,
-    required this.fallbackWarranty,
-  });
-
-  final String id;
-  final String title;
-  final String description;
-  final List<String> aliases;
-  final String fallbackWarranty;
-}
-
 class _ProductSectorCardData {
   const _ProductSectorCardData({
     required this.id,
     required this.title,
     required this.description,
-    required this.category,
     required this.categoryId,
-    required this.categoryName,
     required this.warrantySupport,
   });
 
   final String id;
   final String title;
   final String description;
-  final VerificationCategory? category;
   final String categoryId;
-  final String categoryName;
   final String warrantySupport;
 }
-
-const List<_ProductSectorDef> _productSectorDefs = <_ProductSectorDef>[
-  _ProductSectorDef(
-    id: 'electronics_appliances',
-    title: 'Electronics',
-    description:
-        'Warranty and serial-based certificates for devices and appliances.',
-    aliases: <String>['electronics & appliances', 'electronics', 'appliances'],
-    fallbackWarranty: 'required',
-  ),
-  _ProductSectorDef(
-    id: 'beauty_cosmetics',
-    title: 'Beauty & Cosmetics',
-    description: 'Authenticity certificates with lab reports and batch proofs.',
-    aliases: <String>[
-      'beauty & cosmetics',
-      'beauty products',
-      'cosmetics',
-      'personal care',
-    ],
-    fallbackWarranty: 'disabled',
-  ),
-];
 
 class ProductSectorSelectorPage extends ConsumerStatefulWidget {
   const ProductSectorSelectorPage({super.key});
@@ -86,34 +43,6 @@ class _ProductSectorSelectorPageState
   bool _loading = true;
   String? _error;
   List<VerificationCategory> _categories = const <VerificationCategory>[];
-
-  static String _normalizeName(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll('&', 'and')
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .trim();
-  }
-
-  static VerificationCategory? _matchCategory(
-    _ProductSectorDef sector,
-    List<VerificationCategory> categories,
-  ) {
-    final List<String> aliases = <String>[
-      sector.title,
-      ...sector.aliases,
-    ].map(_normalizeName).toList();
-
-    for (final VerificationCategory category in categories) {
-      final String name = _normalizeName(category.categoryName);
-      if (aliases.any(
-        (String alias) => name.contains(alias) || alias.contains(name),
-      )) {
-        return category;
-      }
-    }
-    return null;
-  }
 
   @override
   void initState() {
@@ -176,22 +105,9 @@ class _ProductSectorSelectorPageState
 
   @override
   Widget build(BuildContext context) {
-    final List<_ProductSectorCardData> sectors = _productSectorDefs.map((
-      _ProductSectorDef def,
-    ) {
-      final VerificationCategory? category = _matchCategory(def, _categories);
-      return _ProductSectorCardData(
-        id: def.id,
-        title: def.title,
-        description: def.description,
-        category: category,
-        categoryId: category?.id.trim() ?? '',
-        categoryName: category?.categoryName.trim() ?? def.title,
-        warrantySupport: category?.warrantySupport.trim().isNotEmpty == true
-            ? category!.warrantySupport
-            : def.fallbackWarranty,
-      );
-    }).toList();
+    final List<_ProductSectorCardData> sectors = _categories
+        .map(_sectorFromCategory)
+        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -359,8 +275,8 @@ class _ProductSectorSelectorPageState
                                                         title: sector.title,
                                                         description:
                                                             sector.description,
-                                                        icon: _iconForSector(
-                                                          sector.id,
+                                                        icon: _iconForCategory(
+                                                          sector.title,
                                                         ),
                                                         selected: selected,
                                                         onTap: () {
@@ -403,15 +319,42 @@ class _ProductSectorSelectorPageState
   }
 }
 
-IconData _iconForSector(String id) {
-  switch (id) {
-    case 'electronics_appliances':
+_ProductSectorCardData _sectorFromCategory(
+  VerificationCategory category,
+) {
+  final String title = category.categoryName.trim().isNotEmpty
+      ? category.categoryName.trim()
+      : 'Unknown';
+  return _ProductSectorCardData(
+    id: category.id.trim(),
+    title: title,
+    description: category.description.trim().isNotEmpty
+        ? category.description.trim()
+        : 'Product category',
+    categoryId: category.id.trim(),
+    warrantySupport: category.warrantySupport.trim().isNotEmpty
+        ? category.warrantySupport.trim()
+        : 'optional',
+  );
+}
+
+IconData _iconForCategory(String title) {
+  final String key = title.toLowerCase();
+  if (key.contains('electronics') || key.contains('appliance')) {
       return Icons.electrical_services_rounded;
-    case 'beauty_cosmetics':
-      return Icons.spa_rounded;
-    default:
-      return Icons.inventory_rounded;
   }
+  if (key.contains('beauty') || key.contains('cosmetics')) {
+      return Icons.spa_rounded;
+  }
+  if (key.contains('agriculture')) return Icons.agriculture_rounded;
+  if (key.contains('health')) return Icons.local_hospital_rounded;
+  if (key.contains('industrial')) return Icons.precision_manufacturing_rounded;
+  if (key.contains('insurance')) return Icons.shield_rounded;
+  if (key.contains('luxury')) return Icons.workspace_premium_rounded;
+  if (key.contains('ev') || key.contains('automotive')) {
+    return Icons.directions_car_rounded;
+  }
+  return Icons.inventory_rounded;
 }
 
 class _SectorCard extends StatelessWidget {

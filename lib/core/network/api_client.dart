@@ -182,6 +182,45 @@ class ApiClient {
     }
   }
 
+  Future<VerificationBinaryResponse> verificationGetBinary(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    try {
+      final Response<dynamic> res = await _verificationDio.get<dynamic>(
+        path,
+        queryParameters: queryParameters,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return VerificationBinaryResponse(
+        bytes: _asBytes(res.data),
+        contentDisposition: res.headers.value('content-disposition'),
+      );
+    } on DioException catch (e) {
+      if (_shouldRetryOnPrimary(e)) {
+        try {
+          final Response<dynamic> res = await _dio.get<dynamic>(
+            path,
+            queryParameters: queryParameters,
+            options: Options(responseType: ResponseType.bytes),
+          );
+          return VerificationBinaryResponse(
+            bytes: _asBytes(res.data),
+            contentDisposition: res.headers.value('content-disposition'),
+          );
+        } on DioException catch (e2) {
+          throw _toApiException(e2);
+        }
+      }
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
   // For endpoints that return a JSON array (or non-map JSON).
   Future<dynamic> verificationGetAny(
     String path, {

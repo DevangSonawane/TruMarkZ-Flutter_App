@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -40,6 +43,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   String _sector = 'Consumer Goods & Warranty';
   String _categoryId = '';
   String _batchName = 'New Product Batch';
+  String _description = '';
   String _mode = 'verification'; // 'verification' | 'warranty'
   String _access = 'public_searchable';
   final Set<String> _checks = <String>{};
@@ -97,6 +101,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
 
     final Map<String, String> qp = uri.queryParameters;
+    final String previousMode = _mode;
 
     final String flowIndustry = (qp['industry'] ?? '').trim();
     if (flowIndustry.isNotEmpty) {
@@ -118,6 +123,19 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String mode = (qp['mode'] ?? 'verification').trim().toLowerCase();
     if (mode == 'warranty' || mode == 'verification') {
       _mode = mode;
+    }
+    if (_mode != previousMode) {
+      _savedTemplateHeaders = <String>[];
+      if (_mode == 'warranty') {
+        _checks.clear();
+      }
+    }
+
+    final String description = (qp['desc'] ?? '').trim();
+    if (description.isNotEmpty) {
+      _description = description;
+    } else if (_description.trim().isEmpty) {
+      _description = _defaultDescriptionForMode();
     }
 
     final String access = (qp['access'] ?? _access).trim().toLowerCase();
@@ -148,10 +166,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     if (_mode == 'warranty') {
       return <String>[
         'product_name',
+        'category',
         'serial_number',
+        'purchase_date',
         'warranty_start_date',
         'warranty_end_date',
-        'invoice_number',
       ];
     }
     return <String>[
@@ -174,9 +193,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         return _ProductTemplateDialog(
           initialHeaders: initialHeaders,
           categoryId: _categoryId,
-          serviceLabel: _mode == 'warranty'
-              ? 'Warranty'
-              : 'Product Verification',
+          isWarranty: _mode == 'warranty',
           onSave: (List<String> headers) {
             setState(() {
               _savedTemplateHeaders = List<String>.from(headers);
@@ -210,13 +227,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final List<String> columns = _columns();
     final String resolvedIndustry = _effectiveIndustry();
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
-    final String modeLabel = _mode == 'warranty'
-        ? 'Warranty'
-        : 'Product Verification';
+    final String description = _resolvedDescription();
+    final String checks = _resolvedVerificationTypesCsv();
     final Uri previewUri = Uri(
       path: AppRouter.certificatePreviewPath,
       queryParameters: <String, String>{
-        if (_checks.isNotEmpty) 'checks': _checks.join(','),
+        if (checks.isNotEmpty) 'checks': checks,
         'industry': resolvedIndustry,
         'industry_label': displayIndustry,
         'access': _access,
@@ -227,7 +243,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         if (_sector.trim().isNotEmpty) 'sector': _sector.trim(),
         if (_mode == 'warranty') 'supports_warranty': 'true',
         'batch': _resolvedBatchName,
-        'desc': '$_sector • $modeLabel',
+        'desc': description,
       },
     );
     Future<void> confirmAction() => _uploadAndNavigate(columns);
@@ -250,22 +266,32 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final String modeLabel = _mode == 'warranty'
-          ? 'Warranty'
-          : 'Verification';
-      final res = await repo.bulkUploadProducts(
-        batchName: _resolvedBatchName,
-        categoryId: _categoryId,
-        description: '$_sector • $modeLabel',
-        verificationTypes: _checks.join(','),
-        credentialVisibility: _access,
-        fileBytes: pickedFile.bytes,
-        fileName: pickedFile.name,
-      );
+      final bool isWarranty = _mode == 'warranty';
+      final PickedFile preparedFile = isWarranty
+          ? await _normalizeWarrantyCategoriesInFile(
+              pickedFile,
+              await repo.getProductCategories(),
+            )
+          : pickedFile;
+      final BulkUploadResponse res = isWarranty
+          ? await repo.uploadWarrantyProducts(
+              batchName: _resolvedBatchName,
+              description: _resolvedDescription(),
+              fileBytes: preparedFile.bytes,
+              fileName: preparedFile.name,
+            )
+          : await repo.bulkUploadProducts(
+              batchName: _resolvedBatchName,
+              description: _resolvedDescription(),
+              verificationTypes: _resolvedVerificationTypesCsv(),
+              fileBytes: pickedFile.bytes,
+              fileName: pickedFile.name,
+            );
       await ref
           .read(batchNameStoreProvider.notifier)
           .setBatchName(res.batchId, _resolvedBatchName);
       if (!mounted) return;
+      final String checks = _resolvedVerificationTypesCsv();
       final Uri uri = Uri(
         path: AppRouter.productBatchCreatedPath,
         queryParameters: <String, String>{
@@ -275,7 +301,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           'skipped': res.totalSkipped.toString(),
           'batchId': res.batchId,
           if (columns.isNotEmpty) 'columns': columns.join(','),
-          if (_checks.isNotEmpty) 'checks': _checks.join(','),
+          if (checks.isNotEmpty) 'checks': checks,
           'access': _access,
           'flow': 'product',
           'mode': _mode,
@@ -299,6 +325,291 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
   }
 
+  String _resolvedDescription() {
+    final String typed = _description.trim();
+    if (typed.isNotEmpty) return typed;
+    return _defaultDescriptionForMode();
+  }
+
+  String _defaultDescriptionForMode() {
+    final String modeLabel = _mode == 'warranty'
+        ? 'Warranty'
+        : 'Product Verification';
+    return '$_sector • $modeLabel';
+  }
+
+  String _resolvedVerificationTypesCsv() {
+    final List<String> checks = _checks
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toList()
+      ..sort();
+    return checks.join(',');
+  }
+
+  Future<PickedFile> _normalizeWarrantyCategoriesInFile(
+    PickedFile file,
+    List<VerificationCategory> categories,
+  ) async {
+    if (categories.isEmpty) return file;
+
+    final Map<String, String> lookup = _buildWarrantyCategoryLookup(categories);
+    if (lookup.isEmpty) return file;
+
+    final String ext = file.extension.toLowerCase().replaceAll('.', '');
+    if (ext == 'csv') {
+      return _normalizeWarrantyCategoriesInCsv(file, lookup);
+    }
+    if (ext != 'xlsx') return file;
+    return _normalizeWarrantyCategoriesInXlsx(file, lookup);
+  }
+
+  static Map<String, String> _buildWarrantyCategoryLookup(
+    List<VerificationCategory> categories,
+  ) {
+    final Map<String, String> out = <String, String>{};
+
+    void addAlias(String alias, String exact) {
+      final String key = _normalizeCategoryLabel(alias);
+      if (key.isEmpty) return;
+      out[key] = exact;
+    }
+
+    for (final VerificationCategory category in categories) {
+      final String exact = category.categoryName.trim();
+      if (exact.isEmpty) continue;
+
+      addAlias(exact, exact);
+      addAlias(exact.replaceAll('&', 'and'), exact);
+
+      final String normalized = _normalizeCategoryLabel(exact);
+      if (normalized.contains('electronics')) {
+        addAlias('electronics', exact);
+        addAlias('appliances', exact);
+      }
+      if (normalized.contains('beauty') || normalized.contains('cosmetics')) {
+        addAlias('beauty', exact);
+        addAlias('beauty products', exact);
+        addAlias('cosmetics', exact);
+        addAlias('personal care', exact);
+      }
+      if (normalized.contains('consumer goods')) {
+        addAlias('consumer goods', exact);
+        addAlias('consumer goods & warranty', exact);
+      }
+      if (normalized.contains('healthcare')) {
+        addAlias('healthcare', exact);
+        addAlias('healthcare products', exact);
+      }
+      if (normalized.contains('industrial equipment')) {
+        addAlias('industrial equipment', exact);
+      }
+      if (normalized.contains('agriculture')) {
+        addAlias('agriculture', exact);
+        addAlias('agriculture products', exact);
+      }
+      if (normalized.contains('automotive') || normalized.contains('ev')) {
+        addAlias('ev', exact);
+        addAlias('ev automotive', exact);
+        addAlias('ev & automotive', exact);
+        addAlias('automotive', exact);
+      }
+      if (normalized.contains('insurance')) {
+        addAlias('insurance', exact);
+        addAlias('insurance policies', exact);
+      }
+      if (normalized.contains('luxury')) {
+        addAlias('luxury', exact);
+        addAlias('luxury products', exact);
+      }
+      if (normalized.contains('other')) {
+        addAlias('others', exact);
+        addAlias('other', exact);
+      }
+    }
+
+    return out;
+  }
+
+  Future<PickedFile> _normalizeWarrantyCategoriesInCsv(
+    PickedFile file,
+    Map<String, String> lookup,
+  ) async {
+    try {
+      final String raw = utf8.decode(file.bytes, allowMalformed: true);
+      final List<List<dynamic>> table = const CsvToListConverter(
+        shouldParseNumbers: false,
+      ).convert(raw);
+      if (table.isEmpty) return file;
+
+      final int headerIndex = _firstNonEmptyRowIndex(table);
+      if (headerIndex < 0) return file;
+
+      final List<String> header = table[headerIndex]
+          .map((dynamic e) => (e?.toString() ?? '').trim())
+          .toList();
+      final int categoryIndex = _categoryColumnIndex(header);
+      if (categoryIndex < 0) return file;
+
+      bool changed = false;
+      for (int i = headerIndex + 1; i < table.length; i++) {
+        final List<dynamic> row = table[i];
+        if (_isLooseRowEmpty(row)) continue;
+        if (categoryIndex >= row.length) continue;
+        final String rawCategory = row[categoryIndex]?.toString().trim() ?? '';
+        final String? normalized = _normalizeCategoryValue(
+          rawCategory,
+          lookup,
+        );
+        if (normalized == null || normalized == rawCategory) continue;
+        row[categoryIndex] = normalized;
+        changed = true;
+      }
+
+      if (!changed) return file;
+      final String csv = const ListToCsvConverter().convert(table);
+      return PickedFile(
+        name: file.name,
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        extension: file.extension,
+      );
+    } catch (e) {
+      debugPrint('[WarrantyUpload] CSV category normalization failed: $e');
+      return file;
+    }
+  }
+
+  Future<PickedFile> _normalizeWarrantyCategoriesInXlsx(
+    PickedFile file,
+    Map<String, String> lookup,
+  ) async {
+    try {
+      final Excel excel = Excel.decodeBytes(file.bytes);
+      final List<String> sheetNames = excel.tables.keys.toList();
+      if (sheetNames.isEmpty) return file;
+
+      bool changed = false;
+      for (final String sheetName in sheetNames) {
+        final Sheet? sheet = excel.tables[sheetName];
+        if (sheet == null) continue;
+
+        final List<List<Data?>> all = sheet.rows;
+        if (all.isEmpty) continue;
+
+        final int headerIndex = _firstNonEmptyExcelRowIndex(all);
+        if (headerIndex < 0) continue;
+
+        final List<String> header = all[headerIndex]
+            .map((Data? d) => (d?.value?.toString() ?? '').trim())
+            .toList();
+        final int categoryIndex = _categoryColumnIndex(header);
+        if (categoryIndex < 0) continue;
+
+        for (int rowIndex = headerIndex + 1; rowIndex < all.length; rowIndex++) {
+          final List<Data?> row = all[rowIndex];
+          if (_isExcelRowEmpty(row)) continue;
+          if (categoryIndex >= row.length) continue;
+
+          final String rawCategory =
+              (row[categoryIndex]?.value?.toString() ?? '').trim();
+          final String? normalized = _normalizeCategoryValue(
+            rawCategory,
+            lookup,
+          );
+          if (normalized == null || normalized == rawCategory) continue;
+
+          sheet.updateCell(
+            CellIndex.indexByColumnRow(
+              columnIndex: categoryIndex,
+              rowIndex: rowIndex,
+            ),
+            TextCellValue(normalized),
+          );
+          changed = true;
+        }
+      }
+
+      if (!changed) return file;
+      final List<int>? encoded = excel.encode();
+      if (encoded == null || encoded.isEmpty) return file;
+      return PickedFile(
+        name: file.name,
+        bytes: Uint8List.fromList(encoded),
+        extension: file.extension,
+      );
+    } catch (e) {
+      debugPrint('[WarrantyUpload] XLSX category normalization failed: $e');
+      return file;
+    }
+  }
+
+  static String? _normalizeCategoryValue(
+    String raw,
+    Map<String, String> lookup,
+  ) {
+    final String trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    final String? exact = lookup[_normalizeCategoryLabel(trimmed)];
+    if (exact != null && exact.isNotEmpty) return exact;
+    return null;
+  }
+
+  static int _firstNonEmptyRowIndex(List<List<dynamic>> table) {
+    for (int i = 0; i < table.length; i++) {
+      if (!_isLooseRowEmpty(table[i])) return i;
+    }
+    return -1;
+  }
+
+  static int _firstNonEmptyExcelRowIndex(List<List<Data?>> table) {
+    for (int i = 0; i < table.length; i++) {
+      if (!_isExcelRowEmpty(table[i])) return i;
+    }
+    return -1;
+  }
+
+  static int _categoryColumnIndex(List<String> header) {
+    final Map<String, int> map = <String, int>{};
+    for (int i = 0; i < header.length; i++) {
+      final String key = _normalizeCategoryLabel(header[i]);
+      if (key.isNotEmpty) map[key] = i;
+    }
+    for (final String candidate in <String>[
+      'category',
+      'category_name',
+      'product_category',
+    ]) {
+      final int? ix = map[_normalizeCategoryLabel(candidate)];
+      if (ix != null) return ix;
+    }
+    return -1;
+  }
+
+  static bool _isLooseRowEmpty(List<dynamic> row) {
+    for (final dynamic v in row) {
+      final String s = (v?.toString() ?? '').trim();
+      if (s.isNotEmpty) return false;
+    }
+    return true;
+  }
+
+  static bool _isExcelRowEmpty(List<Data?> row) {
+    for (final Data? v in row) {
+      final String s = (v?.value?.toString() ?? '').trim();
+      if (s.isNotEmpty) return false;
+    }
+    return true;
+  }
+
+  static String _normalizeCategoryLabel(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('&', 'and')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
   List<String> _columns() {
     final List<String> source = _savedTemplateHeaders.isNotEmpty
         ? _savedTemplateHeaders
@@ -307,7 +618,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         .map((String s) => s.trim())
         .where((String s) => s.isNotEmpty)
         .toList();
-    out.sort();
     return out;
   }
 
@@ -760,13 +1070,13 @@ class _ProductTemplateDialog extends ConsumerStatefulWidget {
   const _ProductTemplateDialog({
     required this.initialHeaders,
     required this.categoryId,
-    required this.serviceLabel,
+    required this.isWarranty,
     required this.onSave,
   });
 
   final List<String> initialHeaders;
   final String categoryId;
-  final String serviceLabel;
+  final bool isWarranty;
   final ValueChanged<List<String>> onSave;
 
   @override
@@ -843,7 +1153,7 @@ class _ProductTemplateDialogState
 
   Future<void> _generateTemplate() async {
     if (_headers.isEmpty || _isGenerating) return;
-    if (widget.categoryId.trim().isEmpty) {
+    if (!widget.isWarranty && widget.categoryId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -862,16 +1172,16 @@ class _ProductTemplateDialogState
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final List<String> headers = <String>[
-        for (final String header in _headers)
-          if (header.trim().isNotEmpty)
-            header.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_'),
-      ];
-      final VerificationBinaryResponse res = await repo
-          .generateProductsTemplate(
-            categoryId: widget.categoryId,
-            headers: headers,
-          );
+      final VerificationBinaryResponse res = widget.isWarranty
+          ? await repo.generateWarrantyTemplate()
+          : await repo.generateProductsTemplate(
+              categoryId: widget.categoryId,
+              headers: <String>[
+                for (final String header in _headers)
+                  if (header.trim().isNotEmpty)
+                    header.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_'),
+              ],
+            );
       if (!mounted) return;
 
       final Uint8List templateBytes = res.bytes;
@@ -963,7 +1273,7 @@ class _ProductTemplateDialogState
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: Text(
-            'Download Excel',
+            widget.isWarranty ? 'Download Warranty Excel' : 'Download Excel',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(16),
@@ -983,7 +1293,9 @@ class _ProductTemplateDialogState
           ),
           children: <Widget>[
             Text(
-              'Add headers one at a time. Added headers are saved automatically, then generate the product template.',
+              widget.isWarranty
+                  ? 'Use the fixed warranty template, then fill it out and upload it back.'
+                  : 'Add headers one at a time. Added headers are saved automatically, then generate the product template.',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: s(12),
@@ -994,7 +1306,9 @@ class _ProductTemplateDialogState
             ),
             const SizedBox(height: AppSpacing.x4),
             Text(
-              'Default product fields',
+              widget.isWarranty
+                  ? 'Warranty template fields'
+                  : 'Default product fields',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: s(12),
@@ -1023,125 +1337,129 @@ class _ProductTemplateDialogState
                   ),
               ],
             ),
-            const SizedBox(height: AppSpacing.x4),
-            TextField(
-              controller: _headerInputController,
-              onSubmitted: (_) => _addHeader(),
-              textInputAction: TextInputAction.done,
-              scrollPadding: const EdgeInsets.only(bottom: 180),
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(14),
-                fontWeight: FontWeight.w400,
-                height: 20 / 14,
-                color: const Color(0xFF0F172A),
-              ),
-              cursorColor: AppColors.brandBlue,
-              decoration: InputDecoration(
-                hintText: 'Enter header name',
-                hintStyle: TextStyle(
+            if (!widget.isWarranty) ...<Widget>[
+              const SizedBox(height: AppSpacing.x4),
+              TextField(
+                controller: _headerInputController,
+                onSubmitted: (_) => _addHeader(),
+                textInputAction: TextInputAction.done,
+                scrollPadding: const EdgeInsets.only(bottom: 180),
+                style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(14),
                   fontWeight: FontWeight.w400,
                   height: 20 / 14,
-                  color: const Color(0xFF94A3B8),
+                  color: const Color(0xFF0F172A),
                 ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: AppColors.brandBlue,
-                    width: s(1.2),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x3),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _addHeader,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: EdgeInsets.symmetric(vertical: s(14)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: Text(
-                  'Add New',
-                  style: TextStyle(
+                cursorColor: AppColors.brandBlue,
+                decoration: InputDecoration(
+                  hintText: 'Enter header name',
+                  hintStyle: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(14),
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                     height: 20 / 14,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: AppColors.brandBlue,
+                      width: s(1.2),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.x4),
-            Text(
-              'Saved headers',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(12),
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-                height: 18 / 12,
-                color: const Color(0xFF111827),
+              const SizedBox(height: AppSpacing.x3),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _addHeader,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandBlue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: EdgeInsets.symmetric(vertical: s(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Text(
+                    'Add New',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(14),
+                      fontWeight: FontWeight.w700,
+                      height: 20 / 14,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.x2),
-            if (_headers.isEmpty)
+              const SizedBox(height: AppSpacing.x4),
               Text(
-                'No headers added yet.',
+                'Saved headers',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(12),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
                   height: 18 / 12,
-                  color: const Color(0xFF64748B),
+                  color: const Color(0xFF111827),
                 ),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  for (final String header in _headers)
-                    InputChip(
-                      label: Text(header),
-                      backgroundColor: AppColors.brandBlue,
-                      deleteIcon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
-                      ),
-                      onDeleted: () => _removeHeader(header),
-                      labelStyle: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(12),
-                        fontWeight: FontWeight.w600,
-                        height: 16.5 / 12,
-                        color: Colors.white,
-                      ),
-                      deleteIconColor: Colors.white,
-                    ),
-                ],
               ),
+              const SizedBox(height: AppSpacing.x2),
+              if (_headers.isEmpty)
+                Text(
+                  'No headers added yet.',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 18 / 12,
+                    color: const Color(0xFF64748B),
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    for (final String header in _headers)
+                      InputChip(
+                        label: Text(header),
+                        backgroundColor: AppColors.brandBlue,
+                        deleteIcon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                        ),
+                        onDeleted: () => _removeHeader(header),
+                        labelStyle: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(12),
+                          fontWeight: FontWeight.w600,
+                          height: 16.5 / 12,
+                          color: Colors.white,
+                        ),
+                        deleteIconColor: Colors.white,
+                      ),
+                  ],
+                ),
+            ],
             const SizedBox(height: AppSpacing.x8),
             if (_headersSaved)
               Text(
-                'Headers saved. You can generate the template now.',
+                widget.isWarranty
+                    ? 'Warranty fields locked. You can generate the template now.'
+                    : 'Headers saved. You can generate the template now.',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(12),
@@ -1187,7 +1505,9 @@ class _ProductTemplateDialogState
                       label: Text(
                         _isGenerating
                             ? 'Generating...'
-                            : 'Generate Product Template',
+                            : widget.isWarranty
+                                ? 'Generate Warranty Template'
+                                : 'Generate Product Template',
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.brandBlue,
