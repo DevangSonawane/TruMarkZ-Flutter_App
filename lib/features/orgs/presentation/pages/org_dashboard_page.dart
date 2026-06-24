@@ -178,8 +178,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                     batchesAsync: batchesAsync,
                     summary: summary,
                     onTapBatch: (String batchId) => context.push(
-                      AppRouter.appBatchTrackingDetailPath,
-                      extra: batchId,
+                      '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
                     ),
                     onRetry: () => ref.refresh(verificationBatchesProvider),
                   ),
@@ -1014,9 +1013,10 @@ class _RecentBatchCard extends StatelessWidget {
                       'Created ${_formatCreatedDate(batch.updatedAt)} • ${_formatCompact(total)} records',
                       style: const TextStyle(
                         fontFamily: 'SF Pro Rounded',
-                        fontSize: 14,
-                        height: 20 / 14,
+                        fontSize: 10,
+                        height: 15 / 10,
                         fontWeight: FontWeight.w500,
+                        letterSpacing: 0.03,
                         color: Color(0xFF94A3B8),
                       ),
                     ),

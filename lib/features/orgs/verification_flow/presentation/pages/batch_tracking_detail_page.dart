@@ -286,18 +286,6 @@ class _BatchTrackingDetailPageState
                                 subtitle: 'Items in this batch',
                               ),
                               const SizedBox(height: AppSpacing.x3),
-                              if (res.industryTypes.isNotEmpty ||
-                                  res.verificationTypes.isNotEmpty ||
-                                  res.credentialVisibility.trim().isNotEmpty)
-                                _BatchMetaCard(
-                                  industryTypes: res.industryTypes,
-                                  verificationTypes: res.verificationTypes,
-                                  credentialVisibility: res.credentialVisibility,
-                                ),
-                              if (res.industryTypes.isNotEmpty ||
-                                  res.verificationTypes.isNotEmpty ||
-                                  res.credentialVisibility.trim().isNotEmpty)
-                                const SizedBox(height: AppSpacing.x3),
                               for (final VerificationUser u in res.users)
                                 ...<Widget>[
                                   _UserTile(
@@ -369,77 +357,6 @@ class _BatchTrackingDetailPageState
       'verified': verified,
       'failed': failed,
     };
-  }
-}
-
-class _BatchMetaCard extends StatelessWidget {
-  const _BatchMetaCard({
-    required this.industryTypes,
-    required this.verificationTypes,
-    required this.credentialVisibility,
-  });
-
-  final List<String> industryTypes;
-  final List<String> verificationTypes;
-  final String credentialVisibility;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<Widget> chips = <Widget>[];
-    if (industryTypes.isNotEmpty) {
-      chips.add(
-        _MetaChip(label: 'Industries', value: industryTypes.join(', ')),
-      );
-    }
-    if (verificationTypes.isNotEmpty) {
-      chips.add(_MetaChip(label: 'Checks', value: verificationTypes.join(', ')));
-    }
-    if (credentialVisibility.trim().isNotEmpty) {
-      chips.add(
-        _MetaChip(
-          label: 'Visibility',
-          value: credentialVisibility.trim(),
-        ),
-      );
-    }
-
-    return TMZCard(
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      child: Wrap(
-        spacing: AppSpacing.x2,
-        runSpacing: AppSpacing.x2,
-        children: chips,
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Text(
-        '$label: ${value.isEmpty ? '-' : value}',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 11,
-          height: 15 / 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
-        ),
-      ),
-    );
   }
 }
 

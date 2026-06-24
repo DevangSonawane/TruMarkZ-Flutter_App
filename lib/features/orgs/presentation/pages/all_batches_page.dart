@@ -1152,9 +1152,10 @@ class _BatchDirectoryCard extends StatelessWidget {
                       'Created ${item.createdLabel} • ${_formatInt(item.records)} records',
                       style: TextStyle(
                         fontFamily: 'SF Pro Rounded',
-                        fontSize: s(14),
-                        height: 20 / 14,
+                        fontSize: s(10),
+                        height: 15 / 10,
                         fontWeight: FontWeight.w500,
+                        letterSpacing: 0.03,
                         color: const Color(0xFF94A3B8),
                       ),
                     ),
