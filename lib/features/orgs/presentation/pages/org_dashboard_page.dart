@@ -9,11 +9,10 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/models/verification_models.dart';
-import '../../../../core/services/batch_name_store.dart';
 import '../../../../core/widgets/tmz_card.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
-import '../../application/verification_list_notifier.dart';
+import '../../data/verification_repository.dart';
 
 class OrgDashboardPage extends ConsumerStatefulWidget {
   const OrgDashboardPage({super.key});
@@ -23,25 +22,7 @@ class OrgDashboardPage extends ConsumerStatefulWidget {
 }
 
 class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
-  bool _didLoad = false;
   static const double _sectionHeaderToCardGap = 12;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_didLoad) return;
-    _didLoad = true;
-
-    Future<void>.microtask(() async {
-      final notifier = ref.read(verificationListNotifierProvider.notifier);
-      await notifier.load(limit: 20);
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        notifier.load(limit: 500);
-      });
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,18 +34,12 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
         : (profile?.fullName?.trim().isNotEmpty == true
               ? profile!.fullName!.trim()
               : 'Organisation');
-    final VerificationListState verificationState = ref.watch(
-      verificationListNotifierProvider,
+    final AsyncValue<List<VerificationBatchSummary>> batchesAsync = ref.watch(
+      verificationBatchesProvider,
     );
-    final VerificationListResponse? verification =
-        verificationState.data.valueOrNull;
-    final Map<String, String> savedBatchNames = ref.watch(
-      batchNameStoreProvider,
-    );
-    final _DashboardSummary summary = _DashboardSummary.fromVerification(
-      verification,
-      savedBatchNames: savedBatchNames,
-    );
+    final List<VerificationBatchSummary> batches =
+        batchesAsync.valueOrNull ?? const <VerificationBatchSummary>[];
+    final _DashboardSummary summary = _DashboardSummary.fromBatches(batches);
 
     final double safeTop = MediaQuery.paddingOf(context).top;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
@@ -200,15 +175,13 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                     0,
                   ),
                   child: _RecentSectionBody(
-                    verificationState: verificationState,
+                    batchesAsync: batchesAsync,
                     summary: summary,
                     onTapBatch: (String batchId) => context.push(
                       AppRouter.appBatchTrackingDetailPath,
                       extra: batchId,
                     ),
-                    onRetry: () => ref
-                        .read(verificationListNotifierProvider.notifier)
-                        .load(limit: 500),
+                    onRetry: () => ref.refresh(verificationBatchesProvider),
                   ),
                 ),
               ),
@@ -228,26 +201,26 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
 
 class _RecentSectionBody extends StatelessWidget {
   const _RecentSectionBody({
-    required this.verificationState,
+    required this.batchesAsync,
     required this.summary,
     required this.onTapBatch,
     required this.onRetry,
   });
 
-  final VerificationListState verificationState;
+  final AsyncValue<List<VerificationBatchSummary>> batchesAsync;
   final _DashboardSummary summary;
   final ValueChanged<String> onTapBatch;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    if (verificationState.data.isLoading) {
+    if (batchesAsync.isLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.x4),
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    if (verificationState.data.hasError) {
+    if (batchesAsync.hasError) {
       return TMZCard(
         padding: const EdgeInsets.all(AppSpacing.x4),
         child: Row(
@@ -1154,109 +1127,32 @@ class _DashboardSummary {
   final int activeBatches;
   final List<_DashboardBatchItem> recentBatches;
 
-  static _DashboardSummary fromVerification(
-    VerificationListResponse? data, {
-    Map<String, String> savedBatchNames = const <String, String>{},
-  }) {
-    if (data == null) {
-      return const _DashboardSummary(
-        pending: 0,
-        verified: 0,
-        failed: 0,
-        activeBatches: 0,
-        recentBatches: <_DashboardBatchItem>[],
-      );
-    }
+  static _DashboardSummary fromBatches(List<VerificationBatchSummary> batches) {
+    int pending = 0;
+    int verified = 0;
+    int failed = 0;
+    int active = 0;
 
-    final Map<String, _BatchAgg> byBatch = <String, _BatchAgg>{};
-    for (final VerificationUser u in data.users) {
-      final String batchId = u.batchId.trim();
-      final _BatchAgg agg = byBatch.putIfAbsent(
-        batchId,
-        () => _BatchAgg(batchId: batchId),
-      );
-      agg.count++;
-      agg.updatedAt = _maxIso(agg.updatedAt, u.updatedAt);
-      if (agg.batchName.trim().isEmpty && u.batchName.trim().isNotEmpty) {
-        agg.batchName = u.batchName.trim();
-      }
-
-      final String s = u.verificationStatus.trim();
-      if (s == 'failed') {
-        agg.failedCount++;
-      } else if (s == 'pending_verification' || s == 'pending') {
-        agg.pendingCount++;
-      } else if (s == 'verified') {
-        agg.verifiedCount++;
-      }
-    }
-
-    final List<_BatchAgg> recent =
-        byBatch.values.where((a) => a.batchId.isNotEmpty).toList()
-          ..sort((a, b) => _compareIsoDesc(a.updatedAt, b.updatedAt));
-
-    for (final _BatchAgg agg in recent) {
-      if (agg.batchName.trim().isNotEmpty) continue;
-      final String? stored = savedBatchNames[agg.batchId];
-      if (stored != null && stored.trim().isNotEmpty) {
-        agg.batchName = stored.trim();
-      }
-    }
-
-    final List<_DashboardBatchItem> recentTiles = recent
-        .take(8)
-        .map(_DashboardBatchItem.fromAgg)
-        .toList();
-
-    final int active = byBatch.values
-        .where((a) => a.batchId.isNotEmpty)
-        .where((a) => a.pendingCount > 0)
-        .length;
+    final List<_DashboardBatchItem> recentTiles = batches
+        .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
+        .map((VerificationBatchSummary item) {
+          pending += item.pending;
+          verified += item.verified;
+          failed += item.failed;
+          if (item.pending > 0) active++;
+          return _DashboardBatchItem.fromSummary(item);
+        })
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     return _DashboardSummary(
-      pending: data.pending,
-      verified: data.verified,
-      failed: data.failed,
+      pending: pending,
+      verified: verified,
+      failed: failed,
       activeBatches: active,
-      recentBatches: recentTiles,
+      recentBatches: recentTiles.take(8).toList(),
     );
   }
-
-  static int _compareIsoDesc(String? a, String? b) {
-    final DateTime? da = _tryParseIso(a);
-    final DateTime? db = _tryParseIso(b);
-    if (da == null && db == null) return 0;
-    if (da == null) return 1;
-    if (db == null) return -1;
-    return db.compareTo(da);
-  }
-
-  static String? _maxIso(String? a, String? b) {
-    final DateTime? da = _tryParseIso(a);
-    final DateTime? db = _tryParseIso(b);
-    if (da == null) return b;
-    if (db == null) return a;
-    return db.isAfter(da) ? b : a;
-  }
-
-  static DateTime? _tryParseIso(String? s) {
-    if (s == null) return null;
-    final String t = s.trim();
-    if (t.isEmpty) return null;
-    return DateTime.tryParse(t);
-  }
-}
-
-class _BatchAgg {
-  _BatchAgg({required this.batchId});
-
-  final String batchId;
-  String batchName = '';
-  int count = 0;
-  int pendingCount = 0;
-  int verifiedCount = 0;
-  int failedCount = 0;
-  String? updatedAt;
 }
 
 enum _BatchStatus { complete, processing, alert }
@@ -1282,32 +1178,29 @@ class _DashboardBatchItem {
   final DateTime updatedAt;
   final bool isHumanVerification;
 
-  factory _DashboardBatchItem.fromAgg(_BatchAgg agg) {
-    final String shortId = agg.batchId.length <= 10
-        ? agg.batchId
-        : agg.batchId.substring(0, 10);
-
-    final _BatchStatus status = agg.failedCount > 0
+  factory _DashboardBatchItem.fromSummary(VerificationBatchSummary item) {
+    final String shortId = item.batchId.length <= 10
+        ? item.batchId
+        : item.batchId.substring(0, 10);
+    final _BatchStatus status = item.failed > 0
         ? _BatchStatus.alert
-        : (agg.pendingCount > 0
+        : (item.pending > 0
               ? _BatchStatus.processing
               : _BatchStatus.complete);
-
-    final double progress = agg.count > 0
-        ? (agg.verifiedCount / agg.count).clamp(0.0, 1.0)
+    final double progress = item.totalUsers > 0
+        ? (item.verified / item.totalUsers).clamp(0.0, 1.0)
         : 0.0;
 
     return _DashboardBatchItem(
-      batchId: agg.batchId,
-      title: agg.batchName.trim().isNotEmpty
-          ? agg.batchName.trim()
+      batchId: item.batchId,
+      title: item.batchName.trim().isNotEmpty
+          ? item.batchName.trim()
           : 'Batch $shortId',
-      recordCount: agg.count,
-      verifiedCount: agg.verifiedCount,
+      recordCount: item.totalUsers,
+      verifiedCount: item.verified,
       progressFraction: progress,
       status: status,
-      updatedAt:
-          _DashboardSummary._tryParseIso(agg.updatedAt) ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(item.createdAt) ?? DateTime.now(),
       isHumanVerification: false,
     );
   }

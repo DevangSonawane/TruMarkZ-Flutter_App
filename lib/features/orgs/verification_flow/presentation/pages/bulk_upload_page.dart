@@ -464,9 +464,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       barrierDismissible: true,
       barrierColor: Colors.black54,
       builder: (BuildContext dialogContext) {
+        final String verificationFilter =
+            _verificationFilter(category: 'human');
         return _HumanTemplateDialog(
           initialHeaders: initialHeaders,
           selectedChecks: _checks,
+          verificationFilter: verificationFilter,
           onSave: (List<String> headers) {
             if (!mounted) return;
             setState(() {
@@ -995,8 +998,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         ? apiIndustry
         : profileIndustry;
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final String verificationFilter = resolvedIndustry.isNotEmpty
+        ? 'human::$resolvedIndustry'
+        : 'human';
     final AsyncValue<List<VerificationTypeDefinition>> humanTypesAsync = ref
-        .watch(verificationTypesProvider('human'));
+        .watch(verificationTypesProvider(verificationFilter));
     if (_checks.isEmpty &&
         !_seededDefaultChecks &&
         (humanTypesAsync.valueOrNull?.isNotEmpty == true ||
@@ -1636,17 +1642,28 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (apiIndustry.isNotEmpty) return apiIndustry;
     return profileIndustry;
   }
+
+  String _verificationFilter({
+    required String category,
+    String? industry,
+  }) {
+    final String selectedIndustry = (industry ?? _effectiveIndustry()).trim();
+    if (selectedIndustry.isEmpty) return category;
+    return '$category::$selectedIndustry';
+  }
 }
 
 class _HumanTemplateDialog extends ConsumerStatefulWidget {
   const _HumanTemplateDialog({
     required this.initialHeaders,
     required this.selectedChecks,
+    required this.verificationFilter,
     required this.onSave,
   });
 
   final List<String> initialHeaders;
   final Set<String> selectedChecks;
+  final String verificationFilter;
   final ValueChanged<List<String>> onSave;
 
   @override
@@ -1731,7 +1748,8 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
         verificationRepositoryProvider,
       );
       final List<VerificationTypeDefinition> verificationTypes =
-          await ref.read(verificationTypesProvider('human').future);
+          await ref
+              .read(verificationTypesProvider(widget.verificationFilter).future);
       final Map<String, VerificationTypeDefinition> verificationTypesById =
           <String, VerificationTypeDefinition>{
             for (final VerificationTypeDefinition item in verificationTypes)
@@ -1984,7 +2002,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     final double scale = mediaQuery.size.width / 402;
     double s(double v) => v * scale;
     final AsyncValue<List<VerificationTypeDefinition>> verificationTypesAsync =
-        ref.watch(verificationTypesProvider('human'));
+        ref.watch(verificationTypesProvider(widget.verificationFilter));
     final Map<String, VerificationTypeDefinition> verificationTypesById =
         <String, VerificationTypeDefinition>{
           for (final VerificationTypeDefinition item

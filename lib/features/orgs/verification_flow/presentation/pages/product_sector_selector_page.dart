@@ -42,7 +42,8 @@ class _ProductSectorSelectorPageState
   _ProductSectorCardData? _selectedSector;
   bool _loading = true;
   String? _error;
-  List<VerificationCategory> _categories = const <VerificationCategory>[];
+  List<VerificationIndustryType> _industryTypes =
+      const <VerificationIndustryType>[];
 
   @override
   void initState() {
@@ -55,11 +56,11 @@ class _ProductSectorSelectorPageState
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final List<VerificationCategory> categories = await repo
-          .getProductCategories();
+      final List<VerificationIndustryType> industryTypes =
+          await repo.getIndustryTypes();
       if (!mounted) return;
       setState(() {
-        _categories = categories;
+        _industryTypes = industryTypes;
         _loading = false;
         _error = null;
       });
@@ -105,8 +106,8 @@ class _ProductSectorSelectorPageState
 
   @override
   Widget build(BuildContext context) {
-    final List<_ProductSectorCardData> sectors = _categories
-        .map(_sectorFromCategory)
+    final List<_ProductSectorCardData> sectors = _industryTypes
+        .map(_sectorFromIndustryType)
         .toList();
 
     return Scaffold(
@@ -201,7 +202,7 @@ class _ProductSectorSelectorPageState
                                     ),
                                     SizedBox(height: s(14)),
                                     Text(
-                                      'Choose the sector category for this product verification batch.',
+                                      'Choose the industry category for this product verification batch.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -224,9 +225,9 @@ class _ProductSectorSelectorPageState
                                     else if (_error != null)
                                       _InfoBanner(
                                         scale: scale,
-                                        title: 'Unable to load categories',
+                                        title: 'Unable to load industries',
                                         message:
-                                            'Try loading the category list again.',
+                                            'Try loading the industry list again.',
                                         actionLabel: 'Retry',
                                         onAction: () {
                                           setState(() {
@@ -319,23 +320,34 @@ class _ProductSectorSelectorPageState
   }
 }
 
-_ProductSectorCardData _sectorFromCategory(
-  VerificationCategory category,
+_ProductSectorCardData _sectorFromIndustryType(
+  VerificationIndustryType industryType,
 ) {
-  final String title = category.categoryName.trim().isNotEmpty
-      ? category.categoryName.trim()
+  final String title = industryType.name.trim().isNotEmpty
+      ? industryType.name.trim()
       : 'Unknown';
+  final String warrantySupport = industryType.warrantySupport.trim().isNotEmpty
+      ? industryType.warrantySupport.trim()
+      : 'optional';
   return _ProductSectorCardData(
-    id: category.id.trim(),
+    id: title,
     title: title,
-    description: category.description.trim().isNotEmpty
-        ? category.description.trim()
-        : 'Product category',
-    categoryId: category.id.trim(),
-    warrantySupport: category.warrantySupport.trim().isNotEmpty
-        ? category.warrantySupport.trim()
-        : 'optional',
+    description: _descriptionForWarrantySupport(warrantySupport),
+    categoryId: title,
+    warrantySupport: warrantySupport,
   );
+}
+
+String _descriptionForWarrantySupport(String warrantySupport) {
+  switch (warrantySupport.trim().toLowerCase()) {
+    case 'required':
+      return 'Warranty support is required for this industry.';
+    case 'disabled':
+      return 'Warranty support is not available for this industry.';
+    case 'optional':
+    default:
+      return 'Warranty support is optional for this industry.';
+  }
 }
 
 IconData _iconForCategory(String title) {

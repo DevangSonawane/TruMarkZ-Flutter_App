@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class VerificationDocument {
   const VerificationDocument({
     required this.id,
@@ -50,6 +52,7 @@ class VerificationTypeDefinition {
     required this.name,
     required this.label,
     required this.category,
+    required this.industryTypes,
     required this.emailAddress,
     required this.apiLink,
     required this.price,
@@ -60,6 +63,7 @@ class VerificationTypeDefinition {
   final String name;
   final String label;
   final String category;
+  final List<String> industryTypes;
   final String? emailAddress;
   final String? apiLink;
   final int? price;
@@ -72,6 +76,7 @@ class VerificationTypeDefinition {
       name: (json['name'] ?? '').toString(),
       label: (json['label'] ?? '').toString(),
       category: (json['category'] ?? '').toString(),
+      industryTypes: _readStringList(json['industry_type']),
       emailAddress: json['email_address']?.toString(),
       apiLink: json['api_link']?.toString(),
       price: rawPrice is num
@@ -91,6 +96,38 @@ class VerificationTypeDefinition {
     'price': price,
     'timeline': timeline,
   };
+}
+
+List<String> _readStringList(dynamic raw) {
+  if (raw is List) {
+    return raw
+        .map((dynamic e) => e?.toString().trim() ?? '')
+        .where((String s) => s.isNotEmpty)
+        .toList();
+  }
+  if (raw is String) {
+    final String value = raw.trim();
+    if (value.isEmpty) return const <String>[];
+    if (value.startsWith('[')) {
+      try {
+        final dynamic decoded = jsonDecode(value);
+        if (decoded is List) {
+          return decoded
+              .map((dynamic e) => e?.toString().trim() ?? '')
+              .where((String s) => s.isNotEmpty)
+              .toList();
+        }
+      } catch (_) {
+        // Fall through to comma-separated parsing.
+      }
+    }
+    return value
+        .split(',')
+        .map((String s) => s.trim())
+        .where((String s) => s.isNotEmpty)
+        .toList();
+  }
+  return const <String>[];
 }
 
 class VerificationUser {
@@ -288,6 +325,129 @@ class VerificationListResponse {
   }
 }
 
+class VerificationBatchSummary {
+  const VerificationBatchSummary({
+    required this.batchId,
+    required this.batchName,
+    required this.totalUsers,
+    required this.verified,
+    required this.failed,
+    required this.createdAt,
+    required this.excelStoragePath,
+    required this.reportStoragePaths,
+  });
+
+  final String batchId;
+  final String batchName;
+  final int totalUsers;
+  final int verified;
+  final int failed;
+  final String createdAt;
+  final String excelStoragePath;
+  final List<String> reportStoragePaths;
+
+  int get pending => (totalUsers - verified - failed).clamp(0, totalUsers);
+
+  factory VerificationBatchSummary.fromJson(Map<String, dynamic> json) {
+    final dynamic reportsRaw = json['report_storage_paths'];
+    final List<String> reports = reportsRaw is List
+        ? reportsRaw
+              .map((dynamic e) => e?.toString().trim() ?? '')
+              .where((String s) => s.isNotEmpty)
+              .toList()
+        : <String>[];
+
+    return VerificationBatchSummary(
+      batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
+      batchName: (json['batch_name'] ?? json['batchName'] ?? '').toString().trim(),
+      totalUsers: int.tryParse((json['total_users'] ?? json['totalUsers'] ?? '').toString()) ?? 0,
+      verified: int.tryParse((json['verified'] ?? '').toString()) ?? 0,
+      failed: int.tryParse((json['failed'] ?? '').toString()) ?? 0,
+      createdAt: (json['created_at'] ?? json['createdAt'] ?? '').toString().trim(),
+      excelStoragePath: (json['excel_storage_path'] ?? json['excelStoragePath'] ?? '').toString().trim(),
+      reportStoragePaths: reports,
+    );
+  }
+}
+
+class VerificationBatchDetailResponse {
+  const VerificationBatchDetailResponse({
+    required this.batchId,
+    required this.batchName,
+    required this.description,
+    required this.industryTypes,
+    required this.verificationTypes,
+    required this.credentialVisibility,
+    required this.totalUsers,
+    required this.verificationProgress,
+    required this.users,
+    required this.excelStoragePath,
+    required this.reportStoragePaths,
+  });
+
+  final String batchId;
+  final String batchName;
+  final String description;
+  final List<String> industryTypes;
+  final List<String> verificationTypes;
+  final String credentialVisibility;
+  final int totalUsers;
+  final Map<String, dynamic> verificationProgress;
+  final List<VerificationUser> users;
+  final String excelStoragePath;
+  final List<String> reportStoragePaths;
+
+  factory VerificationBatchDetailResponse.fromJson(Map<String, dynamic> json) {
+    final dynamic reportsRaw = json['report_storage_paths'];
+    final List<String> reports = reportsRaw is List
+        ? reportsRaw
+              .map((dynamic e) => e?.toString().trim() ?? '')
+              .where((String s) => s.isNotEmpty)
+              .toList()
+        : <String>[];
+    final dynamic industryRaw = json['industry_type'];
+    final List<String> industries = industryRaw is List
+        ? industryRaw
+              .map((dynamic e) => e?.toString().trim() ?? '')
+              .where((String s) => s.isNotEmpty)
+              .toList()
+        : <String>[];
+    final dynamic typesRaw = json['verification_types'];
+    final List<String> types = typesRaw is List
+        ? typesRaw
+              .map((dynamic e) => e?.toString().trim() ?? '')
+              .where((String s) => s.isNotEmpty)
+              .toList()
+        : <String>[];
+    final dynamic usersRaw = json['users'];
+    final List<VerificationUser> users = usersRaw is List
+        ? usersRaw
+              .whereType<Map>()
+              .map(
+                (Map e) =>
+                    VerificationUser.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+        : const <VerificationUser>[];
+
+    return VerificationBatchDetailResponse(
+      batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
+      batchName: (json['batch_name'] ?? json['batchName'] ?? '').toString().trim(),
+      description: (json['description'] ?? '').toString().trim(),
+      industryTypes: industries,
+      verificationTypes: types,
+      credentialVisibility: (json['credential_visibility'] ?? '').toString().trim(),
+      totalUsers: int.tryParse((json['total_users'] ?? json['totalUsers'] ?? '').toString()) ?? users.length,
+      verificationProgress: json['verification_progress'] is Map
+          ? Map<String, dynamic>.from(json['verification_progress'] as Map)
+          : <String, dynamic>{},
+      users: users,
+      excelStoragePath: (json['excel_storage_path'] ?? json['excelStoragePath'] ?? '').toString().trim(),
+      reportStoragePaths: reports,
+    );
+  }
+}
+
 class VerificationCategory {
   const VerificationCategory({
     required this.id,
@@ -331,6 +491,39 @@ class VerificationCategory {
       categoryName: (json['category_name'] ?? '').toString(),
       warrantySupport: warranty,
       description: (json['description'] ?? '').toString(),
+    );
+  }
+}
+
+class VerificationIndustryType {
+  const VerificationIndustryType({
+    required this.name,
+    required this.warrantySupport,
+  });
+
+  final String name;
+  final String warrantySupport;
+
+  bool get supportsWarranty {
+    final String v = warrantySupport.trim().toLowerCase();
+    if (v.isEmpty) return false;
+    return v != 'disabled' &&
+        v != 'false' &&
+        v != '0' &&
+        v != 'no' &&
+        v != 'none' &&
+        v != 'unsupported' &&
+        v != 'not_supported';
+  }
+
+  factory VerificationIndustryType.fromJson(Map<String, dynamic> json) {
+    final dynamic rawWarranty = json['warranty_support'];
+    final String warranty = rawWarranty is bool
+        ? (rawWarranty ? 'true' : 'false')
+        : (rawWarranty ?? '').toString();
+    return VerificationIndustryType(
+      name: (json['name'] ?? '').toString(),
+      warrantySupport: warranty,
     );
   }
 }

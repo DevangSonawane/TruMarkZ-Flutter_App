@@ -7,9 +7,8 @@ import 'dart:math' as math;
 
 import '../../../../core/models/verification_models.dart';
 import '../../../../core/router/app_router.dart';
-import '../../../../core/services/batch_name_store.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../application/verification_list_notifier.dart';
+import '../../data/verification_repository.dart';
 
 class BatchProgressPage extends ConsumerStatefulWidget {
   const BatchProgressPage({super.key});
@@ -24,10 +23,6 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(
-      () =>
-          ref.read(verificationListNotifierProvider.notifier).load(limit: 500),
-    );
     _searchController.addListener(() {
       if (!mounted) return;
       setState(() {});
@@ -43,21 +38,14 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
   @override
   Widget build(BuildContext context) {
     const double refWidth = 402;
-    final VerificationListState state = ref.watch(
-      verificationListNotifierProvider,
+    final AsyncValue<List<VerificationBatchSummary>> batchesAsync = ref.watch(
+      verificationBatchesProvider,
     );
-    final AsyncValue<VerificationListResponse> dataAsync = state.data;
-
-    final VerificationListResponse? data = dataAsync.valueOrNull;
-    final Map<String, String> savedBatchNames = ref.watch(
-      batchNameStoreProvider,
-    );
-    final List<_BatchDirectoryItem> directory = data == null
-        ? const <_BatchDirectoryItem>[]
-        : _BatchDirectoryItem.fromUsers(
-            data.users,
-            savedBatchNames: savedBatchNames,
-          );
+    final List<VerificationBatchSummary> batches =
+        batchesAsync.valueOrNull ?? const <VerificationBatchSummary>[];
+    final List<_BatchDirectoryItem> directory = batches
+        .map(_BatchDirectoryItem.fromSummary)
+        .toList();
 
     final String search = _searchController.text.trim().toLowerCase();
     final List<_BatchDirectoryItem> filtered = directory.where((
@@ -128,16 +116,14 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
                             onFilterTap: () {},
                           ),
                           SizedBox(height: s(24)),
-                          if (dataAsync.isLoading)
+                          if (batchesAsync.isLoading)
                             const Center(child: CircularProgressIndicator())
-                          else if (dataAsync.hasError)
+                          else if (batchesAsync.hasError)
                             _ErrorCard(
-                              message: dataAsync.error.toString(),
-                              onRetry: () => ref
-                                  .read(
-                                    verificationListNotifierProvider.notifier,
-                                  )
-                                  .load(limit: 500),
+                              message: batchesAsync.error.toString(),
+                              onRetry: () => ref.refresh(
+                                verificationBatchesProvider,
+                              ),
                             )
                           else
                             Column(
@@ -743,68 +729,21 @@ class _BatchDirectoryItem {
   final int verifiedCount;
   final int failedCount;
 
-  static List<_BatchDirectoryItem> fromUsers(
-    List<VerificationUser> users, {
-    required Map<String, String> savedBatchNames,
-  }) {
-    final Map<String, List<VerificationUser>> byBatch =
-        <String, List<VerificationUser>>{};
-    for (final VerificationUser u in users) {
-      final String id = u.batchId.trim();
-      if (id.isEmpty) continue;
-      (byBatch[id] ??= <VerificationUser>[]).add(u);
-    }
-
-    final List<_BatchDirectoryItem> items = <_BatchDirectoryItem>[];
-    byBatch.forEach((String batchId, List<VerificationUser> batchUsers) {
-      int pending = 0;
-      int verified = 0;
-      int failed = 0;
-      DateTime? latest;
-      String batchNameFromApi = '';
-
-      for (final VerificationUser u in batchUsers) {
-        final String status = u.verificationStatus.toLowerCase();
-        if (status.contains('pending')) pending++;
-        if (status.contains('verified')) verified++;
-        if (status.contains('failed') || status.contains('rejected')) failed++;
-
-        if (batchNameFromApi.isEmpty && u.batchName.trim().isNotEmpty) {
-          batchNameFromApi = u.batchName.trim();
-        }
-
-        final DateTime? updatedAt = DateTime.tryParse(u.updatedAt);
-        final DateTime? createdAt = DateTime.tryParse(u.createdAt);
-        final DateTime? candidate = updatedAt ?? createdAt;
-        if (candidate != null &&
-            (latest == null || candidate.isAfter(latest))) {
-          latest = candidate;
-        }
-      }
-
-      final String updatedLabel = latest == null
-          ? 'Updated —'
-          : 'Updated ${_formatDate(latest)}';
-      final String batchName =
-          (savedBatchNames[batchId] ?? '').trim().isNotEmpty
-          ? (savedBatchNames[batchId] ?? '').trim()
-          : batchNameFromApi;
-
-      items.add(
-        _BatchDirectoryItem(
-          batchId: batchId,
-          batchName: batchName,
-          updatedLabel: updatedLabel,
-          records: batchUsers.length,
-          pendingCount: pending,
-          verifiedCount: verified,
-          failedCount: failed,
-        ),
-      );
-    });
-
-    items.sort((a, b) => b.updatedLabel.compareTo(a.updatedLabel));
-    return items;
+  static _BatchDirectoryItem fromSummary(VerificationBatchSummary item) {
+    final DateTime? createdAt = DateTime.tryParse(item.createdAt);
+    return _BatchDirectoryItem(
+      batchId: item.batchId,
+      batchName: item.batchName.trim().isNotEmpty
+          ? item.batchName.trim()
+          : 'Batch ${item.batchId}',
+      updatedLabel: createdAt == null
+          ? 'Created -'
+          : 'Created ${_formatDate(createdAt)}',
+      records: item.totalUsers,
+      pendingCount: item.pending,
+      verifiedCount: item.verified,
+      failedCount: item.failed,
+    );
   }
 
   static String _formatDate(DateTime dt) {

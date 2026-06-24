@@ -9,8 +9,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/models/verification_models.dart';
-import '../../../../core/services/batch_name_store.dart';
-import '../../application/verification_list_notifier.dart';
+import '../../data/verification_repository.dart';
 
 class AllBatchesPage extends ConsumerStatefulWidget {
   const AllBatchesPage({super.key});
@@ -26,10 +25,6 @@ class _AllBatchesPageState extends ConsumerState<AllBatchesPage> {
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(
-      () =>
-          ref.read(verificationListNotifierProvider.notifier).load(limit: 500),
-    );
     _searchController.addListener(() {
       if (!mounted) return;
       setState(() {});
@@ -45,26 +40,19 @@ class _AllBatchesPageState extends ConsumerState<AllBatchesPage> {
   @override
   Widget build(BuildContext context) {
     const double refWidth = 402;
-    final VerificationListState state = ref.watch(
-      verificationListNotifierProvider,
+    final AsyncValue<List<VerificationBatchSummary>> batchesAsync = ref.watch(
+      verificationBatchesProvider,
     );
-    final AsyncValue<VerificationListResponse> dataAsync = state.data;
-
-    final VerificationListResponse? data = dataAsync.valueOrNull;
-    final Map<String, String> savedBatchNames = ref.watch(
-      batchNameStoreProvider,
-    );
-    final List<_BatchDirectoryItem> directory = data == null
-        ? const <_BatchDirectoryItem>[]
-        : _BatchDirectoryItem.fromUsers(
-            data.users,
-            savedBatchNames: savedBatchNames,
-          );
+    final List<VerificationBatchSummary> batches =
+        batchesAsync.valueOrNull ?? const <VerificationBatchSummary>[];
+    final List<_BatchDirectoryItem> directory = batches
+        .map((VerificationBatchSummary item) => _BatchDirectoryItem.fromSummary(item))
+        .toList();
 
     final int totalBatches = directory.length;
-    final int pending = data?.pending ?? 0;
-    final int verified = data?.verified ?? 0;
-    final int failed = data?.failed ?? 0;
+    final int pending = directory.fold<int>(0, (int acc, _BatchDirectoryItem i) => acc + i.pendingCount);
+    final int verified = directory.fold<int>(0, (int acc, _BatchDirectoryItem i) => acc + i.verifiedCount);
+    final int failed = directory.fold<int>(0, (int acc, _BatchDirectoryItem i) => acc + i.failedCount);
 
     final String search = _searchController.text.trim().toLowerCase();
     final List<_BatchDirectoryItem> filtered = directory.where((
@@ -198,11 +186,9 @@ class _AllBatchesPageState extends ConsumerState<AllBatchesPage> {
                         s(71.016) + safeBottom + s(140),
                       ),
                       child: _BatchesListBody(
-                        dataAsync: dataAsync,
+                        dataAsync: batchesAsync,
                         filtered: filtered,
-                        onRetry: () => ref
-                            .read(verificationListNotifierProvider.notifier)
-                            .load(limit: 500),
+                        onRetry: () => ref.refresh(verificationBatchesProvider),
                       ),
                     ),
                   ),
@@ -223,7 +209,7 @@ class _BatchesListBody extends StatelessWidget {
     required this.onRetry,
   });
 
-  final AsyncValue<VerificationListResponse> dataAsync;
+  final AsyncValue<List<VerificationBatchSummary>> dataAsync;
   final List<_BatchDirectoryItem> filtered;
   final VoidCallback onRetry;
 
@@ -843,96 +829,37 @@ class _BatchDirectoryItem {
   final DateTime? createdAt;
   final String? alertMessage;
 
-  static List<_BatchDirectoryItem> fromUsers(
-    List<VerificationUser> users, {
-    Map<String, String> savedBatchNames = const <String, String>{},
-  }) {
-    final Map<String, List<VerificationUser>> groups =
-        <String, List<VerificationUser>>{};
-    for (final VerificationUser u in users) {
-      final String key = u.batchId.trim().isEmpty
-          ? 'unknown'
-          : u.batchId.trim();
-      (groups[key] ??= <VerificationUser>[]).add(u);
-    }
+  static _BatchDirectoryItem fromSummary(VerificationBatchSummary item) {
+    final DateTime? created = DateTime.tryParse(item.createdAt);
+    final int total = item.totalUsers;
+    final int verified = item.verified;
+    final int failed = item.failed;
+    final int pending = item.pending;
+    final double progress = total == 0 ? 0 : (verified / total);
+    final _BatchStatus status = failed > 0
+        ? _BatchStatus.alert
+        : (verified >= total && total > 0
+              ? _BatchStatus.completed
+              : _BatchStatus.processing);
+    final String batchName = item.batchName.trim().isNotEmpty
+        ? item.batchName.trim()
+        : (item.batchId.length <= 10
+              ? 'Batch ${item.batchId}'
+              : 'Batch ${item.batchId.substring(0, 10)}');
 
-    final List<_BatchDirectoryItem> items = <_BatchDirectoryItem>[];
-    for (final MapEntry<String, List<VerificationUser>> e in groups.entries) {
-      final List<VerificationUser> groupUsers = e.value;
-      String groupBatchName = '';
-      int verified = 0;
-      int pending = 0;
-      int failed = 0;
-      DateTime? earliest;
-      for (final VerificationUser u in groupUsers) {
-        switch (u.verificationStatus) {
-          case 'verified':
-            verified += 1;
-          case 'failed':
-            failed += 1;
-          default:
-            pending += 1;
-        }
-        final DateTime? created = DateTime.tryParse(u.createdAt);
-        if (created != null) {
-          if (earliest == null || created.isBefore(earliest)) {
-            earliest = created;
-          }
-        }
-        if (groupBatchName.trim().isEmpty && u.batchName.trim().isNotEmpty) {
-          groupBatchName = u.batchName.trim();
-        }
-      }
-
-      final String? stored = savedBatchNames[e.key];
-      if (stored != null && stored.trim().isNotEmpty) {
-        groupBatchName = stored.trim();
-      }
-
-      if (groupBatchName.trim().isEmpty) {
-        final String shortId = e.key.length <= 10
-            ? e.key
-            : e.key.substring(0, 10);
-        groupBatchName = 'Batch $shortId';
-      }
-
-      final int total = groupUsers.length;
-      final double progress = total == 0 ? 0 : (verified / total);
-      final _BatchStatus status = failed > 0
-          ? _BatchStatus.alert
-          : (verified == total
-                ? _BatchStatus.completed
-                : _BatchStatus.processing);
-      final String createdLabel = _formatShortDate(earliest);
-      final String? alertMessage = failed > 0
-          ? '$failed record(s) failed verification'
-          : null;
-
-      items.add(
-        _BatchDirectoryItem(
-          batchId: e.key,
-          batchName: groupBatchName,
-          status: status,
-          progress: progress,
-          records: total,
-          verifiedCount: verified,
-          pendingCount: pending,
-          failedCount: failed,
-          createdLabel: createdLabel,
-          createdAt: earliest,
-          alertMessage: alertMessage,
-        ),
-      );
-    }
-    items.sort((a, b) {
-      final DateTime? da = a.createdAt;
-      final DateTime? db = b.createdAt;
-      if (da != null && db != null) return db.compareTo(da);
-      if (da != null) return -1;
-      if (db != null) return 1;
-      return b.createdLabel.compareTo(a.createdLabel);
-    });
-    return items;
+    return _BatchDirectoryItem(
+      batchId: item.batchId,
+      batchName: batchName,
+      status: status,
+      progress: progress,
+      records: total,
+      verifiedCount: verified,
+      pendingCount: pending,
+      failedCount: failed,
+      createdLabel: _formatShortDate(created),
+      createdAt: created,
+      alertMessage: failed > 0 ? '$failed record(s) failed verification' : null,
+    );
   }
 
   static String _formatShortDate(DateTime? dt) {

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -167,17 +166,20 @@ class _VerificationChecksPageState
   }
 
   String _verificationCategoryForFlow() {
-    if (_flow == 'product') {
-      final List<String> industryTypes = <String>[
-        _industry.trim(),
-        _sectorTitle.trim(),
-      ].where((String value) => value.isNotEmpty).toList();
-      if (industryTypes.isNotEmpty) {
-        return 'product::${jsonEncode(industryTypes)}';
-      }
-      return 'product';
-    }
-    return 'human';
+    final String category = _flow == 'product' ? 'product' : 'human';
+    final String industry = _selectedIndustryForQuery();
+    if (industry.isEmpty) return category;
+    return '$category::$industry';
+  }
+
+  String _selectedIndustryForQuery() {
+    final String raw = _industry.trim().isNotEmpty
+        ? _industry.trim()
+        : _sectorTitle.trim();
+    if (raw.isEmpty) return '';
+    final String normalized = raw.toLowerCase();
+    if (normalized == 'all' || normalized == 'both') return '';
+    return raw;
   }
 
   List<_CheckItem> _buildItems(List<VerificationTypeDefinition> types) {
@@ -604,7 +606,11 @@ class _VerificationChecksPageState
     required String current,
   }) async {
     double s(double v) => v * scale;
-    final Set<String> selected = _industrySelectionFromRaw(current);
+    String selected = current.trim().isEmpty ? 'All' : current.trim();
+    final String normalizedSelected = selected.toLowerCase();
+    if (normalizedSelected == 'both') {
+      selected = 'All';
+    }
 
     return showDialog<String>(
       context: context,
@@ -615,25 +621,11 @@ class _VerificationChecksPageState
                 BuildContext context,
                 void Function(void Function()) setDialogState,
               ) {
-                final List<String> options = _industryOptions
-                    .where((String e) => e != 'All')
-                    .toList();
+                final List<String> options = _industryOptions;
 
-                final bool allSelected = selected.length >= options.length;
-
-                void toggle(String label) {
+                void select(String label) {
                   setDialogState(() {
-                    if (label == 'All') {
-                      selected
-                        ..clear()
-                        ..addAll(options);
-                      return;
-                    }
-                    if (selected.contains(label)) {
-                      selected.remove(label);
-                    } else {
-                      selected.add(label);
-                    }
+                    selected = label;
                   });
                 }
 
@@ -657,7 +649,7 @@ class _VerificationChecksPageState
                           Row(
                             children: <Widget>[
                               Text(
-                                'Select Industry',
+                                'Select Category',
                                 style: TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: s(16),
@@ -680,7 +672,7 @@ class _VerificationChecksPageState
                           ),
                           SizedBox(height: s(10)),
                           Text(
-                            'Choose one or more industries, then tap Update.',
+                            'Choose one category, then tap Update.',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: s(12),
@@ -692,19 +684,17 @@ class _VerificationChecksPageState
                           SizedBox(height: s(10)),
                           Expanded(
                             child: ListView.separated(
-                              itemCount: _industryOptions.length,
+                              itemCount: options.length,
                               separatorBuilder:
                                   (BuildContext context, int index) => Divider(
                                     height: s(1),
                                     color: const Color(0xFFF1F5F9),
                                   ),
                               itemBuilder: (BuildContext context, int index) {
-                                final String label = _industryOptions[index];
-                                final bool isSelected = label == 'All'
-                                    ? allSelected
-                                    : selected.contains(label);
+                                final String label = options[index];
+                                final bool isSelected = label == selected;
                                 return InkWell(
-                                  onTap: () => toggle(label),
+                                  onTap: () => select(label),
                                   child: Padding(
                                     padding: EdgeInsets.symmetric(
                                       vertical: s(12),
@@ -764,15 +754,9 @@ class _VerificationChecksPageState
                                   borderRadius: BorderRadius.circular(s(12)),
                                 ),
                               ),
-                              onPressed: selected.isEmpty
-                                  ? null
-                                  : () {
-                                      final List<String> sorted =
-                                          selected.toList()..sort();
-                                      Navigator.of(
-                                        context,
-                                      ).pop(sorted.join(', '));
-                                    },
+                              onPressed: () {
+                                Navigator.of(context).pop(selected);
+                              },
                               child: Text(
                                 'Update',
                                 style: TextStyle(
@@ -884,34 +868,6 @@ class _VerificationChecksPageState
         .join(' ');
   }
 
-  Set<String> _industrySelectionFromRaw(String raw) {
-    final Set<String> selected = <String>{};
-    final List<String> parts = _industryParts(raw);
-    if (parts.isEmpty) return selected;
-
-    final List<String> options = _industryOptions
-        .where((String e) => e != 'All')
-        .toList();
-    final Set<String> normalizedParts = parts
-        .map((String e) => e.trim().toLowerCase())
-        .where((String e) => e.isNotEmpty)
-        .toSet();
-    final Set<String> normalizedOptions = options
-        .map((String e) => e.toLowerCase())
-        .toSet();
-
-    if (normalizedParts.containsAll(normalizedOptions)) {
-      selected.addAll(options);
-      return selected;
-    }
-
-    for (final String option in options) {
-      if (normalizedParts.contains(option.toLowerCase())) {
-        selected.add(option);
-      }
-    }
-    return selected;
-  }
 }
 
 class _IndustryPill extends StatelessWidget {

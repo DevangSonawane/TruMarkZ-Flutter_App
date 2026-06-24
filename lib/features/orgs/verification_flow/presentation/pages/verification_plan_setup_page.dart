@@ -7,6 +7,8 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
 import '../../../data/verification_repository.dart';
 
 enum _AccessType { publicSearchable, permissionBased }
@@ -193,8 +195,14 @@ class _VerificationPlanSetupPageState
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final String selectedIndustry =
+        authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
+    final String verificationFilter = selectedIndustry.isNotEmpty
+        ? 'human::$selectedIndustry'
+        : 'human';
     final AsyncValue<List<VerificationTypeDefinition>> humanTypesAsync = ref
-        .watch(verificationTypesProvider('human'));
+        .watch(verificationTypesProvider(verificationFilter));
     final List<_VerificationCheck> apiChecks =
         _checksFromApi(
           humanTypesAsync.valueOrNull ?? const <VerificationTypeDefinition>[],

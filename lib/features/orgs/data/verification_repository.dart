@@ -12,6 +12,11 @@ final verificationRepositoryProvider = Provider<VerificationRepository>((ref) {
   return VerificationRepository(ref.read(apiClientProvider));
 });
 
+final verificationBatchesProvider =
+    FutureProvider.autoDispose<List<VerificationBatchSummary>>((ref) async {
+      return ref.read(verificationRepositoryProvider).getBatches();
+    });
+
 final verificationTypesProvider =
     FutureProvider.family.autoDispose<List<VerificationTypeDefinition>, String>(
       (ref, category) async {
@@ -67,7 +72,7 @@ class VerificationRepository {
       queryParameters['category'] = category.trim();
     }
     if (industryTypes != null && industryTypes.isNotEmpty) {
-      queryParameters['industry_type'] = jsonEncode(industryTypes);
+      queryParameters['industry_type'] = industryTypes.first.trim();
     }
     final dynamic res = await _api.verificationGetAny(
       '/verification/verification-types',
@@ -85,6 +90,9 @@ class VerificationRepository {
     }
 
     final String normalizedCategory = category?.trim().toLowerCase() ?? '';
+    final String normalizedIndustry = industryTypes?.isNotEmpty == true
+        ? industryTypes!.first.trim().toLowerCase()
+        : '';
     return rawItems
         .whereType<Map>()
         .map(
@@ -93,7 +101,16 @@ class VerificationRepository {
         )
         .where((VerificationTypeDefinition item) {
           if (normalizedCategory.isEmpty) return true;
-          return item.category.trim().toLowerCase() == normalizedCategory;
+          final bool matchesCategory =
+              item.category.trim().toLowerCase() == normalizedCategory;
+          if (!matchesCategory) return false;
+          if (normalizedIndustry.isEmpty) return true;
+          final Set<String> itemIndustries = item.industryTypes
+              .map((String value) => value.trim().toLowerCase())
+              .where((String value) => value.isNotEmpty)
+              .toSet();
+          if (itemIndustries.isEmpty) return true;
+          return itemIndustries.contains(normalizedIndustry);
         })
         .toList();
   }
@@ -125,6 +142,72 @@ class VerificationRepository {
       }
     }
     return const <VerificationCategory>[];
+  }
+
+  Future<List<VerificationIndustryType>> getIndustryTypes() async {
+    final dynamic res = await _api.verificationGetAny(
+      '/verification/industry-types',
+    );
+    Iterable<dynamic> rawItems;
+    if (res is List) {
+      rawItems = res;
+    } else if (res is Map) {
+      final dynamic data = res['data'] ?? res['industry_types'] ?? res['types'];
+      rawItems = data is List ? data : const <dynamic>[];
+    } else {
+      rawItems = const <dynamic>[];
+    }
+
+    return rawItems
+        .whereType<Map>()
+        .map(
+          (Map e) => VerificationIndustryType.fromJson(
+            Map<String, dynamic>.from(e),
+          ),
+        )
+        .where(
+          (VerificationIndustryType item) => item.name.trim().isNotEmpty,
+        )
+        .toList();
+  }
+
+  Future<List<VerificationBatchSummary>> getBatches() async {
+    final dynamic res = await _api.verificationGetAny('/verification/batches');
+    final Iterable<dynamic> rawItems = res is List
+        ? res
+        : (res is Map
+              ? (res['data'] is List
+                    ? res['data'] as List
+                    : const <dynamic>[])
+              : const <dynamic>[]);
+
+    return rawItems
+        .whereType<Map>()
+        .map(
+          (Map e) =>
+              VerificationBatchSummary.fromJson(Map<String, dynamic>.from(e)),
+        )
+        .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
+        .toList()
+      ..sort((VerificationBatchSummary a, VerificationBatchSummary b) {
+        final DateTime? da = DateTime.tryParse(a.createdAt);
+        final DateTime? db = DateTime.tryParse(b.createdAt);
+        if (da == null && db == null) {
+          return b.batchName.compareTo(a.batchName);
+        }
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return db.compareTo(da);
+      });
+  }
+
+  Future<VerificationBatchDetailResponse> getBatchDetails(
+    String batchId,
+  ) async {
+    final Map<String, dynamic> res = await _api.verificationGet(
+      '/verification/batches/${Uri.encodeComponent(batchId.trim())}',
+    );
+    return VerificationBatchDetailResponse.fromJson(res);
   }
 
   Future<SingleProductUploadResponse> uploadSingleProduct({

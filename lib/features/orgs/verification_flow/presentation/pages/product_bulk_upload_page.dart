@@ -1,11 +1,8 @@
-import 'dart:convert';
 import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:csv/csv.dart';
-import 'package:excel/excel.dart' hide Border;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -267,18 +264,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         verificationRepositoryProvider,
       );
       final bool isWarranty = _mode == 'warranty';
-      final PickedFile preparedFile = isWarranty
-          ? await _normalizeWarrantyCategoriesInFile(
-              pickedFile,
-              await repo.getProductCategories(),
-            )
-          : pickedFile;
       final BulkUploadResponse res = isWarranty
           ? await repo.uploadWarrantyProducts(
               batchName: _resolvedBatchName,
               description: _resolvedDescription(),
-              fileBytes: preparedFile.bytes,
-              fileName: preparedFile.name,
+              fileBytes: pickedFile.bytes,
+              fileName: pickedFile.name,
             )
           : await repo.bulkUploadProducts(
               batchName: _resolvedBatchName,
@@ -296,6 +287,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         path: AppRouter.productBatchCreatedPath,
         queryParameters: <String, String>{
           'sector': _sector,
+          if (_industry.trim().isNotEmpty) 'industry': _industry.trim(),
+          if (_categoryId.trim().isNotEmpty) 'category_id': _categoryId.trim(),
           'batch': _resolvedBatchName,
           'records': res.totalUploaded.toString(),
           'skipped': res.totalSkipped.toString(),
@@ -305,6 +298,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           'access': _access,
           'flow': 'product',
           'mode': _mode,
+          if (_mode == 'warranty') 'supports_warranty': 'true',
+          if (_mode == 'warranty' && _industry.trim().isNotEmpty)
+            'industry_label': _prettyIndustry(_industry),
         },
       );
       context.go(uri.toString(), extra: res);
@@ -346,270 +342,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       ..sort();
     return checks.join(',');
   }
-
-  Future<PickedFile> _normalizeWarrantyCategoriesInFile(
-    PickedFile file,
-    List<VerificationCategory> categories,
-  ) async {
-    if (categories.isEmpty) return file;
-
-    final Map<String, String> lookup = _buildWarrantyCategoryLookup(categories);
-    if (lookup.isEmpty) return file;
-
-    final String ext = file.extension.toLowerCase().replaceAll('.', '');
-    if (ext == 'csv') {
-      return _normalizeWarrantyCategoriesInCsv(file, lookup);
-    }
-    if (ext != 'xlsx') return file;
-    return _normalizeWarrantyCategoriesInXlsx(file, lookup);
-  }
-
-  static Map<String, String> _buildWarrantyCategoryLookup(
-    List<VerificationCategory> categories,
-  ) {
-    final Map<String, String> out = <String, String>{};
-
-    void addAlias(String alias, String exact) {
-      final String key = _normalizeCategoryLabel(alias);
-      if (key.isEmpty) return;
-      out[key] = exact;
-    }
-
-    for (final VerificationCategory category in categories) {
-      final String exact = category.categoryName.trim();
-      if (exact.isEmpty) continue;
-
-      addAlias(exact, exact);
-      addAlias(exact.replaceAll('&', 'and'), exact);
-
-      final String normalized = _normalizeCategoryLabel(exact);
-      if (normalized.contains('electronics')) {
-        addAlias('electronics', exact);
-        addAlias('appliances', exact);
-      }
-      if (normalized.contains('beauty') || normalized.contains('cosmetics')) {
-        addAlias('beauty', exact);
-        addAlias('beauty products', exact);
-        addAlias('cosmetics', exact);
-        addAlias('personal care', exact);
-      }
-      if (normalized.contains('consumer goods')) {
-        addAlias('consumer goods', exact);
-        addAlias('consumer goods & warranty', exact);
-      }
-      if (normalized.contains('healthcare')) {
-        addAlias('healthcare', exact);
-        addAlias('healthcare products', exact);
-      }
-      if (normalized.contains('industrial equipment')) {
-        addAlias('industrial equipment', exact);
-      }
-      if (normalized.contains('agriculture')) {
-        addAlias('agriculture', exact);
-        addAlias('agriculture products', exact);
-      }
-      if (normalized.contains('automotive') || normalized.contains('ev')) {
-        addAlias('ev', exact);
-        addAlias('ev automotive', exact);
-        addAlias('ev & automotive', exact);
-        addAlias('automotive', exact);
-      }
-      if (normalized.contains('insurance')) {
-        addAlias('insurance', exact);
-        addAlias('insurance policies', exact);
-      }
-      if (normalized.contains('luxury')) {
-        addAlias('luxury', exact);
-        addAlias('luxury products', exact);
-      }
-      if (normalized.contains('other')) {
-        addAlias('others', exact);
-        addAlias('other', exact);
-      }
-    }
-
-    return out;
-  }
-
-  Future<PickedFile> _normalizeWarrantyCategoriesInCsv(
-    PickedFile file,
-    Map<String, String> lookup,
-  ) async {
-    try {
-      final String raw = utf8.decode(file.bytes, allowMalformed: true);
-      final List<List<dynamic>> table = const CsvToListConverter(
-        shouldParseNumbers: false,
-      ).convert(raw);
-      if (table.isEmpty) return file;
-
-      final int headerIndex = _firstNonEmptyRowIndex(table);
-      if (headerIndex < 0) return file;
-
-      final List<String> header = table[headerIndex]
-          .map((dynamic e) => (e?.toString() ?? '').trim())
-          .toList();
-      final int categoryIndex = _categoryColumnIndex(header);
-      if (categoryIndex < 0) return file;
-
-      bool changed = false;
-      for (int i = headerIndex + 1; i < table.length; i++) {
-        final List<dynamic> row = table[i];
-        if (_isLooseRowEmpty(row)) continue;
-        if (categoryIndex >= row.length) continue;
-        final String rawCategory = row[categoryIndex]?.toString().trim() ?? '';
-        final String? normalized = _normalizeCategoryValue(
-          rawCategory,
-          lookup,
-        );
-        if (normalized == null || normalized == rawCategory) continue;
-        row[categoryIndex] = normalized;
-        changed = true;
-      }
-
-      if (!changed) return file;
-      final String csv = const ListToCsvConverter().convert(table);
-      return PickedFile(
-        name: file.name,
-        bytes: Uint8List.fromList(utf8.encode(csv)),
-        extension: file.extension,
-      );
-    } catch (e) {
-      debugPrint('[WarrantyUpload] CSV category normalization failed: $e');
-      return file;
-    }
-  }
-
-  Future<PickedFile> _normalizeWarrantyCategoriesInXlsx(
-    PickedFile file,
-    Map<String, String> lookup,
-  ) async {
-    try {
-      final Excel excel = Excel.decodeBytes(file.bytes);
-      final List<String> sheetNames = excel.tables.keys.toList();
-      if (sheetNames.isEmpty) return file;
-
-      bool changed = false;
-      for (final String sheetName in sheetNames) {
-        final Sheet? sheet = excel.tables[sheetName];
-        if (sheet == null) continue;
-
-        final List<List<Data?>> all = sheet.rows;
-        if (all.isEmpty) continue;
-
-        final int headerIndex = _firstNonEmptyExcelRowIndex(all);
-        if (headerIndex < 0) continue;
-
-        final List<String> header = all[headerIndex]
-            .map((Data? d) => (d?.value?.toString() ?? '').trim())
-            .toList();
-        final int categoryIndex = _categoryColumnIndex(header);
-        if (categoryIndex < 0) continue;
-
-        for (int rowIndex = headerIndex + 1; rowIndex < all.length; rowIndex++) {
-          final List<Data?> row = all[rowIndex];
-          if (_isExcelRowEmpty(row)) continue;
-          if (categoryIndex >= row.length) continue;
-
-          final String rawCategory =
-              (row[categoryIndex]?.value?.toString() ?? '').trim();
-          final String? normalized = _normalizeCategoryValue(
-            rawCategory,
-            lookup,
-          );
-          if (normalized == null || normalized == rawCategory) continue;
-
-          sheet.updateCell(
-            CellIndex.indexByColumnRow(
-              columnIndex: categoryIndex,
-              rowIndex: rowIndex,
-            ),
-            TextCellValue(normalized),
-          );
-          changed = true;
-        }
-      }
-
-      if (!changed) return file;
-      final List<int>? encoded = excel.encode();
-      if (encoded == null || encoded.isEmpty) return file;
-      return PickedFile(
-        name: file.name,
-        bytes: Uint8List.fromList(encoded),
-        extension: file.extension,
-      );
-    } catch (e) {
-      debugPrint('[WarrantyUpload] XLSX category normalization failed: $e');
-      return file;
-    }
-  }
-
-  static String? _normalizeCategoryValue(
-    String raw,
-    Map<String, String> lookup,
-  ) {
-    final String trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
-    final String? exact = lookup[_normalizeCategoryLabel(trimmed)];
-    if (exact != null && exact.isNotEmpty) return exact;
-    return null;
-  }
-
-  static int _firstNonEmptyRowIndex(List<List<dynamic>> table) {
-    for (int i = 0; i < table.length; i++) {
-      if (!_isLooseRowEmpty(table[i])) return i;
-    }
-    return -1;
-  }
-
-  static int _firstNonEmptyExcelRowIndex(List<List<Data?>> table) {
-    for (int i = 0; i < table.length; i++) {
-      if (!_isExcelRowEmpty(table[i])) return i;
-    }
-    return -1;
-  }
-
-  static int _categoryColumnIndex(List<String> header) {
-    final Map<String, int> map = <String, int>{};
-    for (int i = 0; i < header.length; i++) {
-      final String key = _normalizeCategoryLabel(header[i]);
-      if (key.isNotEmpty) map[key] = i;
-    }
-    for (final String candidate in <String>[
-      'category',
-      'category_name',
-      'product_category',
-    ]) {
-      final int? ix = map[_normalizeCategoryLabel(candidate)];
-      if (ix != null) return ix;
-    }
-    return -1;
-  }
-
-  static bool _isLooseRowEmpty(List<dynamic> row) {
-    for (final dynamic v in row) {
-      final String s = (v?.toString() ?? '').trim();
-      if (s.isNotEmpty) return false;
-    }
-    return true;
-  }
-
-  static bool _isExcelRowEmpty(List<Data?> row) {
-    for (final Data? v in row) {
-      final String s = (v?.value?.toString() ?? '').trim();
-      if (s.isNotEmpty) return false;
-    }
-    return true;
-  }
-
-  static String _normalizeCategoryLabel(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll('&', 'and')
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .trim()
-        .replaceAll(RegExp(r'\s+'), ' ');
-  }
-
   List<String> _columns() {
     final List<String> source = _savedTemplateHeaders.isNotEmpty
         ? _savedTemplateHeaders
@@ -699,8 +431,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final double referenceWidth = 402;
     final String resolvedIndustry = _effectiveIndustry();
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final String verificationFilter = resolvedIndustry.isNotEmpty
+        ? 'product::$resolvedIndustry'
+        : 'product';
     final AsyncValue<List<VerificationTypeDefinition>> productTypesAsync = ref
-        .watch(verificationTypesProvider('product'));
+        .watch(verificationTypesProvider(verificationFilter));
     final Map<String, VerificationTypeDefinition> productTypesById =
         <String, VerificationTypeDefinition>{
           for (final VerificationTypeDefinition item

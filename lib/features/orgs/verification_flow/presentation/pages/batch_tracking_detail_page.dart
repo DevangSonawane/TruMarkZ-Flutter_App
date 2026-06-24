@@ -25,7 +25,8 @@ class _BatchTrackingDetailPageState
   String _batchId = '';
   String _mode = 'verification';
 
-  AsyncValue<VerificationListResponse> _data = const AsyncLoading();
+  AsyncValue<VerificationBatchDetailResponse> _detailData =
+      const AsyncLoading();
   AsyncValue<WarrantyBatchStatusResponse> _warrantyData = const AsyncLoading();
 
   @override
@@ -45,7 +46,7 @@ class _BatchTrackingDetailPageState
     if (_isWarrantyMode) {
       setState(() => _warrantyData = const AsyncLoading());
     } else {
-      setState(() => _data = const AsyncLoading());
+      setState(() => _detailData = const AsyncLoading());
     }
     try {
       final VerificationRepository repo = ref.read(
@@ -57,27 +58,25 @@ class _BatchTrackingDetailPageState
         if (!mounted) return;
         setState(() => _warrantyData = AsyncData(res));
       } else {
-        final VerificationListResponse res = await repo.getAllVerifications(
-          batchId: _batchId,
-          limit: 500,
-          offset: 0,
+        final VerificationBatchDetailResponse res = await repo.getBatchDetails(
+          _batchId,
         );
         if (!mounted) return;
-        setState(() => _data = AsyncData(res));
+        setState(() => _detailData = AsyncData(res));
       }
     } on ApiException catch (e, st) {
       if (!mounted) return;
       if (_isWarrantyMode) {
         setState(() => _warrantyData = AsyncError(e, st));
       } else {
-        setState(() => _data = AsyncError(e, st));
+        setState(() => _detailData = AsyncError(e, st));
       }
     } catch (e, st) {
       if (!mounted) return;
       if (_isWarrantyMode) {
         setState(() => _warrantyData = AsyncError(e, st));
       } else {
-        setState(() => _data = AsyncError(e, st));
+        setState(() => _detailData = AsyncError(e, st));
       }
     }
   }
@@ -95,9 +94,12 @@ class _BatchTrackingDetailPageState
 
   @override
   Widget build(BuildContext context) {
+    final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
     final String title = _batchId.trim().isEmpty
         ? 'Batch'
-        : 'Batch ${_batchId.substring(0, _batchId.length.clamp(0, 10))}';
+        : (detail?.batchName.trim().isNotEmpty == true
+              ? detail!.batchName.trim()
+              : 'Batch ${_batchId.substring(0, _batchId.length.clamp(0, 10))}');
     const double navBarHeight = 71.016;
 
     return Scaffold(
@@ -218,7 +220,7 @@ class _BatchTrackingDetailPageState
                           );
                         },
                       )
-                    : _data.when(
+                    : _detailData.when(
                         loading: () => const Center(
                           child: CircularProgressIndicator(),
                         ),
@@ -247,7 +249,9 @@ class _BatchTrackingDetailPageState
                             ],
                           ),
                         ),
-                        data: (VerificationListResponse res) {
+                        data: (VerificationBatchDetailResponse res) {
+                          final Map<String, int> derivedCounts =
+                              _deriveUserStatusCounts(res.users);
                           return ListView(
                             physics: const BouncingScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
@@ -260,16 +264,40 @@ class _BatchTrackingDetailPageState
                             ),
                             children: <Widget>[
                               _SummarySection(
-                                verified: res.verified,
-                                pending: res.pending,
-                                failed: res.failed,
+                                verified: _readProgressOrFallback(
+                                  res.verificationProgress,
+                                  'verified',
+                                  derivedCounts['verified'] ?? 0,
+                                ),
+                                pending: _readProgressOrFallback(
+                                  res.verificationProgress,
+                                  'pending',
+                                  derivedCounts['pending'] ?? 0,
+                                ),
+                                failed: _readProgressOrFallback(
+                                  res.verificationProgress,
+                                  'failed',
+                                  derivedCounts['failed'] ?? 0,
+                                ),
                               ),
                               const SizedBox(height: AppSpacing.x4),
                               const _SectionHeader(
                                 title: 'RECORDS',
-                                subtitle: 'People in this batch',
+                                subtitle: 'Items in this batch',
                               ),
                               const SizedBox(height: AppSpacing.x3),
+                              if (res.industryTypes.isNotEmpty ||
+                                  res.verificationTypes.isNotEmpty ||
+                                  res.credentialVisibility.trim().isNotEmpty)
+                                _BatchMetaCard(
+                                  industryTypes: res.industryTypes,
+                                  verificationTypes: res.verificationTypes,
+                                  credentialVisibility: res.credentialVisibility,
+                                ),
+                              if (res.industryTypes.isNotEmpty ||
+                                  res.verificationTypes.isNotEmpty ||
+                                  res.credentialVisibility.trim().isNotEmpty)
+                                const SizedBox(height: AppSpacing.x3),
                               for (final VerificationUser u in res.users)
                                 ...<Widget>[
                                   _UserTile(
@@ -301,6 +329,114 @@ class _BatchTrackingDetailPageState
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  static int _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse((value ?? '').toString()) ?? 0;
+  }
+
+  static int _readProgressOrFallback(
+    Map<String, dynamic> progress,
+    String key,
+    int fallback,
+  ) {
+    final dynamic value = progress[key];
+    if (value == null || value.toString().trim().isEmpty) return fallback;
+    return _readInt(value);
+  }
+
+  static Map<String, int> _deriveUserStatusCounts(List<VerificationUser> users) {
+    int pending = 0;
+    int verified = 0;
+    int failed = 0;
+    for (final VerificationUser user in users) {
+      final String status = user.verificationStatus.trim().toLowerCase();
+      if (status.contains('verified')) {
+        verified++;
+      } else if (status.contains('failed') || status.contains('rejected')) {
+        failed++;
+      } else if (status.contains('pending')) {
+        pending++;
+      }
+    }
+    return <String, int>{
+      'pending': pending,
+      'verified': verified,
+      'failed': failed,
+    };
+  }
+}
+
+class _BatchMetaCard extends StatelessWidget {
+  const _BatchMetaCard({
+    required this.industryTypes,
+    required this.verificationTypes,
+    required this.credentialVisibility,
+  });
+
+  final List<String> industryTypes;
+  final List<String> verificationTypes;
+  final String credentialVisibility;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> chips = <Widget>[];
+    if (industryTypes.isNotEmpty) {
+      chips.add(
+        _MetaChip(label: 'Industries', value: industryTypes.join(', ')),
+      );
+    }
+    if (verificationTypes.isNotEmpty) {
+      chips.add(_MetaChip(label: 'Checks', value: verificationTypes.join(', ')));
+    }
+    if (credentialVisibility.trim().isNotEmpty) {
+      chips.add(
+        _MetaChip(
+          label: 'Visibility',
+          value: credentialVisibility.trim(),
+        ),
+      );
+    }
+
+    return TMZCard(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      child: Wrap(
+        spacing: AppSpacing.x2,
+        runSpacing: AppSpacing.x2,
+        children: chips,
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        '$label: ${value.isEmpty ? '-' : value}',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          height: 15 / 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
         ),
       ),
     );

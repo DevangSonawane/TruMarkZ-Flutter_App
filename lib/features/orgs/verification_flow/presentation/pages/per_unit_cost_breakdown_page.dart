@@ -120,14 +120,18 @@ class _PerUnitCostBreakdownPageState
       context,
     ).uri.queryParameters;
     final bool isProductFlow = _isProductFlow();
+    final String industry = (qp['industry'] ?? '').trim();
     final bool isWarrantyFlow =
         isProductFlow && (qp['mode'] ?? '').trim().toLowerCase() == 'warranty';
     final List<String> ids = isWarrantyFlow
         ? const <String>[]
         : _selectedChecks(context);
     final int userCount = _userCount(context);
+    final String verificationFilter = industry.isNotEmpty
+        ? '${isProductFlow ? 'product' : 'human'}::$industry'
+        : (isProductFlow ? 'product' : 'human');
     final AsyncValue<List<VerificationTypeDefinition>> typesAsync = ref.watch(
-      verificationTypesProvider(isProductFlow ? 'product' : 'human'),
+      verificationTypesProvider(verificationFilter),
     );
     final Map<String, _CheckPricing> pricing = _pricingFromTypes(
       typesAsync.valueOrNull ?? <VerificationTypeDefinition>[],
