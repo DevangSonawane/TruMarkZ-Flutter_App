@@ -36,6 +36,15 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const Color _panelText = Color(0xFF3A3A3A);
+  static const List<String> _defaultHumanTemplateHeaders = <String>[
+    'name',
+    'email',
+    'phone_number',
+    'aadhar_number',
+    'pan_number',
+    'dob',
+    'gender',
+  ];
 
   String? _lastRouteSignature;
 
@@ -111,33 +120,34 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   static List<String> _templateColumnsForChecks(Set<String> checks) {
-    final Set<String> columns = <String>{
-      'full_name',
-      'dob',
-      'email',
-      'phone_number',
-      'aadhar_number',
-      'pan_number',
-      'address_line1',
-      'address_line2',
-      'address_line3',
-      'pincode',
-      'state',
-      'country',
-    };
-
-    final List<String> sorted = columns.toList()..sort();
-    return sorted;
+    // Keep the human template seeded with the exact default fields requested
+    // for first-time download. Users can still remove any of them in the
+    // template dialog before generating the file.
+    return List<String>.from(_defaultHumanTemplateHeaders);
   }
 
   List<String> _columns() {
-    return (_columnsController.text)
+    return _dedupeHeaders(
+      (_columnsController.text)
         .split(',')
         .map((String s) => s.trim())
         .where((String s) => s.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+        .toList(),
+    );
+  }
+
+  static List<String> _dedupeHeaders(List<String> headers) {
+    final List<String> ordered = <String>[];
+    final Set<String> seen = <String>{};
+    for (final String header in headers) {
+      final String cleaned = header.trim();
+      if (cleaned.isEmpty) continue;
+      final String key = cleaned.toLowerCase();
+      if (seen.add(key)) {
+        ordered.add(cleaned);
+      }
+    }
+    return ordered;
   }
 
   // TODO: Remove once backend file parsing is fully relied upon everywhere.
@@ -1918,7 +1928,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     final Map<String, String> replacements = <String, String>{
       for (final MapEntry<String, VerificationTypeDefinition> entry
           in verificationTypesById.entries)
-        entry.key.trim().toLowerCase(): entry.value.name.trim(),
+        entry.key.trim().toLowerCase(): _verificationTypeDisplayName(
+          entry.value,
+        ),
     }..removeWhere((String key, String value) => key.isEmpty || value.isEmpty);
 
     if (replacements.isEmpty) return bytes;
@@ -1995,12 +2007,29 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     return mapped.join(', ');
   }
 
+  static String _verificationTypeDisplayName(VerificationTypeDefinition item) {
+    final String name = item.name.trim();
+    if (name.isNotEmpty) return name;
+
+    final String label = item.label.trim();
+    if (label.isNotEmpty) return label;
+
+    final String fallback = item.id.trim();
+    if (fallback.isEmpty) return '';
+
+    return fallback
+        .replaceAll(RegExp(r'[_\-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final MediaQueryData mediaQuery = MediaQuery.of(context);
     final bool keyboardOpen = mediaQuery.viewInsets.bottom > 0;
     final double scale = mediaQuery.size.width / 402;
     double s(double v) => v * scale;
+    const Color surfaceColor = Color(0xFFF8FAFC);
     final AsyncValue<List<VerificationTypeDefinition>> verificationTypesAsync =
         ref.watch(verificationTypesProvider(widget.verificationFilter));
     final Map<String, VerificationTypeDefinition> verificationTypesById =
@@ -2011,250 +2040,119 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
         };
 
     return Dialog.fullscreen(
-      backgroundColor: const Color(0xFFF8FAFC),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFFF8FAFC),
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.close_rounded),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: Text(
-            'Download Excel',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(16),
-              fontWeight: FontWeight.w700,
-              height: 24 / 16,
-              color: const Color(0xFF111827),
-            ),
-          ),
-          centerTitle: false,
+      backgroundColor: surfaceColor,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: surfaceColor,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+          systemNavigationBarColor: surfaceColor,
+          systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        body: ListView(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.x4,
-            AppSpacing.x2,
-            AppSpacing.x4,
-            AppSpacing.x4 + AppSpacing.x8,
-          ),
-          children: <Widget>[
-            Text(
-              'Add headers one at a time. Added headers are saved automatically, then generate the Excel template. Selected verification types will be added automatically.',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(12),
-                fontWeight: FontWeight.w500,
-                height: 18 / 12,
-                color: const Color(0xFF64748B),
+        child: Material(
+          color: surfaceColor,
+          child: Scaffold(
+            backgroundColor: surfaceColor,
+            extendBodyBehindAppBar: false,
+            appBar: AppBar(
+              backgroundColor: surfaceColor,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              shadowColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              systemOverlayStyle: const SystemUiOverlayStyle(
+                statusBarColor: surfaceColor,
+                statusBarIconBrightness: Brightness.dark,
+                statusBarBrightness: Brightness.light,
+                systemNavigationBarColor: surfaceColor,
+                systemNavigationBarIconBrightness: Brightness.dark,
               ),
-            ),
-            const SizedBox(height: AppSpacing.x4),
-            TextField(
-              controller: _headerInputController,
-              onSubmitted: (_) => _addHeader(),
-              textInputAction: TextInputAction.done,
-              scrollPadding: const EdgeInsets.only(bottom: 180),
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(14),
-                fontWeight: FontWeight.w400,
-                height: 20 / 14,
-                color: const Color(0xFF0F172A),
+              leading: IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.of(context).pop(),
               ),
-              cursorColor: AppColors.brandBlue,
-              decoration: InputDecoration(
-                hintText: 'Enter header name',
-                hintStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(14),
-                  fontWeight: FontWeight.w400,
-                  height: 20 / 14,
-                  color: const Color(0xFF94A3B8),
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x3),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _addHeader,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: EdgeInsets.symmetric(vertical: s(14)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: Text(
-                  'Add New',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(14),
-                    fontWeight: FontWeight.w700,
-                    height: 20 / 14,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x4),
-            Text(
-              'Verification types',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(12),
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-                height: 18 / 12,
-                color: const Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x2),
-            if (verificationTypesAsync.isLoading &&
-                verificationTypesAsync.valueOrNull == null)
-              Text(
-                'Loading verification types...',
+              title: Text(
+                'Download Excel',
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w500,
-                  height: 18 / 12,
-                  color: const Color(0xFF64748B),
+                  fontSize: s(16),
+                  fontWeight: FontWeight.w700,
+                  height: 24 / 16,
+                  color: const Color(0xFF111827),
                 ),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              ),
+              centerTitle: false,
+            ),
+            body: ColoredBox(
+              color: surfaceColor,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.x4,
+                  AppSpacing.x2,
+                  AppSpacing.x4,
+                  AppSpacing.x4 + AppSpacing.x8,
+                ),
                 children: <Widget>[
-                  for (final String check
-                      in widget.selectedChecks.toList()..sort())
-                    Chip(
-                      label: Text(
-                        verificationTypesById[check]?.name ?? check,
-                      ),
-                      backgroundColor: AppColors.brandBlue,
-                      labelStyle: TextStyle(
+                  Text(
+                    'Add headers one at a time. Added headers are saved automatically, then generate the Excel template. Selected verification types will be added automatically.',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w500,
+                      height: 18 / 12,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+                  TextField(
+                    controller: _headerInputController,
+                    onSubmitted: (_) => _addHeader(),
+                    textInputAction: TextInputAction.done,
+                    scrollPadding: const EdgeInsets.only(bottom: 180),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(14),
+                      fontWeight: FontWeight.w400,
+                      height: 20 / 14,
+                      color: const Color(0xFF0F172A),
+                    ),
+                    cursorColor: AppColors.brandBlue,
+                    decoration: InputDecoration(
+                      hintText: 'Enter header name',
+                      hintStyle: TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: s(12),
-                        fontWeight: FontWeight.w600,
-                        height: 16.5 / 12,
-                        color: Colors.white,
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w400,
+                        height: 20 / 14,
+                        color: const Color(0xFF94A3B8),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: AppColors.border),
                       ),
                     ),
-                ],
-              ),
-            const SizedBox(height: AppSpacing.x4),
-            Text(
-              'Saved headers',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(12),
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-                height: 18 / 12,
-                color: const Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x2),
-            if (_headers.isEmpty)
-              Text(
-                'No headers added yet.',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w500,
-                  height: 18 / 12,
-                  color: const Color(0xFF64748B),
-                ),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  for (final String header in _headers)
-                    InputChip(
-                      label: Text(header),
-                      backgroundColor: AppColors.brandBlue,
-                      deleteIcon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
-                      ),
-                      onDeleted: () => _removeHeader(header),
-                      labelStyle: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(12),
-                        fontWeight: FontWeight.w600,
-                        height: 16.5 / 12,
-                        color: Colors.white,
-                      ),
-                      deleteIconColor: Colors.white,
-                    ),
-                ],
-              ),
-            const SizedBox(height: AppSpacing.x8),
-            if (_headersSaved)
-              Text(
-                'Headers saved. You can generate the template now.',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w600,
-                  height: 18 / 12,
-                  color: const Color(0xFF0F766E),
-                ),
-              ),
-          ],
-        ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: keyboardOpen
-              ? const SizedBox.shrink()
-              : AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.x4,
-                    AppSpacing.x2,
-                    AppSpacing.x4,
-                    AppSpacing.x4,
                   ),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF8FAFC),
-                    border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
-                  ),
-                  child: SizedBox(
+                  const SizedBox(height: AppSpacing.x3),
+                  SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _headers.isNotEmpty && !_isGenerating
-                          ? _generateTemplate
-                          : null,
-                      icon: _isGenerating
-                          ? SizedBox(
-                              width: s(16),
-                              height: s(16),
-                              child: const CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.download_rounded),
-                      label: Text(
-                        _isGenerating ? 'Downloading' : 'Download',
+                    child: ElevatedButton(
+                      onPressed: _addHeader,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: EdgeInsets.symmetric(vertical: s(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Add New',
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: s(14),
@@ -2262,22 +2160,187 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                           height: 20 / 14,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandBlue,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            AppColors.brandBlue.withAlpha(90),
-                        disabledForegroundColor:
-                            Colors.white.withAlpha(180),
-                        elevation: 0,
-                        padding: EdgeInsets.symmetric(vertical: s(18)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(s(20)),
-                        ),
-                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.x4),
+                  Text(
+                    'Verification types',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                      height: 18 / 12,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                  if (verificationTypesAsync.isLoading &&
+                      verificationTypesAsync.valueOrNull == null)
+                    Text(
+                      'Loading verification types...',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w500,
+                        height: 18 / 12,
+                        color: const Color(0xFF64748B),
+                      ),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        for (final String check
+                            in widget.selectedChecks.toList()..sort())
+                          Chip(
+                            label: Text(
+                              verificationTypesById[check] != null
+                                  ? _verificationTypeDisplayName(
+                                      verificationTypesById[check]!,
+                                    )
+                                  : check,
+                            ),
+                            backgroundColor: AppColors.brandBlue,
+                            labelStyle: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(12),
+                              fontWeight: FontWeight.w600,
+                              height: 16.5 / 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                      ],
+                    ),
+                  const SizedBox(height: AppSpacing.x4),
+                  Text(
+                    'Saved headers',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                      height: 18 / 12,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                  if (_headers.isEmpty)
+                    Text(
+                      'No headers added yet.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w500,
+                        height: 18 / 12,
+                        color: const Color(0xFF64748B),
+                      ),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        for (final String header in _headers)
+                          InputChip(
+                            label: Text(header),
+                            backgroundColor: AppColors.brandBlue,
+                            deleteIcon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                            ),
+                            onDeleted: () => _removeHeader(header),
+                            labelStyle: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(12),
+                              fontWeight: FontWeight.w600,
+                              height: 16.5 / 12,
+                              color: Colors.white,
+                            ),
+                            deleteIconColor: Colors.white,
+                          ),
+                      ],
+                    ),
+                  const SizedBox(height: AppSpacing.x8),
+                  if (_headersSaved)
+                    Text(
+                      'Headers saved. You can generate the template now.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w600,
+                        height: 18 / 12,
+                        color: const Color(0xFF0F766E),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            bottomNavigationBar: ColoredBox(
+              color: surfaceColor,
+              child: SafeArea(
+                top: false,
+                child: keyboardOpen
+                    ? const SizedBox.shrink()
+                    : AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.x4,
+                          AppSpacing.x2,
+                          AppSpacing.x4,
+                          AppSpacing.x4,
+                        ),
+                        decoration: const BoxDecoration(
+                          color: surfaceColor,
+                          border: Border(
+                            top: BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _headers.isNotEmpty && !_isGenerating
+                                ? _generateTemplate
+                                : null,
+                            icon: _isGenerating
+                                ? SizedBox(
+                                    width: s(16),
+                                    height: s(16),
+                                    child: const CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.download_rounded),
+                            label: Text(
+                              _isGenerating ? 'Downloading' : 'Download',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: s(14),
+                                fontWeight: FontWeight.w700,
+                                height: 20 / 14,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.brandBlue,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor:
+                                  AppColors.brandBlue.withAlpha(90),
+                              disabledForegroundColor:
+                                  Colors.white.withAlpha(180),
+                              elevation: 0,
+                              padding: EdgeInsets.symmetric(vertical: s(18)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(s(20)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ),
         ),
       ),
     );

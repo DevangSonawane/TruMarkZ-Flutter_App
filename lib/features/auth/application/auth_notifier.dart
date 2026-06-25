@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/auth_models.dart';
@@ -33,6 +34,28 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     if (_normalizeLoginType(loginType) == 'individual') {
       return AppRouter.individualIdentityPath;
     }
+    if (requiresOnboarding) {
+      return AppRouter.orgOnboardingPath;
+    }
+    return AppRouter.dashboardPath;
+  }
+
+  String _routeForGoogleLogin({
+    required String requestedLoginType,
+    required String backendLoginType,
+    required bool requiresOnboarding,
+  }) {
+    final String requested = _normalizeLoginType(requestedLoginType);
+    final String backend = _normalizeLoginType(backendLoginType);
+
+    // If the user started from the individual Google flow, never push them
+    // into org onboarding just because the backend omitted or misreported the
+    // account type. That keeps the first-time individual signup on the
+    // individual path.
+    if (requested == 'individual' || backend == 'individual') {
+      return AppRouter.individualIdentityPath;
+    }
+
     if (requiresOnboarding) {
       return AppRouter.orgOnboardingPath;
     }
@@ -175,6 +198,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     required String idToken,
     required String userType,
   }) async {
+    final String requestedLoginType = _normalizeLoginType(userType);
     state = AsyncData(
       (state.value ?? const AuthState()).copyWith(
         isLoading: true,
@@ -190,6 +214,14 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       final String resolvedLoginType =
           me.loginType.trim().isNotEmpty ? me.loginType : login.loginType;
       await _persistLoginType(resolvedLoginType);
+      if (kDebugMode &&
+          requestedLoginType == 'individual' &&
+          _normalizeLoginType(resolvedLoginType) != 'individual') {
+        debugPrint(
+          '[Auth] Google login returned "${resolvedLoginType.trim()}" '
+          'for an individual flow; routing to individual screen.',
+        );
+      }
       state = AsyncData(
         AuthState(
           status: AuthStatus.authenticated,
@@ -199,8 +231,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         ),
       );
       AppRouter.router.go(
-        _routeForLoginType(
-          loginType: resolvedLoginType,
+        _routeForGoogleLogin(
+          requestedLoginType: requestedLoginType,
+          backendLoginType: resolvedLoginType,
           requiresOnboarding: login.requiresOnboarding,
         ),
       );

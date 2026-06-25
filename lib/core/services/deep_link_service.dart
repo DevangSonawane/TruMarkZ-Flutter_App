@@ -61,9 +61,9 @@ class DeepLinkService {
                 '')
             .trim()
             .toLowerCase();
-    final String loginType = loginTypeRaw == 'individual'
-        ? 'individual'
-        : 'organization';
+    final String loginType = loginTypeRaw == 'organization'
+        ? 'organization'
+        : 'individual';
 
     if (token == null || token.trim().isEmpty) {
       AppRouter.router.go(
