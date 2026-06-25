@@ -74,6 +74,45 @@ class FilePickerUtil {
     }
   }
 
+  static Future<List<PickedFile>> pickDocuments() async {
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowMultiple: true,
+        withData: true,
+        allowedExtensions: <String>['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+      );
+      if (result == null || result.files.isEmpty) return <PickedFile>[];
+      final List<PickedFile> files = <PickedFile>[];
+      for (final PlatformFile file in result.files) {
+        final Uint8List? bytes = file.bytes;
+        if (bytes == null) continue;
+        final String name = (file.name).trim();
+        final String ext = (file.extension ?? '')
+            .toLowerCase()
+            .replaceAll('.', '')
+            .trim();
+        files.add(
+          PickedFile(
+            name: name.isEmpty ? 'file' : name,
+            bytes: bytes,
+            extension: ext,
+          ),
+        );
+      }
+      return files;
+    } on MissingPluginException {
+      debugPrint(
+        '[FilePickerUtil] file_picker plugin not registered. '
+        'Do a full stop/re-run (not hot restart).',
+      );
+      return <PickedFile>[];
+    } on PlatformException {
+      debugPrint('[FilePickerUtil] pickDocuments failed (PlatformException).');
+      return <PickedFile>[];
+    }
+  }
+
   static PickedFile? _fromResult(FilePickerResult? result) {
     if (result == null || result.files.isEmpty) return null;
     final PlatformFile file = result.files.first;

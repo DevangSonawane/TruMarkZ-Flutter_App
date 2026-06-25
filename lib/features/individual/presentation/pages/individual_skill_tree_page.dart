@@ -1,23 +1,29 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/skill_tree_models.dart';
+import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/theme/app_spacing.dart';
+import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../orgs/verification_flow/presentation/pages/flow_step_progress.dart';
+import '../../data/skill_tree_repository.dart';
 
-class IndividualSkillTreePage extends StatefulWidget {
+class IndividualSkillTreePage extends ConsumerStatefulWidget {
   const IndividualSkillTreePage({super.key});
 
   @override
-  State<IndividualSkillTreePage> createState() =>
+  ConsumerState<IndividualSkillTreePage> createState() =>
       _IndividualSkillTreePageState();
 }
 
-class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
+class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
 
@@ -30,6 +36,7 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
           'Add tools, frameworks, systems, and platform knowledge you want to highlight.',
       hint:
           'Mention languages, software, tools, APIs, frameworks, or certifications.',
+      skillType: SkillTreeSkillType.technical,
     ),
     _SkillStepDraft(
       title: 'Soft Skills',
@@ -37,13 +44,15 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
           'Capture the communication and collaboration strengths that support your work.',
       hint:
           'Describe leadership, teamwork, adaptability, problem solving, or time management.',
+      skillType: SkillTreeSkillType.soft,
     ),
     _SkillStepDraft(
       title: 'Education and Experience',
       subtitle:
           'Add academic history, internships, work experience, and learning milestones.',
       hint:
-          'Include degrees, institutions, companies, roles, dates, or notable outcomes.',
+          'Include degrees, institutions, roles, dates, or notable outcomes.',
+      skillType: SkillTreeSkillType.education,
     ),
     _SkillStepDraft(
       title: 'Projects and Achievements',
@@ -51,10 +60,38 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
           'Showcase the work, wins, and proof points that make your profile stand out.',
       hint:
           'Share portfolios, awards, hackathons, launches, results, or personal projects.',
+      skillType: SkillTreeSkillType.project,
     ),
   ];
 
   int _activeStep = 0;
+  bool _isSubmitting = false;
+  bool _isLoadingSummary = true;
+  int _savedSkillsCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSummary();
+  }
+
+  Future<void> _loadSummary() async {
+    try {
+      final SkillsMeResponse res = await ref
+          .read(skillTreeRepositoryProvider)
+          .getMySkills();
+      if (!mounted) return;
+      setState(() {
+        _savedSkillsCount = res.total;
+      });
+    } on Exception {
+      // Keep the builder usable even if the summary fetch fails.
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingSummary = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -80,17 +117,13 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
     }
   }
 
-  void _goNext() {
+  Future<void> _goNext() async {
     if (_activeStep < _steps.length - 1) {
       setState(() => _activeStep += 1);
       _scrollToTop();
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Skill tree draft is ready for backend wiring.'),
-      ),
-    );
+    await _submitAllSkills();
   }
 
   void _addFieldGroup([int insertAfterIndex = -1]) {
@@ -106,12 +139,55 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
 
   Future<void> _pickDocument(int entryIndex) async {
     final _SkillEntryDraft entry = _steps[_activeStep].entries[entryIndex];
-    final PickedFile? picked = await FilePickerUtil.pickDocument();
-    if (!mounted || picked == null) return;
+    if (entry.skillId != null) {
+      await _uploadAdditionalDocument(entry);
+      return;
+    }
+    final List<PickedFile> picked = await FilePickerUtil.pickDocuments();
+    if (!mounted || picked.isEmpty) return;
     setState(() {
-      entry.documentName = picked.name;
-      entry.documentExtension = picked.extension;
+      entry.files = picked;
     });
+  }
+
+  Future<void> _uploadAdditionalDocument(_SkillEntryDraft entry) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final _UploadDocumentRequest? request = await showModalBottomSheet<
+      _UploadDocumentRequest
+    >(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) => const _UploadDocumentSheet(),
+    );
+    if (request == null) return;
+
+    try {
+      await ref.read(skillTreeRepositoryProvider).uploadSkillDocument(
+        skillId: entry.skillId!,
+        documentLabel: request.documentLabel,
+        file: request.file,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            "Document '${request.documentLabel}' uploaded successfully.",
+          ),
+        ),
+      );
+      await _loadSummary();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    }
   }
 
   void _removeEntry(int index) {
@@ -179,6 +255,82 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
     );
   }
 
+  Future<void> _submitAllSkills() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    try {
+      final SkillTreeRepository repo = ref.read(skillTreeRepositoryProvider);
+      final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+      int submitted = 0;
+
+      for (final _SkillStepDraft step in _steps) {
+        for (final _SkillEntryDraft entry in step.entries) {
+          final String skillName = entry.skillName.text.trim();
+          final String skillInfo = entry.about.text.trim();
+          final String institutionName = entry.institutionName.text.trim();
+          final String degree = entry.degree.text.trim();
+
+          if (skillName.isEmpty &&
+              skillInfo.isEmpty &&
+              institutionName.isEmpty &&
+              entry.files.isEmpty) {
+            continue;
+          }
+
+          if (entry.skillId != null) {
+            continue;
+          }
+
+          if (step.skillType.requiresInstitution &&
+              institutionName.isEmpty) {
+            throw const ApiException(
+              statusCode: null,
+              message: 'Institution name is required for education.',
+            );
+          }
+
+          final SkillItem created = await repo.addSkill(
+            skillType: step.skillType,
+            skillName: skillName,
+            skillInfo: skillInfo,
+            institutionName: institutionName.isEmpty ? null : institutionName,
+            degree: degree.isEmpty ? null : degree,
+            files: entry.files,
+          );
+          entry.skillId = created.id;
+          submitted += 1;
+        }
+      }
+
+      if (!mounted) return;
+      await _loadSummary();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            submitted == 0
+                ? 'No new skills to save.'
+                : 'Saved $submitted skill${submitted == 1 ? '' : 's'} successfully.',
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final _SkillStepDraft step = _steps[_activeStep];
@@ -236,6 +388,29 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
                               ),
                             ),
                           ),
+                          if (!_isLoadingSummary)
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: s(12),
+                                vertical: s(7),
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(s(18)),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.22),
+                                ),
+                              ),
+                              child: Text(
+                                'Saved $_savedSkillsCount',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: s(12),
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -314,13 +489,15 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
                                                       ? step.title
                                                       : '${step.title} ${i + 1}',
                                               entry: step.entries[i],
-                                              onRemove: () =>
-                                                  _removeEntry(i),
+                                              isEducation:
+                                                  step.skillType ==
+                                                  SkillTreeSkillType.education,
+                                              onRemove: () => _removeEntry(i),
                                               onPickDocument: () =>
                                                   _pickDocument(i),
-                                              onAddBelow: () =>
-                                                  _addFieldGroup(i),
-                                              fieldDecoration: _fieldDecoration,
+                                              onAddBelow: () => _addFieldGroup(i),
+                                              fieldDecoration:
+                                                  _fieldDecoration,
                                             ),
                                             if (i != step.entries.length - 1)
                                               SizedBox(height: s(16)),
@@ -338,9 +515,9 @@ class _IndividualSkillTreePageState extends State<IndividualSkillTreePage> {
                                 scale: scale,
                                 label:
                                     _activeStep == totalSteps - 1
-                                        ? 'Finish'
+                                        ? (_isSubmitting ? 'Saving...' : 'Finish')
                                         : 'Continue',
-                                onTap: _goNext,
+                                onTap: _isSubmitting ? () {} : _goNext,
                               ),
                             ),
                           ],
@@ -363,34 +540,44 @@ class _SkillStepDraft {
     required this.title,
     required this.subtitle,
     required this.hint,
+    required this.skillType,
   }) : entries = <_SkillEntryDraft>[_SkillEntryDraft()];
 
   final String title;
   final String subtitle;
   final String hint;
+  final SkillTreeSkillType skillType;
   final List<_SkillEntryDraft> entries;
 }
 
 class _SkillEntryDraft {
   _SkillEntryDraft()
       : skillName = TextEditingController(),
-        about = TextEditingController();
+        about = TextEditingController(),
+        institutionName = TextEditingController(),
+        degree = TextEditingController();
 
   final TextEditingController skillName;
   final TextEditingController about;
-  String? documentName;
-  String? documentExtension;
+  final TextEditingController institutionName;
+  final TextEditingController degree;
+  String? skillId;
+  List<PickedFile> files = <PickedFile>[];
 
   void clear() {
     skillName.clear();
     about.clear();
-    documentName = null;
-    documentExtension = null;
+    institutionName.clear();
+    degree.clear();
+    skillId = null;
+    files = <PickedFile>[];
   }
 
   void dispose() {
     skillName.dispose();
     about.dispose();
+    institutionName.dispose();
+    degree.dispose();
   }
 }
 
@@ -400,6 +587,7 @@ class _SkillEntryCard extends StatelessWidget {
     required this.index,
     required this.title,
     required this.entry,
+    required this.isEducation,
     required this.onRemove,
     required this.onPickDocument,
     required this.onAddBelow,
@@ -410,6 +598,7 @@ class _SkillEntryCard extends StatelessWidget {
   final int index;
   final String title;
   final _SkillEntryDraft entry;
+  final bool isEducation;
   final VoidCallback onRemove;
   final VoidCallback onPickDocument;
   final VoidCallback onAddBelow;
@@ -422,7 +611,7 @@ class _SkillEntryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    final bool hasDocument = (entry.documentName ?? '').trim().isNotEmpty;
+    final bool hasDocument = entry.files.isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -535,6 +724,56 @@ class _SkillEntryCard extends StatelessWidget {
               hint: 'e.g. Flutter, Negotiation, B.Com, Hackathon',
             ),
           ),
+          if (isEducation) ...<Widget>[
+            SizedBox(height: s(14)),
+            Text(
+              'Institution name',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w700,
+                letterSpacing: s(0.7),
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            SizedBox(height: s(8)),
+            TextField(
+              controller: entry.institutionName,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(14),
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF0F172A),
+              ),
+              decoration: fieldDecoration(
+                hint: 'School, college, or university name',
+              ),
+            ),
+            SizedBox(height: s(14)),
+            Text(
+              'Degree / qualification',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(11),
+                fontWeight: FontWeight.w700,
+                letterSpacing: s(0.7),
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            SizedBox(height: s(8)),
+            TextField(
+              controller: entry.degree,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(14),
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF0F172A),
+              ),
+              decoration: fieldDecoration(
+                hint: 'Optional degree or qualification details',
+              ),
+            ),
+          ],
           SizedBox(height: s(14)),
           Text(
             'More about the skill',
@@ -620,7 +859,9 @@ class _SkillEntryCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          hasDocument ? entry.documentName! : 'Tap to upload',
+                          hasDocument
+                              ? entry.files.first.name
+                              : 'Tap to upload',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -634,7 +875,9 @@ class _SkillEntryCard extends StatelessWidget {
                         SizedBox(height: s(2)),
                         Text(
                           hasDocument
-                              ? 'Replace the uploaded document'
+                              ? entry.files.length > 1
+                                    ? '+${entry.files.length - 1} more file${entry.files.length == 2 ? '' : 's'}'
+                                    : 'Replace the uploaded document'
                               : 'PDF, PNG, JPG, or WEBP',
                           style: TextStyle(
                             fontFamily: 'Inter',
@@ -662,8 +905,8 @@ class _SkillEntryCard extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        (entry.documentExtension ?? '').isNotEmpty
-                            ? entry.documentExtension!.toUpperCase()
+                        entry.files.first.extension.isNotEmpty
+                            ? entry.files.first.extension.toUpperCase()
                             : 'FILE',
                         style: TextStyle(
                           fontFamily: 'Inter',
@@ -812,6 +1055,141 @@ class _BottomContinue extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadDocumentRequest {
+  const _UploadDocumentRequest({
+    required this.documentLabel,
+    required this.file,
+  });
+
+  final String documentLabel;
+  final PickedFile file;
+}
+
+class _UploadDocumentSheet extends StatefulWidget {
+  const _UploadDocumentSheet();
+
+  @override
+  State<_UploadDocumentSheet> createState() => _UploadDocumentSheetState();
+}
+
+class _UploadDocumentSheetState extends State<_UploadDocumentSheet> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _label = TextEditingController(
+    text: 'certificate',
+  );
+
+  PickedFile? _file;
+  bool _picking = false;
+
+  @override
+  void dispose() {
+    _label.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    setState(() => _picking = true);
+    try {
+      final PickedFile? picked = await FilePickerUtil.pickDocument();
+      if (!mounted || picked == null) return;
+      setState(() => _file = picked);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() != true) return;
+    final PickedFile? file = _file;
+    if (file == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please attach a file first.')),
+      );
+      return;
+    }
+    Navigator.of(context).pop(
+      _UploadDocumentRequest(documentLabel: _label.text, file: file),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final EdgeInsets viewInsets = MediaQuery.of(context).viewInsets;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x4,
+        AppSpacing.x2,
+        AppSpacing.x4,
+        AppSpacing.x4 + viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        padding: const EdgeInsets.all(AppSpacing.x4),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text('Upload document', style: AppTypography.heading1),
+              const SizedBox(height: AppSpacing.x2),
+              Text(
+                'Upload or re-upload one document. The backend will version the file automatically for the same label.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.x4),
+              TextFormField(
+                controller: _label,
+                decoration: const InputDecoration(
+                  labelText: 'Document label',
+                  hintText: 'certificate',
+                ),
+                validator: (String? value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Document label is required.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: AppSpacing.x3),
+              OutlinedButton.icon(
+                onPressed: _picking ? null : _pickFile,
+                icon: _picking
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.attach_file_rounded),
+                label: Text(_file == null ? 'Choose file' : _file!.name),
+              ),
+              if (_file != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  'Selected: ${_file!.name}',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.x4),
+              FilledButton(
+                onPressed: _submit,
+                child: const Text('Upload'),
+              ),
+            ],
           ),
         ),
       ),
