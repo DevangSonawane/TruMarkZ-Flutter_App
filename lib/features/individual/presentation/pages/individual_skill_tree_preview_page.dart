@@ -130,9 +130,36 @@ class _IndividualSkillTreePreviewPageState
             _showOverviewAfterLoader = true;
           });
         });
-        return _loaderScaffold();
       }
-      return const IndividualSkillTreeOverviewPage();
+      return Scaffold(
+        backgroundColor: AppColors.brandBlue,
+        body: Stack(
+          children: <Widget>[
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: AppColors.brandBlue),
+              ),
+            ),
+            Center(
+              child: LoadingAnimationWidget.dotsTriangle(
+                color: Colors.white,
+                size: 42,
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_showOverviewAfterLoader,
+                child: AnimatedOpacity(
+                  opacity: _showOverviewAfterLoader ? 1 : 0,
+                  duration: const Duration(milliseconds: 380),
+                  curve: Curves.easeOut,
+                  child: const IndividualSkillTreeOverviewPage(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     _existingSkillsLoaderTimer?.cancel();

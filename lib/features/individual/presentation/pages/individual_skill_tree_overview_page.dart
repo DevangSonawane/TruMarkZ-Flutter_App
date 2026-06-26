@@ -29,7 +29,6 @@ class _IndividualSkillTreeOverviewPageState
 
   late final AnimationController _pulseController;
   bool _deletingAll = false;
-  final Set<String> _busySkillIds = <String>{};
 
   @override
   void initState() {
@@ -57,40 +56,6 @@ class _IndividualSkillTreeOverviewPageState
 
   Future<void> _refresh() async {
     ref.invalidate(mySkillsProvider);
-  }
-
-  Future<void> _deleteSkill(SkillItem skill) async {
-    if (_busySkillIds.contains(skill.id)) return;
-    final bool confirmed = await _confirmDanger(
-      title: 'Delete skill',
-      message: 'Delete "${skill.skillName}" from your skill tree?',
-      actionLabel: 'Delete',
-    );
-    if (!confirmed) return;
-
-    setState(() => _busySkillIds.add(skill.id));
-    try {
-      await ref.read(skillTreeRepositoryProvider).deleteSkill(
-        skillId: skill.id,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${skill.skillName}" deleted.')),
-      );
-      ref.invalidate(mySkillsProvider);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busySkillIds.remove(skill.id));
-    }
   }
 
   Future<void> _deleteAllSkills() async {
@@ -329,6 +294,18 @@ class _IndividualSkillTreeOverviewPageState
                                 .length;
                             final String displayName =
                                 _displayName(authAsync.value?.userProfile);
+                            final Map<SkillTreeSkillType, int> verifiedByType =
+                                <SkillTreeSkillType, int>{
+                              for (final SkillTreeSkillType type
+                                  in SkillTreeSkillType.values)
+                                type: (grouped[type] ?? <SkillItem>[])
+                                    .where(
+                                      (SkillItem skill) =>
+                                          skill.status.trim().toLowerCase() ==
+                                          'verified',
+                                    )
+                                    .length,
+                            };
 
                             return Column(
                               children: <Widget>[
@@ -363,11 +340,11 @@ class _IndividualSkillTreeOverviewPageState
                                             type: type,
                                             skills: grouped[type] ??
                                                 <SkillItem>[],
-                                            busySkillIds: _busySkillIds,
-                                            onEditSkill: (_) => context.push(
-                                              AppRouter.individualSkillTreeBuildPath,
+                                            verifiedCount:
+                                                verifiedByType[type] ?? 0,
+                                            onTap: () => context.push(
+                                              '${AppRouter.individualSkillTreeDetailPath}?type=${Uri.encodeComponent(type.value)}',
                                             ),
-                                            onDeleteSkill: _deleteSkill,
                                           ),
                                           SizedBox(height: s(12)),
                                         ],
@@ -527,7 +504,7 @@ class _SummaryCard extends StatelessWidget {
           ),
           SizedBox(height: s(10)),
           Text(
-            'Your skills are saved and waiting for review. Edit or remove items as needed while the tree is pending.',
+            'Your skills are saved and waiting for review. Tap any category to open the detailed skill list.',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(12),
@@ -653,271 +630,137 @@ class _SkillGroupCard extends StatelessWidget {
     required this.scale,
     required this.type,
     required this.skills,
-    required this.busySkillIds,
-    required this.onEditSkill,
-    required this.onDeleteSkill,
+    required this.verifiedCount,
+    required this.onTap,
   });
 
   final double scale;
   final SkillTreeSkillType type;
   final List<SkillItem> skills;
-  final Set<String> busySkillIds;
-  final ValueChanged<SkillItem> onEditSkill;
-  final ValueChanged<SkillItem> onDeleteSkill;
+  final int verifiedCount;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    return Container(
+    final int total = skills.length;
+    final bool allVerified = total > 0 && verifiedCount == total;
+    return SizedBox(
       width: double.infinity,
-      padding: EdgeInsets.all(s(14)),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(18)),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      type.label,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(16),
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                    SizedBox(height: s(2)),
-                    Text(
-                      type.description,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(11),
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: s(10), vertical: s(6)),
-                decoration: BoxDecoration(
-                  color: AppColors.blueTint,
-                  borderRadius: BorderRadius.circular(s(999)),
-                ),
-                child: Text(
-                  '${skills.length}',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(11),
-                    fontWeight: FontWeight.w800,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(s(18)),
+          child: Ink(
+            padding: EdgeInsets.all(s(14)),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(s(18)),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: s(52),
+                  height: s(52),
+                  decoration: BoxDecoration(
+                    color: AppColors.blueTint,
+                    borderRadius: BorderRadius.circular(s(16)),
+                  ),
+                  child: Icon(
+                    _iconForType(type),
                     color: AppColors.brandBlue,
+                    size: s(24),
                   ),
                 ),
-              ),
-            ],
-          ),
-          SizedBox(height: s(12)),
-          if (skills.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(s(12)),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(s(14)),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Text(
-                'No ${type.label.toLowerCase()} skills yet.',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF64748B),
-                ),
-              ),
-            )
-          else
-            for (int i = 0; i < skills.length; i++) ...<Widget>[
-              _SkillCard(
-                scale: scale,
-                skill: skills[i],
-                busy: busySkillIds.contains(skills[i].id),
-                onEdit: () => onEditSkill(skills[i]),
-                onDelete: () => onDeleteSkill(skills[i]),
-              ),
-              if (i != skills.length - 1) SizedBox(height: s(10)),
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SkillCard extends StatelessWidget {
-  const _SkillCard({
-    required this.scale,
-    required this.skill,
-    required this.busy,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final double scale;
-  final SkillItem skill;
-  final bool busy;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    final Color statusBg = _statusBg(skill.status);
-    final Color statusFg = _statusFg(skill.status);
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(s(12)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(s(16)),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      skill.skillName,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(14),
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                    if ((skill.skillInfo ?? '').trim().isNotEmpty) ...<Widget>[
-                      SizedBox(height: s(4)),
+                SizedBox(width: s(12)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
                       Text(
-                        skill.skillInfo!.trim(),
+                        type.label,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(16),
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      SizedBox(height: s(3)),
+                      Text(
+                        type.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: s(11),
                           fontWeight: FontWeight.w500,
-                          height: 1.4,
+                          height: 1.35,
                           color: const Color(0xFF64748B),
                         ),
                       ),
                     ],
-                    if ((skill.institutionName ?? '').trim().isNotEmpty) ...<
-                      Widget
-                    >[
-                      SizedBox(height: s(4)),
+                  ),
+                ),
+                SizedBox(width: s(12)),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    if (allVerified)
+                      Container(
+                        width: s(28),
+                        height: s(28),
+                        decoration: BoxDecoration(
+                          color: AppColors.successBg,
+                          borderRadius: BorderRadius.circular(s(999)),
+                        ),
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: s(18),
+                          color: AppColors.success,
+                        ),
+                      )
+                    else
                       Text(
-                        skill.degree?.trim().isNotEmpty == true
-                            ? '${skill.institutionName!.trim()} • ${skill.degree!.trim()}'
-                            : skill.institutionName!.trim(),
+                        '$verifiedCount/$total',
                         style: TextStyle(
                           fontFamily: 'Inter',
-                          fontSize: s(11),
-                          fontWeight: FontWeight.w600,
+                          fontSize: s(15),
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.brandBlue,
+                        ),
+                      ),
+                    SizedBox(height: s(4)),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: s(8),
+                        vertical: s(4),
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(s(999)),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        '$total skills',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(10),
+                          fontWeight: FontWeight.w700,
                           color: const Color(0xFF475569),
                         ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: s(10), vertical: s(6)),
-                decoration: BoxDecoration(
-                  color: statusBg,
-                  borderRadius: BorderRadius.circular(s(999)),
-                ),
-                child: Text(
-                  skill.status.toUpperCase(),
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(10),
-                    fontWeight: FontWeight.w800,
-                    color: statusFg,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if ((skill.statusReason ?? '').trim().isNotEmpty) ...<Widget>[
-            SizedBox(height: s(6)),
-            Text(
-              skill.statusReason!.trim(),
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(11),
-                fontWeight: FontWeight.w500,
-                color: AppColors.warning,
-              ),
+              ],
             ),
-          ],
-          SizedBox(height: s(10)),
-          Wrap(
-            spacing: s(8),
-            runSpacing: s(8),
-            children: <Widget>[
-              if (skill.documents.isNotEmpty)
-                for (final SkillDocument doc in skill.documents)
-                  Chip(
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    label: Text(
-                      '${doc.documentLabel?.trim().isNotEmpty == true ? doc.documentLabel!.trim() : 'Document'} v${doc.version}',
-                    ),
-                  )
-              else
-                Chip(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
-                  label: const Text('No documents yet'),
-                ),
-            ],
           ),
-          SizedBox(height: s(10)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              IconButton(
-                tooltip: 'Edit',
-                onPressed: busy ? null : onEdit,
-                icon: const Icon(Icons.edit_rounded),
-              ),
-              IconButton(
-                tooltip: 'Delete',
-                onPressed: busy ? null : onDelete,
-                icon: busy
-                    ? SizedBox(
-                        width: s(18),
-                        height: s(18),
-                        child: const CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.delete_outline_rounded),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -992,28 +835,15 @@ class _BottomActions extends StatelessWidget {
   }
 }
 
-Color _statusBg(String status) {
-  switch (status.trim().toLowerCase()) {
-    case 'verified':
-      return AppColors.successBg;
-    case 'rejected':
-    case 'failed':
-      return AppColors.dangerBg;
-    case 'pending':
-    default:
-      return AppColors.blueTint;
-  }
-}
-
-Color _statusFg(String status) {
-  switch (status.trim().toLowerCase()) {
-    case 'verified':
-      return AppColors.success;
-    case 'rejected':
-    case 'failed':
-      return AppColors.danger;
-    case 'pending':
-    default:
-      return AppColors.brandBlue;
+IconData _iconForType(SkillTreeSkillType type) {
+  switch (type) {
+    case SkillTreeSkillType.technical:
+      return Icons.code_rounded;
+    case SkillTreeSkillType.soft:
+      return Icons.groups_rounded;
+    case SkillTreeSkillType.education:
+      return Icons.school_rounded;
+    case SkillTreeSkillType.project:
+      return Icons.work_outline_rounded;
   }
 }
