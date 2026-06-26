@@ -68,6 +68,7 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
   bool _isSubmitting = false;
   bool _isLoadingSummary = true;
   int _savedSkillsCount = 0;
+  bool _didSeedExistingSkills = false;
 
   @override
   void initState() {
@@ -90,6 +91,40 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
       if (mounted) {
         setState(() => _isLoadingSummary = false);
       }
+    }
+  }
+
+  void _seedExistingSkills(List<SkillItem> skills) {
+    if (_didSeedExistingSkills) return;
+    _didSeedExistingSkills = true;
+
+    for (final _SkillStepDraft step in _steps) {
+      for (final _SkillEntryDraft entry in step.entries) {
+        entry.dispose();
+      }
+      step.entries.clear();
+    }
+
+    final Map<SkillTreeSkillType, List<SkillItem>> grouped =
+        <SkillTreeSkillType, List<SkillItem>>{
+      for (final SkillTreeSkillType type in SkillTreeSkillType.values)
+        type:
+            skills
+                .where((SkillItem skill) => skillTypeFromValue(skill.skillType) == type)
+                .toList(),
+    };
+
+    for (final _SkillStepDraft step in _steps) {
+      final List<SkillItem> items = grouped[step.skillType] ?? <SkillItem>[];
+      if (items.isEmpty) {
+        step.entries.add(_SkillEntryDraft());
+        continue;
+      }
+      step.entries.addAll(
+        items.map(
+          (SkillItem item) => _SkillEntryDraft.fromSkill(item),
+        ),
+      );
     }
   }
 
@@ -190,7 +225,44 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
     }
   }
 
-  void _removeEntry(int index) {
+  Future<void> _removeEntry(int index) async {
+    final _SkillEntryDraft entry = _steps[_activeStep].entries[index];
+    if (entry.skillId != null) {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Delete skill'),
+            content: const Text('This will permanently delete this skill.'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                ),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+      try {
+        await ref.read(skillTreeRepositoryProvider).deleteSkill(
+          skillId: entry.skillId!,
+        );
+        await _loadSummary();
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        return;
+      }
+    }
+
     if (_steps[_activeStep].entries.length == 1) {
       _steps[_activeStep].entries[index].clear();
       setState(() {});
@@ -278,10 +350,6 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
             continue;
           }
 
-          if (entry.skillId != null) {
-            continue;
-          }
-
           if (step.skillType.requiresInstitution &&
               institutionName.isEmpty) {
             throw const ApiException(
@@ -290,30 +358,54 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
             );
           }
 
-          final SkillItem created = await repo.addSkill(
-            skillType: step.skillType,
+          if (entry.skillId == null) {
+            final SkillItem created = await repo.addSkill(
+              skillType: step.skillType,
+              skillName: skillName,
+              skillInfo: skillInfo,
+              institutionName:
+                  institutionName.isEmpty ? null : institutionName,
+              degree: degree.isEmpty ? null : degree,
+              files: entry.files,
+            );
+            entry.skillId = created.id;
+            submitted += 1;
+            continue;
+          }
+
+          await repo.editSkill(
+            skillId: entry.skillId!,
             skillName: skillName,
             skillInfo: skillInfo,
             institutionName: institutionName.isEmpty ? null : institutionName,
             degree: degree.isEmpty ? null : degree,
-            files: entry.files,
           );
-          entry.skillId = created.id;
           submitted += 1;
         }
       }
 
       if (!mounted) return;
       await _loadSummary();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            submitted == 0
-                ? 'No new skills to save.'
-                : 'Saved $submitted skill${submitted == 1 ? '' : 's'} successfully.',
+      if (submitted == 0) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('No new skills to save.'),
           ),
-        ),
+        );
+        return;
+      }
+
+      final Uri uri = Uri(
+        path: AppRouter.individualSkillTreeCompletionPath,
+        queryParameters: <String, String>{
+          'submitted': submitted.toString(),
+          'skipped': '0',
+          'errors': '0',
+          'subject': 'Skill Tree',
+        },
       );
+      if (!mounted) return;
+      AppRouter.router.go(uri.toString());
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
@@ -333,6 +425,15 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<SkillsMeResponse> skillsAsync = ref.watch(
+      mySkillsProvider,
+    );
+    skillsAsync.whenData((SkillsMeResponse data) {
+      if (!_didSeedExistingSkills) {
+        _seedExistingSkills(data.skills);
+      }
+    });
+
     final _SkillStepDraft step = _steps[_activeStep];
     final int stepNumber = _activeStep + 1;
     final int totalSteps = _steps.length;
@@ -556,6 +657,16 @@ class _SkillEntryDraft {
         about = TextEditingController(),
         institutionName = TextEditingController(),
         degree = TextEditingController();
+
+  _SkillEntryDraft.fromSkill(SkillItem item)
+      : skillName = TextEditingController(text: item.skillName),
+        about = TextEditingController(text: item.skillInfo ?? ''),
+        institutionName = TextEditingController(
+          text: item.institutionName ?? '',
+        ),
+        degree = TextEditingController(text: item.degree ?? '') {
+    skillId = item.id;
+  }
 
   final TextEditingController skillName;
   final TextEditingController about;

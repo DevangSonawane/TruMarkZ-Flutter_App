@@ -160,6 +160,27 @@ class ApiClient {
     }
   }
 
+  Future<dynamic> deleteAny(
+    String path, {
+    Object? data,
+  }) async {
+    try {
+      final Response<dynamic> res = await _dio.delete<dynamic>(
+        path,
+        data: data,
+        options: Options(contentType: Headers.jsonContentType),
+      );
+      return res.data;
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> verificationGet(String path) async {
     try {
       final Response<dynamic> res = await _verificationDio.get<dynamic>(path);

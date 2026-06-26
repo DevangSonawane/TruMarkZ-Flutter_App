@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 
 import '../../../../../core/models/auth_models.dart';
+import '../../../../../core/models/skill_tree_models.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../data/skill_tree_repository.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
+import 'individual_skill_tree_overview_page.dart';
 
 class IndividualSkillTreePreviewPage extends ConsumerStatefulWidget {
   const IndividualSkillTreePreviewPage({super.key});
@@ -30,9 +36,12 @@ class _IndividualSkillTreePreviewPageState
   final TextEditingController _address = TextEditingController();
 
   bool _didSeedFromProfile = false;
+  Timer? _existingSkillsLoaderTimer;
+  bool _showOverviewAfterLoader = false;
 
   @override
   void dispose() {
+    _existingSkillsLoaderTimer?.cancel();
     _fullName.dispose();
     _email.dispose();
     _mobile.dispose();
@@ -88,11 +97,47 @@ class _IndividualSkillTreePreviewPageState
     context.push(AppRouter.individualSkillTreeBuildPath);
   }
 
+  Widget _loaderScaffold() {
+    return Scaffold(
+      backgroundColor: AppColors.brandBlue,
+      body: Center(
+        child: LoadingAnimationWidget.dotsTriangle(
+          color: Colors.white,
+          size: 42,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final UserProfile? profile = authAsync.value?.userProfile;
+    final AsyncValue<SkillsMeResponse> skillsAsync = ref.watch(
+      mySkillsProvider,
+    );
     _seedFromProfile(profile);
+
+    if (skillsAsync.isLoading && !skillsAsync.hasValue) {
+      return _loaderScaffold();
+    }
+
+    if (skillsAsync.hasValue && skillsAsync.value!.total > 0) {
+      if (!_showOverviewAfterLoader) {
+        _existingSkillsLoaderTimer ??= Timer(const Duration(seconds: 1), () {
+          if (!mounted) return;
+          setState(() {
+            _showOverviewAfterLoader = true;
+          });
+        });
+        return _loaderScaffold();
+      }
+      return const IndividualSkillTreeOverviewPage();
+    }
+
+    _existingSkillsLoaderTimer?.cancel();
+    _existingSkillsLoaderTimer = null;
+    _showOverviewAfterLoader = false;
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,

@@ -9,7 +9,7 @@ final skillTreeRepositoryProvider = Provider<SkillTreeRepository>((ref) {
   return SkillTreeRepository(ref.read(apiClientProvider));
 });
 
-final mySkillsProvider = FutureProvider.autoDispose<SkillsMeResponse>((ref) {
+final mySkillsProvider = FutureProvider<SkillsMeResponse>((ref) {
   return ref.read(skillTreeRepositoryProvider).getMySkills();
 });
 
@@ -65,6 +65,51 @@ class SkillTreeRepository {
       formData,
     );
     return SkillItem.fromJson(res);
+  }
+
+  Future<SkillItem> editSkill({
+    required String skillId,
+    required String skillName,
+    String? skillInfo,
+    String? institutionName,
+    String? degree,
+  }) async {
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'skill_name': skillName.trim(),
+    };
+    if ((skillInfo ?? '').trim().isNotEmpty) {
+      payload['skill_info'] = skillInfo!.trim();
+    }
+    if ((institutionName ?? '').trim().isNotEmpty) {
+      payload['institution_name'] = institutionName!.trim();
+    }
+    if ((degree ?? '').trim().isNotEmpty) {
+      payload['degree'] = degree!.trim();
+    }
+
+    final Map<String, dynamic> res = await _api.patch(
+      '/skills/${Uri.encodeComponent(skillId.trim())}/edit',
+      data: payload,
+    );
+    return SkillItem.fromJson(res);
+  }
+
+  Future<void> deleteSkill({required String skillId}) async {
+    await _api.deleteAny('/skills/${Uri.encodeComponent(skillId.trim())}');
+  }
+
+  Future<void> deleteAllSkills() async {
+    final SkillsMeResponse current = await getMySkills();
+    final String individualId = current.individualId.trim();
+    if (individualId.isEmpty) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Could not determine your skill tree owner.',
+      );
+    }
+    await _api.deleteAny(
+      '/skills/all/${Uri.encodeComponent(individualId)}',
+    );
   }
 
   Future<SkillDocument> uploadSkillDocument({

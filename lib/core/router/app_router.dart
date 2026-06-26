@@ -13,6 +13,7 @@ import '../services/token_storage.dart';
 import '../../features/individual/presentation/pages/individual_dashboard_page.dart';
 import '../../features/individual/presentation/pages/individual_profile_page.dart';
 import '../../features/individual/presentation/pages/individual_skill_tree_preview_page.dart';
+import '../../features/individual/presentation/pages/individual_skill_tree_completion_page.dart';
 import '../../features/individual/presentation/pages/individual_reports_page.dart';
 import '../../features/individual/verification_flow/presentation/pages/individual_certificate_preview_page.dart';
 import '../../features/individual/verification_flow/presentation/pages/individual_cost_breakdown_page.dart';
@@ -158,6 +159,8 @@ class AppRouter {
   static const String individualProfilePath = '/me/profile';
   static const String individualSkillTreePreviewPath = '/me/skill-tree';
   static const String individualSkillTreeBuildPath = '/me/skill-tree/build';
+  static const String individualSkillTreeCompletionPath =
+      '/me/skill-tree/pending';
   static const String individualVerificationIndustryPath =
       '/me/verification/industry';
   static const String individualVerificationChecksPath =
@@ -472,6 +475,15 @@ class AppRouter {
                 _slideFadePage(
                   state: state,
                   child: const IndividualSkillTreePage(),
+                ),
+          ),
+          GoRoute(
+            path: individualSkillTreeCompletionPath,
+            name: 'individual_skill_tree_completion',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualSkillTreeCompletionPage(),
                 ),
           ),
           GoRoute(
