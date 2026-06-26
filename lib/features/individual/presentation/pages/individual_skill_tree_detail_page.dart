@@ -5,9 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/models/auth_models.dart';
 import '../../../../../core/models/skill_tree_models.dart';
-import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/widgets/tmz_badge.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 import '../../data/skill_tree_repository.dart';
@@ -30,10 +30,6 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
     return 'there';
   }
 
-  void _refresh(WidgetRef ref) {
-    ref.invalidate(mySkillsProvider);
-  }
-
   void _goBack(BuildContext context) {
     final GoRouter router = GoRouter.of(context);
     if (router.canPop()) {
@@ -41,6 +37,10 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
     } else {
       context.go(AppRouter.individualScanPath);
     }
+  }
+
+  void _refresh(WidgetRef ref) {
+    ref.invalidate(mySkillsProvider);
   }
 
   @override
@@ -134,10 +134,7 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                             child: CircularProgressIndicator(),
                           ),
                           error: (Object error, StackTrace stackTrace) {
-                            final String message =
-                                error is ApiException
-                                    ? error.message
-                                    : 'Unable to load your skills.';
+                            final String message = 'Unable to load your skills.';
                             return Center(
                               child: Padding(
                                 padding: EdgeInsets.all(s(18)),
@@ -156,20 +153,6 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                                       selectedType,
                                 )
                                 .toList();
-                            final int verifiedCount = skills
-                                .where(
-                                  (SkillItem skill) =>
-                                      skill.status.trim().toLowerCase() ==
-                                      'verified',
-                                )
-                                .length;
-                            final int pendingCount = skills
-                                .where(
-                                  (SkillItem skill) =>
-                                      skill.status.trim().toLowerCase() ==
-                                      'pending',
-                                )
-                                .length;
                             final String displayName =
                                 _displayName(authAsync.value?.userProfile);
 
@@ -195,29 +178,8 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                                                 displayName: displayName,
                                                 selectedType: selectedType,
                                                 total: skills.length,
-                                                verifiedCount: verifiedCount,
-                                                pendingCount: pendingCount,
                                               ),
                                               SizedBox(height: s(16)),
-                                              _DetailSummaryCard(
-                                                scale: scale,
-                                                selectedType: selectedType,
-                                                total: skills.length,
-                                                verifiedCount: verifiedCount,
-                                                pendingCount: pendingCount,
-                                              ),
-                                              SizedBox(height: s(18)),
-                                              Text(
-                                                'Skills',
-                                                style: TextStyle(
-                                                  fontFamily: 'Inter',
-                                                  fontSize: s(15),
-                                                  fontWeight: FontWeight.w800,
-                                                  color: const Color(
-                                                    0xFF0F172A,
-                                                  ),
-                                                ),
-                                              ),
                                             ],
                                           ),
                                         ),
@@ -264,10 +226,6 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                                     ],
                                   ),
                                 ),
-                                _DetailFooter(
-                                  scale: scale,
-                                  onRefresh: () => _refresh(ref),
-                                ),
                               ],
                             );
                           },
@@ -291,16 +249,12 @@ class _DetailHero extends StatelessWidget {
     required this.displayName,
     required this.selectedType,
     required this.total,
-    required this.verifiedCount,
-    required this.pendingCount,
   });
 
   final double scale;
   final String displayName;
   final SkillTreeSkillType selectedType;
   final int total;
-  final int verifiedCount;
-  final int pendingCount;
 
   @override
   Widget build(BuildContext context) {
@@ -338,7 +292,7 @@ class _DetailHero extends StatelessWidget {
           ),
           SizedBox(height: s(10)),
           Text(
-            'Tap into the skills below to review descriptions and uploaded documents.',
+            '${selectedType.label} in one place',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(12),
@@ -348,112 +302,18 @@ class _DetailHero extends StatelessWidget {
             ),
           ),
           SizedBox(height: s(14)),
-          Wrap(
-            spacing: s(8),
-            runSpacing: s(8),
-            children: <Widget>[
-              _StatPill(scale: scale, label: 'Total', value: total),
-              _StatPill(scale: scale, label: 'Verified', value: verifiedCount),
-              _StatPill(scale: scale, label: 'Pending', value: pendingCount),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailSummaryCard extends StatelessWidget {
-  const _DetailSummaryCard({
-    required this.scale,
-    required this.selectedType,
-    required this.total,
-    required this.verifiedCount,
-    required this.pendingCount,
-  });
-
-  final double scale;
-  final SkillTreeSkillType selectedType;
-  final int total;
-  final int verifiedCount;
-  final int pendingCount;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(s(14)),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(18)),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: s(46),
-            height: s(46),
-            decoration: BoxDecoration(
-              color: AppColors.blueTint,
-              borderRadius: BorderRadius.circular(s(14)),
-            ),
-            child: Icon(
-              _iconForType(selectedType),
-              color: AppColors.brandBlue,
+          Text(
+            'Review your ${selectedType.label.toLowerCase()} skills, documents, and verification status here.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(12),
+              fontWeight: FontWeight.w500,
+              height: 1.45,
+              color: AppColors.textSecondary,
             ),
           ),
-          SizedBox(width: s(12)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '${selectedType.label} details',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(14),
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                SizedBox(height: s(4)),
-                Text(
-                  '$total skills total, $verifiedCount verified, $pendingCount pending',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(11),
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (total > 0 && verifiedCount == total)
-            Container(
-              width: s(26),
-              height: s(26),
-              decoration: BoxDecoration(
-                color: AppColors.successBg,
-                borderRadius: BorderRadius.circular(s(999)),
-              ),
-              child: Icon(
-                Icons.check_rounded,
-                size: s(16),
-                color: AppColors.success,
-              ),
-            )
-          else
-            Text(
-              '$verifiedCount/$total',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(12),
-                fontWeight: FontWeight.w800,
-                color: AppColors.brandBlue,
-              ),
-            ),
+          SizedBox(height: s(14)),
+          TMZBadge.pending(label: total > 0 ? 'PENDING' : 'EMPTY'),
         ],
       ),
     );
@@ -640,109 +500,6 @@ class _EmptyState extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _DetailFooter extends StatelessWidget {
-  const _DetailFooter({
-    required this.scale,
-    required this.onRefresh,
-  });
-
-  final double scale;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        s(13.604),
-        s(12.864),
-        s(13.668),
-        s(12.864),
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withAlpha(204),
-        border: const Border(
-          top: BorderSide(color: Color(0xFFF3F4F6), width: 1.072),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: s(52),
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: onRefresh,
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFFE2E8F0)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(s(16)),
-              ),
-              backgroundColor: Colors.white,
-            ),
-            child: Text(
-              'Refresh',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(15),
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  const _StatPill({
-    required this.scale,
-    required this.label,
-    required this.value,
-  });
-
-  final double scale;
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(8)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(s(999)),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: s(11),
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF334155),
-        ),
-      ),
-    );
-  }
-}
-
-IconData _iconForType(SkillTreeSkillType type) {
-  switch (type) {
-    case SkillTreeSkillType.technical:
-      return Icons.code_rounded;
-    case SkillTreeSkillType.soft:
-      return Icons.groups_rounded;
-    case SkillTreeSkillType.education:
-      return Icons.school_rounded;
-    case SkillTreeSkillType.project:
-      return Icons.work_outline_rounded;
   }
 }
 

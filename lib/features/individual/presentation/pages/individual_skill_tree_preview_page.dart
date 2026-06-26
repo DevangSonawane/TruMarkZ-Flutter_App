@@ -116,13 +116,21 @@ class _IndividualSkillTreePreviewPageState
     final AsyncValue<SkillsMeResponse> skillsAsync = ref.watch(
       mySkillsProvider,
     );
+    final AsyncValue<bool> completedAsync = ref.watch(
+      skillTreeCompletedProvider,
+    );
     _seedFromProfile(profile);
 
-    if (skillsAsync.isLoading && !skillsAsync.hasValue) {
+    if ((skillsAsync.isLoading && !skillsAsync.hasValue) ||
+        (completedAsync.isLoading && !completedAsync.hasValue)) {
       return _loaderScaffold();
     }
 
-    if (skillsAsync.hasValue && skillsAsync.value!.total > 0) {
+    final bool hasCompletedFlow = completedAsync.value == true;
+    final bool hasExistingSkills =
+        skillsAsync.hasValue && skillsAsync.value!.total > 0;
+
+    if (hasCompletedFlow || hasExistingSkills) {
       if (!_showOverviewAfterLoader) {
         _existingSkillsLoaderTimer ??= Timer(const Duration(seconds: 1), () {
           if (!mounted) return;

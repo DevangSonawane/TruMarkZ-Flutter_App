@@ -10,6 +10,7 @@ class TokenStorage {
   static const String _tokenKey = 'auth_token';
   static const String _loginTypeKey = 'login_type';
   static const String _userIdKey = 'user_id';
+  static const String _skillTreeCompletedKey = 'skill_tree_completed';
 
   final FlutterSecureStorage _storage;
 
@@ -22,10 +23,20 @@ class TokenStorage {
   Future<void> saveUserId(String id) => _storage.write(key: _userIdKey, value: id);
   Future<String?> getUserId() => _storage.read(key: _userIdKey);
 
+  Future<void> saveSkillTreeCompleted(bool value) => _storage.write(
+        key: _skillTreeCompletedKey,
+        value: value ? 'true' : 'false',
+      );
+
+  Future<bool> isSkillTreeCompleted() async {
+    final String? raw = await _storage.read(key: _skillTreeCompletedKey);
+    return raw?.trim().toLowerCase() == 'true';
+  }
+
   Future<void> clearAll() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _loginTypeKey);
     await _storage.delete(key: _userIdKey);
+    await _storage.delete(key: _skillTreeCompletedKey);
   }
 }
-

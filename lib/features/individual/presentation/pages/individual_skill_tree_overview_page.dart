@@ -9,6 +9,7 @@ import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/widgets/tmz_badge.dart';
+import '../../../../../core/services/token_storage.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 import '../../data/skill_tree_repository.dart';
@@ -28,6 +29,7 @@ class _IndividualSkillTreeOverviewPageState
   static const Color _panelBg = Color(0xFFF7F9FC);
 
   late final AnimationController _pulseController;
+  late final AnimationController _refreshController;
   bool _deletingAll = false;
 
   @override
@@ -37,11 +39,16 @@ class _IndividualSkillTreeOverviewPageState
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
+    _refreshController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _refreshController.dispose();
     super.dispose();
   }
 
@@ -55,6 +62,7 @@ class _IndividualSkillTreeOverviewPageState
   }
 
   Future<void> _refresh() async {
+    _refreshController.forward(from: 0);
     ref.invalidate(mySkillsProvider);
   }
 
@@ -71,6 +79,7 @@ class _IndividualSkillTreeOverviewPageState
     setState(() => _deletingAll = true);
     try {
       await ref.read(skillTreeRepositoryProvider).deleteAllSkills();
+      await ref.read(tokenStorageProvider).saveSkillTreeCompleted(false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('All skills deleted.')),
@@ -196,10 +205,19 @@ class _IndividualSkillTreeOverviewPageState
                                 borderRadius: BorderRadius.circular(s(12)),
                               ),
                               alignment: Alignment.center,
-                              child: Icon(
-                                Icons.refresh_rounded,
-                                size: s(18),
-                                color: Colors.white,
+                              child: AnimatedBuilder(
+                                animation: _refreshController,
+                                builder: (BuildContext context, Widget? child) {
+                                  return Transform.rotate(
+                                    angle: _refreshController.value * 6.283185307179586,
+                                    child: child,
+                                  );
+                                },
+                                child: Icon(
+                                  Icons.refresh_rounded,
+                                  size: s(18),
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
@@ -306,6 +324,8 @@ class _IndividualSkillTreeOverviewPageState
                                     )
                                     .length,
                             };
+                            final bool allVerified =
+                                data.total > 0 && verifiedCount == data.total;
 
                             return Column(
                               children: <Widget>[
@@ -321,7 +341,11 @@ class _IndividualSkillTreeOverviewPageState
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
-                                        _PendingHero(scale: scale, pulse: _pulseController),
+                                        _PendingHero(
+                                          scale: scale,
+                                          pulse: _pulseController,
+                                          allVerified: allVerified,
+                                        ),
                                         SizedBox(height: s(20)),
                                         _SummaryCard(
                                           scale: scale,
@@ -329,6 +353,7 @@ class _IndividualSkillTreeOverviewPageState
                                           total: data.total,
                                           pendingCount: pendingCount,
                                           verifiedCount: verifiedCount,
+                                          allVerified: allVerified,
                                         ),
                                         SizedBox(height: s(16)),
                                         for (final SkillTreeSkillType type
@@ -383,10 +408,12 @@ class _PendingHero extends StatelessWidget {
   const _PendingHero({
     required this.scale,
     required this.pulse,
+    required this.allVerified,
   });
 
   final double scale;
   final AnimationController pulse;
+  final bool allVerified;
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +450,7 @@ class _PendingHero extends StatelessWidget {
                 height: s(90),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white,
+                  color: allVerified ? AppColors.successBg : Colors.white,
                   boxShadow: <BoxShadow>[
                     BoxShadow(
                       color: Colors.black.withAlpha(12),
@@ -434,9 +461,9 @@ class _PendingHero extends StatelessWidget {
                 ),
               ),
               Icon(
-                Icons.hourglass_top_rounded,
+                allVerified ? Icons.check_rounded : Icons.hourglass_top_rounded,
                 size: s(42),
-                color: AppColors.brandBlue,
+                color: allVerified ? AppColors.success : AppColors.brandBlue,
               ),
             ],
           ),
@@ -453,6 +480,7 @@ class _SummaryCard extends StatelessWidget {
     required this.total,
     required this.pendingCount,
     required this.verifiedCount,
+    required this.allVerified,
   });
 
   final double scale;
@@ -460,6 +488,7 @@ class _SummaryCard extends StatelessWidget {
   final int total;
   final int pendingCount;
   final int verifiedCount;
+  final bool allVerified;
 
   @override
   Widget build(BuildContext context) {
@@ -493,7 +522,7 @@ class _SummaryCard extends StatelessWidget {
           ),
           SizedBox(height: s(8)),
           Text(
-            'Pending skill tree',
+            allVerified ? 'All skills verified' : 'Pending skill tree',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(24),
@@ -504,7 +533,9 @@ class _SummaryCard extends StatelessWidget {
           ),
           SizedBox(height: s(10)),
           Text(
-            'Your skills are saved and waiting for review. Tap any category to open the detailed skill list.',
+            allVerified
+                ? 'Everything in your skill tree has been verified.'
+                : 'Your skills are saved and waiting for review. Tap any category to open the detailed skill list.',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(12),
@@ -524,7 +555,25 @@ class _SummaryCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: s(14)),
-          TMZBadge.pending(label: 'PENDING'),
+          allVerified
+              ? Container(
+                  padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(8)),
+                  decoration: BoxDecoration(
+                    color: AppColors.successBg,
+                    borderRadius: BorderRadius.circular(s(999)),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.12)),
+                  ),
+                  child: Text(
+                    'ALL VERIFIED',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(11),
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.success,
+                    ),
+                  ),
+                )
+              : TMZBadge.pending(label: 'PENDING'),
         ],
       ),
     );

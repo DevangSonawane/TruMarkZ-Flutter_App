@@ -12,6 +12,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
+import '../../../../../core/services/token_storage.dart';
 import '../../../orgs/verification_flow/presentation/pages/flow_step_progress.dart';
 import '../../data/skill_tree_repository.dart';
 
@@ -327,12 +328,31 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
     );
   }
 
+  String _documentLabelForUpload(
+    _SkillEntryDraft entry,
+    PickedFile file,
+    int index,
+  ) {
+    final String typedLabel = entry.documentLabel.text.trim();
+    if (typedLabel.isNotEmpty) {
+      return entry.files.length > 1 ? '$typedLabel ${index + 1}' : typedLabel;
+    }
+    final String rawName = file.name.trim();
+    final String stem = rawName.contains('.')
+        ? rawName.substring(0, rawName.lastIndexOf('.')).trim()
+        : rawName;
+    final String fallback = 'document ${index + 1}';
+    final String label = stem.isEmpty ? fallback : stem;
+    return label.length > 48 ? label.substring(0, 48).trim() : label;
+  }
+
   Future<void> _submitAllSkills() async {
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
     try {
       final SkillTreeRepository repo = ref.read(skillTreeRepositoryProvider);
+      final tokenStorage = ref.read(tokenStorageProvider);
       final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
       int submitted = 0;
 
@@ -366,9 +386,16 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
               institutionName:
                   institutionName.isEmpty ? null : institutionName,
               degree: degree.isEmpty ? null : degree,
-              files: entry.files,
             );
             entry.skillId = created.id;
+            for (int fileIndex = 0; fileIndex < entry.files.length; fileIndex++) {
+              final PickedFile file = entry.files[fileIndex];
+              await repo.uploadSkillDocument(
+                skillId: created.id,
+                documentLabel: _documentLabelForUpload(entry, file, fileIndex),
+                file: file,
+              );
+            }
             submitted += 1;
             continue;
           }
@@ -386,6 +413,7 @@ class _IndividualSkillTreePageState extends ConsumerState<IndividualSkillTreePag
 
       if (!mounted) return;
       await _loadSummary();
+      await tokenStorage.saveSkillTreeCompleted(true);
       if (submitted == 0) {
         messenger.showSnackBar(
           const SnackBar(
@@ -656,7 +684,8 @@ class _SkillEntryDraft {
       : skillName = TextEditingController(),
         about = TextEditingController(),
         institutionName = TextEditingController(),
-        degree = TextEditingController();
+        degree = TextEditingController(),
+        documentLabel = TextEditingController();
 
   _SkillEntryDraft.fromSkill(SkillItem item)
       : skillName = TextEditingController(text: item.skillName),
@@ -664,7 +693,8 @@ class _SkillEntryDraft {
         institutionName = TextEditingController(
           text: item.institutionName ?? '',
         ),
-        degree = TextEditingController(text: item.degree ?? '') {
+        degree = TextEditingController(text: item.degree ?? ''),
+        documentLabel = TextEditingController() {
     skillId = item.id;
   }
 
@@ -672,6 +702,7 @@ class _SkillEntryDraft {
   final TextEditingController about;
   final TextEditingController institutionName;
   final TextEditingController degree;
+  final TextEditingController documentLabel;
   String? skillId;
   List<PickedFile> files = <PickedFile>[];
 
@@ -680,6 +711,7 @@ class _SkillEntryDraft {
     about.clear();
     institutionName.clear();
     degree.clear();
+    documentLabel.clear();
     skillId = null;
     files = <PickedFile>[];
   }
@@ -689,6 +721,7 @@ class _SkillEntryDraft {
     about.dispose();
     institutionName.dispose();
     degree.dispose();
+    documentLabel.dispose();
   }
 }
 
@@ -1036,6 +1069,30 @@ class _SkillEntryCard extends StatelessWidget {
                     ),
                 ],
               ),
+            ),
+          ),
+          SizedBox(height: s(14)),
+          Text(
+            'Document label',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(11),
+              fontWeight: FontWeight.w700,
+              letterSpacing: s(0.7),
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          SizedBox(height: s(8)),
+          TextField(
+            controller: entry.documentLabel,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(14),
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF0F172A),
+            ),
+            decoration: fieldDecoration(
+              hint: 'e.g. certificate, marksheet, portfolio',
             ),
           ),
           SizedBox(height: s(14)),

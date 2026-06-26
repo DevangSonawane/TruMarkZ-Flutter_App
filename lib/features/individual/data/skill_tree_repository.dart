@@ -3,10 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/skill_tree_models.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/token_storage.dart';
 import '../../../core/utils/file_picker_util.dart';
 
 final skillTreeRepositoryProvider = Provider<SkillTreeRepository>((ref) {
   return SkillTreeRepository(ref.read(apiClientProvider));
+});
+
+final skillTreeCompletedProvider = FutureProvider<bool>((ref) async {
+  return ref.read(tokenStorageProvider).isSkillTreeCompleted();
 });
 
 final mySkillsProvider = FutureProvider<SkillsMeResponse>((ref) {
@@ -32,33 +37,29 @@ class SkillTreeRepository {
     String? documentLabel,
     List<PickedFile> files = const <PickedFile>[],
   }) async {
-    final FormData formData = FormData();
-    formData.fields.addAll(<MapEntry<String, String>>[
-      MapEntry('skill_type', skillType.value),
-      MapEntry('skill_name', skillName.trim()),
-      if ((skillInfo ?? '').trim().isNotEmpty)
-        MapEntry('skill_info', skillInfo!.trim()),
-      if (skillType.requiresInstitution &&
-          (institutionName ?? '').trim().isNotEmpty)
-        MapEntry('institution_name', institutionName!.trim()),
-      if (skillType == SkillTreeSkillType.education &&
-          (degree ?? '').trim().isNotEmpty)
-        MapEntry('degree', degree!.trim()),
-      if ((documentLabel ?? '').trim().isNotEmpty)
-        MapEntry('document_label', documentLabel!.trim()),
-    ]);
-
-    for (final PickedFile file in files) {
-      formData.files.add(
-        MapEntry(
-          'files',
-          MultipartFile.fromBytes(
+    final List<MultipartFile> fileParts = files
+        .map(
+          (PickedFile file) => MultipartFile.fromBytes(
             file.bytes,
             filename: file.name.trim().isEmpty ? 'document' : file.name.trim(),
           ),
-        ),
-      );
-    }
+        )
+        .toList();
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'skill_type': skillType.value,
+      'skill_name': skillName.trim(),
+      if ((skillInfo ?? '').trim().isNotEmpty) 'skill_info': skillInfo!.trim(),
+      if (skillType.requiresInstitution &&
+          (institutionName ?? '').trim().isNotEmpty)
+        'institution_name': institutionName!.trim(),
+      if (skillType == SkillTreeSkillType.education &&
+          (degree ?? '').trim().isNotEmpty)
+        'degree': degree!.trim(),
+      if ((documentLabel ?? '').trim().isNotEmpty)
+        'document_label': documentLabel!.trim(),
+      if (fileParts.isNotEmpty) 'files': fileParts,
+    };
+    final FormData formData = FormData.fromMap(payload);
 
     final Map<String, dynamic> res = await _api.postMultipart(
       '/skills/add',
