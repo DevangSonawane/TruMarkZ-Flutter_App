@@ -24,7 +24,7 @@ class IndividualSkillTreeOverviewPage extends ConsumerStatefulWidget {
 
 class _IndividualSkillTreeOverviewPageState
     extends ConsumerState<IndividualSkillTreeOverviewPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
 
