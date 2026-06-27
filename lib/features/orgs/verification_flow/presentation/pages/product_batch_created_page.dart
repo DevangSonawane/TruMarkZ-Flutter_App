@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
 import 'org_verification_completion_view.dart';
 
-class ProductBatchCreatedPage extends StatelessWidget {
+class ProductBatchCreatedPage extends ConsumerWidget {
   const ProductBatchCreatedPage({super.key});
 
   static int _tryParseInt(String? value, {required int fallback}) {
@@ -15,7 +16,7 @@ class ProductBatchCreatedPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final Map<String, String> qp = GoRouterState.of(
       context,
     ).uri.queryParameters;
@@ -28,7 +29,6 @@ class ProductBatchCreatedPage extends StatelessWidget {
     final BulkUploadResponse? report = extra is BulkUploadResponse
         ? extra
         : null;
-
     return OrgVerificationCompletionView(
       headerTitle: mode == 'warranty'
           ? 'Warranty Submitted'
@@ -53,7 +53,7 @@ class ProductBatchCreatedPage extends StatelessWidget {
           ? () => context.go(AppRouter.appBatchesPath)
           : () => context.go(
               '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}${mode == 'warranty' ? '&mode=warranty' : ''}',
-            ),
+      ),
       secondaryActionLabel: 'Dashboard',
       secondaryAction: () => context.go(AppRouter.dashboardPath),
     );

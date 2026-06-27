@@ -695,14 +695,19 @@ class BulkUploadSuccessUser {
   final String inviteLink;
 
   factory BulkUploadSuccessUser.fromJson(Map<String, dynamic> json) {
+    final String productName =
+        (json['product_name'] ?? json['productName'] ?? json['name'] ?? '')
+            .toString();
     return BulkUploadSuccessUser(
       row: int.tryParse((json['row'] ?? '').toString()) ?? 0,
-      userId: (json['user_id'] ?? '').toString(),
-      email: (json['email'] ?? '').toString(),
-      phoneNumber: (json['phone_number'] ?? '').toString(),
-      fullName: (json['full_name'] ?? '').toString(),
-      token: (json['token'] ?? '').toString(),
-      inviteLink: (json['invite_link'] ?? '').toString(),
+      userId: (json['user_id'] ?? json['id'] ?? '').toString(),
+      email: (json['email'] ?? json['contact_email'] ?? '').toString(),
+      phoneNumber:
+          (json['phone_number'] ?? json['phone'] ?? json['contact_phone'] ?? '')
+              .toString(),
+      fullName: (json['full_name'] ?? productName).toString(),
+      token: (json['token'] ?? json['invite_token'] ?? '').toString(),
+      inviteLink: (json['invite_link'] ?? json['link'] ?? '').toString(),
     );
   }
 }
@@ -745,6 +750,7 @@ class BulkUploadResponse {
   const BulkUploadResponse({
     required this.message,
     required this.batchId,
+    required this.entityType,
     required this.totalUploaded,
     required this.totalSkipped,
     required this.successfulUsers,
@@ -754,6 +760,7 @@ class BulkUploadResponse {
 
   final String message;
   final String batchId;
+  final String entityType;
   final int totalUploaded;
   final int totalSkipped;
   final List<BulkUploadSuccessUser> successfulUsers;
@@ -768,6 +775,7 @@ class BulkUploadResponse {
     return BulkUploadResponse(
       message: (json['message'] ?? '').toString(),
       batchId: (json['batch_id'] ?? '').toString(),
+      entityType: (json['entity_type'] ?? json['entityType'] ?? '').toString(),
       totalUploaded:
           int.tryParse((json['total_uploaded'] ?? '').toString()) ?? 0,
       totalSkipped: int.tryParse((json['total_skipped'] ?? '').toString()) ?? 0,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -16,6 +19,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
+import '../../../../../core/widgets/tmz_input.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
@@ -43,10 +47,13 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   String _description = '';
   String _mode = 'verification'; // 'verification' | 'warranty'
   String _access = 'public_searchable';
-  String _defaultProductId = '';
   final Set<String> _checks = <String>{};
+  final List<String> _parsedProductNames = <String>[];
   final List<int> _documentCardIds = <int>[];
+  final Map<int, _ProductDocumentDraft> _documentDrafts =
+      <int, _ProductDocumentDraft>{};
   int _nextDocumentCardId = 0;
+  String? _productParseError;
 
   PickedFile? _pickedFile;
   bool _creating = false;
@@ -83,6 +90,139 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
   }
 
+  static bool _looksLikeZip(Uint8List bytes) {
+    if (bytes.length < 4) return false;
+    return bytes[0] == 0x50 && bytes[1] == 0x4B;
+  }
+
+  static String _normalizeHeader(String header) {
+    return header.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+  }
+
+  List<String> _dedupeNames(List<String> names) {
+    final List<String> ordered = <String>[];
+    final Set<String> seen = <String>{};
+    for (final String raw in names) {
+      final String cleaned = raw.trim();
+      if (cleaned.isEmpty) continue;
+      final String key = cleaned.toLowerCase();
+      if (seen.add(key)) {
+        ordered.add(cleaned);
+      }
+    }
+    return ordered;
+  }
+
+  static bool _isRowEmpty(List<Object?> row) {
+    return row.every(
+      (dynamic cell) => (cell?.toString() ?? '').trim().isEmpty,
+    );
+  }
+
+  static String _rowValue(List<Object?> row, int? index) {
+    if (index == null || index < 0 || index >= row.length) return '';
+    return row[index]?.toString().trim() ?? '';
+  }
+
+  List<String> _parseProductNamesFromCsv(Uint8List bytes) {
+    final String text = utf8.decode(bytes, allowMalformed: true);
+    final List<List<dynamic>> table = const CsvToListConverter(
+      eol: '\n',
+      shouldParseNumbers: false,
+    ).convert(text);
+    if (table.isEmpty) return <String>[];
+
+    int headerIndex = 0;
+    while (headerIndex < table.length && _isRowEmpty(table[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= table.length) return <String>[];
+
+    final List<String> header = table[headerIndex]
+        .map((dynamic v) => (v?.toString() ?? '').trim())
+        .toList();
+    final int nameIndex = header.indexWhere(
+      (String value) => _normalizeHeader(value) == 'productname',
+    );
+    if (nameIndex < 0) return <String>[];
+
+    final List<String> names = <String>[];
+    for (int i = headerIndex + 1; i < table.length; i++) {
+      final List<dynamic> row = table[i];
+      if (_isRowEmpty(row)) continue;
+      final String name = _rowValue(row, nameIndex).trim();
+      if (name.isNotEmpty) names.add(name);
+    }
+    return _dedupeNames(names);
+  }
+
+  List<String> _parseProductNamesFromXlsx(Uint8List bytes) {
+    Excel excel;
+    try {
+      excel = Excel.decodeBytes(bytes);
+    } catch (_) {
+      return <String>[];
+    }
+    final List<String> sheetNames = excel.tables.keys.toList();
+    if (sheetNames.isEmpty) return <String>[];
+    final Sheet? sheet = excel.tables[sheetNames.first];
+    if (sheet == null) return <String>[];
+
+    final List<List<Data?>> rows = sheet.rows;
+    if (rows.isEmpty) return <String>[];
+
+    int headerIndex = 0;
+    while (headerIndex < rows.length && _isRowEmpty(rows[headerIndex])) {
+      headerIndex += 1;
+    }
+    if (headerIndex >= rows.length) return <String>[];
+
+    final List<String> header = rows[headerIndex]
+        .map((Data? cell) => (cell?.value?.toString() ?? '').trim())
+        .toList();
+    final int nameIndex = header.indexWhere(
+      (String value) => _normalizeHeader(value) == 'productname',
+    );
+    if (nameIndex < 0) return <String>[];
+
+    final List<String> names = <String>[];
+    for (int i = headerIndex + 1; i < rows.length; i++) {
+      final List<Data?> row = rows[i];
+      if (_isRowEmpty(row)) continue;
+      final String name = (row[nameIndex]?.value?.toString() ?? '').trim();
+      if (name.isNotEmpty) names.add(name);
+    }
+    return _dedupeNames(names);
+  }
+
+  List<String> _parseProductNamesFromPickedFile(PickedFile file) {
+    final String safeName = file.name.trim();
+    final String ext = safeName.contains('.')
+        ? safeName.split('.').last.toLowerCase()
+        : file.extension.toLowerCase();
+    if (ext == 'csv') return _parseProductNamesFromCsv(file.bytes);
+    if (ext == 'xlsx' && !_looksLikeZip(file.bytes)) {
+      return _parseProductNamesFromCsv(file.bytes);
+    }
+    return _parseProductNamesFromXlsx(file.bytes);
+  }
+
+  List<String> _missingWarrantyProducts({
+    required List<String> productNames,
+    required List<_ProductDocumentDraft> documentDrafts,
+  }) {
+    final Set<String> coveredProducts = documentDrafts
+        .map(( _ProductDocumentDraft draft) => draft.productName?.trim() ?? '')
+        .where((String value) => value.isNotEmpty)
+        .map((String value) => value.toLowerCase())
+        .toSet();
+    return productNames
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .where((String value) => !coveredProducts.contains(value.toLowerCase()))
+        .toList();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -106,11 +246,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String flowIndustry = (qp['industry'] ?? '').trim();
     if (flowIndustry.isNotEmpty) {
       _industry = flowIndustry;
-    }
-
-    final String productId = (qp['product_id'] ?? '').trim();
-    if (productId.isNotEmpty) {
-      _defaultProductId = productId;
     }
 
     final String? categoryId = qp['category_id'];
@@ -217,28 +352,44 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   }
 
   Future<void> _setPickedFile(PickedFile picked) async {
-    setState(() => _pickedFile = picked);
-  }
-
-  void _toggleDocumentSection() {
     setState(() {
-      if (_documentCardIds.isEmpty) {
-        _documentCardIds.add(_nextDocumentCardId++);
-      } else {
-        _documentCardIds.clear();
-      }
+      _pickedFile = picked;
+      _parsedProductNames.clear();
+      _productParseError = null;
+      _documentCardIds.clear();
+      _documentDrafts.clear();
+      _nextDocumentCardId = 0;
+    });
+    final List<String> productNames = _parseProductNamesFromPickedFile(picked);
+    if (!mounted) return;
+    setState(() {
+      _parsedProductNames
+        ..clear()
+        ..addAll(productNames);
+      _productParseError = productNames.isEmpty
+          ? 'Could not find any product_name values in the selected file.'
+          : null;
     });
   }
 
   void _addDocumentCard() {
     setState(() {
-      _documentCardIds.add(_nextDocumentCardId++);
+      final int cardId = _nextDocumentCardId++;
+      _documentCardIds.add(cardId);
+      _documentDrafts[cardId] = _ProductDocumentDraft(cardId: cardId);
     });
   }
 
   void _removeDocumentCard(int cardId) {
     setState(() {
       _documentCardIds.remove(cardId);
+      _documentDrafts.remove(cardId);
+    });
+  }
+
+  void _updateDocumentDraft(_ProductDocumentDraft draft) {
+    setState(() {
+      _documentDrafts[draft.cardId] = draft;
     });
   }
 
@@ -281,9 +432,56 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   Future<void> _uploadAndNavigate(List<String> columns) async {
     if (_creating) return;
     final PickedFile? pickedFile = _pickedFile;
+    final bool isWarranty = _mode == 'warranty';
     if (pickedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please upload an Excel file first.')),
+      );
+      return;
+    }
+    if (_productParseError != null || _parsedProductNames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please upload a file with a valid product_name column.'),
+        ),
+      );
+      return;
+    }
+    final String resolvedIndustry = _effectiveIndustry();
+
+    final List<_ProductDocumentDraft> documentDrafts =
+        _documentCardIds
+            .map((int id) => _documentDrafts[id])
+            .whereType<_ProductDocumentDraft>()
+            .toList();
+    final List<_ProductDocumentDraft> incompleteDocs = documentDrafts
+        .where(( _ProductDocumentDraft draft) => !draft.isComplete)
+        .toList();
+    if (incompleteDocs.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please finish all document entries before creating the batch.'),
+        ),
+      );
+      return;
+    }
+    final List<String> requiredProducts = _parsedProductNames
+        .map((String v) => v.trim())
+        .where((String v) => v.isNotEmpty)
+        .toList();
+    final List<String> missingProducts = isWarranty
+        ? _missingWarrantyProducts(
+            productNames: requiredProducts,
+            documentDrafts: documentDrafts,
+          )
+        : <String>[];
+    if (isWarranty && missingProducts.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Warranty docs are required for every product. Missing: ${missingProducts.join(', ')}',
+          ),
+        ),
       );
       return;
     }
@@ -293,18 +491,44 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final bool isWarranty = _mode == 'warranty';
+      final List<ProductBulkUploadDocumentInput> documents =
+          isWarranty
+              ? <ProductBulkUploadDocumentInput>[]
+              : documentDrafts
+              .where((_ProductDocumentDraft draft) => draft.isComplete)
+              .map(
+                (_ProductDocumentDraft draft) => ProductBulkUploadDocumentInput(
+                  productName: draft.productName!.trim(),
+                  label: draft.label.trim(),
+                  fileBytes: draft.file!.bytes,
+                  fileName: draft.file!.name,
+                ),
+              )
+              .toList();
       final BulkUploadResponse res = isWarranty
           ? await repo.uploadWarrantyProducts(
               batchName: _resolvedBatchName,
               description: _resolvedDescription(),
+              documents: documentDrafts
+                  .where((_ProductDocumentDraft draft) => draft.isComplete)
+                  .map(
+                    (_ProductDocumentDraft draft) => ProductBulkUploadDocumentInput(
+                      productName: draft.productName!.trim(),
+                      label: draft.label.trim(),
+                      fileBytes: draft.file!.bytes,
+                      fileName: draft.file!.name,
+                    ),
+                  )
+                  .toList(),
               fileBytes: pickedFile.bytes,
               fileName: pickedFile.name,
             )
           : await repo.bulkUploadProducts(
               batchName: _resolvedBatchName,
               description: _resolvedDescription(),
+              industryType: resolvedIndustry,
               verificationTypes: _resolvedVerificationTypesCsv(),
+              documents: documents,
               fileBytes: pickedFile.bytes,
               fileName: pickedFile.name,
             );
@@ -474,6 +698,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
             item.id: item,
         };
     final bool isWarranty = _mode == 'warranty';
+    final String uploadHint = isWarranty
+        ? 'Download template based on your selected sector.\nUpload your Excel and add a document for every product before confirming the batch.'
+        : 'Download template based on your selected sector.\nUpload your Excel, optionally add documents, then confirm the batch.';
     final int currentStep = isWarranty ? 3 : 4;
     final int totalSteps = isWarranty ? 5 : 6;
     final String stepLabel = 'STEP $currentStep OF $totalSteps';
@@ -696,7 +923,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     ),
                                     SizedBox(height: s(14)),
                                     Text(
-                                      'Download template based on your selected sector.\nUpload your Excel, optionally add documents, then confirm the batch.',
+                                      uploadHint,
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -706,7 +933,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                         color: const Color(0xFF94A3B8),
                                       ),
                                     ),
-                                    SizedBox(height: s(22)),
                                     _DropZone(
                                       scale: scale,
                                       onTap: _pickExcelFile,
@@ -735,18 +961,30 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                             setState(() => _pickedFile = null),
                                       ),
                                     ],
-                                    SizedBox(height: s(28)),
-                                    _DocumentUploadsSection(
-                                      scale: scale,
-                                      modeLabel: isWarranty
-                                          ? 'Warranty'
-                                          : 'Verification',
-                                      defaultProductId: _defaultProductId,
-                                      cardIds: _documentCardIds,
-                                      onToggleSection: _toggleDocumentSection,
-                                      onAddCard: _addDocumentCard,
-                                      onRemoveCard: _removeDocumentCard,
-                                    ),
+                                    if (true) ...<Widget>[
+                                      SizedBox(height: s(20)),
+                                      _DocumentUploadsSection(
+                                        scale: scale,
+                                        productNames: _parsedProductNames,
+                                        cardIds: _documentCardIds,
+                                        onAddCard: _addDocumentCard,
+                                        onRemoveCard: _removeDocumentCard,
+                                        onChanged: _updateDocumentDraft,
+                                        enabled:
+                                            _pickedFile != null &&
+                                            _productParseError == null &&
+                                            _parsedProductNames.isNotEmpty,
+                                        statusText: _pickedFile == null
+                                            ? 'Upload an Excel file first to enable document attachments.'
+                                            : _productParseError != null
+                                                ? _productParseError!
+                                                : _parsedProductNames.isEmpty
+                                                    ? 'No product names found yet.'
+                                                    : isWarranty
+                                                        ? 'Warranty documents are required for every product in the Excel file.'
+                                                        : 'Pick a product name, label, and file to bundle documents with this batch.',
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -759,7 +997,17 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                 enabled:
                                     !_creating &&
                                     _pickedFile != null &&
-                                    _resolvedBatchName.isNotEmpty,
+                                    _resolvedBatchName.isNotEmpty &&
+                                    _productParseError == null &&
+                                    _parsedProductNames.isNotEmpty &&
+                                    (!isWarranty ||
+                                        _missingWarrantyProducts(
+                                          productNames: _parsedProductNames,
+                                          documentDrafts: _documentCardIds
+                                              .map((int id) => _documentDrafts[id])
+                                              .whereType<_ProductDocumentDraft>()
+                                              .toList(),
+                                        ).isEmpty),
                                 onTap: _confirmAndCreateBatch,
                                 label: 'Create Batch',
                               ),
@@ -1775,24 +2023,45 @@ class _UploadButton extends StatelessWidget {
   }
 }
 
+class _ProductDocumentDraft {
+  const _ProductDocumentDraft({
+    required this.cardId,
+    this.productName,
+    this.label = 'certificate',
+    this.file,
+  });
+
+  final int cardId;
+  final String? productName;
+  final String label;
+  final PickedFile? file;
+
+  bool get isComplete =>
+      (productName ?? '').trim().isNotEmpty &&
+      label.trim().isNotEmpty &&
+      file != null;
+}
+
 class _DocumentUploadsSection extends StatelessWidget {
   const _DocumentUploadsSection({
     required this.scale,
-    required this.modeLabel,
-    required this.defaultProductId,
+    required this.productNames,
     required this.cardIds,
-    required this.onToggleSection,
     required this.onAddCard,
     required this.onRemoveCard,
+    required this.onChanged,
+    required this.enabled,
+    required this.statusText,
   });
 
   final double scale;
-  final String modeLabel;
-  final String defaultProductId;
+  final List<String> productNames;
   final List<int> cardIds;
-  final VoidCallback onToggleSection;
   final VoidCallback onAddCard;
   final ValueChanged<int> onRemoveCard;
+  final ValueChanged<_ProductDocumentDraft> onChanged;
+  final bool enabled;
+  final String statusText;
 
   @override
   Widget build(BuildContext context) {
@@ -1821,7 +2090,7 @@ class _DocumentUploadsSection extends StatelessWidget {
                   ),
                   SizedBox(height: s(4)),
                   Text(
-                    '$modeLabel uploads are optional. Attach certificates, warranty cards, or compliance docs to a specific product UUID.',
+                    'Attach docs to the exact product_name from your Excel. Keep the same order across product names, labels, and files.',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(11),
@@ -1834,12 +2103,9 @@ class _DocumentUploadsSection extends StatelessWidget {
               ),
             ),
             TextButton.icon(
-              onPressed: onToggleSection,
-              icon: Icon(
-                hasCards ? Icons.remove_rounded : Icons.add_rounded,
-                size: s(16),
-              ),
-              label: Text(hasCards ? 'Remove' : 'Add documents'),
+              onPressed: enabled ? onAddCard : null,
+              icon: Icon(Icons.add_rounded, size: s(16)),
+              label: const Text('Add Documents'),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.brandBlue,
                 padding: EdgeInsets.symmetric(
@@ -1862,32 +2128,16 @@ class _DocumentUploadsSection extends StatelessWidget {
             _ProductDocumentCard(
               key: ValueKey<int>(cardId),
               scale: scale,
-              defaultProductId: defaultProductId,
+              productNames: productNames,
+              cardId: cardId,
               onRemove: () => onRemoveCard(cardId),
+              onChanged: onChanged,
             ),
             SizedBox(height: s(12)),
           ],
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: onAddCard,
-              icon: Icon(Icons.add_rounded, size: s(16)),
-              label: const Text('Add another document'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandBlue,
-                padding: EdgeInsets.zero,
-                textStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w700,
-                  height: 16 / 12,
-                ),
-              ),
-            ),
-          ),
         ] else
           Text(
-            'Add one or more documents if needed, or continue without them.',
+            statusText,
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(11),
@@ -1905,13 +2155,17 @@ class _ProductDocumentCard extends ConsumerStatefulWidget {
   const _ProductDocumentCard({
     super.key,
     required this.scale,
-    required this.defaultProductId,
+    required this.productNames,
+    required this.cardId,
     required this.onRemove,
+    required this.onChanged,
   });
 
   final double scale;
-  final String defaultProductId;
+  final List<String> productNames;
+  final int cardId;
   final VoidCallback onRemove;
+  final ValueChanged<_ProductDocumentDraft> onChanged;
 
   @override
   ConsumerState<_ProductDocumentCard> createState() =>
@@ -1919,92 +2173,61 @@ class _ProductDocumentCard extends ConsumerStatefulWidget {
 }
 
 class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
-  static const List<String> _labelOptions = <String>[
-    'certificate',
-    'warranty_card',
-    'compliance_doc',
-  ];
-
-  late final TextEditingController _productIdController;
+  String? _productName;
+  late final TextEditingController _documentLabelController;
   PickedFile? _pickedFile;
-  bool _uploading = false;
-  String _documentLabel = _labelOptions.first;
-  UploadDocumentResponse? _response;
 
   @override
   void initState() {
     super.initState();
-    _productIdController = TextEditingController(
-      text: widget.defaultProductId,
-    );
+    _documentLabelController = TextEditingController();
+    _documentLabelController.addListener(_emitDraft);
   }
 
   @override
   void dispose() {
-    _productIdController.dispose();
+    _documentLabelController.removeListener(_emitDraft);
+    _documentLabelController.dispose();
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant _ProductDocumentCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_productName != null &&
+        widget.productNames.isNotEmpty &&
+        !widget.productNames.contains(_productName)) {
+      setState(() {
+        _productName = null;
+      });
+      _emitDraft();
+    }
+  }
+
   Future<void> _pickDocument() async {
-    if (_uploading) return;
     final PickedFile? picked = await FilePickerUtil.pickDocument();
     if (!mounted || picked == null) return;
     setState(() {
       _pickedFile = picked;
-      _uploading = true;
-      _response = null;
     });
-    final String productId = _productIdController.text.trim();
-    if (productId.isEmpty) {
-      if (!mounted) return;
-      setState(() => _uploading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product ID is required.')),
-      );
-      return;
-    }
+    _emitDraft();
+  }
 
-    try {
-      final VerificationRepository repo = ref.read(
-        verificationRepositoryProvider,
-      );
-      final UploadDocumentResponse res = await repo.uploadProductDocument(
-        productId: productId,
-        documentLabel: _documentLabel,
-        fileBytes: picked.bytes,
-        fileName: picked.name,
-      );
-      if (!mounted) return;
-      setState(() => _response = res);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            res.message.isEmpty
-                ? 'Document uploaded successfully.'
-                : res.message,
-          ),
-        ),
-      );
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
+  void _emitDraft() {
+    widget.onChanged(
+      _ProductDocumentDraft(
+        cardId: widget.cardId,
+        productName: _productName,
+        label: _documentLabelController.text.trim(),
+        file: _pickedFile,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * widget.scale;
+    final bool hasProductNames = widget.productNames.isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -2045,7 +2268,7 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Document upload',
+                      'Document entry',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: s(14),
@@ -2056,7 +2279,7 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
                     ),
                     SizedBox(height: s(2)),
                     Text(
-                      'Attach a file to a product UUID.',
+                      'Picked files are bundled into the batch upload.',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: s(11),
@@ -2078,19 +2301,33 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
             ],
           ),
           SizedBox(height: s(14)),
-          TextField(
-            controller: _productIdController,
-            textInputAction: TextInputAction.next,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(13),
-              fontWeight: FontWeight.w600,
-              height: 18 / 13,
-              color: const Color(0xFF111827),
-            ),
+          DropdownButtonFormField<String>(
+            initialValue: _productName,
+            isExpanded: true,
+            items: widget.productNames
+                .map(
+                  (String name) => DropdownMenuItem<String>(
+                    value: name,
+                    child: Text(
+                      name,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: hasProductNames
+                ? (String? value) {
+                    setState(() {
+                      _productName = value;
+                    });
+                    _emitDraft();
+                  }
+                : null,
             decoration: InputDecoration(
-              labelText: 'Product ID',
-              hintText: 'UUID of the product record',
+              labelText: 'Product Name',
+              hintText: hasProductNames
+                  ? 'Select a product from the Excel file'
+                  : 'Upload an Excel file first',
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
@@ -2110,50 +2347,14 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
             ),
           ),
           SizedBox(height: s(12)),
-          Text(
-            'Document label',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w700,
-              height: 18 / 12,
-              color: const Color(0xFF111827),
-            ),
-          ),
-          SizedBox(height: s(8)),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _labelOptions.map((String label) {
-              final bool selected = _documentLabel == label;
-              return ChoiceChip(
-                label: Text(label),
-                selected: selected,
-                onSelected: (_) {
-                  setState(() => _documentLabel = label);
-                },
-                selectedColor: AppColors.brandBlue.withAlpha(18),
-                backgroundColor: const Color(0xFFF8FAFC),
-                labelStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w600,
-                  color: selected ? AppColors.brandBlue : const Color(0xFF475569),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  side: BorderSide(
-                    color: selected
-                        ? AppColors.brandBlue.withAlpha(50)
-                        : const Color(0xFFE5E7EB),
-                  ),
-                ),
-              );
-            }).toList(),
+          TMZInput(
+            label: 'Document Label',
+            hint: 'Type any label, e.g. certificate, warranty, invoice',
+            controller: _documentLabelController,
           ),
           SizedBox(height: s(12)),
           OutlinedButton.icon(
-            onPressed: _uploading ? null : _pickDocument,
+            onPressed: _pickDocument,
             icon: const Icon(Icons.attach_file_rounded),
             label: Text(
               _pickedFile == null ? 'Choose file' : _pickedFile!.name,
@@ -2206,49 +2407,11 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
               ],
             ),
           ],
-          if (_response != null) ...<Widget>[
-            SizedBox(height: s(10)),
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(s(12)),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDF4),
-                borderRadius: BorderRadius.circular(s(14)),
-                border: Border.all(color: const Color(0xFFBBF7D0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    _response!.message.isEmpty
-                        ? 'Uploaded successfully'
-                        : _response!.message,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w700,
-                      height: 18 / 12,
-                      color: const Color(0xFF166534),
-                    ),
-                  ),
-                  SizedBox(height: s(4)),
-                  Text(
-                    'Version ${_response!.version} • ${_response!.documentId}',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(11),
-                      fontWeight: FontWeight.w500,
-                      height: 16 / 11,
-                      color: const Color(0xFF15803D),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-    SizedBox(height: s(12)),
+          SizedBox(height: s(8)),
           Text(
-            'Selecting a file uploads it automatically.',
+            hasProductNames
+                ? 'Match the dropdown to the product_name value from Excel. Labels can be any text.'
+                : 'Wait until the Excel file is parsed before choosing a product.',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(11),

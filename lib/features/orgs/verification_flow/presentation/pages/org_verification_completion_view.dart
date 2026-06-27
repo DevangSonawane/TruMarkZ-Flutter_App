@@ -24,6 +24,8 @@ class OrgVerificationCompletionView extends StatefulWidget {
     required this.primaryAction,
     required this.secondaryActionLabel,
     required this.secondaryAction,
+    this.tertiaryActionLabel,
+    this.tertiaryAction,
   });
 
   final String headerTitle;
@@ -37,6 +39,8 @@ class OrgVerificationCompletionView extends StatefulWidget {
   final VoidCallback primaryAction;
   final String secondaryActionLabel;
   final VoidCallback secondaryAction;
+  final String? tertiaryActionLabel;
+  final VoidCallback? tertiaryAction;
 
   @override
   State<OrgVerificationCompletionView> createState() =>
@@ -171,6 +175,8 @@ class _OrgVerificationCompletionViewState
                               primaryOnTap: widget.primaryAction,
                               secondaryLabel: widget.secondaryActionLabel,
                               secondaryOnTap: widget.secondaryAction,
+                              tertiaryLabel: widget.tertiaryActionLabel,
+                              tertiaryOnTap: widget.tertiaryAction,
                             ),
                           ],
                         ),
@@ -663,6 +669,8 @@ class _BottomActions extends StatelessWidget {
     required this.primaryOnTap,
     required this.secondaryLabel,
     required this.secondaryOnTap,
+    this.tertiaryLabel,
+    this.tertiaryOnTap,
   });
 
   final double scale;
@@ -670,6 +678,8 @@ class _BottomActions extends StatelessWidget {
   final VoidCallback primaryOnTap;
   final String secondaryLabel;
   final VoidCallback secondaryOnTap;
+  final String? tertiaryLabel;
+  final VoidCallback? tertiaryOnTap;
 
   @override
   Widget build(BuildContext context) {
@@ -728,6 +738,32 @@ class _BottomActions extends StatelessWidget {
                 ),
               ),
             ),
+            if (tertiaryLabel != null && tertiaryOnTap != null) ...<Widget>[
+              SizedBox(height: s(10)),
+              SizedBox(
+                width: double.infinity,
+                height: s(48),
+                child: TextButton(
+                  onPressed: tertiaryOnTap,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF334155),
+                    backgroundColor: const Color(0xFFF8FAFC),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(s(14)),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                  ),
+                  child: Text(
+                    tertiaryLabel!,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(13),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

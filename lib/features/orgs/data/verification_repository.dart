@@ -55,13 +55,45 @@ final verificationTypesProvider =
           category: normalizedCategory,
           industryTypes: industryTypes.isEmpty ? null : industryTypes,
         );
-      },
+    },
     );
+
+class ProductBulkUploadDocumentInput {
+  const ProductBulkUploadDocumentInput({
+    required this.productName,
+    required this.label,
+    required this.fileBytes,
+    required this.fileName,
+  });
+
+  final String productName;
+  final String label;
+  final Uint8List fileBytes;
+  final String fileName;
+}
 
 class VerificationRepository {
   VerificationRepository(this._api);
 
   final ApiClient _api;
+
+  static MediaType _mediaTypeForFileName(String fileName) {
+    final String safeName = fileName.trim().isEmpty ? 'upload.xlsx' : fileName;
+    final String ext = safeName.split('.').last.toLowerCase();
+    return switch (ext) {
+      'csv' => MediaType('text', 'csv'),
+      'xls' => MediaType('application', 'vnd.ms-excel'),
+      'pdf' => MediaType('application', 'pdf'),
+      'png' => MediaType('image', 'png'),
+      'jpg' => MediaType('image', 'jpeg'),
+      'jpeg' => MediaType('image', 'jpeg'),
+      'webp' => MediaType('image', 'webp'),
+      _ => MediaType(
+        'application',
+        'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ),
+    };
+  }
 
   Future<List<VerificationTypeDefinition>> getVerificationTypes({
     String? category,
@@ -230,24 +262,21 @@ class VerificationRepository {
   Future<BulkUploadResponse> bulkUploadProducts({
     required String batchName,
     String? description,
+    String? industryType,
     String? verificationTypes,
+    List<ProductBulkUploadDocumentInput> documents =
+        const <ProductBulkUploadDocumentInput>[],
     required Uint8List fileBytes,
     required String fileName,
   }) async {
     final String safeName = fileName.trim().isEmpty ? 'upload.xlsx' : fileName;
-    final String ext = safeName.split('.').last.toLowerCase();
-    final MediaType contentType = switch (ext) {
-      'csv' => MediaType('text', 'csv'),
-      'xls' => MediaType('application', 'vnd.ms-excel'),
-      _ => MediaType(
-        'application',
-        'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      ),
-    };
+    final MediaType contentType = _mediaTypeForFileName(safeName);
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
+      if (industryType != null && industryType.trim().isNotEmpty)
+        'industry_type': industryType.trim(),
       if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
         'verification_types': verificationTypes.trim(),
       'file': MultipartFile.fromBytes(
@@ -256,6 +285,42 @@ class VerificationRepository {
         contentType: contentType,
       ),
     });
+    final List<ProductBulkUploadDocumentInput> cleanDocuments = documents
+        .where(
+          (ProductBulkUploadDocumentInput doc) =>
+              doc.productName.trim().isNotEmpty &&
+              doc.label.trim().isNotEmpty &&
+              doc.fileBytes.isNotEmpty,
+        )
+        .toList();
+    if (cleanDocuments.isNotEmpty) {
+      formData.fields.add(
+        MapEntry(
+          'doc_product_names',
+          cleanDocuments.map((ProductBulkUploadDocumentInput doc) => doc.productName.trim()).join(','),
+        ),
+      );
+      formData.fields.add(
+        MapEntry(
+          'doc_labels',
+          cleanDocuments.map((ProductBulkUploadDocumentInput doc) => doc.label.trim()).join(','),
+        ),
+      );
+      for (final ProductBulkUploadDocumentInput doc in cleanDocuments) {
+        final String safeDocName =
+            doc.fileName.trim().isEmpty ? 'document.pdf' : doc.fileName.trim();
+        formData.files.add(
+          MapEntry(
+            'doc_files',
+            MultipartFile.fromBytes(
+              doc.fileBytes,
+              filename: safeDocName,
+              contentType: _mediaTypeForFileName(safeDocName),
+            ),
+          ),
+        );
+      }
+    }
     final Map<String, dynamic> res = await _api.verificationPostMultipart(
       '/verification/bulk-upload/products',
       formData,
@@ -390,19 +455,13 @@ class VerificationRepository {
   Future<BulkUploadResponse> uploadWarrantyProducts({
     required String batchName,
     String? description,
+    List<ProductBulkUploadDocumentInput> documents =
+        const <ProductBulkUploadDocumentInput>[],
     required Uint8List fileBytes,
     required String fileName,
   }) async {
     final String safeName = fileName.trim().isEmpty ? 'warranty.xlsx' : fileName;
-    final String ext = safeName.split('.').last.toLowerCase();
-    final MediaType contentType = switch (ext) {
-      'csv' => MediaType('text', 'csv'),
-      'xls' => MediaType('application', 'vnd.ms-excel'),
-      _ => MediaType(
-        'application',
-        'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      ),
-    };
+    final MediaType contentType = _mediaTypeForFileName(safeName);
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
       if (description != null && description.trim().isNotEmpty)
@@ -413,6 +472,46 @@ class VerificationRepository {
         contentType: contentType,
       ),
     });
+    final List<ProductBulkUploadDocumentInput> cleanDocuments = documents
+        .where(
+          (ProductBulkUploadDocumentInput doc) =>
+              doc.productName.trim().isNotEmpty &&
+              doc.label.trim().isNotEmpty &&
+              doc.fileBytes.isNotEmpty,
+        )
+        .toList();
+    if (cleanDocuments.isNotEmpty) {
+      formData.fields.add(
+        MapEntry(
+          'doc_product_names',
+          cleanDocuments
+              .map((ProductBulkUploadDocumentInput doc) => doc.productName.trim())
+              .join(','),
+        ),
+      );
+      formData.fields.add(
+        MapEntry(
+          'doc_labels',
+          cleanDocuments
+              .map((ProductBulkUploadDocumentInput doc) => doc.label.trim())
+              .join(','),
+        ),
+      );
+      for (final ProductBulkUploadDocumentInput doc in cleanDocuments) {
+        final String safeDocName =
+            doc.fileName.trim().isEmpty ? 'document.pdf' : doc.fileName.trim();
+        formData.files.add(
+          MapEntry(
+            'doc_files',
+            MultipartFile.fromBytes(
+              doc.fileBytes,
+              filename: safeDocName,
+              contentType: _mediaTypeForFileName(safeDocName),
+            ),
+          ),
+        );
+      }
+    }
     final Map<String, dynamic> res = await _api.verificationPostMultipart(
       '/verification/products/warranty-upload',
       formData,
@@ -539,6 +638,32 @@ class VerificationRepository {
     });
     final Map<String, dynamic> res = await _api.verificationPostMultipart(
       '/verification/products/${Uri.encodeComponent(productId.trim())}/upload-doc',
+      formData,
+    );
+    return UploadDocumentResponse.fromJson(res);
+  }
+
+  Future<UploadDocumentResponse> uploadProductDocumentForBatch({
+    required String batchId,
+    required String productName,
+    required String documentLabel,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final String safeName = fileName.trim().isEmpty ? 'document.pdf' : fileName;
+    final MediaType contentType = _mediaTypeForFileName(safeName);
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'batch_id': batchId.trim(),
+      'product_name': productName.trim(),
+      'document_label': documentLabel.trim(),
+      'file': MultipartFile.fromBytes(
+        fileBytes,
+        filename: safeName,
+        contentType: contentType,
+      ),
+    });
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/products/upload-doc',
       formData,
     );
     return UploadDocumentResponse.fromJson(res);
