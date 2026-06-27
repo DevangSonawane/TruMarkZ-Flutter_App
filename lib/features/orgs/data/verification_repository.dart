@@ -513,4 +513,34 @@ class VerificationRepository {
     );
     return UploadDocumentResponse.fromJson(res);
   }
+
+  Future<UploadDocumentResponse> uploadProductDocument({
+    required String productId,
+    required String documentLabel,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final String safeName = fileName.trim().isEmpty ? 'document.pdf' : fileName;
+    final String ext = safeName.split('.').last.toLowerCase();
+    final MediaType contentType = switch (ext) {
+      'png' => MediaType('image', 'png'),
+      'jpg' => MediaType('image', 'jpeg'),
+      'jpeg' => MediaType('image', 'jpeg'),
+      'webp' => MediaType('image', 'webp'),
+      _ => MediaType('application', 'pdf'),
+    };
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'document_label': documentLabel.trim(),
+      'file': MultipartFile.fromBytes(
+        fileBytes,
+        filename: safeName,
+        contentType: contentType,
+      ),
+    });
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/products/${Uri.encodeComponent(productId.trim())}/upload-doc',
+      formData,
+    );
+    return UploadDocumentResponse.fromJson(res);
+  }
 }

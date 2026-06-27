@@ -43,7 +43,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   String _description = '';
   String _mode = 'verification'; // 'verification' | 'warranty'
   String _access = 'public_searchable';
+  String _defaultProductId = '';
   final Set<String> _checks = <String>{};
+  final List<int> _documentCardIds = <int>[];
+  int _nextDocumentCardId = 0;
 
   PickedFile? _pickedFile;
   bool _creating = false;
@@ -103,6 +106,11 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String flowIndustry = (qp['industry'] ?? '').trim();
     if (flowIndustry.isNotEmpty) {
       _industry = flowIndustry;
+    }
+
+    final String productId = (qp['product_id'] ?? '').trim();
+    if (productId.isNotEmpty) {
+      _defaultProductId = productId;
     }
 
     final String? categoryId = qp['category_id'];
@@ -210,6 +218,28 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   Future<void> _setPickedFile(PickedFile picked) async {
     setState(() => _pickedFile = picked);
+  }
+
+  void _toggleDocumentSection() {
+    setState(() {
+      if (_documentCardIds.isEmpty) {
+        _documentCardIds.add(_nextDocumentCardId++);
+      } else {
+        _documentCardIds.clear();
+      }
+    });
+  }
+
+  void _addDocumentCard() {
+    setState(() {
+      _documentCardIds.add(_nextDocumentCardId++);
+    });
+  }
+
+  void _removeDocumentCard(int cardId) {
+    setState(() {
+      _documentCardIds.remove(cardId);
+    });
   }
 
   Future<void> _confirmAndCreateBatch() async {
@@ -666,7 +696,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     ),
                                     SizedBox(height: s(14)),
                                     Text(
-                                      'Download template based on your selected sector.\nUpload your Excel, then Confirm the batch.',
+                                      'Download template based on your selected sector.\nUpload your Excel, optionally add documents, then confirm the batch.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: s(12),
@@ -705,6 +735,18 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                             setState(() => _pickedFile = null),
                                       ),
                                     ],
+                                    SizedBox(height: s(28)),
+                                    _DocumentUploadsSection(
+                                      scale: scale,
+                                      modeLabel: isWarranty
+                                          ? 'Warranty'
+                                          : 'Verification',
+                                      defaultProductId: _defaultProductId,
+                                      cardIds: _documentCardIds,
+                                      onToggleSection: _toggleDocumentSection,
+                                      onAddCard: _addDocumentCard,
+                                      onRemoveCard: _removeDocumentCard,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1728,6 +1770,494 @@ class _UploadButton extends StatelessWidget {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _DocumentUploadsSection extends StatelessWidget {
+  const _DocumentUploadsSection({
+    required this.scale,
+    required this.modeLabel,
+    required this.defaultProductId,
+    required this.cardIds,
+    required this.onToggleSection,
+    required this.onAddCard,
+    required this.onRemoveCard,
+  });
+
+  final double scale;
+  final String modeLabel;
+  final String defaultProductId;
+  final List<int> cardIds;
+  final VoidCallback onToggleSection;
+  final VoidCallback onAddCard;
+  final ValueChanged<int> onRemoveCard;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+    final bool hasCards = cardIds.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Add Documents',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(14),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: s(0.2),
+                      height: 20 / 14,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                  SizedBox(height: s(4)),
+                  Text(
+                    '$modeLabel uploads are optional. Attach certificates, warranty cards, or compliance docs to a specific product UUID.',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(11),
+                      fontWeight: FontWeight.w500,
+                      height: 16 / 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onToggleSection,
+              icon: Icon(
+                hasCards ? Icons.remove_rounded : Icons.add_rounded,
+                size: s(16),
+              ),
+              label: Text(hasCards ? 'Remove' : 'Add documents'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.brandBlue,
+                padding: EdgeInsets.symmetric(
+                  horizontal: s(12),
+                  vertical: s(10),
+                ),
+                textStyle: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w700,
+                  height: 16 / 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: s(14)),
+        if (hasCards) ...<Widget>[
+          for (final int cardId in cardIds) ...<Widget>[
+            _ProductDocumentCard(
+              key: ValueKey<int>(cardId),
+              scale: scale,
+              defaultProductId: defaultProductId,
+              onRemove: () => onRemoveCard(cardId),
+            ),
+            SizedBox(height: s(12)),
+          ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onAddCard,
+              icon: Icon(Icons.add_rounded, size: s(16)),
+              label: const Text('Add another document'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.brandBlue,
+                padding: EdgeInsets.zero,
+                textStyle: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w700,
+                  height: 16 / 12,
+                ),
+              ),
+            ),
+          ),
+        ] else
+          Text(
+            'Add one or more documents if needed, or continue without them.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(11),
+              fontWeight: FontWeight.w500,
+              height: 16 / 11,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProductDocumentCard extends ConsumerStatefulWidget {
+  const _ProductDocumentCard({
+    super.key,
+    required this.scale,
+    required this.defaultProductId,
+    required this.onRemove,
+  });
+
+  final double scale;
+  final String defaultProductId;
+  final VoidCallback onRemove;
+
+  @override
+  ConsumerState<_ProductDocumentCard> createState() =>
+      _ProductDocumentCardState();
+}
+
+class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
+  static const List<String> _labelOptions = <String>[
+    'certificate',
+    'warranty_card',
+    'compliance_doc',
+  ];
+
+  late final TextEditingController _productIdController;
+  PickedFile? _pickedFile;
+  bool _uploading = false;
+  String _documentLabel = _labelOptions.first;
+  UploadDocumentResponse? _response;
+
+  @override
+  void initState() {
+    super.initState();
+    _productIdController = TextEditingController(
+      text: widget.defaultProductId,
+    );
+  }
+
+  @override
+  void dispose() {
+    _productIdController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDocument() async {
+    if (_uploading) return;
+    final PickedFile? picked = await FilePickerUtil.pickDocument();
+    if (!mounted || picked == null) return;
+    setState(() {
+      _pickedFile = picked;
+      _uploading = true;
+      _response = null;
+    });
+    final String productId = _productIdController.text.trim();
+    if (productId.isEmpty) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product ID is required.')),
+      );
+      return;
+    }
+
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final UploadDocumentResponse res = await repo.uploadProductDocument(
+        productId: productId,
+        documentLabel: _documentLabel,
+        fileBytes: picked.bytes,
+        fileName: picked.name,
+      );
+      if (!mounted) return;
+      setState(() => _response = res);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.message.isEmpty
+                ? 'Document uploaded successfully.'
+                : res.message,
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * widget.scale;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(s(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(18)),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: s(1)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withAlpha(6),
+            blurRadius: s(18),
+            offset: Offset(0, s(8)),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: s(36),
+                height: s(36),
+                decoration: BoxDecoration(
+                  color: AppColors.brandBlue.withAlpha(14),
+                  borderRadius: BorderRadius.circular(s(12)),
+                ),
+                child: Icon(
+                  Icons.description_rounded,
+                  size: s(20),
+                  color: AppColors.brandBlue,
+                ),
+              ),
+              SizedBox(width: s(10)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Document upload',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w700,
+                        height: 20 / 14,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                    SizedBox(height: s(2)),
+                    Text(
+                      'Attach a file to a product UUID.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(11),
+                        fontWeight: FontWeight.w500,
+                        height: 16 / 11,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: widget.onRemove,
+                icon: const Icon(Icons.close_rounded),
+                color: const Color(0xFF94A3B8),
+                tooltip: 'Remove document card',
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          SizedBox(height: s(14)),
+          TextField(
+            controller: _productIdController,
+            textInputAction: TextInputAction.next,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(13),
+              fontWeight: FontWeight.w600,
+              height: 18 / 13,
+              color: const Color(0xFF111827),
+            ),
+            decoration: InputDecoration(
+              labelText: 'Product ID',
+              hintText: 'UUID of the product record',
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(s(14)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(s(14)),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(s(14)),
+                borderSide: BorderSide(
+                  color: AppColors.brandBlue,
+                  width: s(1.2),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: s(12)),
+          Text(
+            'Document label',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(12),
+              fontWeight: FontWeight.w700,
+              height: 18 / 12,
+              color: const Color(0xFF111827),
+            ),
+          ),
+          SizedBox(height: s(8)),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _labelOptions.map((String label) {
+              final bool selected = _documentLabel == label;
+              return ChoiceChip(
+                label: Text(label),
+                selected: selected,
+                onSelected: (_) {
+                  setState(() => _documentLabel = label);
+                },
+                selectedColor: AppColors.brandBlue.withAlpha(18),
+                backgroundColor: const Color(0xFFF8FAFC),
+                labelStyle: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w600,
+                  color: selected ? AppColors.brandBlue : const Color(0xFF475569),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  side: BorderSide(
+                    color: selected
+                        ? AppColors.brandBlue.withAlpha(50)
+                        : const Color(0xFFE5E7EB),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          SizedBox(height: s(12)),
+          OutlinedButton.icon(
+            onPressed: _uploading ? null : _pickDocument,
+            icon: const Icon(Icons.attach_file_rounded),
+            label: Text(
+              _pickedFile == null ? 'Choose file' : _pickedFile!.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF111827),
+              backgroundColor: const Color(0xFFF8FAFC),
+              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              padding: EdgeInsets.symmetric(
+                horizontal: s(14),
+                vertical: s(14),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(s(14)),
+              ),
+              textStyle: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: s(13),
+                fontWeight: FontWeight.w600,
+                height: 18 / 13,
+              ),
+            ),
+          ),
+          if (_pickedFile != null) ...<Widget>[
+            SizedBox(height: s(10)),
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.green.shade600,
+                  size: s(16),
+                ),
+                SizedBox(width: s(6)),
+                Expanded(
+                  child: Text(
+                    'Selected: ${_pickedFile!.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(11),
+                      fontWeight: FontWeight.w500,
+                      height: 16 / 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (_response != null) ...<Widget>[
+            SizedBox(height: s(10)),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(s(12)),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(s(14)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    _response!.message.isEmpty
+                        ? 'Uploaded successfully'
+                        : _response!.message,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w700,
+                      height: 18 / 12,
+                      color: const Color(0xFF166534),
+                    ),
+                  ),
+                  SizedBox(height: s(4)),
+                  Text(
+                    'Version ${_response!.version} • ${_response!.documentId}',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(11),
+                      fontWeight: FontWeight.w500,
+                      height: 16 / 11,
+                      color: const Color(0xFF15803D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+    SizedBox(height: s(12)),
+          Text(
+            'Selecting a file uploads it automatically.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(11),
+              fontWeight: FontWeight.w500,
+              height: 16 / 11,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
       ),
     );
   }
