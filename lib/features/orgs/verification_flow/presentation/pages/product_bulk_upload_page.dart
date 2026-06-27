@@ -207,22 +207,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     return _parseProductNamesFromXlsx(file.bytes);
   }
 
-  List<String> _missingWarrantyProducts({
-    required List<String> productNames,
-    required List<_ProductDocumentDraft> documentDrafts,
-  }) {
-    final Set<String> coveredProducts = documentDrafts
-        .map(( _ProductDocumentDraft draft) => draft.productName?.trim() ?? '')
-        .where((String value) => value.isNotEmpty)
-        .map((String value) => value.toLowerCase())
-        .toSet();
-    return productNames
-        .map((String value) => value.trim())
-        .where((String value) => value.isNotEmpty)
-        .where((String value) => !coveredProducts.contains(value.toLowerCase()))
-        .toList();
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -465,27 +449,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       );
       return;
     }
-    final List<String> requiredProducts = _parsedProductNames
-        .map((String v) => v.trim())
-        .where((String v) => v.isNotEmpty)
-        .toList();
-    final List<String> missingProducts = isWarranty
-        ? _missingWarrantyProducts(
-            productNames: requiredProducts,
-            documentDrafts: documentDrafts,
-          )
-        : <String>[];
-    if (isWarranty && missingProducts.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Warranty docs are required for every product. Missing: ${missingProducts.join(', ')}',
-          ),
-        ),
-      );
-      return;
-    }
-
     setState(() => _creating = true);
     try {
       final VerificationRepository repo = ref.read(
@@ -699,7 +662,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         };
     final bool isWarranty = _mode == 'warranty';
     final String uploadHint = isWarranty
-        ? 'Download template based on your selected sector.\nUpload your Excel and add a document for every product before confirming the batch.'
+        ? 'Download template based on your selected sector.\nUpload your Excel, and optionally add documents before confirming the batch.'
         : 'Download template based on your selected sector.\nUpload your Excel, optionally add documents, then confirm the batch.';
     final int currentStep = isWarranty ? 3 : 4;
     final int totalSteps = isWarranty ? 5 : 6;
@@ -999,15 +962,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     _pickedFile != null &&
                                     _resolvedBatchName.isNotEmpty &&
                                     _productParseError == null &&
-                                    _parsedProductNames.isNotEmpty &&
-                                    (!isWarranty ||
-                                        _missingWarrantyProducts(
-                                          productNames: _parsedProductNames,
-                                          documentDrafts: _documentCardIds
-                                              .map((int id) => _documentDrafts[id])
-                                              .whereType<_ProductDocumentDraft>()
-                                              .toList(),
-                                        ).isEmpty),
+                                    _parsedProductNames.isNotEmpty,
                                 onTap: _confirmAndCreateBatch,
                                 label: 'Create Batch',
                               ),
