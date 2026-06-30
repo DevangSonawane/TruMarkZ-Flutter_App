@@ -30,7 +30,14 @@ export const Badge = ({ status, children, className }) => {
   const variant = variants[status] || variants.default;
 
   return (
-    <span className={clsx('inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium font-inter', variant, className)}>
+    <span
+      className={clsx(
+        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium font-inter',
+        status === 'pending' && 'animate-pulse',
+        variant,
+        className,
+      )}
+    >
       {Icon && <Icon size={12} className={status === 'in-progress' || status === 'info' ? 'animate-spin' : ''} />}
       {children || status}
     </span>

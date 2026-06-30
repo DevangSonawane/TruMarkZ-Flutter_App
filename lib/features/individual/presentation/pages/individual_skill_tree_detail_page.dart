@@ -3,13 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../../core/models/auth_models.dart';
 import '../../../../../core/models/skill_tree_models.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/widgets/tmz_badge.dart';
-import '../../../auth/application/auth_notifier.dart';
-import '../../../auth/application/auth_state.dart';
 import '../../data/skill_tree_repository.dart';
 
 class IndividualSkillTreeDetailPage extends ConsumerWidget {
@@ -19,15 +16,10 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
   static const Color _panelBg = Color(0xFFF7F9FC);
 
   SkillTreeSkillType _selectedType(BuildContext context) {
-    final String raw = GoRouterState.of(context).uri.queryParameters['type'] ??
+    final String raw =
+        GoRouterState.of(context).uri.queryParameters['type'] ??
         SkillTreeSkillType.technical.value;
     return skillTypeFromValue(raw);
-  }
-
-  String _displayName(UserProfile? profile) {
-    final String? name = profile?.fullName?.trim();
-    if (name != null && name.isNotEmpty) return name;
-    return 'there';
   }
 
   void _goBack(BuildContext context) {
@@ -45,8 +37,9 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<SkillsMeResponse> skillsAsync = ref.watch(mySkillsProvider);
-    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final AsyncValue<SkillsMeResponse> skillsAsync = ref.watch(
+      mySkillsProvider,
+    );
     final SkillTreeSkillType selectedType = _selectedType(context);
 
     return Scaffold(
@@ -130,11 +123,11 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                           ),
                         ),
                         child: skillsAsync.when(
-                          loading: () => const Center(
-                            child: CircularProgressIndicator(),
-                          ),
+                          loading: () =>
+                              const Center(child: CircularProgressIndicator()),
                           error: (Object error, StackTrace stackTrace) {
-                            final String message = 'Unable to load your skills.';
+                            final String message =
+                                'Unable to load your skills.';
                             return Center(
                               child: Padding(
                                 padding: EdgeInsets.all(s(18)),
@@ -153,9 +146,6 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                                       selectedType,
                                 )
                                 .toList();
-                            final String displayName =
-                                _displayName(authAsync.value?.userProfile);
-
                             return Column(
                               children: <Widget>[
                                 Expanded(
@@ -175,12 +165,26 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                                             children: <Widget>[
                                               _DetailHero(
                                                 scale: scale,
-                                                displayName: displayName,
                                                 selectedType: selectedType,
                                                 total: skills.length,
                                               ),
                                               SizedBox(height: s(16)),
                                             ],
+                                          ),
+                                        ),
+                                      ),
+                                      SliverPadding(
+                                        padding: EdgeInsets.fromLTRB(
+                                          s(16),
+                                          0,
+                                          s(16),
+                                          s(18),
+                                        ),
+                                        sliver: SliverToBoxAdapter(
+                                          child: Divider(
+                                            height: 1,
+                                            thickness: 1,
+                                            color: const Color(0xFFE5E7EB),
                                           ),
                                         ),
                                       ),
@@ -208,18 +212,25 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
                                             s(24),
                                           ),
                                           sliver: SliverList.separated(
-                                            itemBuilder: (BuildContext context,
-                                                int index) {
-                                              return _SkillDetailCard(
-                                                scale: scale,
-                                                skill: skills[index],
-                                              );
-                                            },
+                                            itemBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) {
+                                                  return _SkillDetailCard(
+                                                    scale: scale,
+                                                    skill: skills[index],
+                                                  );
+                                                },
                                             separatorBuilder:
-                                                (BuildContext context,
-                                                    int index) {
-                                              return SizedBox(height: s(12));
-                                            },
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) {
+                                                  return SizedBox(
+                                                    height: s(12),
+                                                  );
+                                                },
                                             itemCount: skills.length,
                                           ),
                                         ),
@@ -246,13 +257,11 @@ class IndividualSkillTreeDetailPage extends ConsumerWidget {
 class _DetailHero extends StatelessWidget {
   const _DetailHero({
     required this.scale,
-    required this.displayName,
     required this.selectedType,
     required this.total,
   });
 
   final double scale;
-  final String displayName;
   final SkillTreeSkillType selectedType;
   final int total;
 
@@ -267,53 +276,39 @@ class _DetailHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(s(20)),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: <Widget>[
-          Text(
-            'Hello, $displayName',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w700,
-              color: AppColors.brandBlue,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                selectedType.label,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(24),
+                  fontWeight: FontWeight.w800,
+                  height: 1.05,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SizedBox(height: s(10)),
+              Text(
+                'Review your ${selectedType.label.toLowerCase()} skills, documents, and verification status here.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w500,
+                  height: 1.45,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: s(8)),
-          Text(
-            selectedType.label,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(24),
-              fontWeight: FontWeight.w800,
-              height: 1.05,
-              color: AppColors.textPrimary,
-            ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: TMZBadge.pending(label: total > 0 ? 'PENDING' : 'EMPTY'),
           ),
-          SizedBox(height: s(10)),
-          Text(
-            '${selectedType.label} in one place',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w500,
-              height: 1.45,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          SizedBox(height: s(14)),
-          Text(
-            'Review your ${selectedType.label.toLowerCase()} skills, documents, and verification status here.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w500,
-              height: 1.45,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          SizedBox(height: s(14)),
-          TMZBadge.pending(label: total > 0 ? 'PENDING' : 'EMPTY'),
         ],
       ),
     );
@@ -321,10 +316,7 @@ class _DetailHero extends StatelessWidget {
 }
 
 class _SkillDetailCard extends StatelessWidget {
-  const _SkillDetailCard({
-    required this.scale,
-    required this.skill,
-  });
+  const _SkillDetailCard({required this.scale, required this.skill});
 
   final double scale;
   final SkillItem skill;
@@ -375,9 +367,9 @@ class _SkillDetailCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if ((skill.institutionName ?? '').trim().isNotEmpty) ...<
-                      Widget
-                    >[
+                    if ((skill.institutionName ?? '')
+                        .trim()
+                        .isNotEmpty) ...<Widget>[
                       SizedBox(height: s(6)),
                       Text(
                         skill.degree?.trim().isNotEmpty == true
@@ -395,7 +387,10 @@ class _SkillDetailCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: EdgeInsets.symmetric(horizontal: s(10), vertical: s(6)),
+                padding: EdgeInsets.symmetric(
+                  horizontal: s(10),
+                  vertical: s(6),
+                ),
                 decoration: BoxDecoration(
                   color: statusBg,
                   borderRadius: BorderRadius.circular(s(999)),
@@ -455,10 +450,7 @@ class _SkillDetailCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.scale,
-    required this.selectedType,
-  });
+  const _EmptyState({required this.scale, required this.selectedType});
 
   final double scale;
   final SkillTreeSkillType selectedType;

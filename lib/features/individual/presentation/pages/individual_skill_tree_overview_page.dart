@@ -81,14 +81,16 @@ class _IndividualSkillTreeOverviewPageState
       await ref.read(skillTreeRepositoryProvider).deleteAllSkills();
       await ref.read(tokenStorageProvider).saveSkillTreeCompleted(false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All skills deleted.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('All skills deleted.')));
       ref.invalidate(mySkillsProvider);
       context.go(AppRouter.individualScanPath);
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,7 +143,9 @@ class _IndividualSkillTreeOverviewPageState
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<SkillsMeResponse> skillsAsync = ref.watch(mySkillsProvider);
+    final AsyncValue<SkillsMeResponse> skillsAsync = ref.watch(
+      mySkillsProvider,
+    );
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
 
     return Scaffold(
@@ -209,7 +213,9 @@ class _IndividualSkillTreeOverviewPageState
                                 animation: _refreshController,
                                 builder: (BuildContext context, Widget? child) {
                                   return Transform.rotate(
-                                    angle: _refreshController.value * 6.283185307179586,
+                                    angle:
+                                        _refreshController.value *
+                                        6.283185307179586,
                                     child: child,
                                   );
                                 },
@@ -242,10 +248,9 @@ class _IndividualSkillTreeOverviewPageState
                             ),
                           ),
                           error: (Object error, StackTrace stackTrace) {
-                            final String message =
-                                error is ApiException
-                                    ? error.message
-                                    : 'Unable to load your skills.';
+                            final String message = error is ApiException
+                                ? error.message
+                                : 'Unable to load your skills.';
                             return SingleChildScrollView(
                               padding: EdgeInsets.fromLTRB(
                                 s(16),
@@ -285,16 +290,15 @@ class _IndividualSkillTreeOverviewPageState
                             }
 
                             final Map<SkillTreeSkillType, List<SkillItem>>
-                                grouped = <SkillTreeSkillType, List<SkillItem>>{
+                            grouped = <SkillTreeSkillType, List<SkillItem>>{
                               for (final SkillTreeSkillType type
                                   in SkillTreeSkillType.values)
-                                type:
-                                    data.skills
-                                        .where(
-                                          (SkillItem skill) =>
-                                              _skillTypeOf(skill) == type,
-                                        )
-                                        .toList(),
+                                type: data.skills
+                                    .where(
+                                      (SkillItem skill) =>
+                                          _skillTypeOf(skill) == type,
+                                    )
+                                    .toList(),
                             };
                             final int pendingCount = data.skills
                                 .where(
@@ -310,20 +314,23 @@ class _IndividualSkillTreeOverviewPageState
                                       'verified',
                                 )
                                 .length;
-                            final String displayName =
-                                _displayName(authAsync.value?.userProfile);
+                            final String displayName = _displayName(
+                              authAsync.value?.userProfile,
+                            );
                             final Map<SkillTreeSkillType, int> verifiedByType =
                                 <SkillTreeSkillType, int>{
-                              for (final SkillTreeSkillType type
-                                  in SkillTreeSkillType.values)
-                                type: (grouped[type] ?? <SkillItem>[])
-                                    .where(
-                                      (SkillItem skill) =>
-                                          skill.status.trim().toLowerCase() ==
-                                          'verified',
-                                    )
-                                    .length,
-                            };
+                                  for (final SkillTreeSkillType type
+                                      in SkillTreeSkillType.values)
+                                    type: (grouped[type] ?? <SkillItem>[])
+                                        .where(
+                                          (SkillItem skill) =>
+                                              skill.status
+                                                  .trim()
+                                                  .toLowerCase() ==
+                                              'verified',
+                                        )
+                                        .length,
+                                };
                             final bool allVerified =
                                 data.total > 0 && verifiedCount == data.total;
 
@@ -357,14 +364,13 @@ class _IndividualSkillTreeOverviewPageState
                                         ),
                                         SizedBox(height: s(16)),
                                         for (final SkillTreeSkillType type
-                                            in SkillTreeSkillType.values) ...<
-                                          Widget
-                                        >[
+                                            in SkillTreeSkillType
+                                                .values) ...<Widget>[
                                           _SkillGroupCard(
                                             scale: scale,
                                             type: type,
-                                            skills: grouped[type] ??
-                                                <SkillItem>[],
+                                            skills:
+                                                grouped[type] ?? <SkillItem>[],
                                             verifiedCount:
                                                 verifiedByType[type] ?? 0,
                                             onTap: () => context.push(
@@ -423,10 +429,7 @@ class _PendingHero extends StatelessWidget {
         animation: pulse,
         builder: (BuildContext context, Widget? child) {
           final double t = Curves.easeInOut.transform(pulse.value);
-          return Transform.scale(
-            scale: 1.0 + (t * 0.025),
-            child: child,
-          );
+          return Transform.scale(scale: 1.0 + (t * 0.025), child: child);
         },
         child: Container(
           width: s(120),
@@ -508,72 +511,107 @@ class _SummaryCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            'Hello, $displayName',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w700,
-              color: AppColors.brandBlue,
-            ),
-          ),
-          SizedBox(height: s(8)),
-          Text(
-            allVerified ? 'All skills verified' : 'Pending skill tree',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(24),
-              fontWeight: FontWeight.w800,
-              height: 1.05,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          SizedBox(height: s(10)),
-          Text(
-            allVerified
-                ? 'Everything in your skill tree has been verified.'
-                : 'Your skills are saved and waiting for review. Tap any category to open the detailed skill list.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w500,
-              height: 1.45,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          SizedBox(height: s(14)),
-          Wrap(
-            spacing: s(8),
-            runSpacing: s(8),
-            children: <Widget>[
-              _StatPill(scale: scale, label: 'Total', value: total),
-              _StatPill(scale: scale, label: 'Pending', value: pendingCount),
-              _StatPill(scale: scale, label: 'Verified', value: verifiedCount),
-            ],
-          ),
-          SizedBox(height: s(14)),
-          allVerified
-              ? Container(
-                  padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(8)),
-                  decoration: BoxDecoration(
-                    color: AppColors.successBg,
-                    borderRadius: BorderRadius.circular(s(999)),
-                    border: Border.all(color: AppColors.success.withValues(alpha: 0.12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Hello, $displayName',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.brandBlue,
                   ),
-                  child: Text(
-                    'ALL VERIFIED',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(11),
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.success,
+                ),
+                SizedBox(height: s(8)),
+                Text(
+                  allVerified ? 'All skills verified' : 'Skill Tree',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(24),
+                    fontWeight: FontWeight.w800,
+                    height: 1.05,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                SizedBox(height: s(10)),
+                Text(
+                  allVerified
+                      ? 'Everything in your skill tree has been verified.'
+                      : 'Your skills are saved and waiting for review. Tap any category to open the detailed skill list.',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 1.45,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                SizedBox(height: s(14)),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: _StatPill(
+                        scale: scale,
+                        compact: true,
+                        label: 'Total',
+                        value: total,
+                      ),
                     ),
-                  ),
-                )
-              : TMZBadge.pending(label: 'PENDING'),
+                    SizedBox(width: s(8)),
+                    Expanded(
+                      child: _StatPill(
+                        scale: scale,
+                        compact: true,
+                        label: 'Pending',
+                        value: pendingCount,
+                      ),
+                    ),
+                    SizedBox(width: s(8)),
+                    Expanded(
+                      child: _StatPill(
+                        scale: scale,
+                        compact: true,
+                        label: 'Verified',
+                        value: verifiedCount,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: s(14)),
+                allVerified
+                    ? Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: s(12),
+                          vertical: s(8),
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.successBg,
+                          borderRadius: BorderRadius.circular(s(999)),
+                          border: Border.all(
+                            color: AppColors.success.withValues(alpha: 0.12),
+                          ),
+                        ),
+                        child: Text(
+                          'ALL VERIFIED',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(11),
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ],
+            ),
+          ),
+          SizedBox(width: s(12)),
+          TMZBadge.pending(label: 'PENDING'),
         ],
       ),
     );
@@ -585,29 +623,43 @@ class _StatPill extends StatelessWidget {
     required this.scale,
     required this.label,
     required this.value,
+    this.compact = false,
   });
 
   final double scale;
   final String label;
   final int value;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(8)),
+      constraints: BoxConstraints(minHeight: s(30)),
+      padding: EdgeInsets.symmetric(
+        horizontal: s(compact ? 10 : 12),
+        vertical: s(compact ? 7 : 8),
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(s(999)),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: s(11),
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF334155),
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            '$label: $value',
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(compact ? 10.5 : 11),
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF334155),
+            ),
+          ),
         ),
       ),
     );
@@ -664,10 +716,7 @@ class _NoticeCard extends StatelessWidget {
             ),
           ),
           SizedBox(height: s(12)),
-          FilledButton(
-            onPressed: onAction,
-            child: Text(actionLabel),
-          ),
+          FilledButton(onPressed: onAction, child: Text(actionLabel)),
         ],
       ),
     );
@@ -831,12 +880,7 @@ class _BottomActions extends StatelessWidget {
     double s(double v) => v * scale;
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        s(13.604),
-        s(12.864),
-        s(13.668),
-        s(12.864),
-      ),
+      padding: EdgeInsets.fromLTRB(s(13.604), s(12.864), s(13.668), s(12.864)),
       decoration: BoxDecoration(
         color: Colors.white.withAlpha(204),
         border: const Border(
