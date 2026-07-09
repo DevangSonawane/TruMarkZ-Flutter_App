@@ -1,425 +1,298 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/verification_models.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../../auth/application/auth_notifier.dart';
+import '../../../auth/application/auth_state.dart';
+import '../../../orgs/data/verification_repository.dart';
 
-class IndividualSdcPage extends StatelessWidget {
+class IndividualSdcPage extends ConsumerStatefulWidget {
   const IndividualSdcPage({super.key});
 
-  static const String _mockName = 'Rahul Kumar';
-  static const String _mockRole = 'Supply Chain Manager';
-  static const String _mockCompany = 'Skill India Digital';
-  static const String _mockId = 'SDC-SCM-2024-567890';
-  static const String _mockIssuedOn = '20 May 2024';
-  static const String _mockValidTill = '19 May 2034';
+  @override
+  ConsumerState<IndividualSdcPage> createState() => _IndividualSdcPageState();
+}
+
+class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
+  final TextEditingController _searchController = TextEditingController();
+
+  Timer? _debounce;
+  bool _didInit = false;
+  String _orgId = '';
+  String _spaceId = '';
+  String _batchId = '';
+  String _batchName = '';
+  int _active = 1;
+  int _page = 1;
+  int _pageSize = 30;
+
+  AsyncValue<SdcRecordsResponse> _records = const AsyncLoading();
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_handleSearchChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInit) return;
+    _didInit = true;
+    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    _orgId = (qp['org_id'] ?? qp['orgId'] ?? '').trim();
+    _spaceId = (qp['space_id'] ?? qp['spaceId'] ?? '').trim();
+    _batchId = (qp['batch_id'] ?? qp['batchId'] ?? '').trim();
+    _batchName = (qp['batch_name'] ?? qp['batchName'] ?? '').trim();
+    _active = int.tryParse((qp['active'] ?? '').trim()) ?? 1;
+    _page = int.tryParse((qp['page'] ?? '').trim()) ?? 1;
+    _pageSize = int.tryParse((qp['pageSize'] ?? '').trim()) ?? 30;
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController
+      ..removeListener(_handleSearchChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      _page = 1;
+      _load();
+    });
+  }
+
+  String? _resolvedOrgId() {
+    final String fromQuery = _orgId;
+    if (fromQuery.isNotEmpty) return fromQuery;
+    return null;
+  }
+
+  Future<void> _load() async {
+    setState(() => _records = const AsyncLoading());
+    try {
+      final VerificationRepository repo = ref.read(verificationRepositoryProvider);
+      final SdcRecordsResponse res = await repo.getSdcRecords(
+        orgId: _resolvedOrgId(),
+        spaceId: _spaceId.isNotEmpty ? _spaceId : null,
+        active: _active,
+        page: _page,
+        pageSize: _pageSize,
+        search: _searchController.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _records = AsyncData(res);
+        _page = res.page <= 0 ? _page : res.page;
+        _pageSize = res.pageSize > 0 ? res.pageSize : _pageSize;
+      });
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+      setState(() => _records = AsyncError(error, stackTrace));
+    }
+  }
+
+  void _goBack(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(AppRouter.dashboardPath);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final double safeTop = MediaQuery.paddingOf(context).top;
+    final AuthState? authState = ref.watch(authNotifierProvider).valueOrNull;
+    final String orgLabel = authState?.userProfile?.organizationName?.trim().isNotEmpty == true
+        ? authState!.userProfile!.organizationName!.trim()
+        : (authState?.userProfile?.fullName?.trim().isNotEmpty == true
+              ? authState!.userProfile!.fullName!.trim()
+              : 'Organisation');
+    final SdcRecordsResponse? data = _records.valueOrNull;
+    final List<SdcRecord> records = data?.records ?? const <SdcRecord>[];
+    final int totalCount = data?.count ?? 0;
+    final bool canGoBack = context.canPop();
+    final bool isLoading = _records.isLoading;
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
         bottom: false,
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double contentWidth = constraints.maxWidth < 402
-                ? constraints.maxWidth
-                : 402;
-            final double scale = contentWidth / 402;
-            double s(double v) => v * scale;
-
-            return Center(
-              child: SizedBox(
-                width: contentWidth,
-                height: constraints.maxHeight,
-                child: Column(
-                  children: <Widget>[
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () =>
-                                context.go(AppRouter.individualIdentityPath),
-                            radius: s(22),
-                            child: const Padding(
-                              padding: EdgeInsets.all(6),
-                              child: Icon(
-                                Icons.arrow_back_rounded,
-                                color: Colors.white,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  'SDC',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: s(21),
-                                    fontWeight: FontWeight.w600,
-                                    height: 19.5 / 21,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                SizedBox(height: s(2)),
-                                Text(
-                                  'Single Digital Certificate',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: s(12),
-                                    fontWeight: FontWeight.w500,
-                                    height: 17 / 12,
-                                    color: Colors.white.withValues(alpha: 0.82),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: s(12),
-                              vertical: s(7),
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(s(999)),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.16),
-                              ),
-                            ),
-                            child: Text(
-                              'Mock data',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: s(10),
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: s(0.35),
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: s(18)),
-                    Expanded(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF7F9FC),
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(s(20)),
-                          ),
-                        ),
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.fromLTRB(
-                            s(16),
-                            s(28),
-                            s(16),
-                            s(16 + safeTop),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              _SectionHeader(
-                                scale: scale,
-                                title: 'Certificate Preview',
-                                subtitle:
-                                    'A clean SDC layout for the current user, driven by mock data for now.',
-                              ),
-                              SizedBox(height: s(20)),
-                              _CertificateFrame(
-                                scale: scale,
-                                name: _mockName,
-                                role: _mockRole,
-                                company: _mockCompany,
-                                certificateId: _mockId,
-                                issuedOn: _mockIssuedOn,
-                                validTill: _mockValidTill,
-                              ),
-                              SizedBox(height: s(18)),
-                              _InsightCard(scale: scale, name: _mockName),
-                              SizedBox(height: s(18)),
-                              _ActionRow(
-                                scale: scale,
-                                onVerify: () => context.go(
-                                  AppRouter.individualVerificationIndustryPath,
-                                ),
-                                onShare: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Share will hook into live data later.',
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.scale,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final double scale;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          title,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(22),
-            fontWeight: FontWeight.w800,
-            height: 26 / 22,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        SizedBox(height: s(8)),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(12),
-            fontWeight: FontWeight.w400,
-            height: 18 / 12,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CertificateFrame extends StatelessWidget {
-  const _CertificateFrame({
-    required this.scale,
-    required this.name,
-    required this.role,
-    required this.company,
-    required this.certificateId,
-    required this.issuedOn,
-    required this.validTill,
-  });
-
-  final double scale;
-  final String name;
-  final String role;
-  final String company;
-  final String certificateId;
-  final String issuedOn;
-  final String validTill;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(24)),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.brandBlue.withValues(alpha: 0.12),
-            blurRadius: s(24),
-            offset: Offset(0, s(10)),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(s(24)),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Container(
-              padding: EdgeInsets.all(s(16)),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[Color(0xFF0B1E4A), Color(0xFF2563EB)],
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x4,
+                AppSpacing.x3,
+                AppSpacing.x4,
+                AppSpacing.x3,
               ),
               child: Row(
                 children: <Widget>[
-                  Container(
-                    width: s(42),
-                    height: s(42),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(s(12)),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'SDC',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(12),
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () => _goBack(context),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: Colors.white,
                   ),
-                  SizedBox(width: s(12)),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          'Single Digital Certificate',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: s(18),
-                            fontWeight: FontWeight.w800,
-                            height: 1.1,
+                          'SDC Records',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.heading1.copyWith(
                             color: Colors.white,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        SizedBox(height: s(4)),
+                        const SizedBox(height: 2),
                         Text(
-                          'Mock certificate preview for ${name.split(' ').first}',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: s(11),
-                            fontWeight: FontWeight.w500,
-                            height: 16 / 11,
+                          _batchName.isNotEmpty
+                              ? 'Batch: $_batchName'
+                              : (_batchId.isNotEmpty
+                                    ? 'Batch ID: $_batchId'
+                                    : orgLabel),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.body2.copyWith(
                             color: Colors.white.withValues(alpha: 0.82),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: s(10),
-                      vertical: s(6),
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(s(999)),
-                    ),
-                    child: Text(
-                      'VERIFIED',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(10),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: s(0.5),
-                        color: Colors.white,
-                      ),
-                    ),
+                  const SizedBox(width: 8),
+                  _HeaderBadge(
+                    label: _active == 1 ? 'Active only' : 'All active states',
                   ),
+                  if (!canGoBack) const SizedBox(width: 8),
                 ],
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(s(16)),
-              child: Column(
-                children: <Widget>[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(s(18)),
-                    child: AspectRatio(
-                      aspectRatio: 866 / 1230,
-                      child: Image.asset(
-                        'assets/images/certificate_preview_sample.png',
-                        fit: BoxFit.cover,
-                      ),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: RefreshIndicator(
+                  color: AppColors.brandBlue,
+                  onRefresh: _load,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
                     ),
-                  ),
-                  SizedBox(height: s(14)),
-                  Row(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.x4,
+                      AppSpacing.x4,
+                      AppSpacing.x4,
+                      AppSpacing.x6,
+                    ),
                     children: <Widget>[
-                      Expanded(
-                        child: _MiniStat(
-                          scale: scale,
-                          label: 'Name',
-                          value: name,
-                          icon: Icons.person_rounded,
-                        ),
+                      _SearchBox(
+                        controller: _searchController,
+                        onSubmitted: () {
+                          _page = 1;
+                          _load();
+                        },
+                        onClear: _searchController.text.isEmpty
+                            ? null
+                            : () {
+                                _searchController.clear();
+                                _page = 1;
+                                _load();
+                              },
                       ),
-                      SizedBox(width: s(10)),
-                      Expanded(
-                        child: _MiniStat(
-                          scale: scale,
-                          label: 'Role',
-                          value: role,
-                          icon: Icons.badge_rounded,
-                        ),
+                      const SizedBox(height: AppSpacing.x3),
+                      _SummaryStrip(
+                        totalCount: totalCount,
+                        page: _page,
+                        pageSize: _pageSize,
+                        instanceKey: data?.instanceKey ?? '',
+                        batchId: _batchId,
+                        spaceId: _spaceId,
                       ),
+                      const SizedBox(height: AppSpacing.x4),
+                      if (isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: AppSpacing.x8),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_records.hasError)
+                        _ErrorCard(
+                          message: _records.error.toString(),
+                          onRetry: _load,
+                        )
+                      else ...<Widget>[
+                        if (records.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: AppSpacing.x8),
+                            child: Center(
+                              child: Text(
+                                'No records found.',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          for (int i = 0; i < records.length; i++) ...<Widget>[
+                            _SdcRecordCard(
+                              record: records[i],
+                              onTap: () => context.push(
+                                AppRouter.sdcRecordLocation(
+                                  publicId: records[i].publicId,
+                                  instanceKey: data?.instanceKey.isNotEmpty == true
+                                      ? data!.instanceKey
+                                      : 'de',
+                                ),
+                              ),
+                            ),
+                            if (i != records.length - 1) const SizedBox(height: 12),
+                          ],
+                        const SizedBox(height: AppSpacing.x4),
+                        _PaginationRow(
+                          page: _page,
+                          pageSize: _pageSize,
+                          totalCount: totalCount,
+                          onPrev: _page <= 1
+                              ? null
+                              : () {
+                                  setState(() => _page -= 1);
+                                  _load();
+                                },
+                          onNext: records.length < _pageSize && totalCount <= _page * _pageSize
+                              ? null
+                              : () {
+                                  setState(() => _page += 1);
+                                  _load();
+                                },
+                        ),
+                      ],
                     ],
                   ),
-                  SizedBox(height: s(10)),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: _InfoPill(
-                          scale: scale,
-                          label: 'Issued by',
-                          value: company,
-                        ),
-                      ),
-                      SizedBox(width: s(10)),
-                      Expanded(
-                        child: _InfoPill(
-                          scale: scale,
-                          label: 'Certificate ID',
-                          value: certificateId,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: s(10)),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: _InfoPill(
-                          scale: scale,
-                          label: 'Issued on',
-                          value: issuedOn,
-                        ),
-                      ),
-                      SizedBox(width: s(10)),
-                      Expanded(
-                        child: _InfoPill(
-                          scale: scale,
-                          label: 'Valid till',
-                          value: validTill,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
           ],
@@ -429,78 +302,306 @@ class _CertificateFrame extends StatelessWidget {
   }
 }
 
-class _InsightCard extends StatelessWidget {
-  const _InsightCard({required this.scale, required this.name});
+class _SearchBox extends StatelessWidget {
+  const _SearchBox({
+    required this.controller,
+    required this.onSubmitted,
+    required this.onClear,
+  });
 
-  final double scale;
-  final String name;
+  final TextEditingController controller;
+  final VoidCallback onSubmitted;
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    final String firstName = name.split(' ').first;
-
     return Container(
-      padding: EdgeInsets.all(s(16)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(s(22)),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.7)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x3),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Container(
-            width: s(42),
-            height: s(42),
-            decoration: BoxDecoration(
-              color: AppColors.blueTint,
-              borderRadius: BorderRadius.circular(s(14)),
-            ),
-            child: const Icon(
-              Icons.insights_rounded,
-              color: AppColors.brandBlue,
-              size: 24,
+          const Icon(Icons.search_rounded, color: AppColors.textTertiary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textInputAction: TextInputAction.search,
+              decoration: const InputDecoration(
+                hintText: 'Search title or recipient',
+                border: InputBorder.none,
+                isCollapsed: true,
+              ),
+              style: AppTypography.body1,
+              onSubmitted: (_) => onSubmitted(),
             ),
           ),
-          SizedBox(width: s(12)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Why this SDC matters',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(16),
-                    fontWeight: FontWeight.w800,
-                    height: 24 / 16,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                SizedBox(height: s(6)),
-                Text(
-                  '$firstName\'s certificate is structured to show identity, role, and traceability in one place.',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(12),
-                    fontWeight: FontWeight.w400,
-                    height: 18 / 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                SizedBox(height: s(12)),
-                Wrap(
-                  spacing: s(8),
-                  runSpacing: s(8),
-                  children: <Widget>[
-                    _TinyPill(scale: scale, label: 'Identity verified'),
-                    _TinyPill(scale: scale, label: 'Role attached'),
-                    _TinyPill(scale: scale, label: 'Ready for issuance'),
-                  ],
-                ),
-              ],
+          if (onClear != null)
+            TextButton(
+              onPressed: onClear,
+              child: const Text('Clear'),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryStrip extends StatelessWidget {
+  const _SummaryStrip({
+    required this.totalCount,
+    required this.page,
+    required this.pageSize,
+    required this.instanceKey,
+    required this.batchId,
+    required this.spaceId,
+  });
+
+  final int totalCount;
+  final int page;
+  final int pageSize;
+  final String instanceKey;
+  final String batchId;
+  final String spaceId;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> chips = <Widget>[
+      _MetricChip(label: 'Records', value: totalCount.toString()),
+      _MetricChip(label: 'Page', value: page.toString()),
+      _MetricChip(label: 'Page size', value: pageSize.toString()),
+    ];
+    if (batchId.trim().isNotEmpty) {
+      chips.add(_MetricChip(label: 'Batch', value: batchId.trim()));
+    }
+    if (spaceId.trim().isNotEmpty) {
+      chips.add(_MetricChip(label: 'Space', value: spaceId.trim()));
+    }
+    if (instanceKey.trim().isNotEmpty) {
+      chips.add(_MetricChip(label: 'Instance', value: instanceKey.trim()));
+    }
+
+    return Wrap(
+      spacing: AppSpacing.x2,
+      runSpacing: AppSpacing.x2,
+      children: chips,
+    );
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x3,
+        vertical: AppSpacing.x2,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.8)),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          children: <TextSpan>[
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SdcRecordCard extends StatelessWidget {
+  const _SdcRecordCard({required this.record, required this.onTap});
+
+  final SdcRecord record;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime? createdAt = DateTime.tryParse(record.createdAt);
+    final DateTime? updatedAt = DateTime.tryParse(record.updatedAt);
+    final String subtitle = record.recipients.isEmpty
+        ? 'No recipients listed'
+        : record.recipients.join(', ');
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.divider.withValues(alpha: 0.7)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(AppSpacing.x4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: record.active
+                          ? AppColors.success.withValues(alpha: 0.12)
+                          : AppColors.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      record.active
+                          ? Icons.verified_rounded
+                          : Icons.pause_circle_filled_rounded,
+                      color: record.active ? AppColors.success : AppColors.warning,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.x3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          record.title.trim().isNotEmpty ? record.title.trim() : 'Untitled record',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.heading2.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Public ID: ${record.publicId.trim().isNotEmpty ? record.publicId.trim() : record.id}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.body2.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.x2),
+                  _StatusPill(active: record.active),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.x3),
+              Text(
+                subtitle,
+                style: AppTypography.body2.copyWith(color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: AppSpacing.x3),
+              Wrap(
+                spacing: AppSpacing.x2,
+                runSpacing: AppSpacing.x2,
+                children: <Widget>[
+                  _TinyInfo(label: 'Created', value: _formatDate(createdAt)),
+                  _TinyInfo(label: 'Updated', value: _formatDate(updatedAt)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg = active ? AppColors.success : AppColors.warning;
+    final Color bg = active
+        ? AppColors.success.withValues(alpha: 0.12)
+        : AppColors.warning.withValues(alpha: 0.12);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        active ? 'ACTIVE' : 'INACTIVE',
+        style: AppTypography.caption.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _TinyInfo extends StatelessWidget {
+  const _TinyInfo({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.pageBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -508,196 +609,109 @@ class _InsightCard extends StatelessWidget {
   }
 }
 
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({
-    required this.scale,
-    required this.onVerify,
-    required this.onShare,
+class _PaginationRow extends StatelessWidget {
+  const _PaginationRow({
+    required this.page,
+    required this.pageSize,
+    required this.totalCount,
+    required this.onPrev,
+    required this.onNext,
   });
 
-  final double scale;
-  final VoidCallback onVerify;
-  final VoidCallback onShare;
+  final int page;
+  final int pageSize;
+  final int totalCount;
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {
-    double s(double v) => v * scale;
+    final int start = totalCount == 0 ? 0 : ((page - 1) * pageSize) + 1;
+    final int end = totalCount == 0 ? 0 : (page * pageSize).clamp(0, totalCount);
 
     return Row(
       children: <Widget>[
         Expanded(
-          child: SizedBox(
-            height: s(52),
-            child: FilledButton(
-              onPressed: onVerify,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.darkNavy,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(s(18)),
-                ),
-              ),
-              child: Text(
-                'Start Verification',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(14),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+          child: Text(
+            totalCount == 0
+                ? 'No records to page through'
+                : 'Showing $start-$end of $totalCount',
+            style: AppTypography.body2.copyWith(
+              color: AppColors.textSecondary,
             ),
           ),
         ),
-        SizedBox(width: s(12)),
-        Expanded(
-          child: SizedBox(
-            height: s(52),
-            child: OutlinedButton(
-              onPressed: onShare,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.brandBlue,
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(s(18)),
-                ),
-              ),
-              child: Text(
-                'Share',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(14),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
+        TextButton(
+          onPressed: onPrev,
+          child: const Text('Prev'),
+        ),
+        const SizedBox(width: 4),
+        TextButton(
+          onPressed: onNext,
+          child: const Text('Next'),
         ),
       ],
     );
   }
 }
 
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({
-    required this.scale,
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
+class _HeaderBadge extends StatelessWidget {
+  const _HeaderBadge({required this.label});
 
-  final double scale;
   final String label;
-  final String value;
-  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
     return Container(
-      padding: EdgeInsets.all(s(12)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(s(16)),
-        border: Border.all(color: AppColors.divider),
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: s(32),
-            height: s(32),
-            decoration: BoxDecoration(
-              color: AppColors.blueTint,
-              borderRadius: BorderRadius.circular(s(10)),
-            ),
-            child: Icon(icon, color: AppColors.brandBlue, size: s(18)),
-          ),
-          SizedBox(width: s(10)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(10),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: s(0.25),
-                    color: AppColors.textTertiary,
-                  ),
-                ),
-                SizedBox(height: s(4)),
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(13),
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: AppTypography.caption.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
 }
 
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.scale,
-    required this.label,
-    required this.value,
-  });
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, required this.onRetry});
 
-  final double scale;
-  final String label;
-  final String value;
+  final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
     return Container(
-      padding: EdgeInsets.all(s(12)),
+      padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(s(16)),
-        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(10),
-              fontWeight: FontWeight.w700,
-              letterSpacing: s(0.25),
-              color: AppColors.textTertiary,
-            ),
+            'Unable to load records',
+            style: AppTypography.heading2.copyWith(fontWeight: FontWeight.w800),
           ),
-          SizedBox(height: s(4)),
+          const SizedBox(height: AppSpacing.x2),
           Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(12),
-              fontWeight: FontWeight.w700,
-              height: 1.2,
-              color: AppColors.textPrimary,
-            ),
+            message,
+            style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          ElevatedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
           ),
         ],
       ),
@@ -705,31 +719,23 @@ class _InfoPill extends StatelessWidget {
   }
 }
 
-class _TinyPill extends StatelessWidget {
-  const _TinyPill({required this.scale, required this.label});
-
-  final double scale;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(10), vertical: s(7)),
-      decoration: BoxDecoration(
-        color: AppColors.blueTint,
-        borderRadius: BorderRadius.circular(s(999)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: s(10),
-          fontWeight: FontWeight.w700,
-          color: AppColors.brandBlue,
-        ),
-      ),
-    );
-  }
+String _formatDate(DateTime? dt) {
+  if (dt == null) return 'Unknown';
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final String day = dt.day.toString().padLeft(2, '0');
+  final String month = months[dt.month - 1];
+  return '$day $month ${dt.year}';
 }

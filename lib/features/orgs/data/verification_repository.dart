@@ -230,7 +230,68 @@ class VerificationRepository {
         if (da == null) return 1;
         if (db == null) return -1;
         return db.compareTo(da);
-      });
+        });
+  }
+
+  Future<SdcRecordsResponse> getSdcRecords({
+    String? orgId,
+    String? spaceId,
+    int active = 1,
+    int page = 1,
+    int pageSize = 30,
+    String search = '',
+  }) async {
+    final Map<String, String> queryParameters = <String, String>{
+      if (orgId != null && orgId.trim().isNotEmpty) 'org_id': orgId.trim(),
+      if (spaceId != null && spaceId.trim().isNotEmpty)
+        'space_id': spaceId.trim(),
+      'active': active.toString(),
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+    };
+    final dynamic res = await _api.verificationGetAny(
+      '/sdc/records',
+      queryParameters: queryParameters,
+    );
+    if (res is Map<String, dynamic>) {
+      return SdcRecordsResponse.fromJson(res);
+    }
+    if (res is Map) {
+      return SdcRecordsResponse.fromJson(Map<String, dynamic>.from(res));
+    }
+    return SdcRecordsResponse.fromJson(<String, dynamic>{
+      'count': 0,
+      'page': page,
+      'pageSize': pageSize,
+      'records': const <dynamic>[],
+      'instanceKey': '',
+    });
+  }
+
+  Future<SdcRecordDetailResponse> getSdcRecord({
+    required String publicId,
+    String instanceKey = 'de',
+  }) async {
+    final Map<String, String> queryParameters = <String, String>{
+      'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
+    };
+    final dynamic res = await _api.verificationGetAny(
+      '/sdc/records/${Uri.encodeComponent(publicId.trim())}',
+      queryParameters: queryParameters,
+    );
+    if (res is Map<String, dynamic>) {
+      return SdcRecordDetailResponse.fromJson(res);
+    }
+    if (res is Map) {
+      return SdcRecordDetailResponse.fromJson(Map<String, dynamic>.from(res));
+    }
+    return SdcRecordDetailResponse.fromJson(<String, dynamic>{
+      'public_id': publicId.trim(),
+      'pdf': '',
+      'verify': '',
+      'credential': null,
+    });
   }
 
   Future<VerificationBatchDetailResponse> getBatchDetails(

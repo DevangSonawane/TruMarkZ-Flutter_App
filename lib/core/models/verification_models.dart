@@ -920,3 +920,96 @@ class UploadDocumentResponse {
     );
   }
 }
+
+class SdcRecord {
+  const SdcRecord({
+    required this.id,
+    required this.publicId,
+    required this.title,
+    required this.recipients,
+    required this.active,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String publicId;
+  final String title;
+  final List<String> recipients;
+  final bool active;
+  final String createdAt;
+  final String updatedAt;
+
+  factory SdcRecord.fromJson(Map<String, dynamic> json) {
+    return SdcRecord(
+      id: (json['id'] ?? '').toString(),
+      publicId: (json['publicId'] ?? json['public_id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      recipients: _readStringList(json['recipients']),
+      active: json['active'] == true,
+      createdAt: (json['createdAt'] ?? json['created_at'] ?? '').toString(),
+      updatedAt: (json['updatedAt'] ?? json['updated_at'] ?? '').toString(),
+    );
+  }
+}
+
+class SdcRecordsResponse {
+  const SdcRecordsResponse({
+    required this.count,
+    required this.page,
+    required this.pageSize,
+    required this.records,
+    required this.instanceKey,
+  });
+
+  final int count;
+  final int page;
+  final int pageSize;
+  final List<SdcRecord> records;
+  final String instanceKey;
+
+  factory SdcRecordsResponse.fromJson(Map<String, dynamic> json) {
+    final dynamic rawRecords = json['records'] ?? json['data'] ?? const <dynamic>[];
+    final Iterable<dynamic> items = rawRecords is List
+        ? rawRecords
+        : const <dynamic>[];
+    return SdcRecordsResponse(
+      count: _readInt(json['count']),
+      page: _readInt(json['page'], fallback: 1),
+      pageSize: _readInt(json['pageSize'] ?? json['page_size'], fallback: 30),
+      records: items
+          .whereType<Map>()
+          .map((Map e) => SdcRecord.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      instanceKey: (json['instanceKey'] ?? json['instance_key'] ?? '').toString(),
+    );
+  }
+}
+
+class SdcRecordDetailResponse {
+  const SdcRecordDetailResponse({
+    required this.publicId,
+    required this.pdfUrl,
+    required this.verifyUrl,
+    required this.credential,
+  });
+
+  final String publicId;
+  final String pdfUrl;
+  final String verifyUrl;
+  final dynamic credential;
+
+  factory SdcRecordDetailResponse.fromJson(Map<String, dynamic> json) {
+    return SdcRecordDetailResponse(
+      publicId: (json['public_id'] ?? json['publicId'] ?? '').toString(),
+      pdfUrl: (json['pdf'] ?? json['pdf_url'] ?? '').toString(),
+      verifyUrl: (json['verify'] ?? json['verify_url'] ?? '').toString(),
+      credential: json['credential'],
+    );
+  }
+}
+
+int _readInt(dynamic value, {int fallback = 0}) {
+  if (value is int) return value;
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}

@@ -24,6 +24,7 @@ import '../../features/individual/verification_flow/presentation/pages/individua
 import '../../features/individual/verification_flow/presentation/pages/individual_verification_industry_page.dart';
 import '../../features/individual/presentation/pages/individual_skill_tree_page.dart';
 import '../../features/individual/presentation/pages/individual_sdc_page.dart';
+import '../../features/individual/presentation/pages/individual_sdc_record_detail_page.dart';
 import '../../features/individual/presentation/pages/individual_vault_page.dart';
 import '../../features/individual/presentation/shell/app_shell_page.dart';
 import '../../features/notifications/presentation/pages/notification_centre_page.dart';
@@ -101,6 +102,8 @@ class AppRouter {
   static const String settingsPath = '/app/settings';
   static const String appReportsPath = '/app/reports';
   static const String appReportDetailPath = '/app/reports/detail';
+  static const String appSdcPath = '/app/sdc';
+  static const String appSdcRecordDetailPath = '/app/sdc/record';
 
   static const String notificationsPath = '/notifications';
 
@@ -163,6 +166,7 @@ class AppRouter {
   static const String individualSkillTreeDetailPath = '/me/skill-tree/detail';
   static const String individualSkillTreeCompletionPath =
       '/me/skill-tree/pending';
+  static const String individualSdcRecordDetailPath = '/me/sdc/record';
   static const String individualVerificationIndustryPath =
       '/me/verification/industry';
   static const String individualVerificationChecksPath =
@@ -175,6 +179,46 @@ class AppRouter {
       '/me/verification/cost-breakdown';
   static const String individualVerificationCompletionPath =
       '/me/verification/completion';
+
+  static String sdcRecordsLocation({
+    String? batchId,
+    String? batchName,
+    String? orgId,
+    String? spaceId,
+    int active = 1,
+    int page = 1,
+    int pageSize = 30,
+    String search = '',
+  }) {
+    final Map<String, String> queryParameters = <String, String>{
+      if (batchId != null && batchId.trim().isNotEmpty)
+        'batch_id': batchId.trim(),
+      if (batchName != null && batchName.trim().isNotEmpty)
+        'batch_name': batchName.trim(),
+      if (orgId != null && orgId.trim().isNotEmpty) 'org_id': orgId.trim(),
+      if (spaceId != null && spaceId.trim().isNotEmpty)
+        'space_id': spaceId.trim(),
+      'active': active.toString(),
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+    };
+    final String query = Uri(queryParameters: queryParameters).query;
+    return query.isEmpty ? appSdcPath : '$appSdcPath?$query';
+  }
+
+  static String sdcRecordLocation({
+    required String publicId,
+    String instanceKey = 'de',
+  }) {
+    final String query = Uri(
+      queryParameters: <String, String>{
+        'public_id': publicId.trim(),
+        'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
+      },
+    ).query;
+    return '$appSdcRecordDetailPath?$query';
+  }
 
   // Admin
   static const String superAdminDashboardPath = '/admin/dashboard';
@@ -435,6 +479,24 @@ class AppRouter {
                 _slideFadePage(
                   state: state,
                   child: const VerificationReportsPage(),
+                ),
+          ),
+          GoRoute(
+            path: appSdcPath,
+            name: 'app_sdc',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualSdcPage(),
+                ),
+          ),
+          GoRoute(
+            path: appSdcRecordDetailPath,
+            name: 'app_sdc_record_detail',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: const IndividualSdcRecordDetailPage(),
                 ),
           ),
           GoRoute(

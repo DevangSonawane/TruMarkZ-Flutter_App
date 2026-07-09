@@ -8,6 +8,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
 
@@ -278,6 +279,17 @@ class _BatchTrackingDetailPageState
                                   res.verificationProgress,
                                   'failed',
                                   derivedCounts['failed'] ?? 0,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.x3),
+                              TMZButton(
+                                label: 'View SDC Records',
+                                icon: Icons.folder_open_rounded,
+                                onPressed: () => context.push(
+                                  AppRouter.sdcRecordsLocation(
+                                    batchId: _batchId,
+                                    batchName: res.batchName,
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: AppSpacing.x4),
