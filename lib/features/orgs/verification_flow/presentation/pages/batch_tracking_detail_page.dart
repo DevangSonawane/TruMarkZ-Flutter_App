@@ -8,7 +8,6 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
-import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
 
@@ -147,9 +146,8 @@ class _BatchTrackingDetailPageState
                 ),
                 child: _isWarrantyMode
                     ? _warrantyData.when(
-                        loading: () => const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
                         error: (Object err, _) => Padding(
                           padding: const EdgeInsets.all(AppSpacing.x4),
                           child: Column(
@@ -222,9 +220,8 @@ class _BatchTrackingDetailPageState
                         },
                       )
                     : _detailData.when(
-                        loading: () => const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
                         error: (Object err, _) => Padding(
                           padding: const EdgeInsets.all(AppSpacing.x4),
                           child: Column(
@@ -282,32 +279,21 @@ class _BatchTrackingDetailPageState
                                 ),
                               ),
                               const SizedBox(height: AppSpacing.x3),
-                              TMZButton(
-                                label: 'View SDC Records',
-                                icon: Icons.folder_open_rounded,
-                                onPressed: () => context.push(
-                                  AppRouter.sdcRecordsLocation(
-                                    batchId: _batchId,
-                                    batchName: res.batchName,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.x4),
                               const _SectionHeader(
                                 title: 'RECORDS',
                                 subtitle: 'Items in this batch',
                               ),
                               const SizedBox(height: AppSpacing.x3),
-                              for (final VerificationUser u in res.users)
-                                ...<Widget>[
-                                  _UserTile(
-                                    user: u,
-                                    onTap: () => context.push(
-                                      '${AppRouter.individualRecordDetailPath}?user_id=${Uri.encodeQueryComponent(u.id)}',
-                                    ),
+                              for (final VerificationUser u
+                                  in res.users) ...<Widget>[
+                                _UserTile(
+                                  user: u,
+                                  onTap: () => context.push(
+                                    '${AppRouter.individualRecordDetailPath}?user_id=${Uri.encodeQueryComponent(u.id)}',
                                   ),
-                                  const SizedBox(height: AppSpacing.x2),
-                                ],
+                                ),
+                                const SizedBox(height: AppSpacing.x2),
+                              ],
                               if (res.users.isEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(
@@ -350,7 +336,9 @@ class _BatchTrackingDetailPageState
     return _readInt(value);
   }
 
-  static Map<String, int> _deriveUserStatusCounts(List<VerificationUser> users) {
+  static Map<String, int> _deriveUserStatusCounts(
+    List<VerificationUser> users,
+  ) {
     int pending = 0;
     int verified = 0;
     int failed = 0;
@@ -617,17 +605,25 @@ class _UserTile extends StatelessWidget {
         : user.photoUrl!.trim();
 
     return TMZCard(
-      padding: const EdgeInsets.all(AppSpacing.x4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x3,
+        vertical: AppSpacing.x2,
+      ),
       onTap: onTap,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           ClipOval(
             child: Container(
-              width: 48,
-              height: 48,
+              width: 36,
+              height: 36,
               color: const Color(0xFFEAF2FF),
               child: photoUrl == null
-                  ? const Icon(Icons.person_rounded, color: AppColors.brandBlue)
+                  ? const Icon(
+                      Icons.person_rounded,
+                      size: 20,
+                      color: AppColors.brandBlue,
+                    )
                   : Image.network(
                       photoUrl,
                       fit: BoxFit.cover,
@@ -638,6 +634,7 @@ class _UserTile extends StatelessWidget {
                             StackTrace? stackTrace,
                           ) => const Icon(
                             Icons.person_rounded,
+                            size: 20,
                             color: AppColors.brandBlue,
                           ),
                     ),
@@ -646,40 +643,47 @@ class _UserTile extends StatelessWidget {
           const SizedBox(width: AppSpacing.x3),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                const SizedBox(height: 6),
                 Text(
                   user.fullName.trim().isEmpty ? 'Unnamed' : user.fullName,
+                  textAlign: TextAlign.left,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 16,
-                    height: 22 / 16,
+                    fontSize: 14,
+                    height: 18 / 14,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 1),
                 Text(
                   user.email,
+                  textAlign: TextAlign.left,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 13,
-                    height: 18 / 13,
+                    fontSize: 11,
+                    height: 15 / 11,
                     fontWeight: FontWeight.w400,
                     color: AppColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: <Widget>[_StatusBadge(label: label, style: style)],
                 ),
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.x2),
           const Icon(
             Icons.chevron_right_rounded,
             color: AppColors.textTertiary,
@@ -757,18 +761,12 @@ class _WarrantyProductTile extends StatelessWidget {
             spacing: AppSpacing.x2,
             runSpacing: AppSpacing.x2,
             children: <Widget>[
-              _WarrantyMetaChip(
-                label: 'Purchase',
-                value: product.purchaseDate,
-              ),
+              _WarrantyMetaChip(label: 'Purchase', value: product.purchaseDate),
               _WarrantyMetaChip(
                 label: 'Start',
                 value: product.warrantyStartDate,
               ),
-              _WarrantyMetaChip(
-                label: 'End',
-                value: product.warrantyEndDate,
-              ),
+              _WarrantyMetaChip(label: 'End', value: product.warrantyEndDate),
             ],
           ),
         ],
@@ -832,7 +830,7 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: style.bg,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: style.fg.withAlpha(30)),
       ),
       child: Text(
