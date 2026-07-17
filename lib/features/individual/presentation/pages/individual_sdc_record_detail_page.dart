@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
@@ -274,64 +275,68 @@ class _IndividualSdcRecordDetailPageState
                         _SectionCard(
                           title: 'Identity',
                           children: <Widget>[
-                            _DetailRow(label: 'Title', value: record.title),
-                            _DetailRow(
+                            _IdentityFieldRow(
+                              icon: Icons.badge_outlined,
                               label: 'Public ID',
                               value: record.publicId,
+                              onCopy: () =>
+                                  _copyText(record.publicId, 'Public ID'),
                             ),
-                            _DetailRow(label: 'Record ID', value: record.id),
-                            _DetailRow(
-                              label: 'Unique Value',
+                            const SizedBox(height: 18),
+                            _IdentityFieldRow(
+                              icon: Icons.pin_outlined,
+                              label: 'Record ID',
+                              value: record.id,
+                              onCopy: () => _copyText(record.id, 'Record ID'),
+                            ),
+                            const SizedBox(height: 18),
+                            _IdentityFieldRow(
+                              icon: Icons.calendar_today_rounded,
+                              label: 'Date',
                               value: record.uniqueIdValue,
-                            ),
-                            _DetailRow(
-                              label: 'Instance Key',
-                              value: _instanceKey.isEmpty ? 'de' : _instanceKey,
+                              onCopy: () =>
+                                  _copyText(record.uniqueIdValue, 'Date'),
                             ),
                           ],
                         ),
                         const SizedBox(height: AppSpacing.x4),
                         _SectionCard(
-                          title: 'Status',
+                          title: 'Timeline',
                           children: <Widget>[
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: <Widget>[
-                                _StatusChip(
-                                  label: record.active ? 'Active' : 'Inactive',
-                                  active: record.active,
-                                ),
-                                _StatusChip(
-                                  label: record.latest ? 'Latest' : 'Archived',
-                                  active: record.latest,
-                                ),
-                                _StatusChip(
-                                  label: record.revoked ? 'Revoked' : 'Valid',
-                                  active: !record.revoked,
-                                ),
-                                _StatusChip(
-                                  label: record.edited ? 'Edited' : 'Original',
-                                  active: !record.edited,
-                                ),
-                              ],
+                            _TimelineItem(
+                              icon: Icons.description_outlined,
+                              iconColor: const Color(0xFF16A34A),
+                              title: 'Created',
+                              dateTime: _formatCardDate(record.createdAt),
+                              description: 'Record created',
+                              isLast: false,
                             ),
-                            const SizedBox(height: AppSpacing.x3),
-                            _DetailRow(
-                              label: 'Anchor Time',
-                              value: _formatDateTime(record.anchorTime),
+                            _TimelineItem(
+                              icon: Icons.anchor_rounded,
+                              iconColor: const Color(0xFF2563EB),
+                              title: 'Anchored',
+                              dateTime: _formatCardDate(record.anchorTime),
+                              description: 'Record anchored on blockchain',
+                              isLast: false,
                             ),
-                            _DetailRow(
-                              label: 'Expires',
-                              value: _formatDateTime(record.expires),
+                            _TimelineItem(
+                              icon: Icons.star_outline_rounded,
+                              iconColor: const Color(0xFF7C3AED),
+                              title: 'Latest Version',
+                              dateTime: _formatCardDate(record.updatedAt),
+                              description: 'This is the latest version',
+                              isLast: false,
                             ),
-                            _DetailRow(
-                              label: 'Created',
-                              value: _formatDateTime(record.createdAt),
-                            ),
-                            _DetailRow(
-                              label: 'Updated',
-                              value: _formatDateTime(record.updatedAt),
+                            _TimelineItem(
+                              icon: Icons.check_circle_outline_rounded,
+                              iconColor: const Color(0xFF16A34A),
+                              title: 'Active',
+                              dateTime: _formatCardDate(record.updatedAt),
+                              description: record.active
+                                  ? 'Record is active and valid'
+                                  : 'Record is inactive',
+                              isLast: true,
+                              showConnector: false,
                             ),
                           ],
                         ),
@@ -392,6 +397,16 @@ class _IndividualSdcRecordDetailPageState
     );
   }
 
+  Future<void> _copyText(String value, String label) async {
+    final String text = value.trim();
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label copied')));
+  }
+
   Future<void> _downloadPdf(SdcRecord record) async {
     try {
       debugPrint(
@@ -450,6 +465,16 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String createdLabel = _formatCardDate(
+      record.anchorTime ?? record.createdAt,
+    );
+    final String recipientLabel = record.recipients.length == 1
+        ? '1 recipient'
+        : '${record.recipients.length} recipients';
+    final bool isLatest = record.latest;
+    final bool isValid = !record.revoked;
+    final bool isOriginal = !record.edited;
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
@@ -459,8 +484,8 @@ class _HeroCard extends StatelessWidget {
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -470,84 +495,137 @@ class _HeroCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: record.active
-                      ? AppColors.success.withValues(alpha: 0.12)
-                      : AppColors.warning.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  record.active
-                      ? Icons.verified_rounded
-                      : Icons.pause_circle_filled_rounded,
-                  color: record.active ? AppColors.success : AppColors.warning,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.x3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            record.title.trim().isEmpty
-                                ? 'Untitled record'
-                                : record.title.trim(),
-                            style: AppTypography.heading1.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton.icon(
-                          onPressed: onDownload,
-                          icon: const Icon(Icons.download_rounded, size: 18),
-                          label: const Text('Download'),
-                        ),
-                      ],
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF7EF),
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Instance ${instanceKey.isEmpty ? 'de' : instanceKey}',
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
+                    child: const Icon(
+                      Icons.verified_rounded,
+                      color: Color(0xFF24A559),
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: 180,
+                    child: Text(
+                      record.title.trim().isEmpty
+                          ? 'Untitled record'
+                          : record.title.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.heading1.copyWith(
+                        fontWeight: FontWeight.w800,
+                        height: 1.05,
                       ),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Align(
+                alignment: Alignment.topRight,
+                child: _StatusChip(
+                  label: record.active ? 'Active' : 'Inactive',
+                  active: record.active,
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.x3),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: <Widget>[
-              _StatusChip(
-                label: 'Created ${_formatDateTime(record.createdAt)}',
-                active: true,
+              Expanded(
+                child: _MetaRow(
+                  icon: Icons.calendar_today_rounded,
+                  label: createdLabel,
+                ),
               ),
-              _StatusChip(
-                label: record.recipients.length == 1
-                    ? '1 recipient'
-                    : '${record.recipients.length} recipients',
-                active: true,
-              ),
-              _StatusChip(
-                label: record.uniqueIdValue.trim().isEmpty
-                    ? 'No unique value'
-                    : 'Unique value set',
-                active: record.uniqueIdValue.trim().isNotEmpty,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _MetaRow(
+                    icon: Icons.person_outline_rounded,
+                    label: recipientLabel,
+                  ),
+                ),
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.x3),
+          Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              runAlignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _StatusChip(label: 'Latest', active: isLatest),
+                _StatusChip(label: 'Valid', active: isValid),
+                _StatusChip(label: 'Original', active: isOriginal),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onDownload,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                minimumSize: const Size.fromHeight(54),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: const Text(
+                'Download Certificate',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: 15, color: AppColors.textSecondary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: AppTypography.body2.copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -582,40 +660,63 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+class _IdentityFieldRow extends StatelessWidget {
+  const _IdentityFieldRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onCopy,
+  });
 
+  final IconData icon;
   final String label;
   final String value;
+  final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.x2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(
-            width: 96,
-            child: Text(
-              label,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textTertiary,
-                fontWeight: FontWeight.w800,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 18, color: AppColors.textSecondary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                label,
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value.trim().isEmpty ? '—' : value.trim(),
-              style: AppTypography.body2.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
+              const SizedBox(height: 6),
+              Text(
+                value.trim().isEmpty ? '—' : value.trim(),
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 10),
+        IconButton(
+          onPressed: onCopy,
+          icon: const Icon(Icons.copy_rounded, size: 18),
+          color: AppColors.textSecondary,
+          tooltip: 'Copy $label',
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+        ),
+      ],
     );
   }
 }
@@ -649,7 +750,7 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-String _formatDateTime(String? raw) {
+String _formatCardDate(String? raw) {
   final String value = raw?.trim() ?? '';
   if (value.isEmpty) return 'Unknown';
   final DateTime? parsed = DateTime.tryParse(value);
@@ -673,4 +774,96 @@ String _formatDateTime(String? raw) {
   final String hours = parsed.hour.toString().padLeft(2, '0');
   final String minutes = parsed.minute.toString().padLeft(2, '0');
   return '$day $month ${parsed.year}, $hours:$minutes';
+}
+
+class _TimelineItem extends StatelessWidget {
+  const _TimelineItem({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.dateTime,
+    required this.description,
+    required this.isLast,
+    this.showConnector = true,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String dateTime;
+  final String description;
+  final bool isLast;
+  final bool showConnector;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasDateTime =
+        dateTime.trim().isNotEmpty && dateTime.trim() != 'Unknown';
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 44,
+            child: Column(
+              children: <Widget>[
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: iconColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 18),
+                ),
+                if (showConnector)
+                  Container(
+                    width: 2,
+                    height: 72,
+                    margin: const EdgeInsets.only(top: 2),
+                    color: const Color(0xFFE5E7EB),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: AppTypography.body1.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (hasDateTime)
+                    Text(
+                      dateTime,
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: AppTypography.body2.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
