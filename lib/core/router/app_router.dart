@@ -210,13 +210,25 @@ class AppRouter {
   static String sdcRecordLocation({
     required String publicId,
     String instanceKey = 'de',
+    String? orgId,
+    String? spaceId,
+    int active = 1,
+    int page = 1,
+    int pageSize = 30,
+    String search = '',
   }) {
-    final String query = Uri(
-      queryParameters: <String, String>{
-        'public_id': publicId.trim(),
-        'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
-      },
-    ).query;
+    final Map<String, String> queryParameters = <String, String>{
+      'public_id': publicId.trim(),
+      'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
+      if (orgId != null && orgId.trim().isNotEmpty) 'org_id': orgId.trim(),
+      if (spaceId != null && spaceId.trim().isNotEmpty)
+        'space_id': spaceId.trim(),
+      'active': active.toString(),
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+    };
+    final String query = Uri(queryParameters: queryParameters).query;
     return '$appSdcRecordDetailPath?$query';
   }
 
@@ -485,10 +497,7 @@ class AppRouter {
             path: appSdcPath,
             name: 'app_sdc',
             pageBuilder: (BuildContext context, GoRouterState state) =>
-                _slideFadePage(
-                  state: state,
-                  child: const IndividualSdcPage(),
-                ),
+                _slideFadePage(state: state, child: const IndividualSdcPage()),
           ),
           GoRoute(
             path: appSdcRecordDetailPath,
@@ -572,10 +581,7 @@ class AppRouter {
             path: individualSdcPath,
             name: 'individual_sdc',
             pageBuilder: (BuildContext context, GoRouterState state) =>
-                _slideFadePage(
-                  state: state,
-                  child: const IndividualSdcPage(),
-                ),
+                _slideFadePage(state: state, child: const IndividualSdcPage()),
           ),
           GoRoute(
             path: individualVaultPath,

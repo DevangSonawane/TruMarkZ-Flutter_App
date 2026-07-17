@@ -289,7 +289,15 @@ class _BatchTrackingDetailPageState
                                 _UserTile(
                                   user: u,
                                   onTap: () => context.push(
-                                    '${AppRouter.individualRecordDetailPath}?user_id=${Uri.encodeQueryComponent(u.id)}',
+                                    AppRouter.sdcRecordLocation(
+                                      publicId: u.publicId.trim().isNotEmpty
+                                          ? u.publicId.trim()
+                                          : u.id.trim(),
+                                      instanceKey: 'de',
+                                      search: u.publicId.trim().isNotEmpty
+                                          ? u.publicId.trim()
+                                          : u.id.trim(),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: AppSpacing.x2),

@@ -136,6 +136,7 @@ class VerificationUser {
     required this.batchId,
     required this.batchName,
     required this.orgId,
+    required this.publicId,
     required this.fullName,
     required this.dob,
     required this.phoneNumber,
@@ -163,6 +164,7 @@ class VerificationUser {
   final String batchId;
   final String batchName;
   final String orgId;
+  final String publicId;
   final String fullName;
   final String? dob;
   final String phoneNumber;
@@ -236,6 +238,9 @@ class VerificationUser {
       batchId: readString(json['batch_id']),
       batchName: readBatchName(json),
       orgId: readString(json['org_id']),
+      publicId: readString(json['public_id']).trim().isNotEmpty
+          ? readString(json['public_id'])
+          : readString(json['publicId']),
       fullName: readString(json['full_name']),
       dob: json['dob']?.toString(),
       phoneNumber: readString(json['phone_number']),
@@ -265,6 +270,7 @@ class VerificationUser {
     'batch_id': batchId,
     'batch_name': batchName,
     'org_id': orgId,
+    'public_id': publicId,
     'full_name': fullName,
     'dob': dob,
     'phone_number': phoneNumber,
@@ -979,29 +985,48 @@ class UploadDocumentResponse {
 class SdcRecord {
   const SdcRecord({
     required this.id,
+    required this.revoked,
+    required this.uniqueIdValue,
+    required this.edited,
+    required this.anchorTime,
+    required this.latest,
     required this.publicId,
     required this.title,
     required this.recipients,
     required this.active,
+    required this.expires,
     required this.createdAt,
     required this.updatedAt,
   });
 
   final String id;
+  final bool revoked;
+  final String uniqueIdValue;
+  final bool edited;
+  final String? anchorTime;
+  final bool latest;
   final String publicId;
   final String title;
   final List<String> recipients;
   final bool active;
+  final String? expires;
   final String createdAt;
   final String updatedAt;
 
   factory SdcRecord.fromJson(Map<String, dynamic> json) {
     return SdcRecord(
       id: (json['id'] ?? '').toString(),
+      revoked: json['revoked'] == true,
+      uniqueIdValue: (json['uniqueIdValue'] ?? json['unique_id_value'] ?? '')
+          .toString(),
+      edited: json['edited'] == true,
+      anchorTime: json['anchorTime']?.toString(),
+      latest: json['latest'] == true,
       publicId: (json['publicId'] ?? json['public_id'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
       recipients: _readStringList(json['recipients']),
       active: json['active'] == true,
+      expires: json['expires']?.toString(),
       createdAt: (json['createdAt'] ?? json['created_at'] ?? '').toString(),
       updatedAt: (json['updatedAt'] ?? json['updated_at'] ?? '').toString(),
     );

@@ -46,7 +46,9 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
     super.didChangeDependencies();
     if (_didInit) return;
     _didInit = true;
-    final Map<String, String> qp = GoRouterState.of(context).uri.queryParameters;
+    final Map<String, String> qp = GoRouterState.of(
+      context,
+    ).uri.queryParameters;
     _orgId = (qp['org_id'] ?? qp['orgId'] ?? '').trim();
     _spaceId = (qp['space_id'] ?? qp['spaceId'] ?? '').trim();
     _batchId = (qp['batch_id'] ?? qp['batchId'] ?? '').trim();
@@ -84,7 +86,9 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
   Future<void> _load() async {
     setState(() => _records = const AsyncLoading());
     try {
-      final VerificationRepository repo = ref.read(verificationRepositoryProvider);
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
       final SdcRecordsResponse res = await repo.getSdcRecords(
         orgId: _resolvedOrgId(),
         spaceId: _spaceId.isNotEmpty ? _spaceId : null,
@@ -116,7 +120,8 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
   @override
   Widget build(BuildContext context) {
     final AuthState? authState = ref.watch(authNotifierProvider).valueOrNull;
-    final String orgLabel = authState?.userProfile?.organizationName?.trim().isNotEmpty == true
+    final String orgLabel =
+        authState?.userProfile?.organizationName?.trim().isNotEmpty == true
         ? authState!.userProfile!.organizationName!.trim()
         : (authState?.userProfile?.fullName?.trim().isNotEmpty == true
               ? authState!.userProfile!.fullName!.trim()
@@ -232,7 +237,9 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
                       const SizedBox(height: AppSpacing.x4),
                       if (isLoading)
                         const Padding(
-                          padding: EdgeInsets.symmetric(vertical: AppSpacing.x8),
+                          padding: EdgeInsets.symmetric(
+                            vertical: AppSpacing.x8,
+                          ),
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else if (_records.hasError)
@@ -243,7 +250,9 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
                       else ...<Widget>[
                         if (records.isEmpty)
                           const Padding(
-                            padding: EdgeInsets.symmetric(vertical: AppSpacing.x8),
+                            padding: EdgeInsets.symmetric(
+                              vertical: AppSpacing.x8,
+                            ),
                             child: Center(
                               child: Text(
                                 'No records found.',
@@ -263,13 +272,23 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
                               onTap: () => context.push(
                                 AppRouter.sdcRecordLocation(
                                   publicId: records[i].publicId,
-                                  instanceKey: data?.instanceKey.isNotEmpty == true
+                                  instanceKey:
+                                      data?.instanceKey.isNotEmpty == true
                                       ? data!.instanceKey
                                       : 'de',
+                                  orgId: _orgId.isNotEmpty ? _orgId : null,
+                                  spaceId: _spaceId.isNotEmpty
+                                      ? _spaceId
+                                      : null,
+                                  active: _active,
+                                  page: _page,
+                                  pageSize: _pageSize,
+                                  search: _searchController.text,
                                 ),
                               ),
                             ),
-                            if (i != records.length - 1) const SizedBox(height: 12),
+                            if (i != records.length - 1)
+                              const SizedBox(height: 12),
                           ],
                         const SizedBox(height: AppSpacing.x4),
                         _PaginationRow(
@@ -282,7 +301,9 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
                                   setState(() => _page -= 1);
                                   _load();
                                 },
-                          onNext: records.length < _pageSize && totalCount <= _page * _pageSize
+                          onNext:
+                              records.length < _pageSize &&
+                                  totalCount <= _page * _pageSize
                               ? null
                               : () {
                                   setState(() => _page += 1);
@@ -347,10 +368,7 @@ class _SearchBox extends StatelessWidget {
             ),
           ),
           if (onClear != null)
-            TextButton(
-              onPressed: onClear,
-              child: const Text('Clear'),
-            ),
+            TextButton(onPressed: onClear, child: const Text('Clear')),
         ],
       ),
     );
@@ -491,7 +509,9 @@ class _SdcRecordCard extends StatelessWidget {
                       record.active
                           ? Icons.verified_rounded
                           : Icons.pause_circle_filled_rounded,
-                      color: record.active ? AppColors.success : AppColors.warning,
+                      color: record.active
+                          ? AppColors.success
+                          : AppColors.warning,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.x3),
@@ -500,7 +520,9 @@ class _SdcRecordCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          record.title.trim().isNotEmpty ? record.title.trim() : 'Untitled record',
+                          record.title.trim().isNotEmpty
+                              ? record.title.trim()
+                              : 'Untitled record',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.heading2.copyWith(
@@ -526,7 +548,9 @@ class _SdcRecordCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.x3),
               Text(
                 subtitle,
-                style: AppTypography.body2.copyWith(color: AppColors.textPrimary),
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: AppSpacing.x3),
               Wrap(
@@ -627,7 +651,9 @@ class _PaginationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final int start = totalCount == 0 ? 0 : ((page - 1) * pageSize) + 1;
-    final int end = totalCount == 0 ? 0 : (page * pageSize).clamp(0, totalCount);
+    final int end = totalCount == 0
+        ? 0
+        : (page * pageSize).clamp(0, totalCount);
 
     return Row(
       children: <Widget>[
@@ -636,20 +662,12 @@ class _PaginationRow extends StatelessWidget {
             totalCount == 0
                 ? 'No records to page through'
                 : 'Showing $start-$end of $totalCount',
-            style: AppTypography.body2.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
           ),
         ),
-        TextButton(
-          onPressed: onPrev,
-          child: const Text('Prev'),
-        ),
+        TextButton(onPressed: onPrev, child: const Text('Prev')),
         const SizedBox(width: 4),
-        TextButton(
-          onPressed: onNext,
-          child: const Text('Next'),
-        ),
+        TextButton(onPressed: onNext, child: const Text('Next')),
       ],
     );
   }
