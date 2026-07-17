@@ -256,136 +256,148 @@ class _IndividualSdcRecordDetailPageState
                     ),
                   ),
                   data: (SdcRecord record) {
-                    return ListView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.x4,
-                        AppSpacing.x4,
-                        AppSpacing.x4,
-                        AppSpacing.x6 +
-                            MediaQuery.viewPaddingOf(context).bottom,
-                      ),
-                      children: <Widget>[
-                        _HeroCard(
-                          record: record,
-                          instanceKey: _instanceKey,
-                          onDownload: () => _downloadPdf(record),
-                        ),
-                        const SizedBox(height: AppSpacing.x4),
-                        _SectionCard(
-                          title: 'Identity',
-                          children: <Widget>[
-                            _IdentityFieldRow(
-                              icon: Icons.badge_outlined,
-                              label: 'Public ID',
-                              value: record.publicId,
-                              onCopy: () =>
-                                  _copyText(record.publicId, 'Public ID'),
-                            ),
-                            const SizedBox(height: 18),
-                            _IdentityFieldRow(
-                              icon: Icons.pin_outlined,
-                              label: 'Record ID',
-                              value: record.id,
-                              onCopy: () => _copyText(record.id, 'Record ID'),
-                            ),
-                            const SizedBox(height: 18),
-                            _IdentityFieldRow(
-                              icon: Icons.calendar_today_rounded,
-                              label: 'Date',
-                              value: record.uniqueIdValue,
-                              onCopy: () =>
-                                  _copyText(record.uniqueIdValue, 'Date'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.x4),
-                        _SectionCard(
-                          title: 'Timeline',
-                          children: <Widget>[
-                            _TimelineItem(
-                              icon: Icons.description_outlined,
-                              iconColor: const Color(0xFF16A34A),
-                              title: 'Created',
-                              dateTime: _formatCardDate(record.createdAt),
-                              description: 'Record created',
-                              isLast: false,
-                            ),
-                            _TimelineItem(
-                              icon: Icons.anchor_rounded,
-                              iconColor: const Color(0xFF2563EB),
-                              title: 'Anchored',
-                              dateTime: _formatCardDate(record.anchorTime),
-                              description: 'Record anchored on blockchain',
-                              isLast: false,
-                            ),
-                            _TimelineItem(
-                              icon: Icons.star_outline_rounded,
-                              iconColor: const Color(0xFF7C3AED),
-                              title: 'Latest Version',
-                              dateTime: _formatCardDate(record.updatedAt),
-                              description: 'This is the latest version',
-                              isLast: false,
-                            ),
-                            _TimelineItem(
-                              icon: Icons.check_circle_outline_rounded,
-                              iconColor: const Color(0xFF16A34A),
-                              title: 'Active',
-                              dateTime: _formatCardDate(record.updatedAt),
-                              description: record.active
-                                  ? 'Record is active and valid'
-                                  : 'Record is inactive',
-                              isLast: true,
-                              showConnector: false,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.x4),
-                        _SectionCard(
-                          title: 'Recipients',
-                          children: record.recipients.isEmpty
-                              ? <Widget>[
-                                  Text(
-                                    'No recipients listed.',
-                                    style: AppTypography.body2.copyWith(
-                                      color: AppColors.textSecondary,
+                    return LayoutBuilder(
+                      builder:
+                          (BuildContext context, BoxConstraints constraints) {
+                            return SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(
+                                AppSpacing.x4,
+                                AppSpacing.x4,
+                                AppSpacing.x4,
+                                AppSpacing.x6 +
+                                    MediaQuery.viewPaddingOf(context).bottom +
+                                    72,
+                              ),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: constraints.maxHeight,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: <Widget>[
+                                    _HeroCard(
+                                      record: record,
+                                      instanceKey: _instanceKey,
+                                      onDownload: () => _downloadPdf(record),
                                     ),
-                                  ),
-                                ]
-                              : record.recipients
-                                    .map(
-                                      (String recipient) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: AppSpacing.x2,
+                                    const SizedBox(height: AppSpacing.x4),
+                                    _SectionCard(
+                                      title: 'Identity',
+                                      children: <Widget>[
+                                        _IdentityFieldRow(
+                                          icon: Icons.badge_outlined,
+                                          label: 'Public ID',
+                                          value: record.publicId,
+                                          onCopy: () => _copyText(
+                                            record.publicId,
+                                            'Public ID',
+                                          ),
                                         ),
-                                        child: Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: AppSpacing.x3,
-                                            vertical: AppSpacing.x3,
+                                        const SizedBox(height: 18),
+                                        _IdentityFieldRow(
+                                          icon: Icons.pin_outlined,
+                                          label: 'Record ID',
+                                          value: record.id,
+                                          onCopy: () =>
+                                              _copyText(record.id, 'Record ID'),
+                                        ),
+                                        const SizedBox(height: 18),
+                                        _IdentityFieldRow(
+                                          icon: Icons.calendar_today_rounded,
+                                          label: 'Date',
+                                          value: record.uniqueIdValue,
+                                          onCopy: () => _copyText(
+                                            record.uniqueIdValue,
+                                            'Date',
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.pageBg,
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
-                                            border: Border.all(
-                                              color: AppColors.divider
-                                                  .withValues(alpha: 0.5),
-                                            ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.x4),
+                                    _SectionCard(
+                                      title: 'Timeline',
+                                      children: <Widget>[
+                                        _TimelineItem(
+                                          icon: Icons.description_outlined,
+                                          iconColor: const Color(0xFF16A34A),
+                                          title: 'Created',
+                                          dateTime: _formatCardDate(
+                                            record.createdAt,
                                           ),
-                                          child: Text(
-                                            recipient,
+                                          description: 'Record created',
+                                          isLast: false,
+                                        ),
+                                        _TimelineItem(
+                                          icon: Icons.anchor_rounded,
+                                          iconColor: const Color(0xFF2563EB),
+                                          title: 'Anchored',
+                                          dateTime: _formatCardDate(
+                                            record.anchorTime,
+                                          ),
+                                          description:
+                                              'Record anchored on blockchain',
+                                          isLast: false,
+                                        ),
+                                        _TimelineItem(
+                                          icon: Icons.star_outline_rounded,
+                                          iconColor: const Color(0xFF7C3AED),
+                                          title: 'Latest Version',
+                                          dateTime: _formatCardDate(
+                                            record.updatedAt,
+                                          ),
+                                          description:
+                                              'This is the latest version',
+                                          isLast: false,
+                                        ),
+                                        _TimelineItem(
+                                          icon: Icons
+                                              .check_circle_outline_rounded,
+                                          iconColor: const Color(0xFF16A34A),
+                                          title: 'Active',
+                                          dateTime: _formatCardDate(
+                                            record.updatedAt,
+                                          ),
+                                          description: record.active
+                                              ? 'Record is active and valid'
+                                              : 'Record is inactive',
+                                          isLast: true,
+                                          showConnector: false,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.x4),
+                                    _SectionCard(
+                                      title: 'Recipients',
+                                      children: <Widget>[
+                                        if (record.recipients.isEmpty)
+                                          Text(
+                                            'No recipients listed.',
                                             style: AppTypography.body2.copyWith(
-                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          )
+                                        else
+                                          ...record.recipients.map(
+                                            (String recipient) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: AppSpacing.x2,
+                                              ),
+                                              child: _RecipientTile(
+                                                name: recipient,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                        ),
-                      ],
+                                        const SizedBox(height: AppSpacing.x3),
+                                        const _AboutRecordCard(),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                     );
                   },
                 ),
@@ -717,6 +729,137 @@ class _IdentityFieldRow extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
         ),
       ],
+    );
+  }
+}
+
+class _RecipientTile extends StatelessWidget {
+  const _RecipientTile({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEAF2FF),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.person_rounded,
+              color: Color(0xFF5B7FFF),
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body1.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Verified recipient',
+                  style: AppTypography.body2.copyWith(
+                    color: const Color(0xFF16A34A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textSecondary,
+            size: 26,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutRecordCard extends StatelessWidget {
+  const _AboutRecordCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFFF3F8FF), Color(0xFFEAF2FF)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7E5FF)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 26,
+            height: 26,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE7F0FF),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.info_outline_rounded,
+              color: Color(0xFF2563EB),
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'About this record',
+                  style: AppTypography.body1.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'This record is secured on the blockchain and can\'t be tampered with. You can share this certificate as a proof of authenticity.',
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
