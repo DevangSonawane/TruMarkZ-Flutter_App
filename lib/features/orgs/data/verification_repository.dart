@@ -17,46 +17,47 @@ final verificationBatchesProvider =
       return ref.read(verificationRepositoryProvider).getBatches();
     });
 
-final verificationTypesProvider =
-    FutureProvider.family.autoDispose<List<VerificationTypeDefinition>, String>(
-      (ref, category) async {
-        final VerificationRepository repo = ref.read(
-          verificationRepositoryProvider,
-        );
-        final List<String> parts = category.split('::');
-        final String normalizedCategory = parts.isNotEmpty
-            ? parts.first.trim()
-            : '';
-        final String rawIndustryTypes = parts.length > 1
-            ? parts.sublist(1).join('::').trim()
-            : '';
-        final List<String> industryTypes = () {
-          if (rawIndustryTypes.isEmpty) return const <String>[];
-          if (rawIndustryTypes.startsWith('[')) {
-            try {
-              final dynamic decoded = jsonDecode(rawIndustryTypes);
-              if (decoded is List) {
-                return decoded
-                    .map((dynamic e) => e?.toString().trim() ?? '')
-                    .where((String s) => s.isNotEmpty)
-                    .toList();
-              }
-            } catch (_) {
-              // Fall through to comma-separated parsing.
+final verificationTypesProvider = FutureProvider.family
+    .autoDispose<List<VerificationTypeDefinition>, String>((
+      ref,
+      category,
+    ) async {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final List<String> parts = category.split('::');
+      final String normalizedCategory = parts.isNotEmpty
+          ? parts.first.trim()
+          : '';
+      final String rawIndustryTypes = parts.length > 1
+          ? parts.sublist(1).join('::').trim()
+          : '';
+      final List<String> industryTypes = () {
+        if (rawIndustryTypes.isEmpty) return const <String>[];
+        if (rawIndustryTypes.startsWith('[')) {
+          try {
+            final dynamic decoded = jsonDecode(rawIndustryTypes);
+            if (decoded is List) {
+              return decoded
+                  .map((dynamic e) => e?.toString().trim() ?? '')
+                  .where((String s) => s.isNotEmpty)
+                  .toList();
             }
+          } catch (_) {
+            // Fall through to comma-separated parsing.
           }
-          return rawIndustryTypes
-              .split(',')
-              .map((String s) => s.trim())
-              .where((String s) => s.isNotEmpty)
-              .toList();
-        }();
-        return repo.getVerificationTypes(
-          category: normalizedCategory,
-          industryTypes: industryTypes.isEmpty ? null : industryTypes,
-        );
-    },
-    );
+        }
+        return rawIndustryTypes
+            .split(',')
+            .map((String s) => s.trim())
+            .where((String s) => s.isNotEmpty)
+            .toList();
+      }();
+      return repo.getVerificationTypes(
+        category: normalizedCategory,
+        industryTypes: industryTypes.isEmpty ? null : industryTypes,
+      );
+    });
 
 class ProductBulkUploadDocumentInput {
   const ProductBulkUploadDocumentInput({
@@ -115,7 +116,8 @@ class VerificationRepository {
     if (res is List) {
       rawItems = res;
     } else if (res is Map) {
-      final dynamic data = res['data'] ?? res['verification_types'] ?? res['types'];
+      final dynamic data =
+          res['data'] ?? res['verification_types'] ?? res['types'];
       rawItems = data is List ? data : const <dynamic>[];
     } else {
       rawItems = const <dynamic>[];
@@ -193,44 +195,56 @@ class VerificationRepository {
     return rawItems
         .whereType<Map>()
         .map(
-          (Map e) => VerificationIndustryType.fromJson(
-            Map<String, dynamic>.from(e),
-          ),
+          (Map e) =>
+              VerificationIndustryType.fromJson(Map<String, dynamic>.from(e)),
         )
-        .where(
-          (VerificationIndustryType item) => item.name.trim().isNotEmpty,
-        )
+        .where((VerificationIndustryType item) => item.name.trim().isNotEmpty)
         .toList();
   }
 
   Future<List<VerificationBatchSummary>> getBatches() async {
     final dynamic res = await _api.verificationGetAny('/verification/batches');
-    final Iterable<dynamic> rawItems = res is List
-        ? res
-        : (res is Map
-              ? (res['data'] is List
-                    ? res['data'] as List
-                    : const <dynamic>[])
-              : const <dynamic>[]);
+    final List<VerificationBatchSummary> batches = <VerificationBatchSummary>[];
 
-    return rawItems
-        .whereType<Map>()
-        .map(
-          (Map e) =>
-              VerificationBatchSummary.fromJson(Map<String, dynamic>.from(e)),
-        )
-        .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
-        .toList()
-      ..sort((VerificationBatchSummary a, VerificationBatchSummary b) {
-        final DateTime? da = DateTime.tryParse(a.createdAt);
-        final DateTime? db = DateTime.tryParse(b.createdAt);
-        if (da == null && db == null) {
-          return b.batchName.compareTo(a.batchName);
+    void addBatchesFrom(dynamic value) {
+      if (value is List) {
+        for (final dynamic item in value) {
+          if (item is Map) {
+            final Map<String, dynamic> json = Map<String, dynamic>.from(item);
+            if (json['batches'] is List) {
+              batches.addAll(VerificationBatchGroup.fromJson(json).batches);
+            } else {
+              final VerificationBatchSummary summary =
+                  VerificationBatchSummary.fromJson(json);
+              if (summary.batchId.isNotEmpty) {
+                batches.add(summary);
+              }
+            }
+          }
         }
-        if (da == null) return 1;
-        if (db == null) return -1;
-        return db.compareTo(da);
-        });
+      } else if (value is Map) {
+        final Map<String, dynamic> json = Map<String, dynamic>.from(value);
+        if (json['batches'] is List) {
+          batches.addAll(VerificationBatchGroup.fromJson(json).batches);
+        } else if (json['data'] is List) {
+          addBatchesFrom(json['data']);
+        }
+      }
+    }
+
+    addBatchesFrom(res);
+
+    batches.sort((VerificationBatchSummary a, VerificationBatchSummary b) {
+      final DateTime? da = DateTime.tryParse(a.createdAt);
+      final DateTime? db = DateTime.tryParse(b.createdAt);
+      if (da == null && db == null) {
+        return b.batchName.compareTo(a.batchName);
+      }
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db.compareTo(da);
+    });
+    return batches;
   }
 
   Future<SdcRecordsResponse> getSdcRecords({
@@ -358,18 +372,25 @@ class VerificationRepository {
       formData.fields.add(
         MapEntry(
           'doc_product_names',
-          cleanDocuments.map((ProductBulkUploadDocumentInput doc) => doc.productName.trim()).join(','),
+          cleanDocuments
+              .map(
+                (ProductBulkUploadDocumentInput doc) => doc.productName.trim(),
+              )
+              .join(','),
         ),
       );
       formData.fields.add(
         MapEntry(
           'doc_labels',
-          cleanDocuments.map((ProductBulkUploadDocumentInput doc) => doc.label.trim()).join(','),
+          cleanDocuments
+              .map((ProductBulkUploadDocumentInput doc) => doc.label.trim())
+              .join(','),
         ),
       );
       for (final ProductBulkUploadDocumentInput doc in cleanDocuments) {
-        final String safeDocName =
-            doc.fileName.trim().isEmpty ? 'document.pdf' : doc.fileName.trim();
+        final String safeDocName = doc.fileName.trim().isEmpty
+            ? 'document.pdf'
+            : doc.fileName.trim();
         formData.files.add(
           MapEntry(
             'doc_files',
@@ -409,7 +430,9 @@ class VerificationRepository {
   }
 
   Future<VerificationBinaryResponse> generateWarrantyTemplate() async {
-    return _api.verificationGetBinary('/verification/products/warranty-template');
+    return _api.verificationGetBinary(
+      '/verification/products/warranty-template',
+    );
   }
 
   Future<VerificationBinaryResponse> generateHumanTemplate({
@@ -521,7 +544,9 @@ class VerificationRepository {
     required Uint8List fileBytes,
     required String fileName,
   }) async {
-    final String safeName = fileName.trim().isEmpty ? 'warranty.xlsx' : fileName;
+    final String safeName = fileName.trim().isEmpty
+        ? 'warranty.xlsx'
+        : fileName;
     final MediaType contentType = _mediaTypeForFileName(safeName);
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
@@ -546,7 +571,9 @@ class VerificationRepository {
         MapEntry(
           'doc_product_names',
           cleanDocuments
-              .map((ProductBulkUploadDocumentInput doc) => doc.productName.trim())
+              .map(
+                (ProductBulkUploadDocumentInput doc) => doc.productName.trim(),
+              )
               .join(','),
         ),
       );
@@ -559,8 +586,9 @@ class VerificationRepository {
         ),
       );
       for (final ProductBulkUploadDocumentInput doc in cleanDocuments) {
-        final String safeDocName =
-            doc.fileName.trim().isEmpty ? 'document.pdf' : doc.fileName.trim();
+        final String safeDocName = doc.fileName.trim().isEmpty
+            ? 'document.pdf'
+            : doc.fileName.trim();
         formData.files.add(
           MapEntry(
             'doc_files',

@@ -359,13 +359,60 @@ class VerificationBatchSummary {
 
     return VerificationBatchSummary(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
-      batchName: (json['batch_name'] ?? json['batchName'] ?? '').toString().trim(),
-      totalUsers: int.tryParse((json['total_users'] ?? json['totalUsers'] ?? '').toString()) ?? 0,
+      batchName: (json['batch_name'] ?? json['batchName'] ?? '')
+          .toString()
+          .trim(),
+      totalUsers:
+          int.tryParse(
+            (json['total_users'] ?? json['totalUsers'] ?? '').toString(),
+          ) ??
+          0,
       verified: int.tryParse((json['verified'] ?? '').toString()) ?? 0,
       failed: int.tryParse((json['failed'] ?? '').toString()) ?? 0,
-      createdAt: (json['created_at'] ?? json['createdAt'] ?? '').toString().trim(),
-      excelStoragePath: (json['excel_storage_path'] ?? json['excelStoragePath'] ?? '').toString().trim(),
+      createdAt: (json['created_at'] ?? json['createdAt'] ?? '')
+          .toString()
+          .trim(),
+      excelStoragePath:
+          (json['excel_storage_path'] ?? json['excelStoragePath'] ?? '')
+              .toString()
+              .trim(),
       reportStoragePaths: reports,
+    );
+  }
+}
+
+class VerificationBatchGroup {
+  const VerificationBatchGroup({
+    required this.orgId,
+    required this.organizationName,
+    required this.batches,
+  });
+
+  final String orgId;
+  final String organizationName;
+  final List<VerificationBatchSummary> batches;
+
+  factory VerificationBatchGroup.fromJson(Map<String, dynamic> json) {
+    final dynamic batchesRaw = json['batches'];
+    final List<VerificationBatchSummary> batches = batchesRaw is List
+        ? batchesRaw
+              .whereType<Map>()
+              .map(
+                (Map e) => VerificationBatchSummary.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
+              .toList()
+        : const <VerificationBatchSummary>[];
+
+    return VerificationBatchGroup(
+      orgId: (json['org_id'] ?? json['orgId'] ?? '').toString().trim(),
+      organizationName:
+          (json['organization_name'] ?? json['organizationName'] ?? '')
+              .toString()
+              .trim(),
+      batches: batches,
     );
   }
 }
@@ -432,17 +479,28 @@ class VerificationBatchDetailResponse {
 
     return VerificationBatchDetailResponse(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
-      batchName: (json['batch_name'] ?? json['batchName'] ?? '').toString().trim(),
+      batchName: (json['batch_name'] ?? json['batchName'] ?? '')
+          .toString()
+          .trim(),
       description: (json['description'] ?? '').toString().trim(),
       industryTypes: industries,
       verificationTypes: types,
-      credentialVisibility: (json['credential_visibility'] ?? '').toString().trim(),
-      totalUsers: int.tryParse((json['total_users'] ?? json['totalUsers'] ?? '').toString()) ?? users.length,
+      credentialVisibility: (json['credential_visibility'] ?? '')
+          .toString()
+          .trim(),
+      totalUsers:
+          int.tryParse(
+            (json['total_users'] ?? json['totalUsers'] ?? '').toString(),
+          ) ??
+          users.length,
       verificationProgress: json['verification_progress'] is Map
           ? Map<String, dynamic>.from(json['verification_progress'] as Map)
           : <String, dynamic>{},
       users: users,
-      excelStoragePath: (json['excel_storage_path'] ?? json['excelStoragePath'] ?? '').toString().trim(),
+      excelStoragePath:
+          (json['excel_storage_path'] ?? json['excelStoragePath'] ?? '')
+              .toString()
+              .trim(),
       reportStoragePaths: reports,
     );
   }
@@ -563,9 +621,7 @@ class WarrantyBatchProduct {
       serialNumber: readString(
         json['serial_number'] ?? json['serialNumber'] ?? json['serial'],
       ),
-      purchaseDate: readString(
-        json['purchase_date'] ?? json['purchaseDate'],
-      ),
+      purchaseDate: readString(json['purchase_date'] ?? json['purchaseDate']),
       warrantyStartDate: readString(
         json['warranty_start_date'] ?? json['warrantyStartDate'],
       ),
@@ -607,9 +663,8 @@ class WarrantyBatchStatusResponse {
         ? productsRaw
               .whereType<Map>()
               .map(
-                (Map e) => WarrantyBatchProduct.fromJson(
-                  Map<String, dynamic>.from(e),
-                ),
+                (Map e) =>
+                    WarrantyBatchProduct.fromJson(Map<String, dynamic>.from(e)),
               )
               .toList()
         : const <WarrantyBatchProduct>[];
@@ -969,7 +1024,8 @@ class SdcRecordsResponse {
   final String instanceKey;
 
   factory SdcRecordsResponse.fromJson(Map<String, dynamic> json) {
-    final dynamic rawRecords = json['records'] ?? json['data'] ?? const <dynamic>[];
+    final dynamic rawRecords =
+        json['records'] ?? json['data'] ?? const <dynamic>[];
     final Iterable<dynamic> items = rawRecords is List
         ? rawRecords
         : const <dynamic>[];
@@ -981,7 +1037,8 @@ class SdcRecordsResponse {
           .whereType<Map>()
           .map((Map e) => SdcRecord.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
-      instanceKey: (json['instanceKey'] ?? json['instance_key'] ?? '').toString(),
+      instanceKey: (json['instanceKey'] ?? json['instance_key'] ?? '')
+          .toString(),
     );
   }
 }
