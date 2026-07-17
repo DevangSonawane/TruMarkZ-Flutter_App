@@ -1,6 +1,11 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/models/verification_models.dart';
 import '../../../../core/network/api_client.dart';
@@ -49,14 +54,21 @@ class _IndividualSdcRecordDetailPageState
     _page = int.tryParse((qp['page'] ?? '').trim()) ?? 1;
     _pageSize = int.tryParse((qp['pageSize'] ?? '').trim()) ?? 30;
     _search = (qp['search'] ?? '').trim();
+    debugPrint(
+      '[sdc-detail] init publicId=$_publicId instanceKey=$_instanceKey orgId=$_orgId spaceId=$_spaceId active=$_active page=$_page pageSize=$_pageSize search=$_search',
+    );
     _load();
   }
 
   Future<void> _load() async {
-    if (_publicId.isEmpty) {
+    if (_publicId.isEmpty && _search.isEmpty) {
+      debugPrint('[sdc-detail] missing public_id and search');
       setState(() {
         _data = AsyncError(
-          const ApiException(statusCode: null, message: 'Missing public_id.'),
+          const ApiException(
+            statusCode: null,
+            message: 'Missing public_id and search.',
+          ),
           StackTrace.current,
         );
       });
@@ -68,27 +80,40 @@ class _IndividualSdcRecordDetailPageState
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
+      debugPrint(
+        '[sdc-detail] loading /sdc/records orgId=$_orgId spaceId=$_spaceId active=$_active page=$_page pageSize=$_pageSize search=$_search',
+      );
       SdcRecord? selected;
 
       Future<void> loadFromList({String? search}) async {
+        final String effectiveSearch = (search ?? _search).trim();
         final SdcRecordsResponse res = await repo.getSdcRecords(
           orgId: _orgId.isNotEmpty ? _orgId : null,
           spaceId: _spaceId.isNotEmpty ? _spaceId : null,
           active: _active,
           page: _page,
           pageSize: _pageSize,
-          search: search ?? _search,
+          search: effectiveSearch,
         );
-        selected = _matchRecord(res.records);
+        debugPrint(
+          '[sdc-detail] /sdc/records returned count=${res.count} page=${res.page} pageSize=${res.pageSize} records=${res.records.length} instanceKey=${res.instanceKey}',
+        );
+        selected = _matchRecord(res.records, searchHint: effectiveSearch);
+        debugPrint(
+          '[sdc-detail] match=${selected == null ? 'none' : selected!.publicId}',
+        );
       }
 
-      await loadFromList();
-      if (selected == null && _search.trim() != _publicId.trim()) {
+      final String initialSearch = _search.isNotEmpty ? _search : _publicId;
+      await loadFromList(search: initialSearch);
+      if (selected == null && _publicId.isNotEmpty && _search != _publicId) {
+        debugPrint('[sdc-detail] retrying /sdc/records with search=$_publicId');
         await loadFromList(search: _publicId);
       }
 
       if (!mounted) return;
       if (selected == null) {
+        debugPrint('[sdc-detail] record not found after lookup');
         setState(() {
           _data = AsyncError(
             StateError('Record not found in the loaded page.'),
@@ -108,11 +133,21 @@ class _IndividualSdcRecordDetailPageState
     }
   }
 
-  SdcRecord? _matchRecord(List<SdcRecord> records) {
+  SdcRecord? _matchRecord(List<SdcRecord> records, {String? searchHint}) {
+    final String hint = (searchHint ?? '').trim().toLowerCase();
     for (final SdcRecord record in records) {
       if (record.publicId.trim() == _publicId.trim() ||
           record.id.trim() == _publicId.trim()) {
         return record;
+      }
+      if (hint.isNotEmpty) {
+        final String title = record.title.trim().toLowerCase();
+        if (title == hint || title.contains(hint)) return record;
+        if (record.recipients.any(
+          (String recipient) => recipient.trim().toLowerCase() == hint,
+        )) {
+          return record;
+        }
       }
     }
     return records.length == 1 ? records.first : null;
@@ -230,7 +265,11 @@ class _IndividualSdcRecordDetailPageState
                             MediaQuery.viewPaddingOf(context).bottom,
                       ),
                       children: <Widget>[
-                        _HeroCard(record: record, instanceKey: _instanceKey),
+                        _HeroCard(
+                          record: record,
+                          instanceKey: _instanceKey,
+                          onDownload: () => _downloadPdf(record),
+                        ),
                         const SizedBox(height: AppSpacing.x4),
                         _SectionCard(
                           title: 'Identity',
@@ -352,13 +391,62 @@ class _IndividualSdcRecordDetailPageState
       ),
     );
   }
+
+  Future<void> _downloadPdf(SdcRecord record) async {
+    try {
+      debugPrint(
+        '[sdc-detail] download requested publicId=${record.publicId} title=${record.title}',
+      );
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final SdcRecordDetailResponse res = await repo.getSdcRecord(
+        publicId: record.publicId.trim().isNotEmpty
+            ? record.publicId.trim()
+            : record.id.trim(),
+        instanceKey: 'de',
+      );
+      if (res.pdfUrl.trim().isEmpty) {
+        throw StateError('PDF URL is unavailable for this record.');
+      }
+      final Directory tempDir = await getTemporaryDirectory();
+      final String safeTitle = record.title.trim().isEmpty
+          ? 'record'
+          : record.title
+                .trim()
+                .toLowerCase()
+                .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+                .replaceAll(RegExp(r'_+'), '_')
+                .replaceAll(RegExp(r'^_|_$'), '');
+      final String fileName =
+          'sdc_record_${safeTitle.isEmpty ? 'record' : safeTitle}_${record.publicId.isEmpty ? record.id : record.publicId}.pdf';
+      final File file = File('${tempDir.path}/$fileName');
+      debugPrint('[sdc-detail] downloading pdf from ${res.pdfUrl}');
+      await Dio().download(res.pdfUrl, file.path);
+      await Share.shareXFiles(<XFile>[
+        XFile(file.path, mimeType: 'application/pdf'),
+      ], text: 'SDC record PDF');
+    } catch (e, st) {
+      debugPrint('[sdc-detail] pdf download failed: $e');
+      debugPrintStack(stackTrace: st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to download PDF right now.')),
+      );
+    }
+  }
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.record, required this.instanceKey});
+  const _HeroCard({
+    required this.record,
+    required this.instanceKey,
+    required this.onDownload,
+  });
 
   final SdcRecord record;
   final String instanceKey;
+  final VoidCallback onDownload;
 
   @override
   Widget build(BuildContext context) {
@@ -380,6 +468,7 @@ class _HeroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Container(
                 width: 48,
@@ -402,13 +491,25 @@ class _HeroCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      record.title.trim().isEmpty
-                          ? 'Untitled record'
-                          : record.title.trim(),
-                      style: AppTypography.heading1.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            record.title.trim().isEmpty
+                                ? 'Untitled record'
+                                : record.title.trim(),
+                            style: AppTypography.heading1.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: onDownload,
+                          icon: const Icon(Icons.download_rounded, size: 18),
+                          label: const Text('Download'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(

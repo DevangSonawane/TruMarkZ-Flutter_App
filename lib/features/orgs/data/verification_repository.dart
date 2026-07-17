@@ -1,7 +1,7 @@
-import 'dart:typed_data';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http_parser/http_parser.dart';
 
@@ -264,6 +264,9 @@ class VerificationRepository {
       'pageSize': pageSize.toString(),
       if (search.trim().isNotEmpty) 'search': search.trim(),
     };
+    debugPrint(
+      '[verification-repo] GET /sdc/records orgId=${queryParameters['org_id']} spaceId=${queryParameters['space_id']} active=${queryParameters['active']} page=${queryParameters['page']} pageSize=${queryParameters['pageSize']} search=${queryParameters['search'] ?? ''}',
+    );
     final dynamic res = await _api.verificationGetAny(
       '/sdc/records',
       queryParameters: queryParameters,
@@ -274,6 +277,7 @@ class VerificationRepository {
     if (res is Map) {
       return SdcRecordsResponse.fromJson(Map<String, dynamic>.from(res));
     }
+    debugPrint('[verification-repo] GET /sdc/records returned non-map payload');
     return SdcRecordsResponse.fromJson(<String, dynamic>{
       'count': 0,
       'page': page,
@@ -290,6 +294,9 @@ class VerificationRepository {
     final Map<String, String> queryParameters = <String, String>{
       'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
     };
+    debugPrint(
+      '[verification-repo] GET /sdc/records/$publicId instanceKey=${queryParameters['instance_key']}',
+    );
     final dynamic res = await _api.verificationGetAny(
       '/sdc/records/${Uri.encodeComponent(publicId.trim())}',
       queryParameters: queryParameters,

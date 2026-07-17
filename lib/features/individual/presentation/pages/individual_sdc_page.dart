@@ -276,10 +276,8 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
                                       data?.instanceKey.isNotEmpty == true
                                       ? data!.instanceKey
                                       : 'de',
-                                  orgId: _orgId.isNotEmpty ? _orgId : null,
-                                  spaceId: _spaceId.isNotEmpty
-                                      ? _spaceId
-                                      : null,
+                                  orgId: _orgId,
+                                  spaceId: _spaceId,
                                   active: _active,
                                   page: _page,
                                   pageSize: _pageSize,

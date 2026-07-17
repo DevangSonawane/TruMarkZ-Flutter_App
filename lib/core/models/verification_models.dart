@@ -450,6 +450,22 @@ class VerificationBatchDetailResponse {
   final String excelStoragePath;
   final List<String> reportStoragePaths;
 
+  String get sdcOrgId {
+    final dynamic sdc = verificationProgress['sdc'];
+    if (sdc is Map) {
+      return (sdc['org_id'] ?? sdc['orgId'] ?? '').toString().trim();
+    }
+    return '';
+  }
+
+  String get sdcSpaceId {
+    final dynamic sdc = verificationProgress['sdc'];
+    if (sdc is Map) {
+      return (sdc['space_id'] ?? sdc['spaceId'] ?? '').toString().trim();
+    }
+    return '';
+  }
+
   factory VerificationBatchDetailResponse.fromJson(Map<String, dynamic> json) {
     final dynamic reportsRaw = json['report_storage_paths'];
     final List<String> reports = reportsRaw is List
@@ -1031,6 +1047,22 @@ class SdcRecord {
       updatedAt: (json['updatedAt'] ?? json['updated_at'] ?? '').toString(),
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'revoked': revoked,
+    'uniqueIdValue': uniqueIdValue,
+    'edited': edited,
+    'anchorTime': anchorTime,
+    'latest': latest,
+    'publicId': publicId,
+    'title': title,
+    'recipients': recipients,
+    'active': active,
+    'expires': expires,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+  };
 }
 
 class SdcRecordsResponse {

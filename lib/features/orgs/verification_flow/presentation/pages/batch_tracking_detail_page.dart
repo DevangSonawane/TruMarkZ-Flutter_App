@@ -288,17 +288,36 @@ class _BatchTrackingDetailPageState
                                   in res.users) ...<Widget>[
                                 _UserTile(
                                   user: u,
-                                  onTap: () => context.push(
-                                    AppRouter.sdcRecordLocation(
-                                      publicId: u.publicId.trim().isNotEmpty
-                                          ? u.publicId.trim()
-                                          : u.id.trim(),
-                                      instanceKey: 'de',
-                                      search: u.publicId.trim().isNotEmpty
-                                          ? u.publicId.trim()
-                                          : u.id.trim(),
-                                    ),
-                                  ),
+                                  onTap: () {
+                                    final String orgId = detail?.sdcOrgId ?? '';
+                                    final String spaceId =
+                                        detail?.sdcSpaceId ?? '';
+                                    final String searchTerm =
+                                        u.fullName.trim().isNotEmpty
+                                        ? u.fullName.trim()
+                                        : (u.email.trim().isNotEmpty
+                                              ? u.email.trim()
+                                              : u.id.trim());
+                                    final String publicId =
+                                        u.publicId.trim().isNotEmpty
+                                        ? u.publicId.trim()
+                                        : '';
+                                    debugPrint(
+                                      '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
+                                    );
+                                    context.push(
+                                      AppRouter.sdcRecordLocation(
+                                        publicId: publicId,
+                                        orgId: orgId,
+                                        spaceId: spaceId,
+                                        instanceKey: 'de',
+                                        active: 1,
+                                        page: 1,
+                                        pageSize: 30,
+                                        search: searchTerm,
+                                      ),
+                                    );
+                                  },
                                 ),
                                 const SizedBox(height: AppSpacing.x2),
                               ],
