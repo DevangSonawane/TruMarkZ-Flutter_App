@@ -37,7 +37,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const Color _panelText = Color(0xFF3A3A3A);
   static const List<String> _defaultHumanTemplateHeaders = <String>[
-    'name',
+    'full_name',
     'email',
     'phone_number',
     'aadhar_number',
@@ -129,10 +129,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   List<String> _columns() {
     return _dedupeHeaders(
       (_columnsController.text)
-        .split(',')
-        .map((String s) => s.trim())
-        .where((String s) => s.isNotEmpty)
-        .toList(),
+          .split(',')
+          .map((String s) => s.trim())
+          .where((String s) => s.isNotEmpty)
+          .toList(),
     );
   }
 
@@ -474,8 +474,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       barrierDismissible: true,
       barrierColor: Colors.black54,
       builder: (BuildContext dialogContext) {
-        final String verificationFilter =
-            _verificationFilter(category: 'human');
+        final String verificationFilter = _verificationFilter(
+          category: 'human',
+        );
         return _HumanTemplateDialog(
           initialHeaders: initialHeaders,
           selectedChecks: _checks,
@@ -1026,8 +1027,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             ..addAll(
               (humanTypesAsync.valueOrNull?.isNotEmpty == true)
                   ? humanTypesAsync.valueOrNull!
-                      .take(3)
-                      .map((VerificationTypeDefinition t) => t.id)
+                        .take(3)
+                        .map((VerificationTypeDefinition t) => t.id)
                   : <String>{'police', 'dob', 'education'},
             );
           _seededDefaultChecks = true;
@@ -1653,10 +1654,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return profileIndustry;
   }
 
-  String _verificationFilter({
-    required String category,
-    String? industry,
-  }) {
+  String _verificationFilter({required String category, String? industry}) {
     final String selectedIndustry = (industry ?? _effectiveIndustry()).trim();
     if (selectedIndustry.isEmpty) return category;
     return '$category::$selectedIndustry';
@@ -1757,9 +1755,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final List<VerificationTypeDefinition> verificationTypes =
-          await ref
-              .read(verificationTypesProvider(widget.verificationFilter).future);
+      final List<VerificationTypeDefinition> verificationTypes = await ref.read(
+        verificationTypesProvider(widget.verificationFilter).future,
+      );
       final Map<String, VerificationTypeDefinition> verificationTypesById =
           <String, VerificationTypeDefinition>{
             for (final VerificationTypeDefinition item in verificationTypes)
@@ -1977,34 +1975,27 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     }
   }
 
-  String? _remapVerificationCell(
-    String raw,
-    Map<String, String> replacements,
-  ) {
+  String? _remapVerificationCell(String raw, Map<String, String> replacements) {
     final String normalized = raw.trim();
     final String? direct = replacements[normalized.toLowerCase()];
     if (direct != null) return direct;
 
-    if (!normalized.contains(',')) return null;
-
-    final List<String> parts = normalized.split(',');
+    String remapped = normalized;
     bool changed = false;
-    final List<String> mapped = <String>[];
 
-    for (final String part in parts) {
-      final String token = part.trim();
-      if (token.isEmpty) continue;
-      final String? replacement = replacements[token.toLowerCase()];
-      if (replacement != null) {
-        mapped.add(replacement);
-        changed = true;
-      } else {
-        mapped.add(token);
-      }
+    final List<String> ids = replacements.keys.toList()
+      ..sort((String a, String b) => b.length.compareTo(a.length));
+    for (final String id in ids) {
+      final String replacement = replacements[id]!;
+      final RegExp pattern = RegExp(RegExp.escape(id), caseSensitive: false);
+      final String next = remapped.replaceAll(pattern, replacement);
+      if (next == remapped) continue;
+      remapped = next;
+      changed = true;
     }
 
     if (!changed) return null;
-    return mapped.join(', ');
+    return remapped;
   }
 
   static String _verificationTypeDisplayName(VerificationTypeDefinition item) {
@@ -2035,7 +2026,8 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     final Map<String, VerificationTypeDefinition> verificationTypesById =
         <String, VerificationTypeDefinition>{
           for (final VerificationTypeDefinition item
-              in verificationTypesAsync.valueOrNull ?? <VerificationTypeDefinition>[])
+              in verificationTypesAsync.valueOrNull ??
+                  <VerificationTypeDefinition>[])
             item.id: item,
         };
 
@@ -2325,10 +2317,11 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.brandBlue,
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  AppColors.brandBlue.withAlpha(90),
-                              disabledForegroundColor:
-                                  Colors.white.withAlpha(180),
+                              disabledBackgroundColor: AppColors.brandBlue
+                                  .withAlpha(90),
+                              disabledForegroundColor: Colors.white.withAlpha(
+                                180,
+                              ),
                               elevation: 0,
                               padding: EdgeInsets.symmetric(vertical: s(18)),
                               shape: RoundedRectangleBorder(

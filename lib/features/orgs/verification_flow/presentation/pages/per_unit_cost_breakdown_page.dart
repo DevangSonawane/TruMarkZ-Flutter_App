@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../data/verification_repository.dart';
+import 'human_verification_checks_catalog.dart';
 import 'product_verification_checks_catalog.dart';
 import 'verification_flow_action.dart';
 import 'flow_step_progress.dart';
@@ -39,15 +40,51 @@ class _PerUnitCostBreakdownPageState
 
   Map<String, _CheckPricing> _pricingFromTypes(
     List<VerificationTypeDefinition> types,
+    List<String> ids,
     bool isProductFlow,
   ) {
-    return <String, _CheckPricing>{
-      for (final VerificationTypeDefinition item in types)
-        item.id: _CheckPricing(
-          item.name,
-          _resolvedPrice(item, isProductFlow: isProductFlow),
-        ),
-    };
+    final Map<String, VerificationTypeDefinition> apiById =
+        <String, VerificationTypeDefinition>{
+          for (final VerificationTypeDefinition item in types) item.id: item,
+        };
+    final Map<String, _CheckPricing> pricing = <String, _CheckPricing>{};
+
+    for (final String id in ids) {
+      final VerificationTypeDefinition? apiItem = apiById[id];
+      if (apiItem != null) {
+        pricing[id] = _CheckPricing(
+          apiItem.name,
+          _resolvedPrice(apiItem, isProductFlow: isProductFlow),
+        );
+        continue;
+      }
+
+      final ProductVerificationCheckDefinition? productItem =
+          ProductVerificationChecksCatalog.byId[id];
+      if (productItem != null) {
+        pricing[id] = _CheckPricing(
+          productItem.title,
+          ProductVerificationChecksCatalog.pricesInr[id] ??
+              productItem.priceMinInr,
+        );
+        continue;
+      }
+
+      final HumanVerificationCheckDefinition? humanItem =
+          HumanVerificationChecksCatalog.byId[id];
+      if (humanItem != null) {
+        pricing[id] = _CheckPricing(
+          humanItem.title,
+          HumanVerificationChecksCatalog.humanPricesInr[id] ??
+              humanItem.priceMinInr,
+        );
+        continue;
+      }
+
+      pricing[id] = _CheckPricing(id, 0);
+    }
+
+    return pricing;
   }
 
   List<String> _selectedChecks(BuildContext context) {
@@ -86,7 +123,7 @@ class _PerUnitCostBreakdownPageState
     if (isProductFlow) {
       return ProductVerificationChecksCatalog.pricesInr[item.id] ?? 0;
     }
-    return 0;
+    return HumanVerificationChecksCatalog.humanPricesInr[item.id] ?? 0;
   }
 
   bool _isProductFlow() {
@@ -135,9 +172,12 @@ class _PerUnitCostBreakdownPageState
     );
     final Map<String, _CheckPricing> pricing = _pricingFromTypes(
       typesAsync.valueOrNull ?? <VerificationTypeDefinition>[],
+      ids,
       isProductFlow,
     );
-    final int total = isWarrantyFlow ? 0 : _totalCostInr(ids, pricing) * userCount;
+    final int total = isWarrantyFlow
+        ? 0
+        : _totalCostInr(ids, pricing) * userCount;
     final Object? extra = GoRouterState.of(context).extra;
     final VerificationFlowConfirmAction? action =
         extra is VerificationFlowConfirmAction ? extra : null;
@@ -452,14 +492,14 @@ class _CostSummaryCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFFEEF3FF),
                       borderRadius: BorderRadius.circular(s(999)),
-                  ),
-                  child: Text(
-                    hasWarrantyChecksDisabled
-                        ? 'No Checks'
-                        : '$checksCount Checks',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
+                    ),
+                    child: Text(
+                      hasWarrantyChecksDisabled
+                          ? 'No Checks'
+                          : '$checksCount Checks',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
                         fontWeight: FontWeight.w600,
                         height: 16 / 12,
                         color: AppColors.brandBlue,
