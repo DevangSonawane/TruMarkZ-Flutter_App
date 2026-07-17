@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -212,12 +213,6 @@ class _IndividualSdcRecordDetailPageState
                       ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Refresh',
-                    onPressed: _load,
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: Colors.white,
-                  ),
                 ],
               ),
             ),
@@ -230,31 +225,8 @@ class _IndividualSdcRecordDetailPageState
                 child: _data.when(
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
-                  error: (Object err, _) => Padding(
-                    padding: const EdgeInsets.all(AppSpacing.x4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Unable to load record',
-                          style: AppTypography.display2,
-                        ),
-                        const SizedBox(height: AppSpacing.x2),
-                        Text(
-                          err.toString(),
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.x4),
-                        ElevatedButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
+                  error: (Object err, _) =>
+                      _PendingSdcErrorState(error: err, onRetry: _load),
                   data: (SdcRecord record) {
                     return LayoutBuilder(
                       builder:
@@ -864,6 +836,312 @@ class _AboutRecordCard extends StatelessWidget {
   }
 }
 
+class _PendingSdcErrorState extends StatefulWidget {
+  const _PendingSdcErrorState({required this.error, required this.onRetry});
+
+  final Object error;
+  final VoidCallback onRetry;
+
+  @override
+  State<_PendingSdcErrorState> createState() => _PendingSdcErrorStateState();
+}
+
+class _PendingSdcErrorStateState extends State<_PendingSdcErrorState>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool _isPendingState(Object error) {
+    final String message = error.toString().toLowerCase();
+    return error is StateError ||
+        message.contains('not found') ||
+        message.contains('missing public_id') ||
+        message.contains('missing user id') ||
+        message.contains('missing user if') ||
+        message.contains('missing user') ||
+        message.contains('still creating');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isPending = _isPendingState(widget.error);
+    final String title = isPending
+        ? 'Oops, we are still creating your SDC'
+        : 'Unable to load record';
+    final String subtitle = isPending
+        ? 'Hang tight. Your record is still being prepared. Try again in a moment and we’ll bring it right back.'
+        : widget.error.toString();
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double width = constraints.maxWidth;
+        final double height = constraints.maxHeight;
+        final double size = width < 402 ? width : 402;
+        final double scale = size / 402;
+        double s(double v) => v * scale;
+
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            s(16),
+            s(20),
+            s(16),
+            s(32) + MediaQuery.viewPaddingOf(context).bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: height - s(24)),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: double.infinity,
+                child: Container(
+                  padding: EdgeInsets.all(s(20)),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[Color(0xFFFDFEFF), Color(0xFFF2F7FF)],
+                    ),
+                    borderRadius: BorderRadius.circular(s(24)),
+                    border: Border.all(
+                      color: const Color(0xFFDCE8FF),
+                      width: s(1),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: s(24),
+                        offset: Offset(0, s(12)),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      AnimatedBuilder(
+                        animation: _controller,
+                        builder: (BuildContext context, Widget? child) {
+                          final double t = _controller.value;
+                          final double pulse =
+                              0.92 +
+                              (0.08 * (0.5 + 0.5 * _sin(t * 2 * 3.1415926535)));
+                          final double floatY =
+                              _sin(t * 2 * 3.1415926535) * s(6);
+                          final double orbit = _sin(t * 2 * 3.1415926535);
+
+                          return SizedBox(
+                            height: s(150),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: <Widget>[
+                                Container(
+                                  width: s(110) * pulse,
+                                  height: s(110) * pulse,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(
+                                      0xFF2563EB,
+                                    ).withValues(alpha: 0.10 + (0.05 * pulse)),
+                                  ),
+                                ),
+                                Container(
+                                  width: s(82),
+                                  height: s(82),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                    border: Border.all(
+                                      color: const Color(0xFFBFD4FF),
+                                      width: s(1.2),
+                                    ),
+                                  ),
+                                  child: Transform.translate(
+                                    offset: Offset(0, floatY),
+                                    child: Icon(
+                                      Icons.hourglass_bottom_rounded,
+                                      size: s(36),
+                                      color: const Color(0xFF2563EB),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: s(76) + orbit * s(6),
+                                  top: s(30),
+                                  child: _FloatingDot(
+                                    size: s(14),
+                                    color: const Color(0xFF16A34A),
+                                    scale: pulse,
+                                  ),
+                                ),
+                                Positioned(
+                                  right: s(72) - orbit * s(5),
+                                  bottom: s(28),
+                                  child: _FloatingDot(
+                                    size: s(18),
+                                    color: const Color(0xFFF59E0B),
+                                    scale: 1.06 - (pulse - 0.92),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: s(18),
+                                  right: s(108) + orbit * s(8),
+                                  child: _FloatingStar(
+                                    size: s(22),
+                                    color: const Color(0xFF7C3AED),
+                                    rotation: t * 2 * 3.1415926535,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      SizedBox(height: s(6)),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.display2.copyWith(
+                          fontWeight: FontWeight.w900,
+                          height: 1.0,
+                        ),
+                      ),
+                      SizedBox(height: s(10)),
+                      Text(
+                        subtitle,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: s(18)),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: s(8),
+                        runSpacing: s(8),
+                        children: const <Widget>[
+                          _StatusChip(label: 'Still baking', active: true),
+                          _StatusChip(label: 'Almost there', active: true),
+                        ],
+                      ),
+                      SizedBox(height: s(20)),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: widget.onRetry,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            minimumSize: Size.fromHeight(s(52)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(s(14)),
+                            ),
+                          ),
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const Text(
+                            'Try Again',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FloatingDot extends StatelessWidget {
+  const _FloatingDot({
+    required this.size,
+    required this.color,
+    required this.scale,
+  });
+
+  final double size;
+  final Color color;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.scale(
+      scale: scale,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: color.withValues(alpha: 0.28),
+              blurRadius: size / 2,
+              offset: Offset(0, size / 5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingStar extends StatelessWidget {
+  const _FloatingStar({
+    required this.size,
+    required this.color,
+    required this.rotation,
+  });
+
+  final double size;
+  final Color color;
+  final double rotation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: rotation,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.auto_awesome_rounded,
+          color: color,
+          size: size * 0.75,
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.label, required this.active});
 
@@ -918,6 +1196,8 @@ String _formatCardDate(String? raw) {
   final String minutes = parsed.minute.toString().padLeft(2, '0');
   return '$day $month ${parsed.year}, $hours:$minutes';
 }
+
+double _sin(double value) => math.sin(value);
 
 class _TimelineItem extends StatelessWidget {
   const _TimelineItem({
