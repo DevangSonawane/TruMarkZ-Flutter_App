@@ -60,6 +60,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   PickedFile? _pickedFile;
   bool _isUploading = false;
   bool _preflightChecking = false;
+  final List<PickedFile> _attachedDocuments = <PickedFile>[];
 
   @override
   void initState() {
@@ -504,6 +505,21 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       '[BulkUploadPage] Picked file name=${picked.name} bytes=${picked.bytes.length}',
     );
     setState(() => _pickedFile = picked);
+  }
+
+  Future<void> _pickAttachedDocuments() async {
+    final List<PickedFile> picked = await FilePickerUtil.pickDocuments();
+    if (!mounted || picked.isEmpty) return;
+    setState(() {
+      _attachedDocuments.addAll(picked);
+    });
+  }
+
+  void _removeAttachedDocument(int index) {
+    if (index < 0 || index >= _attachedDocuments.length) return;
+    setState(() {
+      _attachedDocuments.removeAt(index);
+    });
   }
 
   Future<void> _confirmAndCreateBatch() async {
@@ -1264,6 +1280,129 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                       scale: scale,
                                       onTap: _pickExcelFile,
                                     ),
+                                    SizedBox(height: s(18)),
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Divider(
+                                            color: const Color(0xFFE5E7EB),
+                                            thickness: s(1),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: s(12),
+                                          ),
+                                          child: Text(
+                                            'OR',
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(11),
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: s(1.4),
+                                              color: const Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Divider(
+                                            color: const Color(0xFFE5E7EB),
+                                            thickness: s(1),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: s(14)),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Text(
+                                                'Add Documents',
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: s(18),
+                                                  fontWeight: FontWeight.w700,
+                                                  height: 22 / 18,
+                                                  color: _panelText,
+                                                ),
+                                              ),
+                                              SizedBox(height: s(6)),
+                                              Text(
+                                                'Attach supporting documents for reference alongside the batch upload.',
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: s(12),
+                                                  fontWeight: FontWeight.w500,
+                                                  height: 17 / 12,
+                                                  color: const Color(
+                                                    0xFF94A3B8,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: _pickAttachedDocuments,
+                                          icon: const Icon(
+                                            Icons.attach_file_rounded,
+                                            size: 18,
+                                          ),
+                                          label: const Text('Add Documents'),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor:
+                                                AppColors.brandBlue,
+                                            textStyle: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(12),
+                                              fontWeight: FontWeight.w700,
+                                              height: 16 / 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (_attachedDocuments
+                                        .isNotEmpty) ...<Widget>[
+                                      SizedBox(height: s(14)),
+                                      Column(
+                                        children: List<Widget>.generate(
+                                          _attachedDocuments.length,
+                                          (int index) {
+                                            final PickedFile file =
+                                                _attachedDocuments[index];
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom:
+                                                    index ==
+                                                        _attachedDocuments
+                                                                .length -
+                                                            1
+                                                    ? 0
+                                                    : s(10),
+                                              ),
+                                              child: _AttachedDocumentCard(
+                                                scale: scale,
+                                                fileName: file.name,
+                                                fileSizeLabel: _formatBytes(
+                                                  file.bytes.length,
+                                                ),
+                                                onRemove: () =>
+                                                    _removeAttachedDocument(
+                                                      index,
+                                                    ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
                                     SizedBox(height: s(26)),
                                     if (_pickedFile != null) ...<Widget>[
                                       Text(
@@ -2666,6 +2805,90 @@ class _BatchNameField extends StatelessWidget {
         color: const Color(0xFF111827),
       ),
       textInputAction: TextInputAction.done,
+    );
+  }
+}
+
+class _AttachedDocumentCard extends StatelessWidget {
+  const _AttachedDocumentCard({
+    required this.scale,
+    required this.fileName,
+    required this.fileSizeLabel,
+    required this.onRemove,
+  });
+
+  final double scale;
+  final String fileName;
+  final String fileSizeLabel;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(s(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(18)),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: s(1)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: s(38),
+            height: s(38),
+            decoration: BoxDecoration(
+              color: AppColors.brandBlue.withAlpha(14),
+              borderRadius: BorderRadius.circular(s(12)),
+            ),
+            child: Icon(
+              Icons.description_rounded,
+              size: s(20),
+              color: AppColors.brandBlue,
+            ),
+          ),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(13),
+                    fontWeight: FontWeight.w600,
+                    height: 18 / 13,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: s(2)),
+                Text(
+                  fileSizeLabel,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(11),
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 11,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.close_rounded),
+            color: const Color(0xFF94A3B8),
+            tooltip: 'Remove document',
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
     );
   }
 }
