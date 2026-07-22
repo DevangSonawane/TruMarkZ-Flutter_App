@@ -1109,6 +1109,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       );
       return;
     }
+    if (_pickedFile != null) {
+      await _submitExcelBatch();
+      return;
+    }
     if (_parsedUsers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add at least one user first.')),
@@ -1129,6 +1133,102 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         );
     if (reviewedUsers == null || reviewedUsers.isEmpty) return;
     await _submitReviewedBatch(reviewedUsers);
+  }
+
+  String _verificationTypesCsv() {
+    final List<String> sortedChecks = _checks.toList()..sort();
+    return sortedChecks.join(',');
+  }
+
+  Future<void> _submitExcelBatch() async {
+    final PickedFile? pickedFile = _pickedFile;
+    if (pickedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload an Excel file first.')),
+      );
+      return;
+    }
+    if (_isUploading) return;
+
+    setState(() => _isUploading = true);
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final BulkUploadResponse res = await repo.bulkUpload(
+        batchName: _batchNameController.text.trim(),
+        industryType: _industry.trim().isNotEmpty ? _industry.trim() : null,
+        verificationTypes: _verificationTypesCsv().isNotEmpty
+            ? _verificationTypesCsv()
+            : null,
+        credentialVisibility: _credentialVisibility.trim().isNotEmpty
+            ? _credentialVisibility.trim()
+            : null,
+        fileBytes: pickedFile.bytes,
+        fileName: pickedFile.name,
+      );
+
+      await ref
+          .read(batchNameStoreProvider.notifier)
+          .setBatchName(res.batchId, _batchNameController.text.trim());
+
+      if (!mounted) return;
+      final Uri uri = Uri(
+        path: AppRouter.batchCreatedSuccessPath,
+        queryParameters: <String, String>{
+          'batch_id': res.batchId,
+          'total_uploaded': res.totalUploaded.toString(),
+          'total_skipped': res.totalSkipped.toString(),
+          'errors': res.errors.length.toString(),
+          'batch': _batchNameController.text.trim(),
+        },
+      );
+      context.push(uri.toString());
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } on DioException catch (e) {
+      if (!mounted) return;
+      debugPrint(
+        '[BulkUploadPage] Excel upload DioException: type=${e.type} uri=${e.requestOptions.uri} '
+        'status=${e.response?.statusCode} data=${e.response?.data} message=${e.message}',
+      );
+      final Object? inner = e.error;
+      if (inner is ApiException) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(inner.message)));
+      } else {
+        final dynamic data = e.response?.data;
+        String? serverMessage;
+        if (data is String && data.trim().isNotEmpty) {
+          serverMessage = data.trim();
+        } else if (data is Map && data['message'] is String) {
+          final String m = (data['message'] as String).trim();
+          if (m.isNotEmpty) serverMessage = m;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              serverMessage ??
+                  'Could not upload the Excel file. Please try again.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('[BulkUploadPage] Excel upload failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
   }
 
   Future<void> _submitReviewedBatch(

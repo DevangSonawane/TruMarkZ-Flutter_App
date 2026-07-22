@@ -160,10 +160,7 @@ class ApiClient {
     }
   }
 
-  Future<dynamic> deleteAny(
-    String path, {
-    Object? data,
-  }) async {
+  Future<dynamic> deleteAny(String path, {Object? data}) async {
     try {
       final Response<dynamic> res = await _dio.delete<dynamic>(
         path,
@@ -436,7 +433,6 @@ class ApiClient {
     try {
       final Options options = Options(
         extra: skipAuth ? <String, dynamic>{'skipAuth': true} : null,
-        contentType: 'multipart/form-data',
       );
       final Response<dynamic> res = await _verificationDio.post<dynamic>(
         path,
@@ -449,7 +445,6 @@ class ApiClient {
         try {
           final Options retryOptions = Options(
             extra: skipAuth ? <String, dynamic>{'skipAuth': true} : null,
-            contentType: 'multipart/form-data',
           );
           final Response<dynamic> res = await _dio.post<dynamic>(
             path,
