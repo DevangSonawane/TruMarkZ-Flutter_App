@@ -681,229 +681,278 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
-          builder:
-              (
-                BuildContext context,
-                void Function(void Function()) setDialogState,
-              ) {
-                Future<void> addDocuments() async {
-                  final List<PickedFile> picked =
-                      await FilePickerUtil.pickDocuments();
-                  if (!mounted || picked.isEmpty) return;
-                  final List<_HumanDocumentDraft> drafts = picked
-                      .map(
-                        (PickedFile file) =>
-                            _HumanDocumentDraft(label: 'document', file: file),
-                      )
-                      .toList();
-                  setState(() {
-                    final List<_HumanDocumentDraft> docs =
-                        _attachedDocumentsByUser.putIfAbsent(
-                          selectedIndex,
-                          () => <_HumanDocumentDraft>[],
-                        );
-                    docs.addAll(drafts);
-                    _selectedUserIndex = selectedIndex;
-                  });
-                  final Map<String, dynamic>? ocr = await _extractOcrForDocs(
-                    drafts,
-                  );
-                  if (ocr != null) {
-                    setState(() => _mergeOcrIntoUser(selectedIndex, ocr));
-                  }
-                  setDialogState(() {});
-                }
+          builder: (BuildContext context, void Function(void Function()) setDialogState) {
+            Future<void> addDocuments() async {
+              final List<PickedFile> picked =
+                  await FilePickerUtil.pickDocuments();
+              if (!mounted || picked.isEmpty) return;
+              final List<_HumanDocumentDraft> drafts = picked
+                  .map(
+                    (PickedFile file) =>
+                        _HumanDocumentDraft(label: 'document', file: file),
+                  )
+                  .toList();
+              setState(() {
+                final List<_HumanDocumentDraft> docs = _attachedDocumentsByUser
+                    .putIfAbsent(selectedIndex, () => <_HumanDocumentDraft>[]);
+                docs.addAll(drafts);
+                _selectedUserIndex = selectedIndex;
+              });
+              final Map<String, dynamic>? ocr = await _extractOcrForDocs(
+                drafts,
+              );
+              if (ocr != null) {
+                setState(() => _mergeOcrIntoUser(selectedIndex, ocr));
+              }
+              setDialogState(() {});
+            }
 
-                Future<void> reviewAndContinue() async {
-                  Navigator.of(dialogContext).pop();
-                  await Future<void>.delayed(Duration.zero);
-                  if (!mounted) return;
-                  await _confirmAndCreateBatch();
-                }
+            Future<void> reviewAndContinue() async {
+              Navigator.of(dialogContext).pop();
+              await Future<void>.delayed(Duration.zero);
+              if (!mounted) return;
+              await _confirmAndCreateBatch();
+            }
 
-                void addUser() {
-                  setState(() {
-                    _addManualDocumentUser();
-                    selectedIndex = _selectedUserIndex;
-                  });
-                  setDialogState(() {});
-                }
+            void addUser() {
+              setState(() {
+                _addManualDocumentUser();
+                selectedIndex = _selectedUserIndex;
+              });
+              setDialogState(() {});
+            }
 
-                void goToPreviousUser() {
-                  if (selectedIndex <= 0) return;
-                  setDialogState(() => selectedIndex -= 1);
-                }
-
-                void goToNextUser() {
-                  if (selectedIndex >= _parsedUsers.length - 1) return;
-                  setDialogState(() => selectedIndex += 1);
-                }
-
-                void removeDocument(int docIndex) {
-                  final List<_HumanDocumentDraft>? docs =
-                      _attachedDocumentsByUser[selectedIndex];
-                  if (docs == null || docIndex < 0 || docIndex >= docs.length) {
-                    return;
-                  }
-                  setState(() {
-                    docs.removeAt(docIndex);
-                    if (docs.isEmpty) {
-                      _attachedDocumentsByUser.remove(selectedIndex);
-                    }
-                  });
-                  setDialogState(() {});
-                }
-
-                final List<_HumanDocumentDraft> currentDocs =
-                    _documentDraftsForUser(selectedIndex);
-
-                return Dialog(
-                  insetPadding: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+            void removeCurrentUser() {
+              if (_parsedUsers.length <= 1) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Keep at least one user in the batch.'),
                   ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 520),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                );
+                return;
+              }
+              setState(() {
+                final int removedIndex = selectedIndex;
+                _parsedUsers.removeAt(removedIndex);
+                _attachedDocumentsByUser.remove(removedIndex);
+
+                final Map<int, List<_HumanDocumentDraft>> shifted =
+                    <int, List<_HumanDocumentDraft>>{};
+                for (final MapEntry<int, List<_HumanDocumentDraft>> entry
+                    in _attachedDocumentsByUser.entries.toList()) {
+                  final int key = entry.key;
+                  if (key > removedIndex) {
+                    shifted[key - 1] = entry.value;
+                  } else {
+                    shifted[key] = entry.value;
+                  }
+                }
+                _attachedDocumentsByUser
+                  ..clear()
+                  ..addAll(shifted);
+
+                if (selectedIndex >= _parsedUsers.length) {
+                  selectedIndex = _parsedUsers.length - 1;
+                }
+                if (selectedIndex < 0) selectedIndex = 0;
+                _selectedUserIndex = selectedIndex;
+              });
+              setDialogState(() {});
+            }
+
+            void goToPreviousUser() {
+              if (selectedIndex <= 0) return;
+              setDialogState(() => selectedIndex -= 1);
+            }
+
+            void goToNextUser() {
+              if (selectedIndex >= _parsedUsers.length - 1) return;
+              setDialogState(() => selectedIndex += 1);
+            }
+
+            void removeDocument(int docIndex) {
+              final List<_HumanDocumentDraft>? docs =
+                  _attachedDocumentsByUser[selectedIndex];
+              if (docs == null || docIndex < 0 || docIndex >= docs.length) {
+                return;
+              }
+              setState(() {
+                docs.removeAt(docIndex);
+                if (docs.isEmpty) {
+                  _attachedDocumentsByUser.remove(selectedIndex);
+                }
+              });
+              setDialogState(() {});
+            }
+
+            final List<_HumanDocumentDraft> currentDocs =
+                _documentDraftsForUser(selectedIndex);
+
+            return Dialog(
+              insetPadding: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
                         children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  'Add document for user',
-                                  style: AppTypography.heading1.copyWith(
-                                    color: AppColors.brandBlue,
-                                  ),
-                                ),
+                          Expanded(
+                            child: Text(
+                              'Documents',
+                              style: AppTypography.heading1.copyWith(
+                                color: AppColors.brandBlue,
                               ),
-                              if (_parsedUsers.length > 1) ...<Widget>[
-                                IconButton(
-                                  onPressed: selectedIndex > 0
-                                      ? goToPreviousUser
-                                      : null,
-                                  icon: const Icon(
-                                    Icons.arrow_back_ios_new_rounded,
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed:
-                                      selectedIndex < _parsedUsers.length - 1
-                                      ? goToNextUser
-                                      : null,
-                                  icon: const Icon(
-                                    Icons.arrow_forward_ios_rounded,
-                                  ),
-                                ),
-                              ],
-                              IconButton(
-                                onPressed: () =>
-                                    Navigator.of(dialogContext).pop(),
-                                icon: const Icon(Icons.close_rounded),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _parsedUsers.length > 1
-                                ? 'Use the arrows to move between users, then attach document(s) for each person.'
-                                : 'Attach document(s) for this user.',
-                            style: AppTypography.body2.copyWith(
-                              color: AppColors.textSecondary,
-                              height: 1.35,
                             ),
                           ),
-                          const SizedBox(height: 18),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  _displayUserLabel(
-                                    _parsedUsers[selectedIndex],
-                                    selectedIndex,
+                          if (_parsedUsers.length > 1) ...<Widget>[
+                            IconButton(
+                              onPressed: selectedIndex > 0
+                                  ? goToPreviousUser
+                                  : null,
+                              icon: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: selectedIndex < _parsedUsers.length - 1
+                                  ? goToNextUser
+                                  : null,
+                              icon: const Icon(Icons.arrow_forward_ios_rounded),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _parsedUsers.length > 1
+                            ? 'Use the arrows to move between users, then attach document(s) for each person.'
+                            : 'Attach document(s) for this user.',
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: <Widget>[
+                          if (_parsedUsers.length > 1)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: InkWell(
+                                onTap: removeCurrentUser,
+                                borderRadius: BorderRadius.circular(999),
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFEF4444),
+                                    shape: BoxShape.circle,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.heading2.copyWith(
-                                    color: AppColors.textPrimary,
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    '−',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      height: 1,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ),
-                              if (_parsedUsers.length > 1)
-                                Text(
-                                  '${selectedIndex + 1}/${_parsedUsers.length}',
-                                  style: AppTypography.caption.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: TextButton.icon(
-                                    onPressed: addDocuments,
-                                    icon: const Icon(Icons.attach_file_rounded),
-                                    label: const Text('Add Document'),
-                                  ),
-                                ),
+                            ),
+                          Expanded(
+                            child: Text(
+                              _displayUserLabel(
+                                _parsedUsers[selectedIndex],
+                                selectedIndex,
                               ),
-                              const SizedBox(width: 10),
-                              IconButton.filledTonal(
-                                onPressed: addDocuments,
-                                icon: const Icon(Icons.add_rounded),
-                                tooltip: 'Add another document',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.heading2.copyWith(
+                                color: AppColors.textPrimary,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: addUser,
-                              icon: const Icon(Icons.person_add_alt_1_rounded),
-                              label: const Text('Add User'),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  'Attached documents',
-                                  style: AppTypography.caption.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: addDocuments,
-                                icon: const Icon(Icons.add_circle_outline),
-                                tooltip: 'Add another document',
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          if (currentDocs.isEmpty)
+                          if (_parsedUsers.length > 1)
                             Text(
-                              'No documents added for this user yet.',
-                              style: AppTypography.body2.copyWith(
+                              '${selectedIndex + 1}/${_parsedUsers.length}',
+                              style: AppTypography.caption.copyWith(
                                 color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w800,
                               ),
-                            )
-                          else
-                            SizedBox(
-                              height: 188,
-                              child: GridView.builder(
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: TextButton.icon(
+                                onPressed: addDocuments,
+                                icon: const Icon(Icons.attach_file_rounded),
+                                label: const Text('Add Document'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          IconButton.filledTonal(
+                            onPressed: addDocuments,
+                            icon: const Icon(Icons.add_rounded),
+                            tooltip: 'Add another document',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: addUser,
+                          icon: const Icon(Icons.person_add_alt_1_rounded),
+                          label: const Text('Add User'),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Preview',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 188,
+                        child: currentDocs.isEmpty
+                            ? DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Add a document to see the preview here.',
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.body2.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : GridView.builder(
                                 gridDelegate:
                                     const SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 3,
@@ -922,44 +971,26 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                   );
                                 },
                               ),
-                            ),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: reviewAndContinue,
-                              icon: const Icon(Icons.rate_review_rounded),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.brandBlue,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                              ),
-                              label: const Text('Review & Continue'),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.brandBlue,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                              ),
-                              child: const Text('Close'),
-                            ),
-                          ),
-                        ],
                       ),
-                    ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: reviewAndContinue,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.brandBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Continue'),
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -3237,28 +3268,24 @@ class _DocumentPreviewTile extends StatelessWidget {
             ),
             Positioned(
               top: 6,
-              left: 6,
               right: 6,
-              child: Row(
-                children: <Widget>[
-                  const Spacer(),
-                  InkWell(
-                    onTap: onRemove,
-                    borderRadius: BorderRadius.circular(999),
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(140),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 12,
-                        color: Colors.white,
-                      ),
-                    ),
+              child: InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEF4444),
+                    shape: BoxShape.circle,
                   ),
-                ],
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 11,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
             Positioned(
