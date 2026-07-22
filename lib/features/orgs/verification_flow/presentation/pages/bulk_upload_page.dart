@@ -45,6 +45,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     'dob',
     'gender',
   ];
+  static const String _humanDocumentFieldsCsv =
+      'full_name,email,phone_number,dob,aadhar_number,pan_number,address_line1,address_line2,address_line3,pincode,state,country';
 
   String? _lastRouteSignature;
 
@@ -1113,6 +1115,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       await _submitExcelBatch();
       return;
     }
+    if (_documentUploadFiles().isNotEmpty) {
+      await _submitDocumentBatch();
+      return;
+    }
     if (_parsedUsers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add at least one user first.')),
@@ -1138,6 +1144,33 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   String _verificationTypesCsv() {
     final List<String> sortedChecks = _checks.toList()..sort();
     return sortedChecks.join(',');
+  }
+
+  List<BulkUploadDocumentInput> _documentUploadFiles() {
+    final List<BulkUploadDocumentInput> files = <BulkUploadDocumentInput>[];
+    final List<int> userIndices = _attachedDocumentsByUser.keys.toList()
+      ..sort();
+    for (final int userIndex in userIndices) {
+      final List<_HumanDocumentDraft> docs =
+          _attachedDocumentsByUser[userIndex] ?? <_HumanDocumentDraft>[];
+      for (final _HumanDocumentDraft draft in docs) {
+        final String ext = draft.file.extension.toLowerCase();
+        final bool isImage =
+            ext.contains('jpg') ||
+            ext.contains('jpeg') ||
+            ext.contains('png') ||
+            ext.contains('webp');
+        if (!isImage) continue;
+        files.add(
+          BulkUploadDocumentInput(
+            fileBytes: draft.file.bytes,
+            fileName: draft.file.name,
+          ),
+        );
+        break;
+      }
+    }
+    return files;
   }
 
   Future<void> _submitExcelBatch() async {
@@ -1173,17 +1206,40 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           .setBatchName(res.batchId, _batchNameController.text.trim());
 
       if (!mounted) return;
-      final Uri uri = Uri(
-        path: AppRouter.batchCreatedSuccessPath,
+      final String resolvedIndustry = _industry.trim();
+      final String verificationChecks = _verificationTypesCsv();
+      final Uri previewUri = Uri(
+        path: AppRouter.certificatePreviewPath,
         queryParameters: <String, String>{
-          'batch_id': res.batchId,
-          'total_uploaded': res.totalUploaded.toString(),
-          'total_skipped': res.totalSkipped.toString(),
-          'errors': res.errors.length.toString(),
+          if (verificationChecks.isNotEmpty) 'checks': verificationChecks,
+          if (resolvedIndustry.isNotEmpty) 'industry': resolvedIndustry,
+          'industry_label': _prettyIndustry(resolvedIndustry),
+          'identity_type': 'Human',
+          'flow': 'human',
+          'access': _credentialVisibility.trim().isNotEmpty
+              ? _credentialVisibility.trim()
+              : 'public_searchable',
+          'users_count': res.totalUploaded.toString(),
           'batch': _batchNameController.text.trim(),
         },
       );
-      context.push(uri.toString());
+      Future<void> confirmAction() async {
+        if (!mounted) return;
+        final Uri successUri = Uri(
+          path: AppRouter.batchCreatedSuccessPath,
+          queryParameters: <String, String>{
+            'batch_id': res.batchId,
+            'total_uploaded': res.totalUploaded.toString(),
+            'total_skipped': res.totalSkipped.toString(),
+            'errors': res.errors.length.toString(),
+            'batch': _batchNameController.text.trim(),
+          },
+        );
+        context.push(successUri.toString());
+      }
+
+      // ignore: use_build_context_synchronously
+      await context.push(previewUri.toString(), extra: confirmAction);
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1221,6 +1277,175 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     } catch (e) {
       if (!mounted) return;
       debugPrint('[BulkUploadPage] Excel upload failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  Future<void> _submitDocumentBatch() async {
+    if (_isUploading) return;
+
+    final List<BulkUploadDocumentInput> files = _documentUploadFiles();
+    if (files.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please attach at least one document image.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isUploading = true);
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final String verificationTypesCsv = _verificationTypesCsv();
+      final List<_HumanDocumentDraft> selectedDocs = _documentDraftsForUser(
+        _selectedUserIndex,
+      );
+      final String docType = selectedDocs.isNotEmpty
+          ? selectedDocs.first.label.trim()
+          : 'document';
+      final BulkUploadResponse res = await repo.bulkUploadDocuments(
+        batchName: _batchNameController.text.trim(),
+        industryType: _industry.trim().isNotEmpty ? _industry.trim() : null,
+        verificationTypes: verificationTypesCsv.isNotEmpty
+            ? verificationTypesCsv
+            : null,
+        credentialVisibility: _credentialVisibility.trim().isNotEmpty
+            ? _credentialVisibility.trim()
+            : null,
+        docType: docType.isNotEmpty ? docType : 'document',
+        fields: _humanDocumentFieldsCsv,
+        files: files,
+      );
+
+      final Map<int, String> userIdsByIndex = <int, String>{};
+      for (int i = 0; i < res.successfulUsers.length; i++) {
+        final BulkUploadSuccessUser serverUser = res.successfulUsers[i];
+        final int localIndex = _findMatchingDraftIndex(serverUser, i);
+        if (localIndex < 0) continue;
+        userIdsByIndex[localIndex] = serverUser.userId;
+      }
+
+      if (!mounted) return;
+      final List<Map<String, dynamic>>? reviewedUsers =
+          await showDialog<List<Map<String, dynamic>>>(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext context) {
+              return _HumanReviewDialog(
+                users: _parsedUsers,
+                documentsByUser: _attachedDocumentsByUser,
+              );
+            },
+          );
+      if (reviewedUsers == null || reviewedUsers.isEmpty) return;
+
+      for (final MapEntry<int, String> entry in userIdsByIndex.entries) {
+        final int userIndex = entry.key;
+        final String userId = entry.value;
+        await repo.updateBatchUser(
+          userId: userId,
+          fullName: reviewedUsers[userIndex]['full_name']?.toString(),
+          email: reviewedUsers[userIndex]['email']?.toString(),
+          phoneNumber: reviewedUsers[userIndex]['phone_number']?.toString(),
+          dob: reviewedUsers[userIndex]['dob']?.toString(),
+          aadharNumber: reviewedUsers[userIndex]['aadhar_number']?.toString(),
+          panNumber: reviewedUsers[userIndex]['pan_number']?.toString(),
+          addressLine1: reviewedUsers[userIndex]['address_line1']?.toString(),
+          addressLine2: reviewedUsers[userIndex]['address_line2']?.toString(),
+          addressLine3: reviewedUsers[userIndex]['address_line3']?.toString(),
+          pincode: reviewedUsers[userIndex]['pincode']?.toString(),
+          state: reviewedUsers[userIndex]['state']?.toString(),
+          country: reviewedUsers[userIndex]['country']?.toString(),
+          customFields: reviewedUsers[userIndex],
+          markReviewed: true,
+        );
+      }
+
+      await ref
+          .read(batchNameStoreProvider.notifier)
+          .setBatchName(res.batchId, _batchNameController.text.trim());
+
+      if (!mounted) return;
+      final String resolvedIndustry = _industry.trim();
+      final String verificationChecks = _verificationTypesCsv();
+      final Uri previewUri = Uri(
+        path: AppRouter.certificatePreviewPath,
+        queryParameters: <String, String>{
+          if (verificationChecks.isNotEmpty) 'checks': verificationChecks,
+          if (resolvedIndustry.isNotEmpty) 'industry': resolvedIndustry,
+          'industry_label': _prettyIndustry(resolvedIndustry),
+          'identity_type': 'Human',
+          'flow': 'human',
+          'access': _credentialVisibility.trim().isNotEmpty
+              ? _credentialVisibility.trim()
+              : 'public_searchable',
+          'users_count': res.totalUploaded.toString(),
+          'batch': _batchNameController.text.trim(),
+        },
+      );
+      Future<void> confirmAction() async {
+        if (!mounted) return;
+        final Uri successUri = Uri(
+          path: AppRouter.batchCreatedSuccessPath,
+          queryParameters: <String, String>{
+            'batch_id': res.batchId,
+            'total_uploaded': res.totalUploaded.toString(),
+            'total_skipped': res.totalSkipped.toString(),
+            'errors': res.errors.length.toString(),
+            'batch': _batchNameController.text.trim(),
+          },
+        );
+        context.push(successUri.toString());
+      }
+
+      // ignore: use_build_context_synchronously
+      await context.push(previewUri.toString(), extra: confirmAction);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } on DioException catch (e) {
+      if (!mounted) return;
+      debugPrint(
+        '[BulkUploadPage] Document upload DioException: type=${e.type} uri=${e.requestOptions.uri} '
+        'status=${e.response?.statusCode} data=${e.response?.data} message=${e.message}',
+      );
+      final Object? inner = e.error;
+      if (inner is ApiException) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(inner.message)));
+      } else {
+        final dynamic data = e.response?.data;
+        String? serverMessage;
+        if (data is String && data.trim().isNotEmpty) {
+          serverMessage = data.trim();
+        } else if (data is Map && data['message'] is String) {
+          final String m = (data['message'] as String).trim();
+          if (m.isNotEmpty) serverMessage = m;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              serverMessage ??
+                  'Could not upload the document images. Please try again.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('[BulkUploadPage] Document upload failed: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Something went wrong. Please try again.'),

@@ -73,6 +73,16 @@ class ProductBulkUploadDocumentInput {
   final String fileName;
 }
 
+class BulkUploadDocumentInput {
+  const BulkUploadDocumentInput({
+    required this.fileBytes,
+    required this.fileName,
+  });
+
+  final Uint8List fileBytes;
+  final String fileName;
+}
+
 class VerificationRepository {
   VerificationRepository(this._api);
 
@@ -538,6 +548,59 @@ class VerificationRepository {
     });
     final Map<String, dynamic> res = await _api.verificationPostMultipart(
       '/verification/bulk-upload',
+      formData,
+    );
+    return BulkUploadResponse.fromJson(res);
+  }
+
+  Future<BulkUploadResponse> bulkUploadDocuments({
+    required String batchName,
+    String? description,
+    String? industryType,
+    String? verificationTypes,
+    String? credentialVisibility,
+    String? docType,
+    String? fields,
+    required List<BulkUploadDocumentInput> files,
+  }) async {
+    final List<BulkUploadDocumentInput> cleanFiles = files
+        .where(
+          (BulkUploadDocumentInput file) =>
+              file.fileBytes.isNotEmpty && file.fileName.trim().isNotEmpty,
+        )
+        .toList();
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'batch_name': batchName.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+      if (industryType != null && industryType.trim().isNotEmpty)
+        'industry_type': industryType.trim(),
+      if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
+        'verification_types': verificationTypes.trim(),
+      if (credentialVisibility != null &&
+          credentialVisibility.trim().isNotEmpty)
+        'credential_visibility': credentialVisibility.trim(),
+      if (docType != null && docType.trim().isNotEmpty)
+        'doc_type': docType.trim(),
+      if (fields != null && fields.trim().isNotEmpty) 'fields': fields.trim(),
+    });
+    for (final BulkUploadDocumentInput file in cleanFiles) {
+      final String safeName = file.fileName.trim().isEmpty
+          ? 'document.jpg'
+          : file.fileName.trim();
+      formData.files.add(
+        MapEntry(
+          'files',
+          MultipartFile.fromBytes(
+            file.fileBytes,
+            filename: safeName,
+            contentType: _mediaTypeForFileName(safeName),
+          ),
+        ),
+      );
+    }
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/bulk-upload/documents',
       formData,
     );
     return BulkUploadResponse.fromJson(res);
