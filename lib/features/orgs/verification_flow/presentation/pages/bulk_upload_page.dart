@@ -497,6 +497,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   Future<void> _pickExcelFile() async {
+    if (_batchNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a batch name first.')),
+      );
+      return;
+    }
     final PickedFile? picked = await FilePickerUtil.pickExcel();
     if (!mounted) return;
     if (picked == null) return;
@@ -674,6 +680,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   Future<void> _openAttachDocumentsDialog() async {
+    if (_batchNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a batch name first.')),
+      );
+      return;
+    }
     setState(_ensureDocumentUsers);
     int selectedIndex = _selectedUserIndex.clamp(0, _parsedUsers.length - 1);
     bool isProcessing = false;
