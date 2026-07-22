@@ -543,6 +543,121 @@ class VerificationRepository {
     return BulkUploadResponse.fromJson(res);
   }
 
+  Future<BulkUploadResponse> createHumanBatch({
+    required String batchName,
+    String? description,
+    required List<Map<String, dynamic>> users,
+  }) async {
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'batch_name': batchName.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+      'users': users,
+    };
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '/verification/bulk-upload',
+      data: payload,
+    );
+    return BulkUploadResponse.fromJson(res);
+  }
+
+  Future<Map<String, dynamic>> extractHumanOcr({
+    required List<Uint8List> files,
+    String? fields,
+    String? docType,
+  }) async {
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      if (fields != null && fields.trim().isNotEmpty) 'fields': fields.trim(),
+      if (docType != null && docType.trim().isNotEmpty)
+        'doc_type': docType.trim(),
+    });
+    for (int i = 0; i < files.length; i++) {
+      formData.files.add(
+        MapEntry(
+          'files',
+          MultipartFile.fromBytes(files[i], filename: 'ocr_$i.jpg'),
+        ),
+      );
+    }
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/ocr/extract',
+      formData,
+    );
+    return res;
+  }
+
+  Future<UploadDocumentResponse> uploadHumanDocument({
+    required String userId,
+    required String documentLabel,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final String safeName = fileName.trim().isEmpty ? 'document.pdf' : fileName;
+    final MediaType contentType = _mediaTypeForFileName(safeName);
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'user_id': userId.trim(),
+      'document_label': documentLabel.trim(),
+      'file': MultipartFile.fromBytes(
+        fileBytes,
+        filename: safeName,
+        contentType: contentType,
+      ),
+    });
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/humans/upload-doc',
+      formData,
+    );
+    return UploadDocumentResponse.fromJson(res);
+  }
+
+  Future<void> updateBatchUser({
+    required String userId,
+    String? fullName,
+    String? email,
+    String? phoneNumber,
+    String? dob,
+    String? aadharNumber,
+    String? panNumber,
+    String? addressLine1,
+    String? addressLine2,
+    String? addressLine3,
+    String? pincode,
+    String? state,
+    String? country,
+    Map<String, dynamic>? customFields,
+    bool markReviewed = true,
+  }) async {
+    await _api.verificationPatch(
+      '/verification/batch-users/${Uri.encodeComponent(userId.trim())}',
+      data: <String, dynamic>{
+        if (fullName != null && fullName.trim().isNotEmpty)
+          'full_name': fullName.trim(),
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+        if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+          'phone_number': phoneNumber.trim(),
+        if (dob != null && dob.trim().isNotEmpty) 'dob': dob.trim(),
+        if (aadharNumber != null && aadharNumber.trim().isNotEmpty)
+          'aadhar_number': aadharNumber.trim(),
+        if (panNumber != null && panNumber.trim().isNotEmpty)
+          'pan_number': panNumber.trim(),
+        if (addressLine1 != null && addressLine1.trim().isNotEmpty)
+          'address_line1': addressLine1.trim(),
+        if (addressLine2 != null && addressLine2.trim().isNotEmpty)
+          'address_line2': addressLine2.trim(),
+        if (addressLine3 != null && addressLine3.trim().isNotEmpty)
+          'address_line3': addressLine3.trim(),
+        if (pincode != null && pincode.trim().isNotEmpty)
+          'pincode': pincode.trim(),
+        if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
+        if (country != null && country.trim().isNotEmpty)
+          'country': country.trim(),
+        if (customFields != null && customFields.isNotEmpty)
+          'custom_fields': customFields,
+        'mark_reviewed': markReviewed,
+      },
+    );
+  }
+
   Future<BulkUploadResponse> uploadWarrantyProducts({
     required String batchName,
     String? description,

@@ -61,8 +61,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   bool _isUploading = false;
   bool _preflightChecking = false;
   List<Map<String, dynamic>> _parsedUsers = <Map<String, dynamic>>[];
-  final Map<int, List<PickedFile>> _attachedDocumentsByUser =
-      <int, List<PickedFile>>{};
+  final Map<int, List<_HumanDocumentDraft>> _attachedDocumentsByUser =
+      <int, List<_HumanDocumentDraft>>{};
   int _selectedUserIndex = 0;
 
   @override
@@ -542,8 +542,135 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     _selectedUserIndex = _parsedUsers.length - 1;
   }
 
-  List<PickedFile> _documentsForUser(int index) {
-    return _attachedDocumentsByUser[index] ?? <PickedFile>[];
+  List<_HumanDocumentDraft> _documentDraftsForUser(int index) {
+    return _attachedDocumentsByUser[index] ?? <_HumanDocumentDraft>[];
+  }
+
+  void _mergeOcrIntoUser(int index, Map<String, dynamic> ocrData) {
+    if (index < 0 || index >= _parsedUsers.length) return;
+    final Map<String, dynamic> current = Map<String, dynamic>.from(
+      _parsedUsers[index],
+    );
+    for (final MapEntry<String, dynamic> entry in ocrData.entries) {
+      final String key = entry.key.trim();
+      final dynamic value = entry.value;
+      if (key.isEmpty) continue;
+      if (value == null) continue;
+      final String str = value.toString().trim();
+      if (str.isEmpty) continue;
+      current[key] = str;
+    }
+    _parsedUsers[index] = current;
+  }
+
+  Map<String, dynamic> _normalizeOcrMap(dynamic response) {
+    if (response is Map<String, dynamic>) return response;
+    if (response is Map) {
+      return Map<String, dynamic>.from(response);
+    }
+    if (response is String) {
+      final String raw = response.trim();
+      if (raw.startsWith('{') && raw.endsWith('}')) {
+        try {
+          final dynamic decoded = jsonDecode(raw);
+          if (decoded is Map) {
+            return Map<String, dynamic>.from(decoded);
+          }
+        } catch (_) {
+          // Fall through to raw string wrapper.
+        }
+      }
+      return <String, dynamic>{'raw_text': raw};
+    }
+    return <String, dynamic>{'raw_text': response.toString()};
+  }
+
+  Future<Map<String, dynamic>?> _extractOcrForDocs(
+    List<_HumanDocumentDraft> docs,
+  ) async {
+    final List<Uint8List> imageBytes = docs
+        .where(
+          (_HumanDocumentDraft draft) =>
+              draft.file.extension.toLowerCase().contains('jpg') ||
+              draft.file.extension.toLowerCase().contains('jpeg') ||
+              draft.file.extension.toLowerCase().contains('png') ||
+              draft.file.extension.toLowerCase().contains('webp'),
+        )
+        .map((_HumanDocumentDraft draft) => draft.file.bytes)
+        .toList();
+    if (imageBytes.isEmpty) return null;
+
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final dynamic res = await repo.extractHumanOcr(
+        files: imageBytes,
+        fields:
+            'full_name,email,phone_number,dob,aadhar_number,pan_number,address_line1,address_line2,address_line3,pincode,state,country',
+        docType: docs.first.label,
+      );
+      return _normalizeOcrMap(res);
+    } catch (e) {
+      debugPrint('[BulkUploadPage] OCR extraction failed: $e');
+      return null;
+    }
+  }
+
+  int _findMatchingDraftIndex(BulkUploadSuccessUser serverUser, int fallback) {
+    final String targetFullName = serverUser.fullName.trim().toLowerCase();
+    final String targetEmail = serverUser.email.trim().toLowerCase();
+    final String targetPhone = serverUser.phoneNumber.trim().replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+
+    for (int i = 0; i < _parsedUsers.length; i++) {
+      final Map<String, dynamic> user = _parsedUsers[i];
+      final String fullName = (user['full_name'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final String email = (user['email'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final String phone = (user['phone_number'] ?? '').toString().replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
+
+      if (targetEmail.isNotEmpty && email == targetEmail) return i;
+      if (targetPhone.isNotEmpty && phone == targetPhone) return i;
+      if (targetFullName.isNotEmpty && fullName == targetFullName) return i;
+    }
+
+    if (fallback >= 0 && fallback < _parsedUsers.length) return fallback;
+    return -1;
+  }
+
+  Map<String, dynamic> _userPayloadFromDraft(Map<String, dynamic> user) {
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'full_name': (user['full_name'] ?? '').toString().trim(),
+      'email': (user['email'] ?? '').toString().trim(),
+      'phone_number': (user['phone_number'] ?? '').toString().trim(),
+    };
+    const List<String> optionalKeys = <String>[
+      'dob',
+      'aadhar_number',
+      'pan_number',
+      'address_line1',
+      'address_line2',
+      'address_line3',
+      'pincode',
+      'state',
+      'country',
+    ];
+    for (final String key in optionalKeys) {
+      final String value = (user[key] ?? '').toString().trim();
+      if (value.isNotEmpty) payload[key] = value;
+    }
+    return payload;
   }
 
   Future<void> _openAttachDocumentsDialog() async {
@@ -563,13 +690,35 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                   final List<PickedFile> picked =
                       await FilePickerUtil.pickDocuments();
                   if (!mounted || picked.isEmpty) return;
+                  final List<_HumanDocumentDraft> drafts = picked
+                      .map(
+                        (PickedFile file) =>
+                            _HumanDocumentDraft(label: 'document', file: file),
+                      )
+                      .toList();
                   setState(() {
-                    final List<PickedFile> docs = _attachedDocumentsByUser
-                        .putIfAbsent(selectedIndex, () => <PickedFile>[]);
-                    docs.addAll(picked);
+                    final List<_HumanDocumentDraft> docs =
+                        _attachedDocumentsByUser.putIfAbsent(
+                          selectedIndex,
+                          () => <_HumanDocumentDraft>[],
+                        );
+                    docs.addAll(drafts);
                     _selectedUserIndex = selectedIndex;
                   });
+                  final Map<String, dynamic>? ocr = await _extractOcrForDocs(
+                    drafts,
+                  );
+                  if (ocr != null) {
+                    setState(() => _mergeOcrIntoUser(selectedIndex, ocr));
+                  }
                   setDialogState(() {});
+                }
+
+                Future<void> reviewAndContinue() async {
+                  Navigator.of(dialogContext).pop();
+                  await Future<void>.delayed(Duration.zero);
+                  if (!mounted) return;
+                  await _confirmAndCreateBatch();
                 }
 
                 void addUser() {
@@ -580,8 +729,18 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                   setDialogState(() {});
                 }
 
+                void goToPreviousUser() {
+                  if (selectedIndex <= 0) return;
+                  setDialogState(() => selectedIndex -= 1);
+                }
+
+                void goToNextUser() {
+                  if (selectedIndex >= _parsedUsers.length - 1) return;
+                  setDialogState(() => selectedIndex += 1);
+                }
+
                 void removeDocument(int docIndex) {
-                  final List<PickedFile>? docs =
+                  final List<_HumanDocumentDraft>? docs =
                       _attachedDocumentsByUser[selectedIndex];
                   if (docs == null || docIndex < 0 || docIndex >= docs.length) {
                     return;
@@ -595,9 +754,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                   setDialogState(() {});
                 }
 
-                final List<PickedFile> currentDocs = _documentsForUser(
-                  selectedIndex,
-                );
+                final List<_HumanDocumentDraft> currentDocs =
+                    _documentDraftsForUser(selectedIndex);
 
                 return Dialog(
                   insetPadding: const EdgeInsets.all(16),
@@ -622,6 +780,25 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                   ),
                                 ),
                               ),
+                              if (_parsedUsers.length > 1) ...<Widget>[
+                                IconButton(
+                                  onPressed: selectedIndex > 0
+                                      ? goToPreviousUser
+                                      : null,
+                                  icon: const Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed:
+                                      selectedIndex < _parsedUsers.length - 1
+                                      ? goToNextUser
+                                      : null,
+                                  icon: const Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                  ),
+                                ),
+                              ],
                               IconButton(
                                 onPressed: () =>
                                     Navigator.of(dialogContext).pop(),
@@ -631,51 +808,60 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Pick the person first, then attach document(s) for that person.',
+                            _parsedUsers.length > 1
+                                ? 'Use the arrows to move between users, then attach document(s) for each person.'
+                                : 'Attach document(s) for this user.',
                             style: AppTypography.body2.copyWith(
                               color: AppColors.textSecondary,
                               height: 1.35,
                             ),
                           ),
                           const SizedBox(height: 18),
-                          DropdownButtonFormField<int>(
-                            initialValue: selectedIndex,
-                            items: List<DropdownMenuItem<int>>.generate(
-                              _parsedUsers.length,
-                              (int index) {
-                                return DropdownMenuItem<int>(
-                                  value: index,
-                                  child: Text(
-                                    _displayUserLabel(
-                                      _parsedUsers[index],
-                                      index,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  _displayUserLabel(
+                                    _parsedUsers[selectedIndex],
+                                    selectedIndex,
                                   ),
-                                );
-                              },
-                            ),
-                            onChanged: (int? value) {
-                              if (value == null) return;
-                              setDialogState(() => selectedIndex = value);
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Select user',
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.heading2.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (_parsedUsers.length > 1)
+                                Text(
+                                  '${selectedIndex + 1}/${_parsedUsers.length}',
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                            ],
                           ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: TextButton.icon(
-                              onPressed: addDocuments,
-                              icon: const Icon(Icons.attach_file_rounded),
-                              label: const Text('Add Document'),
-                            ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: TextButton.icon(
+                                    onPressed: addDocuments,
+                                    icon: const Icon(Icons.attach_file_rounded),
+                                    label: const Text('Add Document'),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              IconButton.filledTonal(
+                                onPressed: addDocuments,
+                                icon: const Icon(Icons.add_rounded),
+                                tooltip: 'Add another document',
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           SizedBox(
@@ -687,13 +873,24 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          Text(
-                            'Attached documents',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                            ),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  'Attached documents',
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: addDocuments,
+                                icon: const Icon(Icons.add_circle_outline),
+                                tooltip: 'Add another document',
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
                           if (currentDocs.isEmpty)
@@ -705,22 +902,22 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                             )
                           else
                             SizedBox(
-                              height: 240,
-                              child: ListView.separated(
-                                shrinkWrap: true,
+                              height: 188,
+                              child: GridView.builder(
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      crossAxisSpacing: 10,
+                                      mainAxisSpacing: 10,
+                                      childAspectRatio: 1,
+                                    ),
                                 itemCount: currentDocs.length,
-                                separatorBuilder:
-                                    (BuildContext context, int index) =>
-                                        const SizedBox(height: 10),
                                 itemBuilder: (BuildContext context, int index) {
-                                  final PickedFile file = currentDocs[index];
-                                  return _AttachedDocumentCard(
-                                    scale: 1,
-                                    fileName: file.name,
-                                    fileSizeLabel:
-                                        _BulkUploadPageState._formatBytes(
-                                          file.bytes.length,
-                                        ),
+                                  final _HumanDocumentDraft draft =
+                                      currentDocs[index];
+                                  return _DocumentPreviewTile(
+                                    fileName: draft.file.name,
+                                    fileBytes: draft.file.bytes,
                                     onRemove: () => removeDocument(index),
                                   );
                                 },
@@ -729,9 +926,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           const SizedBox(height: 18),
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(),
+                            child: ElevatedButton.icon(
+                              onPressed: reviewAndContinue,
+                              icon: const Icon(Icons.rate_review_rounded),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.brandBlue,
                                 foregroundColor: Colors.white,
@@ -739,7 +936,22 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                   vertical: 14,
                                 ),
                               ),
-                              child: const Text('Done'),
+                              label: const Text('Review & Continue'),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.brandBlue,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                              ),
+                              child: const Text('Close'),
                             ),
                           ),
                         ],
@@ -754,100 +966,100 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   Future<void> _confirmAndCreateBatch() async {
-    final List<String> columns = _columns();
-    final String resolvedIndustry = _effectiveIndustry();
-    final String displayIndustry = _prettyIndustry(resolvedIndustry);
-    final int userCount = _pickedFile == null
-        ? 0
-        : _parseUsersFromPickedFile(_pickedFile!).length;
-    debugPrint(
-      '[BulkUploadPage] Confirm tapped batch=${_batchNameController.text.trim()} picked=${_pickedFile?.name}',
-    );
     if (_batchNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a batch name.')),
       );
       return;
     }
-    if (_pickedFile == null) {
+    if (_parsedUsers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload an Excel file first.')),
-      );
-      return;
-    }
-    if (userCount == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No valid human rows were found. Please fill full_name, email, and phone_number before uploading.',
-          ),
-        ),
+        const SnackBar(content: Text('Add at least one user first.')),
       );
       return;
     }
 
-    final Uri uri = Uri(
-      path: AppRouter.certificatePreviewPath,
-      queryParameters: <String, String>{
-        'checks': _checks.join(','),
-        'industry': resolvedIndustry,
-        'industry_label': displayIndustry,
-        'access': _credentialVisibility,
-        'identity_type': 'Individual',
-        if (userCount > 0) 'users_count': userCount.toString(),
-      },
-    );
-    Future<void> confirmAction() => _uploadAndNavigate(columns);
-    await context.push(uri.toString(), extra: confirmAction);
+    final List<Map<String, dynamic>>? reviewedUsers =
+        await showDialog<List<Map<String, dynamic>>>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return _HumanReviewDialog(
+              users: _parsedUsers,
+              documentsByUser: _attachedDocumentsByUser,
+            );
+          },
+        );
+    if (reviewedUsers == null || reviewedUsers.isEmpty) return;
+    await _submitReviewedBatch(reviewedUsers);
   }
 
-  Future<void> _uploadAndNavigate(List<String> columns) async {
+  Future<void> _submitReviewedBatch(
+    List<Map<String, dynamic>> reviewedUsers,
+  ) async {
     if (_isUploading) return;
-    final PickedFile? file = _pickedFile;
-    if (file == null) return;
-    final String resolvedIndustry = _effectiveIndustry();
-    final String? templateId = GoRouterState.of(
-      context,
-    ).uri.queryParameters['template_id'];
-
-    final bool ok = await _preflightPreventDuplicatePeople(file);
-    if (!ok) return;
-
     setState(() => _isUploading = true);
     try {
-      final PickedFile uploadFile = _normalizeHumanDobValues(file);
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      debugPrint(
-        '[BulkUploadPage] Uploading bulk file name=${uploadFile.name} bytes=${uploadFile.bytes.length}',
-      );
-      final res = await repo.bulkUpload(
+      final BulkUploadResponse res = await repo.createHumanBatch(
         batchName: _batchNameController.text.trim(),
-        description: null,
-        industryType: resolvedIndustry,
-        verificationTypes: _checks.join(','),
-        credentialVisibility: _credentialVisibility,
-        templateId: templateId,
-        fileBytes: uploadFile.bytes,
-        fileName: uploadFile.name,
+        users: reviewedUsers.map(_userPayloadFromDraft).toList(),
       );
-      final String batchName = _batchNameController.text.trim();
+      final Map<int, String> userIdsByIndex = <int, String>{};
+      for (int i = 0; i < res.successfulUsers.length; i++) {
+        final BulkUploadSuccessUser serverUser = res.successfulUsers[i];
+        final int localIndex = _findMatchingDraftIndex(serverUser, i);
+        if (localIndex < 0) continue;
+        userIdsByIndex[localIndex] = serverUser.userId;
+      }
+
+      for (final MapEntry<int, String> entry in userIdsByIndex.entries) {
+        final int userIndex = entry.key;
+        final String userId = entry.value;
+        final List<_HumanDocumentDraft> docs =
+            _attachedDocumentsByUser[userIndex] ?? <_HumanDocumentDraft>[];
+        for (final _HumanDocumentDraft draft in docs) {
+          await repo.uploadHumanDocument(
+            userId: userId,
+            documentLabel: draft.label,
+            fileBytes: draft.file.bytes,
+            fileName: draft.file.name,
+          );
+        }
+
+        await repo.updateBatchUser(
+          userId: userId,
+          fullName: reviewedUsers[userIndex]['full_name']?.toString(),
+          email: reviewedUsers[userIndex]['email']?.toString(),
+          phoneNumber: reviewedUsers[userIndex]['phone_number']?.toString(),
+          dob: reviewedUsers[userIndex]['dob']?.toString(),
+          aadharNumber: reviewedUsers[userIndex]['aadhar_number']?.toString(),
+          panNumber: reviewedUsers[userIndex]['pan_number']?.toString(),
+          addressLine1: reviewedUsers[userIndex]['address_line1']?.toString(),
+          addressLine2: reviewedUsers[userIndex]['address_line2']?.toString(),
+          addressLine3: reviewedUsers[userIndex]['address_line3']?.toString(),
+          pincode: reviewedUsers[userIndex]['pincode']?.toString(),
+          state: reviewedUsers[userIndex]['state']?.toString(),
+          country: reviewedUsers[userIndex]['country']?.toString(),
+          customFields: reviewedUsers[userIndex],
+          markReviewed: true,
+        );
+      }
+
       await ref
           .read(batchNameStoreProvider.notifier)
-          .setBatchName(res.batchId, batchName);
+          .setBatchName(res.batchId, _batchNameController.text.trim());
+
       if (!mounted) return;
       final Uri uri = Uri(
         path: AppRouter.batchCreatedSuccessPath,
         queryParameters: <String, String>{
           'batch_id': res.batchId,
-          'total_uploaded': res.totalUploaded.toString(),
-          'total_skipped': res.totalSkipped.toString(),
-          'errors': res.errors.length.toString(),
-          'columns': columns.join(','),
-          'checks': _checks.join(','),
-          'industry': resolvedIndustry,
-          'access': _credentialVisibility,
+          'total_uploaded': reviewedUsers.length.toString(),
+          'total_skipped': '0',
+          'errors': '0',
           'batch': _batchNameController.text.trim(),
         },
       );
@@ -896,184 +1108,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     }
   }
 
-  Future<bool> _preflightPreventDuplicatePeople(PickedFile file) async {
-    if (_preflightChecking) return false;
-    setState(() => _preflightChecking = true);
-
-    try {
-      final _Identifiers fileIds = _Identifiers.fromFile(file);
-      if (fileIds.keys.isEmpty) {
-        // If we can't extract any identifiers, don't block uploads.
-        return true;
-      }
-
-      if (fileIds.duplicatesInFile.isNotEmpty) {
-        await _showBlockingDialog(
-          title: 'Duplicate rows found',
-          message:
-              'Your file contains duplicate people (same email/phone/etc). Please remove duplicates and try again.',
-          samples: fileIds.duplicatesInFile.take(6).toList(),
-        );
-        return false;
-      }
-
-      final Set<String> existing = await _fetchExistingIdentifierKeys();
-      final Set<String> overlap = fileIds.keys.intersection(existing);
-      if (overlap.isNotEmpty) {
-        // Don't hard-block: the backend already supports skipping duplicates and
-        // returns `skipped_users`. Blocking here can be confusing, especially
-        // if the previous attempt partially succeeded (e.g. server error after
-        // creating some records).
-        final bool proceed = await _confirmProceedDialog(
-          title: 'Some people may already exist',
-          message:
-              'Some people in this file already have verifications in your org. If you continue, they may be skipped.',
-          samples: overlap.take(6).toList(),
-          confirmLabel: 'Continue',
-          cancelLabel: 'Cancel',
-        );
-        return proceed;
-      }
-
-      return true;
-    } catch (_) {
-      // If preflight fails, don't block uploads.
-      return true;
-    } finally {
-      if (mounted) setState(() => _preflightChecking = false);
-    }
-  }
-
-  Future<void> _showBlockingDialog({
-    required String title,
-    required String message,
-    required List<String> samples,
-  }) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(message),
-              if (samples.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 12),
-                Text(
-                  'Examples:',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                for (final String s in samples)
-                  Text(
-                    '• $s',
-                    style: AppTypography.body2.copyWith(fontSize: 12),
-                  ),
-              ],
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<bool> _confirmProceedDialog({
-    required String title,
-    required String message,
-    required List<String> samples,
-    required String confirmLabel,
-    required String cancelLabel,
-  }) async {
-    if (!mounted) return false;
-    final bool? res = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(message),
-              if (samples.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 12),
-                Text(
-                  'Examples:',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                for (final String s in samples)
-                  Text(
-                    '• $s',
-                    style: AppTypography.body2.copyWith(fontSize: 12),
-                  ),
-              ],
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(cancelLabel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(confirmLabel),
-            ),
-          ],
-        );
-      },
-    );
-    return res ?? false;
-  }
-
-  Future<Set<String>> _fetchExistingIdentifierKeys() async {
-    final VerificationRepository repo = ref.read(
-      verificationRepositoryProvider,
-    );
-    final Set<String> out = <String>{};
-
-    int offset = 0;
-    const int limit = 500;
-    int guard = 0;
-
-    while (guard < 50) {
-      guard++;
-      final VerificationListResponse res = await repo.getAllVerifications(
-        limit: limit,
-        offset: offset,
-      );
-      for (final VerificationUser u in res.users) {
-        final String email = _normalizeEmail(u.email);
-        if (email.isNotEmpty) out.add('email:$email');
-        final String phone = _normalizePhone(u.phoneNumber);
-        if (phone.isNotEmpty) out.add('phone:$phone');
-        final String aadhar = _normalizeDigits(u.aadharNumber ?? '');
-        if (aadhar.isNotEmpty) out.add('aadhar:$aadhar');
-        final String pan = _normalizeAlphaNum(u.panNumber ?? '');
-        if (pan.isNotEmpty) out.add('pan:$pan');
-      }
-
-      offset += res.users.length;
-      if (res.users.isEmpty || offset >= res.total) break;
-    }
-    return out;
-  }
-
   static String _normalizeEmail(String v) => v.trim().toLowerCase();
 
   static bool _looksLikeEmail(String v) {
@@ -1116,17 +1150,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   static String _normalizeAlphaNum(String v) {
     return v.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').trim().toUpperCase();
-  }
-
-  PickedFile _normalizeHumanDobValues(PickedFile file) {
-    final String ext = file.extension.toLowerCase().replaceAll('.', '').trim();
-    if (ext == 'csv') {
-      return _normalizeDobInCsv(file) ?? file;
-    }
-    if (ext == 'xlsx') {
-      return _normalizeDobInXlsx(file) ?? file;
-    }
-    return file;
   }
 
   PickedFile? _normalizeDobInCsv(PickedFile file) {
@@ -1554,7 +1577,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                                 CrossAxisAlignment.start,
                                             children: <Widget>[
                                               Text(
-                                                'Add Documents',
+                                                'Add documents for users',
                                                 style: TextStyle(
                                                   fontFamily: 'Inter',
                                                   fontSize: s(18),
@@ -1585,7 +1608,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                             Icons.attach_file_rounded,
                                             size: 18,
                                           ),
-                                          label: const Text('Add Documents'),
+                                          label: const Text(
+                                            'Add documents for users',
+                                          ),
                                           style: TextButton.styleFrom(
                                             foregroundColor:
                                                 AppColors.brandBlue,
@@ -1607,8 +1632,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                         children: List<Widget>.generate(
                                           _parsedUsers.length,
                                           (int userIndex) {
-                                            final List<PickedFile> docs =
-                                                _documentsForUser(userIndex);
+                                            final List<_HumanDocumentDraft>
+                                            docs = _documentDraftsForUser(
+                                              userIndex,
+                                            );
                                             if (docs.isEmpty) {
                                               return const SizedBox.shrink();
                                             }
@@ -1625,10 +1652,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                                 documents: docs,
                                                 onRemoveDocument: (int docIndex) {
                                                   setState(() {
-                                                    final List<PickedFile>
+                                                    final List<
+                                                      _HumanDocumentDraft
+                                                    >
                                                     userDocs =
                                                         _attachedDocumentsByUser[userIndex] ??
-                                                        <PickedFile>[];
+                                                        <_HumanDocumentDraft>[];
                                                     if (docIndex >= 0 &&
                                                         docIndex <
                                                             userDocs.length) {
@@ -1683,7 +1712,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                 scale: scale,
                                 isLoading: _isUploading,
                                 enabled:
-                                    _pickedFile != null &&
+                                    _parsedUsers.isNotEmpty &&
                                     _batchNameController.text
                                         .trim()
                                         .isNotEmpty &&
@@ -3138,6 +3167,126 @@ class _AttachedDocumentCard extends StatelessWidget {
   }
 }
 
+class _DocumentPreviewTile extends StatelessWidget {
+  const _DocumentPreviewTile({
+    required this.fileName,
+    required this.fileBytes,
+    required this.onRemove,
+  });
+
+  final String fileName;
+  final Uint8List fileBytes;
+  final VoidCallback onRemove;
+
+  bool get _isImage {
+    final String safe = fileName.toLowerCase();
+    if (!safe.contains('.')) return false;
+    final String ext = safe.split('.').last;
+    return <String>{'jpg', 'jpeg', 'png', 'webp', 'gif'}.contains(ext);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: _isImage
+                    ? Image.memory(fileBytes, fit: BoxFit.cover)
+                    : Container(
+                        color: const Color(0xFFF8FAFC),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                Icons.description_rounded,
+                                size: 28,
+                                color: AppColors.brandBlue,
+                              ),
+                              const SizedBox(height: 6),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                child: Text(
+                                  fileName,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            Positioned(
+              top: 6,
+              left: 6,
+              right: 6,
+              child: Row(
+                children: <Widget>[
+                  const Spacer(),
+                  InkWell(
+                    onTap: onRemove,
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(140),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Text(
+                fileName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(
+                  color: _isImage ? Colors.white : AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                  shadows: _isImage
+                      ? <Shadow>[
+                          const Shadow(blurRadius: 12, color: Colors.black54),
+                        ]
+                      : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _UserDocumentGroupCard extends StatelessWidget {
   const _UserDocumentGroupCard({
     required this.scale,
@@ -3148,7 +3297,7 @@ class _UserDocumentGroupCard extends StatelessWidget {
 
   final double scale;
   final String title;
-  final List<PickedFile> documents;
+  final List<_HumanDocumentDraft> documents;
   final void Function(int docIndex) onRemoveDocument;
 
   @override
@@ -3197,16 +3346,16 @@ class _UserDocumentGroupCard extends StatelessWidget {
           SizedBox(height: s(12)),
           Column(
             children: List<Widget>.generate(documents.length, (int index) {
-              final PickedFile file = documents[index];
+              final _HumanDocumentDraft draft = documents[index];
               return Padding(
                 padding: EdgeInsets.only(
                   bottom: index == documents.length - 1 ? 0 : s(10),
                 ),
                 child: _AttachedDocumentCard(
                   scale: scale,
-                  fileName: file.name,
+                  fileName: '${draft.label} • ${draft.file.name}',
                   fileSizeLabel: _BulkUploadPageState._formatBytes(
-                    file.bytes.length,
+                    draft.file.bytes.length,
                   ),
                   onRemove: () => onRemoveDocument(index),
                 ),
@@ -3214,6 +3363,304 @@ class _UserDocumentGroupCard extends StatelessWidget {
             }),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HumanDocumentDraft {
+  _HumanDocumentDraft({required this.label, required this.file});
+
+  final String label;
+  final PickedFile file;
+}
+
+class _HumanReviewDialog extends StatefulWidget {
+  const _HumanReviewDialog({
+    required this.users,
+    required this.documentsByUser,
+  });
+
+  final List<Map<String, dynamic>> users;
+  final Map<int, List<_HumanDocumentDraft>> documentsByUser;
+
+  @override
+  State<_HumanReviewDialog> createState() => _HumanReviewDialogState();
+}
+
+class _HumanReviewDialogState extends State<_HumanReviewDialog> {
+  static const List<String> _fieldKeys = <String>[
+    'full_name',
+    'email',
+    'phone_number',
+    'dob',
+    'aadhar_number',
+    'pan_number',
+    'address_line1',
+    'address_line2',
+    'address_line3',
+    'pincode',
+    'state',
+    'country',
+  ];
+
+  late final PageController _pageController;
+  late final List<Map<String, dynamic>> _users;
+  late final List<Map<String, TextEditingController>> _controllers;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _users = widget.users
+        .map((Map<String, dynamic> user) => Map<String, dynamic>.from(user))
+        .toList();
+    _controllers = _users.map((Map<String, dynamic> user) {
+      return <String, TextEditingController>{
+        for (final String key in _fieldKeys)
+          key: TextEditingController(text: user[key]?.toString() ?? ''),
+      };
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    for (final Map<String, TextEditingController> entry in _controllers) {
+      for (final TextEditingController controller in entry.values) {
+        controller.dispose();
+      }
+    }
+    super.dispose();
+  }
+
+  void _updateValue(int userIndex, String key, String value) {
+    _users[userIndex][key] = value;
+  }
+
+  InputDecoration _decoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.brandBlue, width: 1.5),
+      ),
+    );
+  }
+
+  String _userLabel(Map<String, dynamic> user, int index) {
+    final String fullName = (user['full_name'] ?? '').toString().trim();
+    if (fullName.isNotEmpty) return fullName;
+    return 'User ${index + 1}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      'Review OCR data',
+                      style: AppTypography.heading1.copyWith(
+                        color: AppColors.brandBlue,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${_index + 1}/${_users.length}',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Swipe between users, edit any OCR values you want to change, then confirm.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: _users.length,
+                  onPageChanged: (int value) => setState(() => _index = value),
+                  itemBuilder: (BuildContext context, int pageIndex) {
+                    final Map<String, dynamic> user = _users[pageIndex];
+                    final Map<String, TextEditingController> controllers =
+                        _controllers[pageIndex];
+                    final List<_HumanDocumentDraft> docs =
+                        widget.documentsByUser[pageIndex] ??
+                        <_HumanDocumentDraft>[];
+
+                    Widget field(String key, String label, {String? hint}) {
+                      return TextFormField(
+                        controller: controllers[key],
+                        decoration: _decoration(label).copyWith(hintText: hint),
+                        onChanged: (String value) =>
+                            _updateValue(pageIndex, key, value),
+                      );
+                    }
+
+                    return SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            _userLabel(user, pageIndex),
+                            style: AppTypography.heading2,
+                          ),
+                          const SizedBox(height: 12),
+                          if (docs.isNotEmpty) ...<Widget>[
+                            Text(
+                              'Documents',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            for (final _HumanDocumentDraft doc in docs)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _AttachedDocumentCard(
+                                  scale: 1,
+                                  fileName: '${doc.label} • ${doc.file.name}',
+                                  fileSizeLabel:
+                                      _BulkUploadPageState._formatBytes(
+                                        doc.file.bytes.length,
+                                      ),
+                                  onRemove: () {},
+                                ),
+                              ),
+                            const SizedBox(height: 12),
+                          ],
+                          field('full_name', 'Full name'),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: <Widget>[
+                              Expanded(child: field('email', 'Email')),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: field('phone_number', 'Phone number'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: field('dob', 'DOB', hint: 'YYYY-MM-DD'),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: field('aadhar_number', 'Aadhaar'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: <Widget>[
+                              Expanded(child: field('pan_number', 'PAN')),
+                              const SizedBox(width: 12),
+                              Expanded(child: field('pincode', 'Pincode')),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          field('address_line1', 'Address line 1'),
+                          const SizedBox(height: 12),
+                          field('address_line2', 'Address line 2'),
+                          const SizedBox(height: 12),
+                          field('address_line3', 'Address line 3'),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: <Widget>[
+                              Expanded(child: field('state', 'State')),
+                              const SizedBox(width: 12),
+                              Expanded(child: field('country', 'Country')),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _index > 0
+                          ? () => _pageController.previousPage(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOut,
+                            )
+                          : null,
+                      icon: const Icon(Icons.chevron_left_rounded),
+                      label: const Text('Back'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _index < _users.length - 1
+                          ? () => _pageController.nextPage(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOut,
+                            )
+                          : null,
+                      icon: const Icon(Icons.chevron_right_rounded),
+                      label: const Text('Next'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(_users);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Confirm'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
