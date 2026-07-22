@@ -60,7 +60,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   PickedFile? _pickedFile;
   bool _isUploading = false;
   bool _preflightChecking = false;
-  final List<PickedFile> _attachedDocuments = <PickedFile>[];
+  List<Map<String, dynamic>> _parsedUsers = <Map<String, dynamic>>[];
+  final Map<int, List<PickedFile>> _attachedDocumentsByUser =
+      <int, List<PickedFile>>{};
+  int _selectedUserIndex = 0;
 
   @override
   void initState() {
@@ -504,22 +507,250 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     debugPrint(
       '[BulkUploadPage] Picked file name=${picked.name} bytes=${picked.bytes.length}',
     );
-    setState(() => _pickedFile = picked);
-  }
-
-  Future<void> _pickAttachedDocuments() async {
-    final List<PickedFile> picked = await FilePickerUtil.pickDocuments();
-    if (!mounted || picked.isEmpty) return;
     setState(() {
-      _attachedDocuments.addAll(picked);
+      _pickedFile = picked;
+      _parsedUsers = _parseUsersFromPickedFile(picked);
+      _attachedDocumentsByUser.clear();
+      _selectedUserIndex = 0;
     });
   }
 
-  void _removeAttachedDocument(int index) {
-    if (index < 0 || index >= _attachedDocuments.length) return;
-    setState(() {
-      _attachedDocuments.removeAt(index);
-    });
+  String _displayUserLabel(Map<String, dynamic> user, int index) {
+    final String fullName = (user['full_name'] ?? '').toString().trim();
+    final String email = (user['email'] ?? '').toString().trim();
+    final String phone = (user['phone_number'] ?? '').toString().trim();
+    if (fullName.isNotEmpty) return fullName;
+    if (email.isNotEmpty) return email;
+    if (phone.isNotEmpty) return phone;
+    return 'User ${index + 1}';
+  }
+
+  void _ensureDocumentUsers() {
+    if (_parsedUsers.isNotEmpty) return;
+    _parsedUsers = <Map<String, dynamic>>[
+      <String, dynamic>{'full_name': 'User 1'},
+    ];
+    _selectedUserIndex = 0;
+  }
+
+  void _addManualDocumentUser() {
+    final int nextIndex = _parsedUsers.length + 1;
+    _parsedUsers = <Map<String, dynamic>>[
+      ..._parsedUsers,
+      <String, dynamic>{'full_name': 'User $nextIndex'},
+    ];
+    _selectedUserIndex = _parsedUsers.length - 1;
+  }
+
+  List<PickedFile> _documentsForUser(int index) {
+    return _attachedDocumentsByUser[index] ?? <PickedFile>[];
+  }
+
+  Future<void> _openAttachDocumentsDialog() async {
+    setState(_ensureDocumentUsers);
+    int selectedIndex = _selectedUserIndex.clamp(0, _parsedUsers.length - 1);
+
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setDialogState,
+              ) {
+                Future<void> addDocuments() async {
+                  final List<PickedFile> picked =
+                      await FilePickerUtil.pickDocuments();
+                  if (!mounted || picked.isEmpty) return;
+                  setState(() {
+                    final List<PickedFile> docs = _attachedDocumentsByUser
+                        .putIfAbsent(selectedIndex, () => <PickedFile>[]);
+                    docs.addAll(picked);
+                    _selectedUserIndex = selectedIndex;
+                  });
+                  setDialogState(() {});
+                }
+
+                void addUser() {
+                  setState(() {
+                    _addManualDocumentUser();
+                    selectedIndex = _selectedUserIndex;
+                  });
+                  setDialogState(() {});
+                }
+
+                void removeDocument(int docIndex) {
+                  final List<PickedFile>? docs =
+                      _attachedDocumentsByUser[selectedIndex];
+                  if (docs == null || docIndex < 0 || docIndex >= docs.length) {
+                    return;
+                  }
+                  setState(() {
+                    docs.removeAt(docIndex);
+                    if (docs.isEmpty) {
+                      _attachedDocumentsByUser.remove(selectedIndex);
+                    }
+                  });
+                  setDialogState(() {});
+                }
+
+                final List<PickedFile> currentDocs = _documentsForUser(
+                  selectedIndex,
+                );
+
+                return Dialog(
+                  insetPadding: const EdgeInsets.all(16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  'Add document for user',
+                                  style: AppTypography.heading1.copyWith(
+                                    color: AppColors.brandBlue,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Pick the person first, then attach document(s) for that person.',
+                            style: AppTypography.body2.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          DropdownButtonFormField<int>(
+                            initialValue: selectedIndex,
+                            items: List<DropdownMenuItem<int>>.generate(
+                              _parsedUsers.length,
+                              (int index) {
+                                return DropdownMenuItem<int>(
+                                  value: index,
+                                  child: Text(
+                                    _displayUserLabel(
+                                      _parsedUsers[index],
+                                      index,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              },
+                            ),
+                            onChanged: (int? value) {
+                              if (value == null) return;
+                              setDialogState(() => selectedIndex = value);
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Select user',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: TextButton.icon(
+                              onPressed: addDocuments,
+                              icon: const Icon(Icons.attach_file_rounded),
+                              label: const Text('Add Document'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: addUser,
+                              icon: const Icon(Icons.person_add_alt_1_rounded),
+                              label: const Text('Add User'),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Attached documents',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          if (currentDocs.isEmpty)
+                            Text(
+                              'No documents added for this user yet.',
+                              style: AppTypography.body2.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            )
+                          else
+                            SizedBox(
+                              height: 240,
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: currentDocs.length,
+                                separatorBuilder:
+                                    (BuildContext context, int index) =>
+                                        const SizedBox(height: 10),
+                                itemBuilder: (BuildContext context, int index) {
+                                  final PickedFile file = currentDocs[index];
+                                  return _AttachedDocumentCard(
+                                    scale: 1,
+                                    fileName: file.name,
+                                    fileSizeLabel:
+                                        _BulkUploadPageState._formatBytes(
+                                          file.bytes.length,
+                                        ),
+                                    onRemove: () => removeDocument(index),
+                                  );
+                                },
+                              ),
+                            ),
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.brandBlue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                              ),
+                              child: const Text('Done'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+        );
+      },
+    );
   }
 
   Future<void> _confirmAndCreateBatch() async {
@@ -1349,7 +1580,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                           ),
                                         ),
                                         TextButton.icon(
-                                          onPressed: _pickAttachedDocuments,
+                                          onPressed: _openAttachDocumentsDialog,
                                           icon: const Icon(
                                             Icons.attach_file_rounded,
                                             size: 18,
@@ -1368,35 +1599,49 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                         ),
                                       ],
                                     ),
-                                    if (_attachedDocuments
-                                        .isNotEmpty) ...<Widget>[
+                                    if (_parsedUsers.isNotEmpty &&
+                                        _attachedDocumentsByUser
+                                            .isNotEmpty) ...<Widget>[
                                       SizedBox(height: s(14)),
                                       Column(
                                         children: List<Widget>.generate(
-                                          _attachedDocuments.length,
-                                          (int index) {
-                                            final PickedFile file =
-                                                _attachedDocuments[index];
+                                          _parsedUsers.length,
+                                          (int userIndex) {
+                                            final List<PickedFile> docs =
+                                                _documentsForUser(userIndex);
+                                            if (docs.isEmpty) {
+                                              return const SizedBox.shrink();
+                                            }
                                             return Padding(
                                               padding: EdgeInsets.only(
-                                                bottom:
-                                                    index ==
-                                                        _attachedDocuments
-                                                                .length -
-                                                            1
-                                                    ? 0
-                                                    : s(10),
+                                                bottom: s(10),
                                               ),
-                                              child: _AttachedDocumentCard(
+                                              child: _UserDocumentGroupCard(
                                                 scale: scale,
-                                                fileName: file.name,
-                                                fileSizeLabel: _formatBytes(
-                                                  file.bytes.length,
+                                                title: _displayUserLabel(
+                                                  _parsedUsers[userIndex],
+                                                  userIndex,
                                                 ),
-                                                onRemove: () =>
-                                                    _removeAttachedDocument(
-                                                      index,
-                                                    ),
+                                                documents: docs,
+                                                onRemoveDocument: (int docIndex) {
+                                                  setState(() {
+                                                    final List<PickedFile>
+                                                    userDocs =
+                                                        _attachedDocumentsByUser[userIndex] ??
+                                                        <PickedFile>[];
+                                                    if (docIndex >= 0 &&
+                                                        docIndex <
+                                                            userDocs.length) {
+                                                      userDocs.removeAt(
+                                                        docIndex,
+                                                      );
+                                                      if (userDocs.isEmpty) {
+                                                        _attachedDocumentsByUser
+                                                            .remove(userIndex);
+                                                      }
+                                                    }
+                                                  });
+                                                },
                                               ),
                                             );
                                           },
@@ -2886,6 +3131,87 @@ class _AttachedDocumentCard extends StatelessWidget {
             color: const Color(0xFF94A3B8),
             tooltip: 'Remove document',
             visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserDocumentGroupCard extends StatelessWidget {
+  const _UserDocumentGroupCard({
+    required this.scale,
+    required this.title,
+    required this.documents,
+    required this.onRemoveDocument,
+  });
+
+  final double scale;
+  final String title;
+  final List<PickedFile> documents;
+  final void Function(int docIndex) onRemoveDocument;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(s(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(18)),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: s(1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(13),
+                    fontWeight: FontWeight.w700,
+                    height: 18 / 13,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+              ),
+              Text(
+                '${documents.length} file${documents.length == 1 ? '' : 's'}',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(11),
+                  fontWeight: FontWeight.w600,
+                  height: 16 / 11,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: s(12)),
+          Column(
+            children: List<Widget>.generate(documents.length, (int index) {
+              final PickedFile file = documents[index];
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: index == documents.length - 1 ? 0 : s(10),
+                ),
+                child: _AttachedDocumentCard(
+                  scale: scale,
+                  fileName: file.name,
+                  fileSizeLabel: _BulkUploadPageState._formatBytes(
+                    file.bytes.length,
+                  ),
+                  onRemove: () => onRemoveDocument(index),
+                ),
+              );
+            }),
           ),
         ],
       ),
