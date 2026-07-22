@@ -570,25 +570,90 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   Map<String, dynamic> _normalizeOcrMap(dynamic response) {
-    if (response is Map<String, dynamic>) return response;
-    if (response is Map) {
-      return Map<String, dynamic>.from(response);
-    }
-    if (response is String) {
+    Map<String, dynamic> responseMap;
+    if (response is Map<String, dynamic>) {
+      responseMap = response;
+    } else if (response is Map) {
+      responseMap = Map<String, dynamic>.from(response);
+    } else if (response is String) {
       final String raw = response.trim();
       if (raw.startsWith('{') && raw.endsWith('}')) {
         try {
           final dynamic decoded = jsonDecode(raw);
           if (decoded is Map) {
-            return Map<String, dynamic>.from(decoded);
+            responseMap = Map<String, dynamic>.from(decoded);
+          } else {
+            return <String, dynamic>{'raw_text': raw};
           }
         } catch (_) {
           // Fall through to raw string wrapper.
+          return <String, dynamic>{'raw_text': raw};
+        }
+      } else {
+        return <String, dynamic>{'raw_text': raw};
+      }
+    } else {
+      return <String, dynamic>{'raw_text': response.toString()};
+    }
+
+    final Map<String, dynamic> flattened = <String, dynamic>{};
+
+    final dynamic extracted = responseMap['extracted'];
+    if (extracted is Map) {
+      flattened.addAll(Map<String, dynamic>.from(extracted));
+    }
+
+    final dynamic perFile = responseMap['per_file'];
+    if (perFile is List) {
+      for (final dynamic item in perFile) {
+        if (item is Map && item['extracted'] is Map) {
+          flattened.addAll(Map<String, dynamic>.from(item['extracted'] as Map));
         }
       }
-      return <String, dynamic>{'raw_text': raw};
     }
-    return <String, dynamic>{'raw_text': response.toString()};
+
+    // Some OCR responses may already come back flattened; keep any top-level
+    // field values as a fallback without overwriting extracted values.
+    for (final MapEntry<String, dynamic> entry in responseMap.entries) {
+      final String key = entry.key.trim();
+      if (key.isEmpty || key == 'extracted' || key == 'per_file') continue;
+      if (!flattened.containsKey(key)) {
+        flattened[key] = entry.value;
+      }
+    }
+
+    if (flattened.isNotEmpty) return flattened;
+
+    return responseMap;
+  }
+
+  Map<String, dynamic> _applyOcrFieldAliases(Map<String, dynamic> data) {
+    final Map<String, dynamic> mapped = Map<String, dynamic>.from(data);
+
+    void setIfMissing(String target, List<String> sources) {
+      if ((mapped[target] ?? '').toString().trim().isNotEmpty) return;
+      for (final String source in sources) {
+        final String value = (mapped[source] ?? '').toString().trim();
+        if (value.isNotEmpty) {
+          mapped[target] = value;
+          return;
+        }
+      }
+    }
+
+    setIfMissing('full_name', <String>[
+      'full_name',
+      'name_english',
+      'name_hindi',
+    ]);
+    setIfMissing('aadhar_number', <String>['aadhar_number', 'aadhaar_number']);
+    setIfMissing('address_line1', <String>[
+      'address_line1',
+      'address_english',
+      'address_hindi',
+    ]);
+
+    return mapped;
   }
 
   Future<Map<String, dynamic>?> _extractOcrForDocs(
@@ -616,7 +681,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             'full_name,email,phone_number,dob,aadhar_number,pan_number,address_line1,address_line2,address_line3,pincode,state,country',
         docType: docs.first.label,
       );
-      return _normalizeOcrMap(res);
+      return _applyOcrFieldAliases(_normalizeOcrMap(res));
     } catch (e) {
       debugPrint('[BulkUploadPage] OCR extraction failed: $e');
       return null;
