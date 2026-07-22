@@ -676,6 +676,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   Future<void> _openAttachDocumentsDialog() async {
     setState(_ensureDocumentUsers);
     int selectedIndex = _selectedUserIndex.clamp(0, _parsedUsers.length - 1);
+    bool isProcessing = false;
 
     await showDialog<void>(
       context: context,
@@ -683,28 +684,38 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         return StatefulBuilder(
           builder: (BuildContext context, void Function(void Function()) setDialogState) {
             Future<void> addDocuments() async {
+              if (isProcessing) return;
+              setDialogState(() => isProcessing = true);
               final List<PickedFile> picked =
                   await FilePickerUtil.pickDocuments();
-              if (!mounted || picked.isEmpty) return;
-              final List<_HumanDocumentDraft> drafts = picked
-                  .map(
-                    (PickedFile file) =>
-                        _HumanDocumentDraft(label: 'document', file: file),
-                  )
-                  .toList();
-              setState(() {
-                final List<_HumanDocumentDraft> docs = _attachedDocumentsByUser
-                    .putIfAbsent(selectedIndex, () => <_HumanDocumentDraft>[]);
-                docs.addAll(drafts);
-                _selectedUserIndex = selectedIndex;
-              });
-              final Map<String, dynamic>? ocr = await _extractOcrForDocs(
-                drafts,
-              );
-              if (ocr != null) {
-                setState(() => _mergeOcrIntoUser(selectedIndex, ocr));
+              try {
+                if (!mounted || picked.isEmpty) return;
+                final List<_HumanDocumentDraft> drafts = picked
+                    .map(
+                      (PickedFile file) =>
+                          _HumanDocumentDraft(label: 'document', file: file),
+                    )
+                    .toList();
+                setState(() {
+                  final List<_HumanDocumentDraft> docs =
+                      _attachedDocumentsByUser.putIfAbsent(
+                        selectedIndex,
+                        () => <_HumanDocumentDraft>[],
+                      );
+                  docs.addAll(drafts);
+                  _selectedUserIndex = selectedIndex;
+                });
+                final Map<String, dynamic>? ocr = await _extractOcrForDocs(
+                  drafts,
+                );
+                if (ocr != null) {
+                  setState(() => _mergeOcrIntoUser(selectedIndex, ocr));
+                }
+              } finally {
+                if (mounted) {
+                  setDialogState(() => isProcessing = false);
+                }
               }
-              setDialogState(() {});
             }
 
             Future<void> reviewAndContinue() async {
@@ -894,33 +905,25 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: TextButton.icon(
-                                onPressed: addDocuments,
-                                icon: const Icon(Icons.attach_file_rounded),
-                                label: const Text('Add Document'),
-                              ),
+                      Center(
+                        child: SizedBox(
+                          width: 220,
+                          child: TextButton.icon(
+                            onPressed: isProcessing ? null : addDocuments,
+                            icon: isProcessing
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.brandBlue,
+                                    ),
+                                  )
+                                : const Icon(Icons.attach_file_rounded),
+                            label: Text(
+                              isProcessing ? 'Uploading...' : 'Add Document',
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          IconButton.filledTonal(
-                            onPressed: addDocuments,
-                            icon: const Icon(Icons.add_rounded),
-                            tooltip: 'Add another document',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: addUser,
-                          icon: const Icon(Icons.person_add_alt_1_rounded),
-                          label: const Text('Add User'),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -977,14 +980,38 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                       const SizedBox(height: 18),
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: reviewAndContinue,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.brandBlue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: const Text('Continue'),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: addUser,
+                                icon: const Icon(
+                                  Icons.person_add_alt_1_rounded,
+                                ),
+                                label: const Text('Add User'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.brandBlue,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: reviewAndContinue,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.brandBlue,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                ),
+                                child: const Text('Continue'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1635,27 +1662,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                             ],
                                           ),
                                         ),
-                                        TextButton.icon(
-                                          onPressed: _openAttachDocumentsDialog,
-                                          icon: const Icon(
-                                            Icons.attach_file_rounded,
-                                            size: 18,
-                                          ),
-                                          label: const Text(
-                                            'Add documents for users',
-                                          ),
-                                          style: TextButton.styleFrom(
-                                            foregroundColor:
-                                                AppColors.brandBlue,
-                                            textStyle: TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: s(12),
-                                              fontWeight: FontWeight.w700,
-                                              height: 16 / 12,
-                                            ),
-                                          ),
-                                        ),
                                       ],
+                                    ),
+                                    SizedBox(height: s(14)),
+                                    _DropZone(
+                                      scale: scale,
+                                      onTap: _openAttachDocumentsDialog,
+                                      title: 'Add documents for users',
+                                      subtitle:
+                                          'Tap to attach docs for each user in the batch.',
+                                      iconAsset:
+                                          'assets/icons/figma/bulk_upload_icon_file_attach.svg',
                                     ),
                                     if (_parsedUsers.isNotEmpty &&
                                         _attachedDocumentsByUser
@@ -2864,10 +2881,19 @@ class _IndustryPill extends StatelessWidget {
 }
 
 class _DropZone extends StatelessWidget {
-  const _DropZone({required this.scale, required this.onTap});
+  const _DropZone({
+    required this.scale,
+    required this.onTap,
+    this.title = 'Tap to select your file',
+    this.subtitle = 'Upload your Excel file here',
+    this.iconAsset = 'assets/icons/figma/bulk_upload_icon_upload.svg',
+  });
 
   final double scale;
   final VoidCallback onTap;
+  final String title;
+  final String subtitle;
+  final String iconAsset;
 
   @override
   Widget build(BuildContext context) {
@@ -2915,7 +2941,7 @@ class _DropZone extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: SvgPicture.asset(
-                    'assets/icons/figma/bulk_upload_icon_upload.svg',
+                    iconAsset,
                     width: s(28),
                     height: s(28),
                     colorFilter: const ColorFilter.mode(
@@ -2926,7 +2952,7 @@ class _DropZone extends StatelessWidget {
                 ),
                 SizedBox(height: s(18)),
                 Text(
-                  'Tap to select your file',
+                  title,
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(20),
@@ -2935,10 +2961,11 @@ class _DropZone extends StatelessWidget {
                     height: 24 / 20,
                     color: const Color(0xFF111827),
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 SizedBox(height: s(8)),
                 Text(
-                  'Upload your Excel file here',
+                  subtitle,
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(12),
@@ -3495,6 +3522,9 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
@@ -3645,31 +3675,51 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
               const SizedBox(height: 16),
               Row(
                 children: <Widget>[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _index > 0
-                          ? () => _pageController.previousPage(
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOut,
-                            )
-                          : null,
-                      icon: const Icon(Icons.chevron_left_rounded),
-                      label: const Text('Back'),
+                  if (_users.length > 1)
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: OutlinedButton(
+                        onPressed: _index > 0
+                            ? () => _pageController.previousPage(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOut,
+                              )
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          side: const BorderSide(color: AppColors.border),
+                          foregroundColor: AppColors.textPrimary,
+                        ),
+                        child: const Icon(Icons.chevron_left_rounded),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _index < _users.length - 1
-                          ? () => _pageController.nextPage(
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOut,
-                            )
-                          : null,
-                      icon: const Icon(Icons.chevron_right_rounded),
-                      label: const Text('Next'),
+                  if (_users.length > 1) const SizedBox(width: 12),
+                  if (_users.length > 1)
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: OutlinedButton(
+                        onPressed: _index < _users.length - 1
+                            ? () => _pageController.nextPage(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOut,
+                              )
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          side: const BorderSide(color: AppColors.border),
+                          foregroundColor: AppColors.textPrimary,
+                        ),
+                        child: const Icon(Icons.chevron_right_rounded),
+                      ),
                     ),
-                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     flex: 2,
