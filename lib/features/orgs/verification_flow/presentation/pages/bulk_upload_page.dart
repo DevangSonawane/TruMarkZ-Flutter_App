@@ -790,6 +790,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
             return Dialog(
               insetPadding: const EdgeInsets.all(16),
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
