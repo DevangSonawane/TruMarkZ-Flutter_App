@@ -18,8 +18,6 @@ class ProfileSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
-  bool _twoFaEnabled = true;
-
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const double _orgBottomNavBarHeight = 71.016;
@@ -35,6 +33,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
               ? profile!.organizationName!.trim()
               : 'User');
     final String email = profile?.email ?? '';
+    final String phoneNumber = profile?.phoneNumber ?? '';
     final bool isVerified = profile?.isVerified == true;
 
     return Scaffold(
@@ -103,16 +102,17 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                               onEdit: () {},
                               displayName: displayName,
                               email: email,
+                              phoneNumber: phoneNumber,
                               isVerified: isVerified,
                             ),
                             SizedBox(height: s(24)),
                             _GeneralInfoCard(profile: profile),
                             SizedBox(height: s(24)),
-                            _SecurityPrivacyCard(
-                              twoFaEnabled: _twoFaEnabled,
-                              onTwoFaChanged: (bool v) =>
-                                  setState(() => _twoFaEnabled = v),
-                            ),
+                            _OrganisationDetailsCard(profile: profile),
+                            SizedBox(height: s(24)),
+                            _AddressAndRecordsCard(profile: profile),
+                            SizedBox(height: s(24)),
+                            _AccountStatusCard(profile: profile),
                             SizedBox(height: s(24)),
                             const _TeamAccessCard(),
                             SizedBox(height: s(24)),
@@ -163,12 +163,14 @@ class _OrgProfileHeader extends StatelessWidget {
     required this.onEdit,
     required this.displayName,
     required this.email,
+    required this.phoneNumber,
     required this.isVerified,
   });
 
   final VoidCallback onEdit;
   final String displayName;
   final String email;
+  final String phoneNumber;
   final bool isVerified;
 
   @override
@@ -203,6 +205,21 @@ class _OrgProfileHeader extends StatelessWidget {
               letterSpacing: 0.02734375,
               height: 20 / 14,
               color: Color(0xFF64748B),
+            ),
+          ),
+        ],
+        if (phoneNumber.trim().isNotEmpty) ...<Widget>[
+          SizedBox(height: s(2)),
+          Text(
+            phoneNumber,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(13),
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.0234375,
+              height: 18 / 13,
+              color: Color(0xFF334155),
             ),
           ),
         ],
@@ -469,16 +486,14 @@ class _GeneralInfoCard extends StatelessWidget {
     final String email = profile?.email.trim().isNotEmpty == true
         ? profile!.email.trim()
         : '—';
-    final String registrationNumber =
-        profile?.businessRegistrationNumber?.trim().isNotEmpty == true
-        ? profile!.businessRegistrationNumber!.trim()
+    final String phoneNumber = profile?.phoneNumber?.trim().isNotEmpty == true
+        ? profile!.phoneNumber!.trim()
         : '—';
-    final String industry = profile?.industry?.trim().isNotEmpty == true
-        ? profile!.industry!.trim()
-        : '—';
-    final String address = profile?.address?.trim().isNotEmpty == true
-        ? profile!.address!.trim()
-        : '—';
+    final String accountType = profile?.userType.trim().isNotEmpty == true
+        ? profile!.userType.trim()
+        : (profile?.loginType.trim().isNotEmpty == true
+              ? profile!.loginType.trim()
+              : '—');
     final bool isActive = profile?.isActive == true;
 
     return Column(
@@ -524,21 +539,178 @@ class _GeneralInfoCard extends StatelessWidget {
           rows: <_InfoRow>[
             _InfoRow(label: 'Official Name', value: orgName),
             _InfoRow(label: 'Official Email', value: email),
-            _InfoRow(label: 'Registration Number', value: registrationNumber),
+            _InfoRow(label: 'Phone Number', value: phoneNumber),
+            _InfoRow(label: 'Account Type', value: accountType),
+            _InfoRow(label: 'Profile ID', value: profile?.id ?? '—'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _OrganisationDetailsCard extends StatelessWidget {
+  const _OrganisationDetailsCard({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final String gstin = profile?.gstin?.trim().isNotEmpty == true
+        ? profile!.gstin!.trim()
+        : '—';
+    final String businessRegNumber =
+        profile?.businessRegNumber?.trim().isNotEmpty == true
+        ? profile!.businessRegNumber!.trim()
+        : '—';
+    final String industryTypes = profile?.industryTypes.isNotEmpty == true
+        ? profile!.industryTypes.join(', ')
+        : (profile?.industry?.trim().isNotEmpty == true
+              ? profile!.industry!.trim()
+              : '—');
+    final String useCases = _formatUseCases(profile?.useCases);
+    final String onboarding = profile?.onboardingCompleted == true
+        ? 'Completed'
+        : 'Pending';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'ORGANISATION DETAILS',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1833819,
+            height: 17.7507286 / 12,
+            color: Color(0xFF323232),
+          ),
+        ),
+        SizedBox(height: s(12)),
+        _FigmaInfoCard(
+          rows: <_InfoRow>[
+            _InfoRow(label: 'GSTIN', value: gstin),
+            _InfoRow(label: 'Business Reg. Number', value: businessRegNumber),
+            _InfoRow(label: 'Industry Types', value: industryTypes),
+            _InfoRow(label: 'Use Cases', value: useCases),
+            _InfoRow(label: 'Onboarding', value: onboarding),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AddressAndRecordsCard extends StatelessWidget {
+  const _AddressAndRecordsCard({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final String addressLine1 = profile?.addressLine1?.trim().isNotEmpty == true
+        ? profile!.addressLine1!.trim()
+        : '—';
+    final String addressLine2 = profile?.addressLine2?.trim().isNotEmpty == true
+        ? profile!.addressLine2!.trim()
+        : '—';
+    final String addressLine3 = profile?.addressLine3?.trim().isNotEmpty == true
+        ? profile!.addressLine3!.trim()
+        : '—';
+    final String storagePath = profile?.storagePath.trim().isNotEmpty == true
+        ? profile!.storagePath.trim()
+        : '—';
+    final String dhiwaySpaceId =
+        profile?.dhiwaySpaceId?.trim().isNotEmpty == true
+        ? profile!.dhiwaySpaceId!.trim()
+        : '—';
+    final String createdAt = profile?.createdAt == null
+        ? '—'
+        : _formatDateTime(profile!.createdAt!);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'ADDRESS & RECORDS',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1833819,
+            height: 17.7507286 / 12,
+            color: Color(0xFF323232),
+          ),
+        ),
+        SizedBox(height: s(12)),
+        _FigmaInfoCard(
+          rows: <_InfoRow>[
+            _InfoRow(label: 'Address Line 1', value: addressLine1),
+            _InfoRow(label: 'Address Line 2', value: addressLine2),
+            _InfoRow(label: 'Address Line 3', value: addressLine3),
+            _InfoRow(label: 'Storage Path', value: storagePath),
+            _InfoRow(label: 'Dhiway Space ID', value: dhiwaySpaceId),
+            _InfoRow(label: 'Created At', value: createdAt),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AccountStatusCard extends StatelessWidget {
+  const _AccountStatusCard({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'ACCOUNT STATUS',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1833819,
+            height: 17.7507286 / 12,
+            color: Color(0xFF323232),
+          ),
+        ),
+        SizedBox(height: s(12)),
+        _FigmaInfoCard(
+          rows: <_InfoRow>[
             _InfoRow(
-              label: 'Industry',
-              value: industry,
-              leadingSvg: 'assets/icons/figma/account_icon_industry.svg',
+              label: 'Active',
+              value: profile?.isActive == true ? 'Yes' : 'No',
             ),
             _InfoRow(
-              label: 'Head Office Address',
-              value: address,
-              leadingSvg: 'assets/icons/figma/account_icon_location.svg',
+              label: 'Email Verified',
+              value: profile?.emailVerified == true ? 'Yes' : 'No',
             ),
-            const _InfoRow(
-              label: 'Website',
-              value: '—',
-              leadingSvg: 'assets/icons/figma/account_icon_globe.svg',
+            _InfoRow(
+              label: 'Onboarding Completed',
+              value: profile?.onboardingCompleted == true ? 'Yes' : 'No',
+            ),
+            _InfoRow(
+              label: 'Skill Tree Initiated',
+              value: profile?.skillTreeInitiated == true ? 'Yes' : 'No',
+            ),
+            _InfoRow(
+              label: 'Mobile Verified',
+              value: profile?.mobileVerified == true ? 'Yes' : 'No',
             ),
           ],
         ),
@@ -548,11 +720,10 @@ class _GeneralInfoCard extends StatelessWidget {
 }
 
 class _InfoRow {
-  const _InfoRow({required this.label, required this.value, this.leadingSvg});
+  const _InfoRow({required this.label, required this.value});
 
   final String label;
   final String value;
-  final String? leadingSvg;
 }
 
 class _FigmaCard extends StatelessWidget {
@@ -643,109 +814,7 @@ class _InfoRowTile extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
-      child: Row(
-        children: <Widget>[
-          if (row.leadingSvg != null) ...<Widget>[
-            Container(
-              width: s(40),
-              height: s(40),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(s(12)),
-              ),
-              alignment: Alignment.center,
-              child: SvgPicture.asset(
-                row.leadingSvg!,
-                width: s(16),
-                height: s(16),
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFF94A3B8),
-                  BlendMode.srcIn,
-                ),
-              ),
-            ),
-            SizedBox(width: s(16)),
-          ],
-          Expanded(child: labelValue),
-        ],
-      ),
-    );
-  }
-}
-
-class _SecurityRow extends StatelessWidget {
-  const _SecurityRow({
-    required this.iconSvg,
-    required this.title,
-    required this.subtitle,
-    this.trailing,
-  });
-
-  final String iconSvg;
-  final String title;
-  final String subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final double scale = _FigmaScaleScope.of(context);
-    double s(double v) => v * scale;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: s(40),
-            height: s(40),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(s(12)),
-            ),
-            alignment: Alignment.center,
-            child: SvgPicture.asset(
-              iconSvg,
-              width: s(16),
-              height: s(16),
-              colorFilter: const ColorFilter.mode(
-                Color(0xFF94A3B8),
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-          SizedBox(width: s(16)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(14),
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.013671875,
-                    height: 20 / 14,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                SizedBox(height: s(2)),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(11),
-                    fontWeight: FontWeight.w400,
-                    height: 16.5 / 11,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (trailing != null) ...<Widget>[trailing!],
-        ],
-      ),
+      child: Row(children: <Widget>[Expanded(child: labelValue)]),
     );
   }
 }
@@ -815,68 +884,6 @@ class _MemberLine extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SecurityPrivacyCard extends StatelessWidget {
-  const _SecurityPrivacyCard({
-    required this.twoFaEnabled,
-    required this.onTwoFaChanged,
-  });
-
-  final bool twoFaEnabled;
-  final ValueChanged<bool> onTwoFaChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final double scale = _FigmaScaleScope.of(context);
-    double s(double v) => v * scale;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(
-          'SECURITY & PRIVACY',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(12),
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.1833819,
-            height: 17.7507286 / 12,
-            color: Color(0xFF323232),
-          ),
-        ),
-        SizedBox(height: s(12)),
-        _FigmaCard(
-          child: Column(
-            children: <Widget>[
-              _SecurityRow(
-                iconSvg: 'assets/icons/figma/account_icon_shield.svg',
-                title: 'Two-Factor Auth',
-                subtitle: 'Required for all admins',
-                trailing: Transform.scale(
-                  scale: 0.9,
-                  child: Switch(
-                    value: twoFaEnabled,
-                    onChanged: onTwoFaChanged,
-                    activeThumbColor: Colors.white,
-                    activeTrackColor: AppColors.brandBlue,
-                    inactiveThumbColor: Colors.white,
-                    inactiveTrackColor: const Color(0xFFE2E8F0),
-                  ),
-                ),
-              ),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
-              _SecurityRow(
-                iconSvg: 'assets/icons/figma/account_icon_audit_refresh.svg',
-                title: 'Audit Status',
-                subtitle: 'Last scanned 2 hours ago',
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -954,4 +961,23 @@ class _TeamAccessCard extends StatelessWidget {
       ],
     );
   }
+}
+
+String _formatDateTime(DateTime value) {
+  final DateTime local = value.toLocal();
+  String twoDigits(int n) => n.toString().padLeft(2, '0');
+  return '${local.year}-${twoDigits(local.month)}-${twoDigits(local.day)} '
+      '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
+}
+
+String _formatUseCases(Map<String, dynamic>? useCases) {
+  if (useCases == null || useCases.isEmpty) return '—';
+  final List<String> labels = <String>[];
+  for (final MapEntry<String, dynamic> entry in useCases.entries) {
+    final String key = entry.key.trim();
+    if (key.isEmpty) continue;
+    final String title = key[0].toUpperCase() + key.substring(1);
+    labels.add('$title: ${entry.value == true ? 'Enabled' : 'Disabled'}');
+  }
+  return labels.isEmpty ? '—' : labels.join(', ');
 }

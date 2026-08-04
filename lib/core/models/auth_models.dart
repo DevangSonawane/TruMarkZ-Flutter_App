@@ -148,56 +148,131 @@ class OrgOnboardingRequest {
 class UserProfile {
   const UserProfile({
     required this.id,
+    required this.userType,
     required this.loginType,
     required this.fullName,
     required this.email,
     required this.mobile,
     required this.organizationName,
+    required this.industryTypes,
     required this.gstNumber,
     required this.businessRegistrationNumber,
     required this.industry,
     required this.address,
+    required this.addressLine1,
+    required this.addressLine2,
+    required this.addressLine3,
+    required this.useCases,
+    required this.onboardingCompleted,
     required this.isActive,
     required this.isVerified,
     required this.emailVerified,
     required this.mobileVerified,
+    required this.skillTreeInitiated,
+    required this.dhiwaySpaceId,
     required this.storagePath,
+    required this.createdAt,
   });
 
   final String id;
+  final String userType;
   final String loginType;
   final String? fullName;
   final String email;
   final String? mobile;
   final String? organizationName;
+  final List<String> industryTypes;
   final String? gstNumber;
   final String? businessRegistrationNumber;
   final String? industry;
   final String? address;
+  final String? addressLine1;
+  final String? addressLine2;
+  final String? addressLine3;
+  final Map<String, dynamic> useCases;
+  final bool onboardingCompleted;
   final bool isActive;
   final bool isVerified;
   final bool emailVerified;
   final bool mobileVerified;
+  final bool skillTreeInitiated;
+  final String? dhiwaySpaceId;
   final String storagePath;
+  final DateTime? createdAt;
+
+  String? get phoneNumber => mobile;
+  String? get gstin => gstNumber;
+  String? get businessRegNumber => businessRegistrationNumber;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    final List<String> industryTypes = _readStringList(
+      json['industry_type'] ?? json['industryTypes'],
+    );
+    final String? userType =
+        _readStringOrNull(json['user_type']) ??
+        _readStringOrNull(json['login_type']);
+    final String loginType =
+        _readStringOrNull(json['login_type']) ?? userType ?? '';
+    final String? mobile = _readStringOrNull(
+      json['phone_number'] ?? json['mobile'],
+    );
+    final String? organizationName = _readStringOrNull(
+      json['organization_name'],
+    );
+    final String? gstNumber =
+        _readStringOrNull(json['gstin']) ??
+        _readStringOrNull(json['gst_number']);
+    final String? businessRegistrationNumber =
+        _readStringOrNull(json['business_reg_number']) ??
+        _readStringOrNull(json['business_registration_number']);
+    final String? addressLine1 = _readStringOrNull(json['address_line1']);
+    final String? addressLine2 = _readStringOrNull(json['address_line2']);
+    final String? addressLine3 = _readStringOrNull(json['address_line3']);
+    final String? legacyAddress = _readStringOrNull(json['address']);
+    final String? address = _joinNonEmpty(<String?>[
+      addressLine1,
+      addressLine2,
+      addressLine3,
+      legacyAddress,
+    ]);
+    final String? industry =
+        _readStringOrNull(json['industry']) ??
+        (industryTypes.isNotEmpty ? industryTypes.join(', ') : null);
+    final Map<String, dynamic> useCases = _readStringMap(json['use_cases']);
+    final DateTime? createdAt = DateTime.tryParse(
+      (json['created_at'] ?? '').toString(),
+    );
+    final bool onboardingCompleted = json['onboarding_completed'] == true;
+    final bool emailVerified = json['email_verified'] == true;
+    final bool isVerified =
+        json['is_verified'] == true || emailVerified || onboardingCompleted;
+
     return UserProfile(
       id: (json['id'] ?? '').toString(),
-      loginType: (json['login_type'] ?? '').toString(),
+      userType: userType ?? '',
+      loginType: loginType,
       fullName: json['full_name']?.toString(),
       email: (json['email'] ?? '').toString(),
-      mobile: json['mobile']?.toString(),
-      organizationName: json['organization_name']?.toString(),
-      gstNumber: json['gst_number']?.toString(),
-      businessRegistrationNumber: json['business_registration_number']
-          ?.toString(),
-      industry: json['industry']?.toString(),
-      address: json['address']?.toString(),
+      mobile: mobile,
+      organizationName: organizationName,
+      industryTypes: industryTypes,
+      gstNumber: gstNumber,
+      businessRegistrationNumber: businessRegistrationNumber,
+      industry: industry,
+      address: address,
+      addressLine1: addressLine1,
+      addressLine2: addressLine2,
+      addressLine3: addressLine3,
+      useCases: useCases,
+      onboardingCompleted: onboardingCompleted,
       isActive: json['is_active'] == true,
-      isVerified: json['is_verified'] == true,
-      emailVerified: json['email_verified'] == true,
+      isVerified: isVerified,
+      emailVerified: emailVerified,
       mobileVerified: json['mobile_verified'] == true,
+      skillTreeInitiated: json['skill_tree_initiated'] == true,
+      dhiwaySpaceId: _readStringOrNull(json['dhiway_space_id']),
       storagePath: (json['storage_path'] ?? '').toString(),
+      createdAt: createdAt,
     );
   }
 }
@@ -277,4 +352,41 @@ class AssignedIndividual {
       assignedAt: (json['assigned_at'] ?? '').toString(),
     );
   }
+}
+
+String? _readStringOrNull(dynamic value) {
+  final String text = value?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
+}
+
+List<String> _readStringList(dynamic value) {
+  if (value is List) {
+    return value
+        .map((dynamic item) => item?.toString().trim() ?? '')
+        .where((String item) => item.isNotEmpty)
+        .toList();
+  }
+  final String? text = _readStringOrNull(value);
+  if (text == null) return <String>[];
+  return text
+      .split(',')
+      .map((String item) => item.trim())
+      .where((String item) => item.isNotEmpty)
+      .toList();
+}
+
+Map<String, dynamic> _readStringMap(dynamic value) {
+  if (value is Map) {
+    return Map<String, dynamic>.from(value);
+  }
+  return <String, dynamic>{};
+}
+
+String? _joinNonEmpty(List<String?> values, {String separator = ', '}) {
+  final List<String> filtered = values
+      .map((String? item) => item?.trim() ?? '')
+      .where((String item) => item.isNotEmpty)
+      .toList();
+  if (filtered.isEmpty) return null;
+  return filtered.join(separator);
 }
