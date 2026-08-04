@@ -27,6 +27,17 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     await _tokenStorage.saveLoginType(_normalizeLoginType(loginType));
   }
 
+  Future<AuthState> _loadCurrentUserState() async {
+    final UserProfile me = await _repo.getMe();
+    await _persistLoginType(me.loginType);
+    return AuthState(
+      status: AuthStatus.authenticated,
+      userId: me.id,
+      loginType: me.loginType,
+      userProfile: me,
+    );
+  }
+
   String _routeForLoginType({
     required String loginType,
     required bool requiresOnboarding,
@@ -69,14 +80,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       return const AuthState(status: AuthStatus.unauthenticated);
     }
     try {
-      final UserProfile me = await _repo.getMe();
-      await _persistLoginType(me.loginType);
-      return AuthState(
-        status: AuthStatus.authenticated,
-        userId: me.id,
-        loginType: me.loginType,
-        userProfile: me,
-      );
+      return _loadCurrentUserState();
     } on ApiException catch (_) {
       await _tokenStorage.clearAll();
       return const AuthState(status: AuthStatus.unauthenticated);
@@ -99,8 +103,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         password: password,
       );
       final UserProfile me = await _repo.getMe();
-      final String resolvedLoginType =
-          me.loginType.trim().isNotEmpty ? me.loginType : login.loginType;
+      final String resolvedLoginType = me.loginType.trim().isNotEmpty
+          ? me.loginType
+          : login.loginType;
       await _persistLoginType(resolvedLoginType);
       state = AsyncData(
         AuthState(
@@ -153,8 +158,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         password: password,
       );
       final UserProfile me = await _repo.getMe();
-      final String resolvedLoginType =
-          me.loginType.trim().isNotEmpty ? me.loginType : login.loginType;
+      final String resolvedLoginType = me.loginType.trim().isNotEmpty
+          ? me.loginType
+          : login.loginType;
       await _persistLoginType(resolvedLoginType);
       state = AsyncData(
         AuthState(
@@ -211,8 +217,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         userType: userType,
       );
       final UserProfile me = await _repo.getMe();
-      final String resolvedLoginType =
-          me.loginType.trim().isNotEmpty ? me.loginType : login.loginType;
+      final String resolvedLoginType = me.loginType.trim().isNotEmpty
+          ? me.loginType
+          : login.loginType;
       await _persistLoginType(resolvedLoginType);
       if (kDebugMode &&
           requestedLoginType == 'individual' &&
@@ -280,6 +287,68 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       return false;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<UserProfile> updateDhiwaySpaceId(String dhiwaySpaceId) async {
+    state = AsyncData(
+      (state.value ?? const AuthState()).copyWith(
+        isLoading: true,
+        errorMessage: null,
+      ),
+    );
+    try {
+      final UserProfile me = await _repo.updateDhiwaySpaceId(
+        dhiwaySpaceId: dhiwaySpaceId,
+      );
+      final AuthState nextState = AuthState(
+        status: AuthStatus.authenticated,
+        userId: me.id,
+        loginType: me.loginType,
+        userProfile: me,
+      );
+      await _persistLoginType(me.loginType);
+      state = AsyncData(nextState);
+      return me;
+    } on ApiException catch (e) {
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: e.message,
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      const String msg = 'Something went wrong. Please try again.';
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: msg,
+        ),
+      );
+      throw const ApiException(statusCode: null, message: msg);
+    } finally {
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(isLoading: false),
+      );
+    }
+  }
+
+  Future<void> refreshCurrentUser() async {
+    try {
+      final AuthState nextState = await _loadCurrentUserState();
+      state = AsyncData(nextState);
+    } on ApiException catch (e) {
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(errorMessage: e.message),
+      );
+      rethrow;
+    } catch (_) {
+      const String msg = 'Something went wrong. Please try again.';
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(errorMessage: msg),
+      );
+      throw const ApiException(statusCode: null, message: msg);
     }
   }
 

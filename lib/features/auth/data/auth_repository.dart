@@ -217,6 +217,20 @@ class AuthRepository {
     return UserProfile.fromJson(res);
   }
 
+  Future<UserProfile> updateDhiwaySpaceId({
+    required String dhiwaySpaceId,
+  }) async {
+    final Map<String, dynamic> res = await _api.patch(
+      '/auth/me/dhiway-space',
+      data: <String, dynamic>{'dhiway_space_id': dhiwaySpaceId},
+    );
+    final String message = (res['message'] ?? '').toString().trim();
+    if (message.isNotEmpty) {
+      // Ignore the body shape and fetch the source of truth profile.
+    }
+    return getMe();
+  }
+
   Future<AssignIndividualResult> assignIndividualToOrg({
     required String individualEmailOrMobile,
   }) async {

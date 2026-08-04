@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/models/auth_models.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/widgets/tmz_button.dart';
+import '../../../../core/widgets/tmz_input.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -21,6 +24,107 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const double _orgBottomNavBarHeight = 71.016;
+
+  Future<void> _showDhiwaySpaceIdDialog(UserProfile? profile) async {
+    final String currentSpaceId = profile?.dhiwaySpaceId?.trim() ?? '';
+    final TextEditingController controller = TextEditingController(
+      text: currentSpaceId,
+    );
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        bool isSaving = false;
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            Future<void> save() async {
+              final String nextValue = controller.text.trim();
+              if (nextValue.isEmpty) {
+                setDialogState(() {
+                  errorText = 'Please enter a Dhiway Space ID.';
+                });
+                return;
+              }
+              setDialogState(() {
+                isSaving = true;
+                errorText = null;
+              });
+              final NavigatorState navigator = Navigator.of(dialogContext);
+              final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
+                dialogContext,
+              );
+              try {
+                await ref
+                    .read(authNotifierProvider.notifier)
+                    .updateDhiwaySpaceId(nextValue);
+                if (!mounted) return;
+                navigator.pop();
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Dhiway Space ID updated successfully.'),
+                  ),
+                );
+              } on ApiException catch (e) {
+                if (!mounted) return;
+                setDialogState(() {
+                  errorText = e.message;
+                });
+              } finally {
+                if (mounted) {
+                  setDialogState(() {
+                    isSaving = false;
+                  });
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Update Dhiway Space ID'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    'Save the space id shared by the superadmin for this organization.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  TMZInput(
+                    label: 'Dhiway Space ID',
+                    hint: 'Enter space id',
+                    controller: controller,
+                    enabled: !isSaving,
+                    errorText: errorText,
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                SizedBox(
+                  width: 140,
+                  child: TMZButton(
+                    label: 'Save',
+                    onPressed: isSaving ? null : save,
+                    isLoading: isSaving,
+                    fullWidth: true,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +214,11 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             SizedBox(height: s(24)),
                             _OrganisationDetailsCard(profile: profile),
                             SizedBox(height: s(24)),
-                            _AddressAndRecordsCard(profile: profile),
+                            _AddressAndRecordsCard(
+                              profile: profile,
+                              onEditDhiwaySpaceId: () =>
+                                  _showDhiwaySpaceIdDialog(profile),
+                            ),
                             SizedBox(height: s(24)),
                             _AccountStatusCard(profile: profile),
                             SizedBox(height: s(24)),
@@ -606,9 +714,13 @@ class _OrganisationDetailsCard extends StatelessWidget {
 }
 
 class _AddressAndRecordsCard extends StatelessWidget {
-  const _AddressAndRecordsCard({required this.profile});
+  const _AddressAndRecordsCard({
+    required this.profile,
+    required this.onEditDhiwaySpaceId,
+  });
 
   final UserProfile? profile;
+  final VoidCallback onEditDhiwaySpaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -634,6 +746,8 @@ class _AddressAndRecordsCard extends StatelessWidget {
     final String createdAt = profile?.createdAt == null
         ? '—'
         : _formatDateTime(profile!.createdAt!);
+    final bool hasDhiwaySpaceId =
+        profile?.dhiwaySpaceId?.trim().isNotEmpty == true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -656,7 +770,32 @@ class _AddressAndRecordsCard extends StatelessWidget {
             _InfoRow(label: 'Address Line 2', value: addressLine2),
             _InfoRow(label: 'Address Line 3', value: addressLine3),
             _InfoRow(label: 'Storage Path', value: storagePath),
-            _InfoRow(label: 'Dhiway Space ID', value: dhiwaySpaceId),
+            _InfoRow(
+              label: 'Dhiway Space ID',
+              value: dhiwaySpaceId,
+              trailing: TextButton.icon(
+                onPressed: onEditDhiwaySpaceId,
+                icon: Icon(
+                  hasDhiwaySpaceId ? Icons.edit_outlined : Icons.add_rounded,
+                  size: s(16),
+                ),
+                label: Text(hasDhiwaySpaceId ? 'Edit' : 'Add'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandBlue,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: Size.zero,
+                  padding: EdgeInsets.zero,
+                  textStyle: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.05859375,
+                    height: 16 / 12,
+                  ),
+                ),
+              ),
+            ),
             _InfoRow(label: 'Created At', value: createdAt),
           ],
         ),
@@ -720,10 +859,11 @@ class _AccountStatusCard extends StatelessWidget {
 }
 
 class _InfoRow {
-  const _InfoRow({required this.label, required this.value});
+  const _InfoRow({required this.label, required this.value, this.trailing});
 
   final String label;
   final String value;
+  final Widget? trailing;
 }
 
 class _FigmaCard extends StatelessWidget {
@@ -814,7 +954,16 @@ class _InfoRowTile extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
-      child: Row(children: <Widget>[Expanded(child: labelValue)]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          Expanded(child: labelValue),
+          if (row.trailing != null) ...<Widget>[
+            SizedBox(width: s(12)),
+            row.trailing!,
+          ],
+        ],
+      ),
     );
   }
 }
