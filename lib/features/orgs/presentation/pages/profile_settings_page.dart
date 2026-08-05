@@ -24,6 +24,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const double _orgBottomNavBarHeight = 71.016;
+  static const List<String> _serviceTypeOptions = <String>['product', 'human'];
 
   Future<void> _showDhiwaySpaceIdDialog(UserProfile? profile) async {
     final String currentSpaceId = profile?.dhiwaySpaceId?.trim() ?? '';
@@ -126,6 +127,178 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     controller.dispose();
   }
 
+  Future<void> _showServiceTypeDialog(UserProfile? profile) async {
+    final String currentServiceType =
+        profile?.serviceType?.trim().toLowerCase() ?? '';
+    final String initialValue = _serviceTypeOptions.contains(currentServiceType)
+        ? currentServiceType
+        : _serviceTypeOptions.first;
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        bool isSaving = false;
+        String selectedServiceType = initialValue;
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            Future<void> save() async {
+              setDialogState(() {
+                isSaving = true;
+                errorText = null;
+              });
+              final NavigatorState navigator = Navigator.of(dialogContext);
+              final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
+                dialogContext,
+              );
+              try {
+                await ref
+                    .read(authNotifierProvider.notifier)
+                    .updateServiceType(selectedServiceType);
+                if (!mounted) return;
+                navigator.pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Service type updated to ${selectedServiceType.toUpperCase()}.',
+                    ),
+                  ),
+                );
+              } on ApiException catch (e) {
+                if (!mounted) return;
+                setDialogState(() {
+                  errorText = e.message;
+                });
+              } finally {
+                if (mounted) {
+                  setDialogState(() {
+                    isSaving = false;
+                  });
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Update Service Type'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    'Choose what your organization deals in. You can change this anytime.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  ..._serviceTypeOptions.map((String option) {
+                    final bool isSelected = selectedServiceType == option;
+                    final String title = option == 'product'
+                        ? 'Product'
+                        : 'Human';
+                    final String description = option == 'product'
+                        ? 'For product batches, registry, and certificate flows.'
+                        : 'For people, credentials, and human verification flows.';
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: InkWell(
+                        onTap: isSaving
+                            ? null
+                            : () {
+                                setDialogState(() {
+                                  selectedServiceType = option;
+                                  errorText = null;
+                                });
+                              },
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFFEFF6FF)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.brandBlue
+                                  : const Color(0xFFE2E8F0),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Icon(
+                                isSelected
+                                    ? Icons.radio_button_checked_rounded
+                                    : Icons.radio_button_unchecked_rounded,
+                                color: isSelected
+                                    ? AppColors.brandBlue
+                                    : const Color(0xFF94A3B8),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      title,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      description,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF64748B),
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  if (errorText != null) ...<Widget>[
+                    const SizedBox(height: 4),
+                    Text(
+                      errorText!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                SizedBox(
+                  width: 140,
+                  child: TMZButton(
+                    label: 'Save',
+                    onPressed: isSaving ? null : save,
+                    isLoading: isSaving,
+                    fullWidth: true,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
@@ -212,7 +385,11 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             SizedBox(height: s(24)),
                             _GeneralInfoCard(profile: profile),
                             SizedBox(height: s(24)),
-                            _OrganisationDetailsCard(profile: profile),
+                            _OrganisationDetailsCard(
+                              profile: profile,
+                              onEditServiceType: () =>
+                                  _showServiceTypeDialog(profile),
+                            ),
                             SizedBox(height: s(24)),
                             _AddressAndRecordsCard(
                               profile: profile,
@@ -662,9 +839,13 @@ class _GeneralInfoCard extends StatelessWidget {
 }
 
 class _OrganisationDetailsCard extends StatelessWidget {
-  const _OrganisationDetailsCard({required this.profile});
+  const _OrganisationDetailsCard({
+    required this.profile,
+    required this.onEditServiceType,
+  });
 
   final UserProfile? profile;
+  final VoidCallback onEditServiceType;
 
   @override
   Widget build(BuildContext context) {
@@ -688,6 +869,7 @@ class _OrganisationDetailsCard extends StatelessWidget {
     final String onboarding = profile?.onboardingCompleted == true
         ? 'Completed'
         : 'Pending';
+    final bool hasServiceType = serviceType.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -711,7 +893,29 @@ class _OrganisationDetailsCard extends StatelessWidget {
             _InfoRow(label: 'Industry Types', value: industryTypes),
             _InfoRow(
               label: 'Service Type',
-              value: serviceType.isNotEmpty ? serviceType : '—',
+              value: hasServiceType ? serviceType : '—',
+              trailing: TextButton.icon(
+                onPressed: onEditServiceType,
+                icon: Icon(
+                  hasServiceType ? Icons.edit_outlined : Icons.add_rounded,
+                  size: s(16),
+                ),
+                label: Text(hasServiceType ? 'Edit' : 'Set'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandBlue,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: Size.zero,
+                  padding: EdgeInsets.zero,
+                  textStyle: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.05859375,
+                    height: 16 / 12,
+                  ),
+                ),
+              ),
             ),
             _InfoRow(label: 'Use Cases', value: useCases),
             _InfoRow(label: 'Onboarding', value: onboarding),

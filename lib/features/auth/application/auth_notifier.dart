@@ -334,6 +334,50 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
+  Future<UserProfile> updateServiceType(String serviceType) async {
+    state = AsyncData(
+      (state.value ?? const AuthState()).copyWith(
+        isLoading: true,
+        errorMessage: null,
+      ),
+    );
+    try {
+      final UserProfile me = await _repo.updateServiceType(
+        serviceType: serviceType,
+      );
+      final AuthState nextState = AuthState(
+        status: AuthStatus.authenticated,
+        userId: me.id,
+        loginType: me.loginType,
+        userProfile: me,
+      );
+      await _persistLoginType(me.loginType);
+      state = AsyncData(nextState);
+      return me;
+    } on ApiException catch (e) {
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: e.message,
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      const String msg = 'Something went wrong. Please try again.';
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(
+          isLoading: false,
+          errorMessage: msg,
+        ),
+      );
+      throw const ApiException(statusCode: null, message: msg);
+    } finally {
+      state = AsyncData(
+        (state.value ?? const AuthState()).copyWith(isLoading: false),
+      );
+    }
+  }
+
   Future<void> refreshCurrentUser() async {
     try {
       final AuthState nextState = await _loadCurrentUserState();

@@ -231,6 +231,25 @@ class AuthRepository {
     return getMe();
   }
 
+  Future<UserProfile> updateServiceType({required String serviceType}) async {
+    final String normalized = serviceType.trim().toLowerCase();
+    if (normalized != 'product' && normalized != 'human') {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Please choose a valid service type.',
+      );
+    }
+    final Map<String, dynamic> res = await _api.patch(
+      '/auth/me/service-type',
+      data: <String, dynamic>{'service_type': normalized},
+    );
+    final String message = (res['message'] ?? '').toString().trim();
+    if (message.isNotEmpty) {
+      // Ignore the body shape and fetch the source of truth profile.
+    }
+    return getMe();
+  }
+
   Future<AssignIndividualResult> assignIndividualToOrg({
     required String individualEmailOrMobile,
   }) async {
