@@ -32,6 +32,7 @@ class _OrganisationRegistrationPageState
   final TextEditingController _password = TextEditingController();
   final TextEditingController _officialEmail = TextEditingController();
   final TextEditingController _phoneNumber = TextEditingController();
+  String? _serviceType;
 
   bool _looksLikeEmail(String value) {
     final String v = value.trim();
@@ -64,8 +65,15 @@ class _OrganisationRegistrationPageState
     if (_orgName.text.trim().isNotEmpty) filled += 1;
     if (_looksLikeEmail(_officialEmail.text)) filled += 1;
     if (_phoneNumber.text.trim().isNotEmpty) filled += 1;
+    if ((_serviceType ?? '').trim().isNotEmpty) filled += 1;
     if (_password.text.trim().length >= 8) filled += 1;
-    return filled / 4;
+    return filled / 5;
+  }
+
+  void _setServiceType(String? value) {
+    if (_serviceType == value) return;
+    setState(() => _serviceType = value);
+    _recomputeProgress();
   }
 
   Future<void> _sendOtp() async {
@@ -73,6 +81,7 @@ class _OrganisationRegistrationPageState
     final String officialEmail = _officialEmail.text.trim();
     final String password = _password.text;
     final String phoneNumber = _phoneNumber.text.trim();
+    final String serviceType = (_serviceType ?? '').trim().toLowerCase();
 
     if (officialEmail.isEmpty || !_looksLikeEmail(officialEmail)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -84,6 +93,7 @@ class _OrganisationRegistrationPageState
     final List<String> missing = <String>[
       if (orgName.isEmpty) 'Organisation Name',
       if (phoneNumber.isEmpty) 'Phone Number',
+      if (serviceType.isEmpty) 'Service Type',
       if (password.isEmpty) 'Password',
     ];
     if (missing.isNotEmpty) {
@@ -111,6 +121,7 @@ class _OrganisationRegistrationPageState
               email: officialEmail,
               phoneNumber: phoneNumber,
               password: password,
+              serviceType: serviceType,
             ),
           );
       if (!mounted) return;
@@ -341,6 +352,11 @@ class _OrganisationRegistrationPageState
                   backgroundColor: inputBg,
                 ),
                 const SizedBox(height: AppSpacing.x3),
+                _ServiceTypeField(
+                  value: _serviceType,
+                  onChanged: _setServiceType,
+                ),
+                const SizedBox(height: AppSpacing.x3),
                 TMZInput(
                   label: 'Password',
                   hint: '••••••••',
@@ -370,6 +386,66 @@ class _OrganisationRegistrationPageState
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ServiceTypeField extends StatelessWidget {
+  const _ServiceTypeField({required this.value, required this.onChanged});
+
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'SERVICE TYPE',
+          style: AppTypography.caption.copyWith(
+            fontWeight: FontWeight.w500,
+            color: AppColors.textTertiary,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: value,
+          onChanged: onChanged,
+          items: const <DropdownMenuItem<String>>[
+            DropdownMenuItem<String>(value: 'human', child: Text('Human')),
+            DropdownMenuItem<String>(value: 'product', child: Text('Product')),
+          ],
+          decoration: InputDecoration(
+            hintText: 'Select service type',
+            filled: true,
+            fillColor: AppColors.offWhite,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.brandBlue),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'This controls which verification flow your organisation can use.',
+          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+      ],
     );
   }
 }

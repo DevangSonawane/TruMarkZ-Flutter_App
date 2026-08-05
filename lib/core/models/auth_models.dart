@@ -80,18 +80,21 @@ class SignupOrganizationRequest {
     required this.email,
     required this.phoneNumber,
     required this.password,
+    required this.serviceType,
   });
 
   final String orgName;
   final String email;
   final String phoneNumber;
   final String password;
+  final String serviceType;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'org_name': orgName,
     'email': email,
     'phone_number': phoneNumber,
     'password': password,
+    'service_type': serviceType,
   };
 }
 
@@ -162,6 +165,7 @@ class UserProfile {
     required this.addressLine1,
     required this.addressLine2,
     required this.addressLine3,
+    required this.serviceType,
     required this.useCases,
     required this.onboardingCompleted,
     required this.isActive,
@@ -170,6 +174,9 @@ class UserProfile {
     required this.mobileVerified,
     required this.skillTreeInitiated,
     required this.dhiwaySpaceId,
+    required this.humanSpaceId,
+    required this.productSpaceId,
+    required this.warrantySpaceId,
     required this.storagePath,
     required this.createdAt,
   });
@@ -189,6 +196,7 @@ class UserProfile {
   final String? addressLine1;
   final String? addressLine2;
   final String? addressLine3;
+  final String? serviceType;
   final Map<String, dynamic> useCases;
   final bool onboardingCompleted;
   final bool isActive;
@@ -197,6 +205,9 @@ class UserProfile {
   final bool mobileVerified;
   final bool skillTreeInitiated;
   final String? dhiwaySpaceId;
+  final String? humanSpaceId;
+  final String? productSpaceId;
+  final String? warrantySpaceId;
   final String storagePath;
   final DateTime? createdAt;
 
@@ -235,6 +246,9 @@ class UserProfile {
       addressLine3,
       legacyAddress,
     ]);
+    final String? serviceType = _readStringOrNull(
+      json['service_type'] ?? json['serviceType'],
+    );
     final String? industry =
         _readStringOrNull(json['industry']) ??
         (industryTypes.isNotEmpty ? industryTypes.join(', ') : null);
@@ -263,6 +277,7 @@ class UserProfile {
       addressLine1: addressLine1,
       addressLine2: addressLine2,
       addressLine3: addressLine3,
+      serviceType: serviceType,
       useCases: useCases,
       onboardingCompleted: onboardingCompleted,
       isActive: json['is_active'] == true,
@@ -271,6 +286,18 @@ class UserProfile {
       mobileVerified: json['mobile_verified'] == true,
       skillTreeInitiated: json['skill_tree_initiated'] == true,
       dhiwaySpaceId: _readStringOrNull(json['dhiway_space_id']),
+      humanSpaceId: _readStringOrNull(
+        json['human_space_id'] ?? json['humanSpaceId'],
+      ),
+      productSpaceId: _readStringOrNull(
+        json['product_space_id'] ?? json['productSpaceId'],
+      ),
+      warrantySpaceId: _readStringOrNull(
+        json['warranty_space_id'] ??
+            json['warrenty_space_id'] ??
+            json['warrantySpaceId'] ??
+            json['warrentySpaceId'],
+      ),
       storagePath: (json['storage_path'] ?? '').toString(),
       createdAt: createdAt,
     );

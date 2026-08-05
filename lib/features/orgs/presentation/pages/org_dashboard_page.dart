@@ -28,6 +28,10 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
   Widget build(BuildContext context) {
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final dynamic profile = authAsync.value?.userProfile;
+    final String serviceType = (profile?.serviceType ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
     final String displayName =
         profile?.organizationName?.trim().isNotEmpty == true
         ? profile!.organizationName!.trim()
@@ -91,10 +95,9 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                           locationLine1: 'Kandivali, Mumbai',
                           locationLine2: 'Asynk Pvt Ltd',
                           avatarAssetPath: 'assets/icons/dashbaord/profile.png',
-                          onAlertsTap: () =>
-                              context.go(
-                                '${AppRouter.notificationsPath}?flow=org',
-                              ),
+                          onAlertsTap: () => context.go(
+                            '${AppRouter.notificationsPath}?flow=org',
+                          ),
                           onProfileTap: () =>
                               context.go(AppRouter.settingsPath),
                         ),
@@ -113,8 +116,17 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                         top: drawerTop,
                         child: _HomeDrawerCard(
                           summary: summary,
-                          onTapNewBatch: () =>
-                              context.go(AppRouter.batchTypeSelectionPath),
+                          onTapNewBatch: () {
+                            if (serviceType == 'human') {
+                              context.go(AppRouter.verificationChecksPath);
+                              return;
+                            }
+                            if (serviceType == 'product') {
+                              context.go(AppRouter.productSectorSelectorPath);
+                              return;
+                            }
+                            context.go(AppRouter.batchTypeSelectionPath);
+                          },
                           onTapScanQr: () =>
                               context.go(AppRouter.qrScannerPath),
                           onTapReports: () =>
@@ -1133,17 +1145,18 @@ class _DashboardSummary {
     int failed = 0;
     int active = 0;
 
-    final List<_DashboardBatchItem> recentTiles = batches
-        .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
-        .map((VerificationBatchSummary item) {
-          pending += item.pending;
-          verified += item.verified;
-          failed += item.failed;
-          if (item.pending > 0) active++;
-          return _DashboardBatchItem.fromSummary(item);
-        })
-        .toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final List<_DashboardBatchItem> recentTiles =
+        batches
+            .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
+            .map((VerificationBatchSummary item) {
+              pending += item.pending;
+              verified += item.verified;
+              failed += item.failed;
+              if (item.pending > 0) active++;
+              return _DashboardBatchItem.fromSummary(item);
+            })
+            .toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     return _DashboardSummary(
       pending: pending,
@@ -1184,9 +1197,7 @@ class _DashboardBatchItem {
         : item.batchId.substring(0, 10);
     final _BatchStatus status = item.failed > 0
         ? _BatchStatus.alert
-        : (item.pending > 0
-              ? _BatchStatus.processing
-              : _BatchStatus.complete);
+        : (item.pending > 0 ? _BatchStatus.processing : _BatchStatus.complete);
     final double progress = item.totalUsers > 0
         ? (item.verified / item.totalUsers).clamp(0.0, 1.0)
         : 0.0;

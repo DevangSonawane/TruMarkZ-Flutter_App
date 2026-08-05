@@ -602,6 +602,9 @@ class _GeneralInfoCard extends StatelessWidget {
         : (profile?.loginType.trim().isNotEmpty == true
               ? profile!.loginType.trim()
               : '—');
+    final String serviceType = profile?.serviceType?.trim().isNotEmpty == true
+        ? profile!.serviceType!.trim()
+        : '—';
     final bool isActive = profile?.isActive == true;
 
     return Column(
@@ -649,6 +652,7 @@ class _GeneralInfoCard extends StatelessWidget {
             _InfoRow(label: 'Official Email', value: email),
             _InfoRow(label: 'Phone Number', value: phoneNumber),
             _InfoRow(label: 'Account Type', value: accountType),
+            _InfoRow(label: 'Service Type', value: serviceType),
             _InfoRow(label: 'Profile ID', value: profile?.id ?? '—'),
           ],
         ),
@@ -680,6 +684,7 @@ class _OrganisationDetailsCard extends StatelessWidget {
               ? profile!.industry!.trim()
               : '—');
     final String useCases = _formatUseCases(profile?.useCases);
+    final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
     final String onboarding = profile?.onboardingCompleted == true
         ? 'Completed'
         : 'Pending';
@@ -704,6 +709,10 @@ class _OrganisationDetailsCard extends StatelessWidget {
             _InfoRow(label: 'GSTIN', value: gstin),
             _InfoRow(label: 'Business Reg. Number', value: businessRegNumber),
             _InfoRow(label: 'Industry Types', value: industryTypes),
+            _InfoRow(
+              label: 'Service Type',
+              value: serviceType.isNotEmpty ? serviceType : '—',
+            ),
             _InfoRow(label: 'Use Cases', value: useCases),
             _InfoRow(label: 'Onboarding', value: onboarding),
           ],
@@ -739,10 +748,25 @@ class _AddressAndRecordsCard extends StatelessWidget {
     final String storagePath = profile?.storagePath.trim().isNotEmpty == true
         ? profile!.storagePath.trim()
         : '—';
+    final String humanSpaceId = profile?.humanSpaceId?.trim().isNotEmpty == true
+        ? profile!.humanSpaceId!.trim()
+        : '—';
+    final String productSpaceId =
+        profile?.productSpaceId?.trim().isNotEmpty == true
+        ? profile!.productSpaceId!.trim()
+        : '—';
+    final String warrantySpaceId =
+        profile?.warrantySpaceId?.trim().isNotEmpty == true
+        ? profile!.warrantySpaceId!.trim()
+        : '—';
     final String dhiwaySpaceId =
         profile?.dhiwaySpaceId?.trim().isNotEmpty == true
         ? profile!.dhiwaySpaceId!.trim()
         : '—';
+    final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
+    final bool showHumanSpaceId = serviceType == 'human' || serviceType.isEmpty;
+    final bool showProductSpaceIds =
+        serviceType == 'product' || serviceType.isEmpty;
     final String createdAt = profile?.createdAt == null
         ? '—'
         : _formatDateTime(profile!.createdAt!);
@@ -770,6 +794,12 @@ class _AddressAndRecordsCard extends StatelessWidget {
             _InfoRow(label: 'Address Line 2', value: addressLine2),
             _InfoRow(label: 'Address Line 3', value: addressLine3),
             _InfoRow(label: 'Storage Path', value: storagePath),
+            if (showHumanSpaceId)
+              _InfoRow(label: 'Human Space ID', value: humanSpaceId),
+            if (showProductSpaceIds)
+              _InfoRow(label: 'Product Space ID', value: productSpaceId),
+            if (showProductSpaceIds)
+              _InfoRow(label: 'Warranty Space ID', value: warrantySpaceId),
             _InfoRow(
               label: 'Dhiway Space ID',
               value: dhiwaySpaceId,

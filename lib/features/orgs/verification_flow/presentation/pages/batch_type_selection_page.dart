@@ -2,21 +2,26 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
 
 enum _BatchType { human, product }
 
-class BatchTypeSelectionPage extends StatefulWidget {
+class BatchTypeSelectionPage extends ConsumerStatefulWidget {
   const BatchTypeSelectionPage({super.key});
 
   @override
-  State<BatchTypeSelectionPage> createState() => _BatchTypeSelectionPageState();
+  ConsumerState<BatchTypeSelectionPage> createState() =>
+      _BatchTypeSelectionPageState();
 }
 
-class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
+class _BatchTypeSelectionPageState
+    extends ConsumerState<BatchTypeSelectionPage> {
   _BatchType? _selected = _BatchType.human;
 
   static const double _referenceWidth = 402;
@@ -34,8 +39,7 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
     }
   }
 
-  void _continue(BuildContext context) {
-    final _BatchType? selected = _selected;
+  void _continue(BuildContext context, _BatchType? selected) {
     if (selected == null) return;
 
     switch (selected) {
@@ -48,6 +52,20 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final String serviceType = (authAsync.value?.userProfile?.serviceType ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final bool lockedToHuman = serviceType == 'human';
+    final bool lockedToProduct = serviceType == 'product';
+    final bool isLocked = lockedToHuman || lockedToProduct;
+    final _BatchType? effectiveSelection = lockedToHuman
+        ? _BatchType.human
+        : lockedToProduct
+        ? _BatchType.product
+        : _selected;
+
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -146,49 +164,66 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                                       ),
                                     ),
                                     SizedBox(height: s(24)),
-                                    _FigmaBatchTypeCard(
-                                      scale: scale,
-                                      title: 'Human Verification',
-                                      subtitle:
-                                          'Verify identities of individuals - workers, agents, drivers, students & more',
-                                      subtitleFontSize: 12,
-                                      svgAssetPath:
-                                          'assets/icons/figma/new_batch_human.svg',
-                                      tags: const <String>[
-                                        'Workforce',
-                                        'Gig Economy',
-                                        'Insurance',
-                                        'Recruitment',
-                                      ],
-                                      selected: _selected == _BatchType.human,
-                                      showLeftStrip:
-                                          _selected == _BatchType.human,
-                                      onTap: () => setState(
-                                        () => _selected = _BatchType.human,
+                                    if (!lockedToProduct) ...<Widget>[
+                                      _FigmaBatchTypeCard(
+                                        scale: scale,
+                                        title: 'Human Verification',
+                                        subtitle:
+                                            'Verify identities of individuals - workers, agents, drivers, students & more',
+                                        subtitleFontSize: 12,
+                                        svgAssetPath:
+                                            'assets/icons/figma/new_batch_human.svg',
+                                        tags: const <String>[
+                                          'Workforce',
+                                          'Gig Economy',
+                                          'Insurance',
+                                          'Recruitment',
+                                        ],
+                                        selected:
+                                            effectiveSelection ==
+                                            _BatchType.human,
+                                        showLeftStrip:
+                                            effectiveSelection ==
+                                            _BatchType.human,
+                                        onTap: isLocked
+                                            ? null
+                                            : () => setState(
+                                                () => _selected =
+                                                    _BatchType.human,
+                                              ),
                                       ),
-                                    ),
-                                    SizedBox(height: s(16)),
-                                    _FigmaBatchTypeCard(
-                                      scale: scale,
-                                      title: 'Product Verification',
-                                      subtitle:
-                                          'Issue digital certificates for products stored on blockchain',
-                                      subtitleFontSize: 14,
-                                      svgAssetPath:
-                                          'assets/icons/figma/new_batch_product.svg',
-                                      tags: const <String>[
-                                        'Consumer Goods',
-                                        'Beauty & Cosmetics',
-                                        'Electronics & Appliances',
-                                        'EV & Automotive',
-                                      ],
-                                      selected: _selected == _BatchType.product,
-                                      showLeftStrip:
-                                          _selected == _BatchType.product,
-                                      onTap: () => setState(
-                                        () => _selected = _BatchType.product,
+                                      if (!lockedToHuman)
+                                        SizedBox(height: s(16)),
+                                    ],
+                                    if (!lockedToHuman) ...<Widget>[
+                                      _FigmaBatchTypeCard(
+                                        scale: scale,
+                                        title: 'Product Verification',
+                                        subtitle:
+                                            'Issue digital certificates for products stored on blockchain',
+                                        subtitleFontSize: 14,
+                                        svgAssetPath:
+                                            'assets/icons/figma/new_batch_product.svg',
+                                        tags: const <String>[
+                                          'Consumer Goods',
+                                          'Beauty & Cosmetics',
+                                          'Electronics & Appliances',
+                                          'EV & Automotive',
+                                        ],
+                                        selected:
+                                            effectiveSelection ==
+                                            _BatchType.product,
+                                        showLeftStrip:
+                                            effectiveSelection ==
+                                            _BatchType.product,
+                                        onTap: isLocked
+                                            ? null
+                                            : () => setState(
+                                                () => _selected =
+                                                    _BatchType.product,
+                                              ),
                                       ),
-                                    ),
+                                    ],
                                     SizedBox(height: s(24)),
                                   ],
                                 ),
@@ -198,8 +233,9 @@ class _BatchTypeSelectionPageState extends State<BatchTypeSelectionPage> {
                               scale: scale,
                               child: _ContinueButton(
                                 scale: scale,
-                                enabled: _selected != null,
-                                onTap: () => _continue(context),
+                                enabled: effectiveSelection != null,
+                                onTap: () =>
+                                    _continue(context, effectiveSelection),
                               ),
                             ),
                           ],
@@ -227,7 +263,7 @@ class _FigmaBatchTypeCard extends StatelessWidget {
     required this.tags,
     required this.selected,
     required this.showLeftStrip,
-    required this.onTap,
+    this.onTap,
   });
 
   final double scale;
@@ -238,7 +274,7 @@ class _FigmaBatchTypeCard extends StatelessWidget {
   final List<String> tags;
   final bool selected;
   final bool showLeftStrip;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
