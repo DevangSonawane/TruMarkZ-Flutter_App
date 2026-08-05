@@ -779,9 +779,6 @@ class _GeneralInfoCard extends StatelessWidget {
         : (profile?.loginType.trim().isNotEmpty == true
               ? profile!.loginType.trim()
               : '—');
-    final String serviceType = profile?.serviceType?.trim().isNotEmpty == true
-        ? profile!.serviceType!.trim()
-        : '—';
     final bool isActive = profile?.isActive == true;
 
     return Column(
@@ -829,7 +826,6 @@ class _GeneralInfoCard extends StatelessWidget {
             _InfoRow(label: 'Official Email', value: email),
             _InfoRow(label: 'Phone Number', value: phoneNumber),
             _InfoRow(label: 'Account Type', value: accountType),
-            _InfoRow(label: 'Service Type', value: serviceType),
             _InfoRow(label: 'Profile ID', value: profile?.id ?? '—'),
           ],
         ),
@@ -859,16 +855,7 @@ class _OrganisationDetailsCard extends StatelessWidget {
         profile?.businessRegNumber?.trim().isNotEmpty == true
         ? profile!.businessRegNumber!.trim()
         : '—';
-    final String industryTypes = profile?.industryTypes.isNotEmpty == true
-        ? profile!.industryTypes.join(', ')
-        : (profile?.industry?.trim().isNotEmpty == true
-              ? profile!.industry!.trim()
-              : '—');
-    final String useCases = _formatUseCases(profile?.useCases);
     final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
-    final String onboarding = profile?.onboardingCompleted == true
-        ? 'Completed'
-        : 'Pending';
     final bool hasServiceType = serviceType.isNotEmpty;
 
     return Column(
@@ -890,7 +877,6 @@ class _OrganisationDetailsCard extends StatelessWidget {
           rows: <_InfoRow>[
             _InfoRow(label: 'GSTIN', value: gstin),
             _InfoRow(label: 'Business Reg. Number', value: businessRegNumber),
-            _InfoRow(label: 'Industry Types', value: industryTypes),
             _InfoRow(
               label: 'Service Type',
               value: hasServiceType ? serviceType : '—',
@@ -917,8 +903,6 @@ class _OrganisationDetailsCard extends StatelessWidget {
                 ),
               ),
             ),
-            _InfoRow(label: 'Use Cases', value: useCases),
-            _InfoRow(label: 'Onboarding', value: onboarding),
           ],
         ),
       ],
@@ -948,9 +932,6 @@ class _AddressAndRecordsCard extends StatelessWidget {
         : '—';
     final String addressLine3 = profile?.addressLine3?.trim().isNotEmpty == true
         ? profile!.addressLine3!.trim()
-        : '—';
-    final String storagePath = profile?.storagePath.trim().isNotEmpty == true
-        ? profile!.storagePath.trim()
         : '—';
     final String humanSpaceId = profile?.humanSpaceId?.trim().isNotEmpty == true
         ? profile!.humanSpaceId!.trim()
@@ -997,7 +978,6 @@ class _AddressAndRecordsCard extends StatelessWidget {
             _InfoRow(label: 'Address Line 1', value: addressLine1),
             _InfoRow(label: 'Address Line 2', value: addressLine2),
             _InfoRow(label: 'Address Line 3', value: addressLine3),
-            _InfoRow(label: 'Storage Path', value: storagePath),
             if (showHumanSpaceId)
               _InfoRow(label: 'Human Space ID', value: humanSpaceId),
             if (showProductSpaceIds)
@@ -1047,6 +1027,11 @@ class _AccountStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final double scale = _FigmaScaleScope.of(context);
     double s(double v) => v * scale;
+    final String accountType = profile?.userType.trim().isNotEmpty == true
+        ? profile!.userType.trim().toLowerCase()
+        : profile?.loginType.trim().toLowerCase() ?? '';
+    final bool isOrgAccount =
+        accountType.isEmpty || accountType == 'organization';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1077,14 +1062,16 @@ class _AccountStatusCard extends StatelessWidget {
               label: 'Onboarding Completed',
               value: profile?.onboardingCompleted == true ? 'Yes' : 'No',
             ),
-            _InfoRow(
-              label: 'Skill Tree Initiated',
-              value: profile?.skillTreeInitiated == true ? 'Yes' : 'No',
-            ),
-            _InfoRow(
-              label: 'Mobile Verified',
-              value: profile?.mobileVerified == true ? 'Yes' : 'No',
-            ),
+            if (!isOrgAccount)
+              _InfoRow(
+                label: 'Skill Tree Initiated',
+                value: profile?.skillTreeInitiated == true ? 'Yes' : 'No',
+              ),
+            if (!isOrgAccount)
+              _InfoRow(
+                label: 'Mobile Verified',
+                value: profile?.mobileVerified == true ? 'Yes' : 'No',
+              ),
           ],
         ),
       ],
@@ -1351,16 +1338,4 @@ String _formatDateTime(DateTime value) {
   String twoDigits(int n) => n.toString().padLeft(2, '0');
   return '${local.year}-${twoDigits(local.month)}-${twoDigits(local.day)} '
       '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
-}
-
-String _formatUseCases(Map<String, dynamic>? useCases) {
-  if (useCases == null || useCases.isEmpty) return '—';
-  final List<String> labels = <String>[];
-  for (final MapEntry<String, dynamic> entry in useCases.entries) {
-    final String key = entry.key.trim();
-    if (key.isEmpty) continue;
-    final String title = key[0].toUpperCase() + key.substring(1);
-    labels.add('$title: ${entry.value == true ? 'Enabled' : 'Disabled'}');
-  }
-  return labels.isEmpty ? '—' : labels.join(', ');
 }
