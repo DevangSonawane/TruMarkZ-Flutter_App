@@ -27,9 +27,23 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   static const List<String> _serviceTypeOptions = <String>['product', 'human'];
 
   Future<void> _showDhiwaySpaceIdDialog(UserProfile? profile) async {
-    final String currentSpaceId = profile?.dhiwaySpaceId?.trim() ?? '';
-    final TextEditingController controller = TextEditingController(
-      text: currentSpaceId,
+    final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
+    final bool isHuman = serviceType == 'human';
+    final bool isProduct = serviceType == 'product';
+    final TextEditingController humanController = TextEditingController(
+      text: profile?.humanSpaceId?.trim().isNotEmpty == true
+          ? profile!.humanSpaceId!.trim()
+          : profile?.dhiwaySpaceId?.trim() ?? '',
+    );
+    final TextEditingController productController = TextEditingController(
+      text: profile?.productSpaceId?.trim().isNotEmpty == true
+          ? profile!.productSpaceId!.trim()
+          : profile?.dhiwaySpaceId?.trim() ?? '',
+    );
+    final TextEditingController warrantyController = TextEditingController(
+      text: profile?.warrantySpaceId?.trim().isNotEmpty == true
+          ? profile!.warrantySpaceId!.trim()
+          : profile?.dhiwaySpaceId?.trim() ?? '',
     );
 
     if (!mounted) return;
@@ -42,10 +56,22 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setDialogState) {
             Future<void> save() async {
-              final String nextValue = controller.text.trim();
-              if (nextValue.isEmpty) {
+              final String humanSpaceId = humanController.text.trim();
+              final String productSpaceId = productController.text.trim();
+              final String warrantySpaceId = warrantyController.text.trim();
+
+              if (isHuman && humanSpaceId.isEmpty) {
                 setDialogState(() {
-                  errorText = 'Please enter a Dhiway Space ID.';
+                  errorText = 'Please enter a Human Space ID.';
+                });
+                return;
+              }
+              if (isProduct &&
+                  productSpaceId.isEmpty &&
+                  warrantySpaceId.isEmpty) {
+                setDialogState(() {
+                  errorText =
+                      'Please enter at least one Product or Warranty Space ID.';
                 });
                 return;
               }
@@ -60,14 +86,17 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
               try {
                 await ref
                     .read(authNotifierProvider.notifier)
-                    .updateDhiwaySpaceId(nextValue);
+                    .updateDhiwaySpaces(
+                      humanSpaceId: isHuman ? humanSpaceId : null,
+                      productSpaceId: isProduct ? productSpaceId : null,
+                      warrantySpaceId: isProduct ? warrantySpaceId : null,
+                    );
                 if (!mounted) return;
                 navigator.pop();
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Dhiway Space ID updated successfully.'),
-                  ),
-                );
+                final String successMessage = isHuman
+                    ? 'Human Space ID updated successfully.'
+                    : 'Product and Warranty Space IDs updated successfully.';
+                messenger.showSnackBar(SnackBar(content: Text(successMessage)));
               } on ApiException catch (e) {
                 if (!mounted) return;
                 setDialogState(() {
@@ -83,23 +112,59 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             }
 
             return AlertDialog(
-              title: const Text('Update Dhiway Space ID'),
+              title: Text(
+                isHuman
+                    ? 'Update Human Space ID'
+                    : isProduct
+                    ? 'Update Product Space IDs'
+                    : 'Update Dhiway Space IDs',
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Text(
-                    'Save the space id shared by the superadmin for this organization.',
+                    isHuman
+                        ? 'Save the human credential space shared by the superadmin.'
+                        : isProduct
+                        ? 'Save the product and warranty spaces shared by the superadmin.'
+                        : 'Save the space ids shared by the superadmin for this organization.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
-                  TMZInput(
-                    label: 'Dhiway Space ID',
-                    hint: 'Enter space id',
-                    controller: controller,
-                    enabled: !isSaving,
-                    errorText: errorText,
-                  ),
+                  if (isHuman) ...<Widget>[
+                    TMZInput(
+                      label: 'Human Space ID',
+                      hint: 'Enter human space id',
+                      controller: humanController,
+                      enabled: !isSaving,
+                      errorText: errorText,
+                    ),
+                  ] else if (isProduct) ...<Widget>[
+                    TMZInput(
+                      label: 'Product Space ID',
+                      hint: 'Enter product space id',
+                      controller: productController,
+                      enabled: !isSaving,
+                      errorText: errorText,
+                    ),
+                    const SizedBox(height: 12),
+                    TMZInput(
+                      label: 'Warranty Space ID',
+                      hint: 'Enter warranty space id',
+                      controller: warrantyController,
+                      enabled: !isSaving,
+                      errorText: errorText,
+                    ),
+                  ] else ...<Widget>[
+                    TMZInput(
+                      label: 'Dhiway Space ID',
+                      hint: 'Enter space id',
+                      controller: humanController,
+                      enabled: !isSaving,
+                      errorText: errorText,
+                    ),
+                  ],
                 ],
               ),
               actions: <Widget>[
@@ -124,7 +189,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         );
       },
     );
-    controller.dispose();
+    humanController.dispose();
+    productController.dispose();
+    warrantyController.dispose();
   }
 
   Future<void> _showServiceTypeDialog(UserProfile? profile) async {
@@ -391,11 +458,13 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                                   _showServiceTypeDialog(profile),
                             ),
                             SizedBox(height: s(24)),
-                            _AddressAndRecordsCard(
+                            _SpaceIdsCard(
                               profile: profile,
-                              onEditDhiwaySpaceId: () =>
+                              onEditSpaceIds: () =>
                                   _showDhiwaySpaceIdDialog(profile),
                             ),
+                            SizedBox(height: s(24)),
+                            _AddressAndRecordsCard(profile: profile),
                             SizedBox(height: s(24)),
                             _AccountStatusCard(profile: profile),
                             SizedBox(height: s(24)),
@@ -911,13 +980,9 @@ class _OrganisationDetailsCard extends StatelessWidget {
 }
 
 class _AddressAndRecordsCard extends StatelessWidget {
-  const _AddressAndRecordsCard({
-    required this.profile,
-    required this.onEditDhiwaySpaceId,
-  });
+  const _AddressAndRecordsCard({required this.profile});
 
   final UserProfile? profile;
-  final VoidCallback onEditDhiwaySpaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -933,30 +998,9 @@ class _AddressAndRecordsCard extends StatelessWidget {
     final String addressLine3 = profile?.addressLine3?.trim().isNotEmpty == true
         ? profile!.addressLine3!.trim()
         : '—';
-    final String humanSpaceId = profile?.humanSpaceId?.trim().isNotEmpty == true
-        ? profile!.humanSpaceId!.trim()
-        : '—';
-    final String productSpaceId =
-        profile?.productSpaceId?.trim().isNotEmpty == true
-        ? profile!.productSpaceId!.trim()
-        : '—';
-    final String warrantySpaceId =
-        profile?.warrantySpaceId?.trim().isNotEmpty == true
-        ? profile!.warrantySpaceId!.trim()
-        : '—';
-    final String dhiwaySpaceId =
-        profile?.dhiwaySpaceId?.trim().isNotEmpty == true
-        ? profile!.dhiwaySpaceId!.trim()
-        : '—';
-    final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
-    final bool showHumanSpaceId = serviceType == 'human' || serviceType.isEmpty;
-    final bool showProductSpaceIds =
-        serviceType == 'product' || serviceType.isEmpty;
     final String createdAt = profile?.createdAt == null
         ? '—'
         : _formatDateTime(profile!.createdAt!);
-    final bool hasDhiwaySpaceId =
-        profile?.dhiwaySpaceId?.trim().isNotEmpty == true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -978,39 +1022,152 @@ class _AddressAndRecordsCard extends StatelessWidget {
             _InfoRow(label: 'Address Line 1', value: addressLine1),
             _InfoRow(label: 'Address Line 2', value: addressLine2),
             _InfoRow(label: 'Address Line 3', value: addressLine3),
-            if (showHumanSpaceId)
-              _InfoRow(label: 'Human Space ID', value: humanSpaceId),
-            if (showProductSpaceIds)
-              _InfoRow(label: 'Product Space ID', value: productSpaceId),
-            if (showProductSpaceIds)
-              _InfoRow(label: 'Warranty Space ID', value: warrantySpaceId),
-            _InfoRow(
-              label: 'Dhiway Space ID',
-              value: dhiwaySpaceId,
-              trailing: TextButton.icon(
-                onPressed: onEditDhiwaySpaceId,
-                icon: Icon(
-                  hasDhiwaySpaceId ? Icons.edit_outlined : Icons.add_rounded,
-                  size: s(16),
-                ),
-                label: Text(hasDhiwaySpaceId ? 'Edit' : 'Add'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.brandBlue,
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  minimumSize: Size.zero,
-                  padding: EdgeInsets.zero,
-                  textStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(12),
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.05859375,
-                    height: 16 / 12,
+            _InfoRow(label: 'Created At', value: createdAt),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SpaceIdsCard extends StatelessWidget {
+  const _SpaceIdsCard({required this.profile, required this.onEditSpaceIds});
+
+  final UserProfile? profile;
+  final VoidCallback onEditSpaceIds;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
+    final bool isHuman = serviceType == 'human';
+    final bool isProduct = serviceType == 'product';
+    final String humanSpaceId = profile?.humanSpaceId?.trim().isNotEmpty == true
+        ? profile!.humanSpaceId!.trim()
+        : profile?.dhiwaySpaceId?.trim().isNotEmpty == true
+        ? profile!.dhiwaySpaceId!.trim()
+        : '—';
+    final String productSpaceId =
+        profile?.productSpaceId?.trim().isNotEmpty == true
+        ? profile!.productSpaceId!.trim()
+        : profile?.dhiwaySpaceId?.trim().isNotEmpty == true
+        ? profile!.dhiwaySpaceId!.trim()
+        : '—';
+    final String warrantySpaceId =
+        profile?.warrantySpaceId?.trim().isNotEmpty == true
+        ? profile!.warrantySpaceId!.trim()
+        : '—';
+    final bool hasHumanSpaceId =
+        profile?.humanSpaceId?.trim().isNotEmpty == true ||
+        profile?.dhiwaySpaceId?.trim().isNotEmpty == true;
+    final bool hasProductSpaceId =
+        profile?.productSpaceId?.trim().isNotEmpty == true ||
+        profile?.dhiwaySpaceId?.trim().isNotEmpty == true;
+    final bool hasWarrantySpaceId =
+        profile?.warrantySpaceId?.trim().isNotEmpty == true;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'SPACE IDS',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1833819,
+            height: 17.7507286 / 12,
+            color: Color(0xFF323232),
+          ),
+        ),
+        SizedBox(height: s(12)),
+        _FigmaInfoCard(
+          rows: <_InfoRow>[
+            if (isHuman || serviceType.isEmpty)
+              _InfoRow(
+                label: 'Human Space ID',
+                value: humanSpaceId,
+                trailing: TextButton.icon(
+                  onPressed: onEditSpaceIds,
+                  icon: Icon(
+                    hasHumanSpaceId ? Icons.edit_outlined : Icons.add_rounded,
+                    size: s(16),
+                  ),
+                  label: Text(hasHumanSpaceId ? 'Edit' : 'Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: Size.zero,
+                    padding: EdgeInsets.zero,
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.05859375,
+                      height: 16 / 12,
+                    ),
                   ),
                 ),
               ),
-            ),
-            _InfoRow(label: 'Created At', value: createdAt),
+            if (isProduct || serviceType.isEmpty) ...<_InfoRow>[
+              _InfoRow(
+                label: 'Product Space ID',
+                value: productSpaceId,
+                trailing: TextButton.icon(
+                  onPressed: onEditSpaceIds,
+                  icon: Icon(
+                    hasProductSpaceId ? Icons.edit_outlined : Icons.add_rounded,
+                    size: s(16),
+                  ),
+                  label: Text(hasProductSpaceId ? 'Edit' : 'Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: Size.zero,
+                    padding: EdgeInsets.zero,
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.05859375,
+                      height: 16 / 12,
+                    ),
+                  ),
+                ),
+              ),
+              _InfoRow(
+                label: 'Warranty Space ID',
+                value: warrantySpaceId,
+                trailing: TextButton.icon(
+                  onPressed: onEditSpaceIds,
+                  icon: Icon(
+                    hasWarrantySpaceId
+                        ? Icons.edit_outlined
+                        : Icons.add_rounded,
+                    size: s(16),
+                  ),
+                  label: Text(hasWarrantySpaceId ? 'Edit' : 'Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: Size.zero,
+                    padding: EdgeInsets.zero,
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.05859375,
+                      height: 16 / 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ],

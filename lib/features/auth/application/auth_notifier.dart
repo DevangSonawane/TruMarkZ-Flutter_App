@@ -291,6 +291,15 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<UserProfile> updateDhiwaySpaceId(String dhiwaySpaceId) async {
+    return updateDhiwaySpaces(dhiwaySpaceId: dhiwaySpaceId);
+  }
+
+  Future<UserProfile> updateDhiwaySpaces({
+    String? humanSpaceId,
+    String? productSpaceId,
+    String? warrantySpaceId,
+    String? dhiwaySpaceId,
+  }) async {
     state = AsyncData(
       (state.value ?? const AuthState()).copyWith(
         isLoading: true,
@@ -298,7 +307,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       ),
     );
     try {
-      final UserProfile me = await _repo.updateDhiwaySpaceId(
+      final UserProfile me = await _repo.updateDhiwaySpaces(
+        humanSpaceId: humanSpaceId,
+        productSpaceId: productSpaceId,
+        warrantySpaceId: warrantySpaceId,
         dhiwaySpaceId: dhiwaySpaceId,
       );
       final AuthState nextState = AuthState(

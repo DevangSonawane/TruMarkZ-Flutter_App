@@ -217,12 +217,44 @@ class AuthRepository {
     return UserProfile.fromJson(res);
   }
 
-  Future<UserProfile> updateDhiwaySpaceId({
-    required String dhiwaySpaceId,
+  Future<UserProfile> updateDhiwaySpaceId({required String dhiwaySpaceId}) {
+    return updateDhiwaySpaces(dhiwaySpaceId: dhiwaySpaceId);
+  }
+
+  Future<UserProfile> updateDhiwaySpaces({
+    String? humanSpaceId,
+    String? productSpaceId,
+    String? warrantySpaceId,
+    String? dhiwaySpaceId,
   }) async {
+    final Map<String, dynamic> payload = <String, dynamic>{};
+    final String human = humanSpaceId?.trim() ?? '';
+    final String product = productSpaceId?.trim() ?? '';
+    final String warranty = warrantySpaceId?.trim() ?? '';
+    final String legacy = dhiwaySpaceId?.trim() ?? '';
+
+    if (human.isNotEmpty) {
+      payload['human_space_id'] = human;
+    }
+    if (product.isNotEmpty) {
+      payload['product_space_id'] = product;
+    }
+    if (warranty.isNotEmpty) {
+      payload['warrenty_space_id'] = warranty;
+    }
+    if (legacy.isNotEmpty) {
+      payload['dhiway_space_id'] = legacy;
+    }
+    if (payload.isEmpty) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Please enter at least one space id.',
+      );
+    }
+
     final Map<String, dynamic> res = await _api.patch(
       '/auth/me/dhiway-space',
-      data: <String, dynamic>{'dhiway_space_id': dhiwaySpaceId},
+      data: payload,
     );
     final String message = (res['message'] ?? '').toString().trim();
     if (message.isNotEmpty) {
