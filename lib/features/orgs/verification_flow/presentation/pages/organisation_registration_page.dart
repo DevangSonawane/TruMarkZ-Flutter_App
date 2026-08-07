@@ -32,6 +32,12 @@ class _OrganisationRegistrationPageState
   final TextEditingController _password = TextEditingController();
   final TextEditingController _officialEmail = TextEditingController();
   final TextEditingController _phoneNumber = TextEditingController();
+  final TextEditingController _humanSpaceId = TextEditingController();
+  final TextEditingController _productSpaceId = TextEditingController();
+  final TextEditingController _warrantySpaceId = TextEditingController();
+  final TextEditingController _humanSchemaId = TextEditingController();
+  final TextEditingController _productSchemaId = TextEditingController();
+  final TextEditingController _warrantySchemaId = TextEditingController();
   String? _serviceType;
 
   bool _looksLikeEmail(String value) {
@@ -113,17 +119,27 @@ class _OrganisationRegistrationPageState
 
     setState(() => _isSendingOtp = true);
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .signupOrganization(
-            SignupOrganizationRequest(
-              orgName: orgName,
-              email: officialEmail,
-              phoneNumber: phoneNumber,
-              password: password,
-              serviceType: serviceType,
-            ),
-          );
+      final SignupOrganizationRequest request = SignupOrganizationRequest(
+        orgName: orgName,
+        email: officialEmail,
+        phoneNumber: phoneNumber,
+        password: password,
+        serviceType: serviceType,
+        humanSpaceId: serviceType == 'human' ? _humanSpaceId.text : null,
+        humanSchemaId: serviceType == 'human' ? _humanSchemaId.text : null,
+        productSpaceId: serviceType == 'product' ? _productSpaceId.text : null,
+        productSchemaId: serviceType == 'product'
+            ? _productSchemaId.text
+            : null,
+        warrantySpaceId: serviceType == 'product'
+            ? _warrantySpaceId.text
+            : null,
+        warrantySchemaId: serviceType == 'product'
+            ? _warrantySchemaId.text
+            : null,
+      );
+
+      await ref.read(authRepositoryProvider).signupOrganization(request);
       if (!mounted) return;
       setState(() => _otpSent = true);
       ScaffoldMessenger.of(
@@ -267,6 +283,12 @@ class _OrganisationRegistrationPageState
     _password.dispose();
     _officialEmail.dispose();
     _phoneNumber.dispose();
+    _humanSpaceId.dispose();
+    _productSpaceId.dispose();
+    _warrantySpaceId.dispose();
+    _humanSchemaId.dispose();
+    _productSchemaId.dispose();
+    _warrantySchemaId.dispose();
     super.dispose();
   }
 
@@ -356,6 +378,19 @@ class _OrganisationRegistrationPageState
                   value: _serviceType,
                   onChanged: _setServiceType,
                 ),
+                if ((_serviceType ?? '').trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: AppSpacing.x3),
+                  _ServiceDetailsSection(
+                    serviceType: _serviceType!,
+                    humanSpaceId: _humanSpaceId,
+                    productSpaceId: _productSpaceId,
+                    warrantySpaceId: _warrantySpaceId,
+                    humanSchemaId: _humanSchemaId,
+                    productSchemaId: _productSchemaId,
+                    warrantySchemaId: _warrantySchemaId,
+                    backgroundColor: inputBg,
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.x3),
                 TMZInput(
                   label: 'Password',
@@ -442,8 +477,195 @@ class _ServiceTypeField extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'This controls which verification flow your organisation can use.',
+          'This controls which verification flow your organisation can use. You can fill the service-specific IDs later in settings if needed.',
           style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceDetailsSection extends StatelessWidget {
+  const _ServiceDetailsSection({
+    required this.serviceType,
+    required this.humanSpaceId,
+    required this.productSpaceId,
+    required this.warrantySpaceId,
+    required this.humanSchemaId,
+    required this.productSchemaId,
+    required this.warrantySchemaId,
+    required this.backgroundColor,
+  });
+
+  final String serviceType;
+  final TextEditingController humanSpaceId;
+  final TextEditingController productSpaceId;
+  final TextEditingController warrantySpaceId;
+  final TextEditingController humanSchemaId;
+  final TextEditingController productSchemaId;
+  final TextEditingController warrantySchemaId;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final String normalized = serviceType.trim().toLowerCase();
+    switch (normalized) {
+      case 'human':
+        return _ServicePair(
+          title: 'Human Service Details',
+          primaryLabel: 'Human Space ID (optional)',
+          primaryHint: 'Enter human space ID later in settings if needed',
+          primaryController: humanSpaceId,
+          secondaryLabel: 'Human Schema ID (optional)',
+          secondaryHint: 'Enter human schema ID later in settings if needed',
+          secondaryController: humanSchemaId,
+          backgroundColor: backgroundColor,
+        );
+      case 'product':
+        return _ServiceStack(
+          title: 'Product Service Details',
+          firstLabel: 'Product Space ID (optional)',
+          firstHint: 'Enter product space ID later in settings if needed',
+          firstController: productSpaceId,
+          secondLabel: 'Product Schema ID (optional)',
+          secondHint: 'Enter product schema ID later in settings if needed',
+          secondController: productSchemaId,
+          thirdLabel: 'Warranty Space ID (optional)',
+          thirdHint: 'Enter warranty space ID later in settings if needed',
+          thirdController: warrantySpaceId,
+          fourthLabel: 'Warranty Schema ID (optional)',
+          fourthHint: 'Enter warranty schema ID later in settings if needed',
+          fourthController: warrantySchemaId,
+          backgroundColor: backgroundColor,
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class _ServicePair extends StatelessWidget {
+  const _ServicePair({
+    required this.title,
+    required this.primaryLabel,
+    required this.primaryHint,
+    required this.primaryController,
+    required this.secondaryLabel,
+    required this.secondaryHint,
+    required this.secondaryController,
+    required this.backgroundColor,
+  });
+
+  final String title;
+  final String primaryLabel;
+  final String primaryHint;
+  final TextEditingController primaryController;
+  final String secondaryLabel;
+  final String secondaryHint;
+  final TextEditingController secondaryController;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(title, style: AppTypography.heading2),
+        const SizedBox(height: AppSpacing.x2),
+        Text(
+          'These fields are optional during signup and can be added later in settings.',
+          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: primaryLabel,
+          hint: primaryHint,
+          controller: primaryController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: secondaryLabel,
+          hint: secondaryHint,
+          controller: secondaryController,
+          backgroundColor: backgroundColor,
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceStack extends StatelessWidget {
+  const _ServiceStack({
+    required this.title,
+    required this.firstLabel,
+    required this.firstHint,
+    required this.firstController,
+    required this.secondLabel,
+    required this.secondHint,
+    required this.secondController,
+    required this.thirdLabel,
+    required this.thirdHint,
+    required this.thirdController,
+    required this.fourthLabel,
+    required this.fourthHint,
+    required this.fourthController,
+    required this.backgroundColor,
+  });
+
+  final String title;
+  final String firstLabel;
+  final String firstHint;
+  final TextEditingController firstController;
+  final String secondLabel;
+  final String secondHint;
+  final TextEditingController secondController;
+  final String thirdLabel;
+  final String thirdHint;
+  final TextEditingController thirdController;
+  final String fourthLabel;
+  final String fourthHint;
+  final TextEditingController fourthController;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(title, style: AppTypography.heading2),
+        const SizedBox(height: AppSpacing.x2),
+        Text(
+          'These fields are optional during signup and can be added later in settings.',
+          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: firstLabel,
+          hint: firstHint,
+          controller: firstController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: secondLabel,
+          hint: secondHint,
+          controller: secondController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: thirdLabel,
+          hint: thirdHint,
+          controller: thirdController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: fourthLabel,
+          hint: fourthHint,
+          controller: fourthController,
+          backgroundColor: backgroundColor,
         ),
       ],
     );

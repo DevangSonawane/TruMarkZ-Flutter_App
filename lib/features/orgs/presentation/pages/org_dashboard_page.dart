@@ -28,6 +28,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
   Widget build(BuildContext context) {
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final dynamic profile = authAsync.value?.userProfile;
+    final String currentOrgId = (profile?.id ?? '').toString().trim();
     final String serviceType = (profile?.serviceType ?? '')
         .toString()
         .trim()
@@ -38,12 +39,21 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
         : (profile?.fullName?.trim().isNotEmpty == true
               ? profile!.fullName!.trim()
               : 'Organisation');
+    final String headerLine1 = displayName.isNotEmpty
+        ? displayName
+        : 'Organisation dashboard';
+    final String headerLine2 = serviceType.isNotEmpty
+        ? '${_toTitleCase(serviceType)} organisation'
+        : 'Organisation dashboard';
     final AsyncValue<List<VerificationBatchSummary>> batchesAsync = ref.watch(
       verificationBatchesProvider,
     );
     final List<VerificationBatchSummary> batches =
         batchesAsync.valueOrNull ?? const <VerificationBatchSummary>[];
-    final _DashboardSummary summary = _DashboardSummary.fromBatches(batches);
+    final _DashboardSummary summary = _DashboardSummary.fromBatches(
+      batches,
+      orgId: currentOrgId,
+    );
 
     final double safeTop = MediaQuery.paddingOf(context).top;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
@@ -92,8 +102,8 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                         top: headerTop,
                         height: 40,
                         child: _HomeHeader(
-                          locationLine1: 'Kandivali, Mumbai',
-                          locationLine2: 'Asynk Pvt Ltd',
+                          locationLine1: headerLine1,
+                          locationLine2: headerLine2,
                           avatarAssetPath: 'assets/icons/dashbaord/profile.png',
                           onAlertsTap: () => context.go(
                             '${AppRouter.notificationsPath}?flow=org',
@@ -745,40 +755,27 @@ class _RecentBatchList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<_DashboardBatchItem> tiles = batches.isEmpty
-        ? <_DashboardBatchItem>[
-            _DashboardBatchItem(
-              batchId: 'TR-98421',
-              title: 'IN-North Logistics',
-              recordCount: 4500,
-              verifiedCount: 3402,
-              progressFraction: 0.74,
-              status: _BatchStatus.processing,
-              updatedAt: DateTime.now().subtract(const Duration(days: 2)),
-              isHumanVerification: true,
+    final List<_DashboardBatchItem> tiles = batches;
+
+    if (tiles.isEmpty) {
+      return const TMZCard(
+        padding: EdgeInsets.all(AppSpacing.x4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'No recent batches yet',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
-            _DashboardBatchItem(
-              batchId: 'TR-98421',
-              title: 'IN-North Logistics',
-              recordCount: 840,
-              verifiedCount: 840,
-              progressFraction: 1,
-              status: _BatchStatus.complete,
-              updatedAt: DateTime.now().subtract(const Duration(days: 4)),
-              isHumanVerification: true,
+            SizedBox(height: AppSpacing.x1),
+            Text(
+              'Create your first batch to see activity here.',
+              style: TextStyle(color: AppColors.textSecondary),
             ),
-            _DashboardBatchItem(
-              batchId: 'TR-98421',
-              title: 'IN-North Logistics',
-              recordCount: 840,
-              verifiedCount: 840,
-              progressFraction: 1,
-              status: _BatchStatus.complete,
-              updatedAt: DateTime.now().subtract(const Duration(days: 4)),
-              isHumanVerification: true,
-            ),
-          ]
-        : batches;
+          ],
+        ),
+      );
+    }
 
     return Column(
       children: <Widget>[
@@ -1100,6 +1097,19 @@ String _formatCompact(int value) {
   return value.toString();
 }
 
+String _toTitleCase(String value) {
+  final String trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return trimmed
+      .split(RegExp(r'\s+'))
+      .where((String part) => part.isNotEmpty)
+      .map((String part) {
+        if (part.length == 1) return part.toUpperCase();
+        return '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}';
+      })
+      .join(' ');
+}
+
 String _truncateBatchId(String id, {int keep = 14}) {
   final String s = id.trim();
   if (s.length <= keep) return s;
@@ -1139,7 +1149,20 @@ class _DashboardSummary {
   final int activeBatches;
   final List<_DashboardBatchItem> recentBatches;
 
-  static _DashboardSummary fromBatches(List<VerificationBatchSummary> batches) {
+  static _DashboardSummary fromBatches(
+    List<VerificationBatchSummary> batches, {
+    String? orgId,
+  }) {
+    final String normalizedOrgId = (orgId ?? '').trim();
+    if (normalizedOrgId.isEmpty) {
+      return const _DashboardSummary(
+        pending: 0,
+        verified: 0,
+        failed: 0,
+        activeBatches: 0,
+        recentBatches: <_DashboardBatchItem>[],
+      );
+    }
     int pending = 0;
     int verified = 0;
     int failed = 0;
@@ -1147,7 +1170,12 @@ class _DashboardSummary {
 
     final List<_DashboardBatchItem> recentTiles =
         batches
-            .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
+            .where((VerificationBatchSummary item) {
+              if (item.batchId.isEmpty) return false;
+              if (normalizedOrgId.isEmpty) return true;
+              final String itemOrgId = item.orgId.trim();
+              return itemOrgId.isNotEmpty && itemOrgId == normalizedOrgId;
+            })
             .map((VerificationBatchSummary item) {
               pending += item.pending;
               verified += item.verified;

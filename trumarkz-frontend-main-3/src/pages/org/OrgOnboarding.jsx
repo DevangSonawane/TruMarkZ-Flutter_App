@@ -274,4 +274,4 @@ export const OrgOnboarding = () => {
   );
 };
 
-export default OrgOnboarding;
+export default OrgRegistration;

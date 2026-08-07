@@ -217,63 +217,78 @@ class AuthRepository {
     return UserProfile.fromJson(res);
   }
 
-  Future<UserProfile> updateDhiwaySpaceId({required String dhiwaySpaceId}) {
-    return updateDhiwaySpaces(dhiwaySpaceId: dhiwaySpaceId);
+  Future<UserProfile> updateServiceType({required String serviceType}) async {
+    final String normalized = serviceType.trim().toLowerCase();
+    if (normalized != 'human' && normalized != 'product') {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Service type must be either human or product.',
+      );
+    }
+    return updateOrganizationProfile(serviceType: normalized);
   }
 
-  Future<UserProfile> updateDhiwaySpaces({
+  Future<UserProfile> updateOrganizationProfile({
+    String? organizationName,
+    String? fullName,
+    String? phoneNumber,
+    String? gstin,
+    String? businessRegNumber,
+    String? addressLine1,
+    String? addressLine2,
+    String? addressLine3,
+    String? serviceType,
     String? humanSpaceId,
     String? productSpaceId,
     String? warrantySpaceId,
+    String? humanSchemaId,
+    String? productSchemaId,
+    String? warrantySchemaId,
     String? dhiwaySpaceId,
   }) async {
-    final Map<String, dynamic> payload = <String, dynamic>{};
-    final String human = humanSpaceId?.trim() ?? '';
-    final String product = productSpaceId?.trim() ?? '';
-    final String warranty = warrantySpaceId?.trim() ?? '';
-    final String legacy = dhiwaySpaceId?.trim() ?? '';
+    if (serviceType != null) {
+      final String normalizedServiceType = serviceType.trim().toLowerCase();
+      if (normalizedServiceType != 'human' &&
+          normalizedServiceType != 'product') {
+        throw const ApiException(
+          statusCode: null,
+          message: 'Service type must be either human or product.',
+        );
+      }
+      serviceType = normalizedServiceType;
+    }
 
-    if (human.isNotEmpty) {
-      payload['human_space_id'] = human;
-    }
-    if (product.isNotEmpty) {
-      payload['product_space_id'] = product;
-    }
-    if (warranty.isNotEmpty) {
-      payload['warrenty_space_id'] = warranty;
-    }
-    if (legacy.isNotEmpty) {
-      payload['dhiway_space_id'] = legacy;
-    }
+    final OrganizationProfileUpdateRequest request =
+        OrganizationProfileUpdateRequest(
+          organizationName: organizationName,
+          fullName: fullName,
+          phoneNumber: phoneNumber,
+          gstin: gstin,
+          businessRegNumber: businessRegNumber,
+          addressLine1: addressLine1,
+          addressLine2: addressLine2,
+          addressLine3: addressLine3,
+          serviceType: serviceType,
+          humanSpaceId: humanSpaceId,
+          productSpaceId: productSpaceId,
+          warrantySpaceId: warrantySpaceId,
+          humanSchemaId: humanSchemaId,
+          productSchemaId: productSchemaId,
+          warrantySchemaId: warrantySchemaId,
+          dhiwaySpaceId: dhiwaySpaceId,
+        );
+
+    final Map<String, dynamic> payload = request.toJson();
     if (payload.isEmpty) {
       throw const ApiException(
         statusCode: null,
-        message: 'Please enter at least one space id.',
+        message: 'Please enter at least one field to update.',
       );
     }
 
     final Map<String, dynamic> res = await _api.patch(
-      '/auth/me/dhiway-space',
+      '/auth/me',
       data: payload,
-    );
-    final String message = (res['message'] ?? '').toString().trim();
-    if (message.isNotEmpty) {
-      // Ignore the body shape and fetch the source of truth profile.
-    }
-    return getMe();
-  }
-
-  Future<UserProfile> updateServiceType({required String serviceType}) async {
-    final String normalized = serviceType.trim().toLowerCase();
-    if (normalized != 'product' && normalized != 'human') {
-      throw const ApiException(
-        statusCode: null,
-        message: 'Please choose a valid service type.',
-      );
-    }
-    final Map<String, dynamic> res = await _api.patch(
-      '/auth/me/service-type',
-      data: <String, dynamic>{'service_type': normalized},
     );
     final String message = (res['message'] ?? '').toString().trim();
     if (message.isNotEmpty) {

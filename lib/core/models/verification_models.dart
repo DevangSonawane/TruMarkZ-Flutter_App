@@ -335,6 +335,7 @@ class VerificationBatchSummary {
   const VerificationBatchSummary({
     required this.batchId,
     required this.batchName,
+    required this.orgId,
     required this.totalUsers,
     required this.verified,
     required this.failed,
@@ -345,6 +346,7 @@ class VerificationBatchSummary {
 
   final String batchId;
   final String batchName;
+  final String orgId;
   final int totalUsers;
   final int verified;
   final int failed;
@@ -354,7 +356,10 @@ class VerificationBatchSummary {
 
   int get pending => (totalUsers - verified - failed).clamp(0, totalUsers);
 
-  factory VerificationBatchSummary.fromJson(Map<String, dynamic> json) {
+  factory VerificationBatchSummary.fromJson(
+    Map<String, dynamic> json, {
+    String? fallbackOrgId,
+  }) {
     final dynamic reportsRaw = json['report_storage_paths'];
     final List<String> reports = reportsRaw is List
         ? reportsRaw
@@ -366,6 +371,9 @@ class VerificationBatchSummary {
     return VerificationBatchSummary(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
       batchName: (json['batch_name'] ?? json['batchName'] ?? '')
+          .toString()
+          .trim(),
+      orgId: (json['org_id'] ?? json['orgId'] ?? fallbackOrgId ?? '')
           .toString()
           .trim(),
       totalUsers:
@@ -399,6 +407,9 @@ class VerificationBatchGroup {
   final List<VerificationBatchSummary> batches;
 
   factory VerificationBatchGroup.fromJson(Map<String, dynamic> json) {
+    final String orgId = (json['org_id'] ?? json['orgId'] ?? '')
+        .toString()
+        .trim();
     final dynamic batchesRaw = json['batches'];
     final List<VerificationBatchSummary> batches = batchesRaw is List
         ? batchesRaw
@@ -406,6 +417,7 @@ class VerificationBatchGroup {
               .map(
                 (Map e) => VerificationBatchSummary.fromJson(
                   Map<String, dynamic>.from(e),
+                  fallbackOrgId: orgId,
                 ),
               )
               .where((VerificationBatchSummary item) => item.batchId.isNotEmpty)
@@ -413,7 +425,7 @@ class VerificationBatchGroup {
         : const <VerificationBatchSummary>[];
 
     return VerificationBatchGroup(
-      orgId: (json['org_id'] ?? json['orgId'] ?? '').toString().trim(),
+      orgId: orgId,
       organizationName:
           (json['organization_name'] ?? json['organizationName'] ?? '')
               .toString()

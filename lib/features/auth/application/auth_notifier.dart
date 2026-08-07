@@ -290,14 +290,26 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
-  Future<UserProfile> updateDhiwaySpaceId(String dhiwaySpaceId) async {
-    return updateDhiwaySpaces(dhiwaySpaceId: dhiwaySpaceId);
+  Future<UserProfile> updateServiceType(String serviceType) async {
+    return updateOrganizationProfile(serviceType: serviceType);
   }
 
-  Future<UserProfile> updateDhiwaySpaces({
+  Future<UserProfile> updateOrganizationProfile({
+    String? organizationName,
+    String? fullName,
+    String? phoneNumber,
+    String? gstin,
+    String? businessRegNumber,
+    String? addressLine1,
+    String? addressLine2,
+    String? addressLine3,
+    String? serviceType,
     String? humanSpaceId,
     String? productSpaceId,
     String? warrantySpaceId,
+    String? humanSchemaId,
+    String? productSchemaId,
+    String? warrantySchemaId,
     String? dhiwaySpaceId,
   }) async {
     state = AsyncData(
@@ -307,55 +319,23 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       ),
     );
     try {
-      final UserProfile me = await _repo.updateDhiwaySpaces(
+      final UserProfile me = await _repo.updateOrganizationProfile(
+        organizationName: organizationName,
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        gstin: gstin,
+        businessRegNumber: businessRegNumber,
+        addressLine1: addressLine1,
+        addressLine2: addressLine2,
+        addressLine3: addressLine3,
+        serviceType: serviceType,
         humanSpaceId: humanSpaceId,
         productSpaceId: productSpaceId,
         warrantySpaceId: warrantySpaceId,
+        humanSchemaId: humanSchemaId,
+        productSchemaId: productSchemaId,
+        warrantySchemaId: warrantySchemaId,
         dhiwaySpaceId: dhiwaySpaceId,
-      );
-      final AuthState nextState = AuthState(
-        status: AuthStatus.authenticated,
-        userId: me.id,
-        loginType: me.loginType,
-        userProfile: me,
-      );
-      await _persistLoginType(me.loginType);
-      state = AsyncData(nextState);
-      return me;
-    } on ApiException catch (e) {
-      state = AsyncData(
-        (state.value ?? const AuthState()).copyWith(
-          isLoading: false,
-          errorMessage: e.message,
-        ),
-      );
-      rethrow;
-    } catch (_) {
-      const String msg = 'Something went wrong. Please try again.';
-      state = AsyncData(
-        (state.value ?? const AuthState()).copyWith(
-          isLoading: false,
-          errorMessage: msg,
-        ),
-      );
-      throw const ApiException(statusCode: null, message: msg);
-    } finally {
-      state = AsyncData(
-        (state.value ?? const AuthState()).copyWith(isLoading: false),
-      );
-    }
-  }
-
-  Future<UserProfile> updateServiceType(String serviceType) async {
-    state = AsyncData(
-      (state.value ?? const AuthState()).copyWith(
-        isLoading: true,
-        errorMessage: null,
-      ),
-    );
-    try {
-      final UserProfile me = await _repo.updateServiceType(
-        serviceType: serviceType,
       );
       final AuthState nextState = AuthState(
         status: AuthStatus.authenticated,

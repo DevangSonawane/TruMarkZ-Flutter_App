@@ -11,6 +11,8 @@ import '../../../../core/widgets/tmz_input.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
 
 class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
@@ -24,345 +26,32 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const double _orgBottomNavBarHeight = 71.016;
-  static const List<String> _serviceTypeOptions = <String>['product', 'human'];
+  static const List<String> _serviceTypeOptions = <String>['human', 'product'];
 
-  Future<void> _showDhiwaySpaceIdDialog(UserProfile? profile) async {
-    final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
-    final bool isHuman = serviceType == 'human';
-    final bool isProduct = serviceType == 'product';
-    final TextEditingController humanController = TextEditingController(
-      text: profile?.humanSpaceId?.trim().isNotEmpty == true
-          ? profile!.humanSpaceId!.trim()
-          : profile?.dhiwaySpaceId?.trim() ?? '',
+  Future<void> _showOrgProfileDialog(UserProfile? profile) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            _OrgEditPage(profile: profile, mode: _OrgEditMode.profile),
+      ),
     );
-    final TextEditingController productController = TextEditingController(
-      text: profile?.productSpaceId?.trim().isNotEmpty == true
-          ? profile!.productSpaceId!.trim()
-          : profile?.dhiwaySpaceId?.trim() ?? '',
+  }
+
+  Future<void> _showServiceIdsDialog(UserProfile? profile) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            _OrgEditPage(profile: profile, mode: _OrgEditMode.serviceIds),
+      ),
     );
-    final TextEditingController warrantyController = TextEditingController(
-      text: profile?.warrantySpaceId?.trim().isNotEmpty == true
-          ? profile!.warrantySpaceId!.trim()
-          : profile?.dhiwaySpaceId?.trim() ?? '',
-    );
-
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        bool isSaving = false;
-        String? errorText;
-
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            Future<void> save() async {
-              final String humanSpaceId = humanController.text.trim();
-              final String productSpaceId = productController.text.trim();
-              final String warrantySpaceId = warrantyController.text.trim();
-
-              if (isHuman && humanSpaceId.isEmpty) {
-                setDialogState(() {
-                  errorText = 'Please enter a Human Space ID.';
-                });
-                return;
-              }
-              if (isProduct &&
-                  productSpaceId.isEmpty &&
-                  warrantySpaceId.isEmpty) {
-                setDialogState(() {
-                  errorText =
-                      'Please enter at least one Product or Warranty Space ID.';
-                });
-                return;
-              }
-              setDialogState(() {
-                isSaving = true;
-                errorText = null;
-              });
-              final NavigatorState navigator = Navigator.of(dialogContext);
-              final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
-                dialogContext,
-              );
-              try {
-                await ref
-                    .read(authNotifierProvider.notifier)
-                    .updateDhiwaySpaces(
-                      humanSpaceId: isHuman ? humanSpaceId : null,
-                      productSpaceId: isProduct ? productSpaceId : null,
-                      warrantySpaceId: isProduct ? warrantySpaceId : null,
-                    );
-                if (!mounted) return;
-                navigator.pop();
-                final String successMessage = isHuman
-                    ? 'Human Space ID updated successfully.'
-                    : 'Product and Warranty Space IDs updated successfully.';
-                messenger.showSnackBar(SnackBar(content: Text(successMessage)));
-              } on ApiException catch (e) {
-                if (!mounted) return;
-                setDialogState(() {
-                  errorText = e.message;
-                });
-              } finally {
-                if (mounted) {
-                  setDialogState(() {
-                    isSaving = false;
-                  });
-                }
-              }
-            }
-
-            return AlertDialog(
-              title: Text(
-                isHuman
-                    ? 'Update Human Space ID'
-                    : isProduct
-                    ? 'Update Product Space IDs'
-                    : 'Update Dhiway Space IDs',
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text(
-                    isHuman
-                        ? 'Save the human credential space shared by the superadmin.'
-                        : isProduct
-                        ? 'Save the product and warranty spaces shared by the superadmin.'
-                        : 'Save the space ids shared by the superadmin for this organization.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  if (isHuman) ...<Widget>[
-                    TMZInput(
-                      label: 'Human Space ID',
-                      hint: 'Enter human space id',
-                      controller: humanController,
-                      enabled: !isSaving,
-                      errorText: errorText,
-                    ),
-                  ] else if (isProduct) ...<Widget>[
-                    TMZInput(
-                      label: 'Product Space ID',
-                      hint: 'Enter product space id',
-                      controller: productController,
-                      enabled: !isSaving,
-                      errorText: errorText,
-                    ),
-                    const SizedBox(height: 12),
-                    TMZInput(
-                      label: 'Warranty Space ID',
-                      hint: 'Enter warranty space id',
-                      controller: warrantyController,
-                      enabled: !isSaving,
-                      errorText: errorText,
-                    ),
-                  ] else ...<Widget>[
-                    TMZInput(
-                      label: 'Dhiway Space ID',
-                      hint: 'Enter space id',
-                      controller: humanController,
-                      enabled: !isSaving,
-                      errorText: errorText,
-                    ),
-                  ],
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                SizedBox(
-                  width: 140,
-                  child: TMZButton(
-                    label: 'Save',
-                    onPressed: isSaving ? null : save,
-                    isLoading: isSaving,
-                    fullWidth: true,
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    humanController.dispose();
-    productController.dispose();
-    warrantyController.dispose();
   }
 
   Future<void> _showServiceTypeDialog(UserProfile? profile) async {
-    final String currentServiceType =
-        profile?.serviceType?.trim().toLowerCase() ?? '';
-    final String initialValue = _serviceTypeOptions.contains(currentServiceType)
-        ? currentServiceType
-        : _serviceTypeOptions.first;
-
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        bool isSaving = false;
-        String selectedServiceType = initialValue;
-        String? errorText;
-
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            Future<void> save() async {
-              setDialogState(() {
-                isSaving = true;
-                errorText = null;
-              });
-              final NavigatorState navigator = Navigator.of(dialogContext);
-              final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
-                dialogContext,
-              );
-              try {
-                await ref
-                    .read(authNotifierProvider.notifier)
-                    .updateServiceType(selectedServiceType);
-                if (!mounted) return;
-                navigator.pop();
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Service type updated to ${selectedServiceType.toUpperCase()}.',
-                    ),
-                  ),
-                );
-              } on ApiException catch (e) {
-                if (!mounted) return;
-                setDialogState(() {
-                  errorText = e.message;
-                });
-              } finally {
-                if (mounted) {
-                  setDialogState(() {
-                    isSaving = false;
-                  });
-                }
-              }
-            }
-
-            return AlertDialog(
-              title: const Text('Update Service Type'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text(
-                    'Choose what your organization deals in. You can change this anytime.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  ..._serviceTypeOptions.map((String option) {
-                    final bool isSelected = selectedServiceType == option;
-                    final String title = option == 'product'
-                        ? 'Product'
-                        : 'Human';
-                    final String description = option == 'product'
-                        ? 'For product batches, registry, and certificate flows.'
-                        : 'For people, credentials, and human verification flows.';
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: InkWell(
-                        onTap: isSaving
-                            ? null
-                            : () {
-                                setDialogState(() {
-                                  selectedServiceType = option;
-                                  errorText = null;
-                                });
-                              },
-                        borderRadius: BorderRadius.circular(14),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? const Color(0xFFEFF6FF)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.brandBlue
-                                  : const Color(0xFFE2E8F0),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: <Widget>[
-                              Icon(
-                                isSelected
-                                    ? Icons.radio_button_checked_rounded
-                                    : Icons.radio_button_unchecked_rounded,
-                                color: isSelected
-                                    ? AppColors.brandBlue
-                                    : const Color(0xFF94A3B8),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      title,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      description,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF64748B),
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                  if (errorText != null) ...<Widget>[
-                    const SizedBox(height: 4),
-                    Text(
-                      errorText!,
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
-                    ),
-                  ],
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                SizedBox(
-                  width: 140,
-                  child: TMZButton(
-                    label: 'Save',
-                    onPressed: isSaving ? null : save,
-                    isLoading: isSaving,
-                    fullWidth: true,
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            _OrgEditPage(profile: profile, mode: _OrgEditMode.serviceType),
+      ),
     );
   }
 
@@ -443,7 +132,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
                             _OrgProfileHeader(
-                              onEdit: () {},
+                              onEdit: () => _showOrgProfileDialog(profile),
                               displayName: displayName,
                               email: email,
                               phoneNumber: phoneNumber,
@@ -461,7 +150,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             _SpaceIdsCard(
                               profile: profile,
                               onEditSpaceIds: () =>
-                                  _showDhiwaySpaceIdDialog(profile),
+                                  _showServiceIdsDialog(profile),
                             ),
                             SizedBox(height: s(24)),
                             _AddressAndRecordsCard(profile: profile),
@@ -492,6 +181,710 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
           },
         ),
       ),
+    );
+  }
+}
+
+enum _OrgEditMode { profile, serviceIds, serviceType }
+
+class _OrgEditPage extends ConsumerStatefulWidget {
+  const _OrgEditPage({required this.profile, required this.mode});
+
+  final UserProfile? profile;
+  final _OrgEditMode mode;
+
+  @override
+  ConsumerState<_OrgEditPage> createState() => _OrgEditPageState();
+}
+
+class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
+  final TextEditingController _organizationNameController =
+      TextEditingController();
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _gstinController = TextEditingController();
+  final TextEditingController _brnController = TextEditingController();
+  final TextEditingController _address1Controller = TextEditingController();
+  final TextEditingController _address2Controller = TextEditingController();
+  final TextEditingController _address3Controller = TextEditingController();
+  final TextEditingController _humanSpaceController = TextEditingController();
+  final TextEditingController _productSpaceController = TextEditingController();
+  final TextEditingController _warrantySpaceController =
+      TextEditingController();
+  final TextEditingController _humanSchemaController = TextEditingController();
+  final TextEditingController _productSchemaController =
+      TextEditingController();
+  final TextEditingController _warrantySchemaController =
+      TextEditingController();
+  String _serviceType = 'human';
+  bool _isSaving = false;
+  String? _errorText;
+
+  bool get _isHuman => _serviceType == 'human';
+  bool get _isProduct => _serviceType == 'product';
+
+  @override
+  void initState() {
+    super.initState();
+    final UserProfile? profile = widget.profile;
+    _organizationNameController.text = profile?.organizationName?.trim() ?? '';
+    _fullNameController.text = profile?.fullName?.trim() ?? '';
+    _phoneController.text = profile?.phoneNumber?.trim() ?? '';
+    _gstinController.text = profile?.gstin?.trim() ?? '';
+    _brnController.text = profile?.businessRegNumber?.trim() ?? '';
+    _address1Controller.text = profile?.addressLine1?.trim() ?? '';
+    _address2Controller.text = profile?.addressLine2?.trim() ?? '';
+    _address3Controller.text = profile?.addressLine3?.trim() ?? '';
+    _humanSpaceController.text =
+        profile?.humanSpaceId?.trim() ?? profile?.dhiwaySpaceId?.trim() ?? '';
+    _productSpaceController.text =
+        profile?.productSpaceId?.trim() ?? profile?.dhiwaySpaceId?.trim() ?? '';
+    _warrantySpaceController.text =
+        profile?.warrantySpaceId?.trim() ??
+        profile?.dhiwaySpaceId?.trim() ??
+        '';
+    _humanSchemaController.text = profile?.humanSchemaId?.trim() ?? '';
+    _productSchemaController.text = profile?.productSchemaId?.trim() ?? '';
+    _warrantySchemaController.text = profile?.warrantySchemaId?.trim() ?? '';
+
+    final String currentServiceType =
+        profile?.serviceType?.trim().toLowerCase() ?? '';
+    if (widget.mode == _OrgEditMode.serviceIds) {
+      _serviceType = currentServiceType == 'human' ? 'human' : 'product';
+    } else if (currentServiceType == 'human' ||
+        currentServiceType == 'product') {
+      _serviceType = currentServiceType;
+    }
+  }
+
+  @override
+  void dispose() {
+    _organizationNameController.dispose();
+    _fullNameController.dispose();
+    _phoneController.dispose();
+    _gstinController.dispose();
+    _brnController.dispose();
+    _address1Controller.dispose();
+    _address2Controller.dispose();
+    _address3Controller.dispose();
+    _humanSpaceController.dispose();
+    _productSpaceController.dispose();
+    _warrantySpaceController.dispose();
+    _humanSchemaController.dispose();
+    _productSchemaController.dispose();
+    _warrantySchemaController.dispose();
+    super.dispose();
+  }
+
+  String _title() {
+    switch (widget.mode) {
+      case _OrgEditMode.profile:
+        return 'Edit Profile';
+      case _OrgEditMode.serviceIds:
+        return 'Edit Space IDs';
+      case _OrgEditMode.serviceType:
+        return 'Update Service Type';
+    }
+  }
+
+  String _subtitle() {
+    switch (widget.mode) {
+      case _OrgEditMode.profile:
+        return 'Only the fields you change will be updated.';
+      case _OrgEditMode.serviceIds:
+        return _isHuman
+            ? 'Save the human credential space shared by the superadmin.'
+            : 'Save the product and warranty credential spaces shared by the superadmin.';
+      case _OrgEditMode.serviceType:
+        return 'Choose whether your organization is human-focused or product-focused. You can change this anytime.';
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _isSaving = true;
+      _errorText = null;
+    });
+
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final NavigatorState navigator = Navigator.of(context);
+
+    try {
+      switch (widget.mode) {
+        case _OrgEditMode.profile:
+          await ref
+              .read(authNotifierProvider.notifier)
+              .updateOrganizationProfile(
+                organizationName: _organizationNameController.text,
+                fullName: _fullNameController.text,
+                phoneNumber: _phoneController.text,
+                gstin: _gstinController.text,
+                businessRegNumber: _brnController.text,
+                addressLine1: _address1Controller.text,
+                addressLine2: _address2Controller.text,
+                addressLine3: _address3Controller.text,
+                serviceType: _serviceType,
+                humanSpaceId: _isHuman ? _humanSpaceController.text : null,
+                productSpaceId: _isProduct
+                    ? _productSpaceController.text
+                    : null,
+                warrantySpaceId: _isProduct
+                    ? _warrantySpaceController.text
+                    : null,
+                humanSchemaId: _isHuman ? _humanSchemaController.text : null,
+                productSchemaId: _isProduct
+                    ? _productSchemaController.text
+                    : null,
+                warrantySchemaId: _isProduct
+                    ? _warrantySchemaController.text
+                    : null,
+              );
+          break;
+        case _OrgEditMode.serviceIds:
+          final String humanSpaceId = _humanSpaceController.text.trim();
+          final String productSpaceId = _productSpaceController.text.trim();
+          final String warrantySpaceId = _warrantySpaceController.text.trim();
+          if (_isHuman && humanSpaceId.isEmpty) {
+            setState(() {
+              _errorText = 'Please enter a Human Space ID.';
+            });
+            return;
+          }
+          if (_isProduct && productSpaceId.isEmpty && warrantySpaceId.isEmpty) {
+            setState(() {
+              _errorText = 'Please enter at least one Product Space ID.';
+            });
+            return;
+          }
+          await ref
+              .read(authNotifierProvider.notifier)
+              .updateOrganizationProfile(
+                humanSpaceId: _isHuman ? humanSpaceId : null,
+                productSpaceId: _isProduct ? productSpaceId : null,
+                warrantySpaceId: _isProduct ? warrantySpaceId : null,
+                humanSchemaId: _isHuman
+                    ? _humanSchemaController.text.trim()
+                    : null,
+                productSchemaId: _isProduct
+                    ? _productSchemaController.text.trim()
+                    : null,
+                warrantySchemaId: _isProduct
+                    ? _warrantySchemaController.text.trim()
+                    : null,
+              );
+          break;
+        case _OrgEditMode.serviceType:
+          await ref
+              .read(authNotifierProvider.notifier)
+              .updateOrganizationProfile(serviceType: _serviceType);
+          break;
+      }
+
+      if (!mounted) return;
+      navigator.pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.mode == _OrgEditMode.serviceType
+                ? 'Service type updated to ${_serviceType.toUpperCase()}.'
+                : 'Profile updated successfully.',
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorText = e.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildServiceTypeOption(String option) {
+    final bool isSelected = _serviceType == option;
+    final String title = option == 'human' ? 'Human' : 'Product';
+    final String description = option == 'human'
+        ? 'For people, credentials, and human verification flows.'
+        : 'For product batches, registry, certificates, and the related warranty IDs.';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: _isSaving
+            ? null
+            : () => setState(() {
+                _serviceType = option;
+                _errorText = null;
+              }),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? AppColors.brandBlue : const Color(0xFFE2E8F0),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: isSelected
+                    ? AppColors.brandBlue
+                    : const Color(0xFF94A3B8),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    switch (widget.mode) {
+      case _OrgEditMode.profile:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(_subtitle(), style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            TMZInput(
+              label: 'Organization Name',
+              hint: 'Enter organization name',
+              controller: _organizationNameController,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            TMZInput(
+              label: 'Full Name',
+              hint: 'Enter full name',
+              controller: _fullNameController,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            TMZInput(
+              label: 'Phone Number',
+              hint: 'Enter phone number',
+              controller: _phoneController,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            TMZInput(
+              label: 'GSTIN',
+              hint: 'Enter GSTIN',
+              controller: _gstinController,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            TMZInput(
+              label: 'Business Reg. Number',
+              hint: 'Enter business reg. number',
+              controller: _brnController,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            TMZInput(
+              label: 'Address Line 1',
+              hint: 'Enter address line 1',
+              controller: _address1Controller,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            TMZInput(
+              label: 'Address Line 2',
+              hint: 'Enter address line 2',
+              controller: _address2Controller,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            TMZInput(
+              label: 'Address Line 3',
+              hint: 'Enter address line 3',
+              controller: _address3Controller,
+              enabled: !_isSaving,
+            ),
+            const SizedBox(height: 12),
+            _ServiceTypeField(
+              value: _serviceType,
+              onChanged: _isSaving
+                  ? null
+                  : (String? value) {
+                      if (value == null) return;
+                      setState(() {
+                        _serviceType = value;
+                        _errorText = null;
+                      });
+                    },
+            ),
+            if (_serviceType.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              _serviceType == 'human'
+                  ? _ServicePair(
+                      title: 'Human Service Details',
+                      primaryLabel: 'Human Space ID (optional)',
+                      primaryHint:
+                          'Enter human space ID later in settings if needed',
+                      primaryController: _humanSpaceController,
+                      secondaryLabel: 'Human Schema ID (optional)',
+                      secondaryHint:
+                          'Enter human schema ID later in settings if needed',
+                      secondaryController: _humanSchemaController,
+                      backgroundColor: const Color(0xFFE9EEF3),
+                    )
+                  : _ServiceStack(
+                      title: 'Product Service Details',
+                      firstLabel: 'Product Space ID (optional)',
+                      firstHint:
+                          'Enter product space ID later in settings if needed',
+                      firstController: _productSpaceController,
+                      secondLabel: 'Product Schema ID (optional)',
+                      secondHint:
+                          'Enter product schema ID later in settings if needed',
+                      secondController: _productSchemaController,
+                      thirdLabel: 'Warranty Space ID (optional)',
+                      thirdHint:
+                          'Enter warranty space ID later in settings if needed',
+                      thirdController: _warrantySpaceController,
+                      fourthLabel: 'Warranty Schema ID (optional)',
+                      fourthHint:
+                          'Enter warranty schema ID later in settings if needed',
+                      fourthController: _warrantySchemaController,
+                      backgroundColor: const Color(0xFFE9EEF3),
+                    ),
+            ],
+          ],
+        );
+      case _OrgEditMode.serviceIds:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(_subtitle(), style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            if (_isHuman) ...<Widget>[
+              TMZInput(
+                label: 'Human Space ID',
+                hint: 'Enter human space id',
+                controller: _humanSpaceController,
+                enabled: !_isSaving,
+                errorText: _errorText,
+              ),
+              const SizedBox(height: 12),
+              TMZInput(
+                label: 'Human Schema ID',
+                hint: 'Enter human schema id',
+                controller: _humanSchemaController,
+                enabled: !_isSaving,
+                errorText: _errorText,
+              ),
+            ] else ...<Widget>[
+              TMZInput(
+                label: 'Product Space ID',
+                hint: 'Enter product space id',
+                controller: _productSpaceController,
+                enabled: !_isSaving,
+                errorText: _errorText,
+              ),
+              const SizedBox(height: 12),
+              TMZInput(
+                label: 'Product Schema ID',
+                hint: 'Enter product schema id',
+                controller: _productSchemaController,
+                enabled: !_isSaving,
+                errorText: _errorText,
+              ),
+              const SizedBox(height: 12),
+              TMZInput(
+                label: 'Warranty Space ID',
+                hint: 'Enter warranty space id',
+                controller: _warrantySpaceController,
+                enabled: !_isSaving,
+                errorText: _errorText,
+              ),
+              const SizedBox(height: 12),
+              TMZInput(
+                label: 'Warranty Schema ID',
+                hint: 'Enter warranty schema id',
+                controller: _warrantySchemaController,
+                enabled: !_isSaving,
+                errorText: _errorText,
+              ),
+            ],
+          ],
+        );
+      case _OrgEditMode.serviceType:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(_subtitle(), style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            ..._ProfileSettingsPageState._serviceTypeOptions.map(
+              _buildServiceTypeOption,
+            ),
+            if (_errorText != null) ...<Widget>[
+              const SizedBox(height: 4),
+              Text(
+                _errorText!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ],
+          ],
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return Scaffold(
+      backgroundColor: AppColors.pageBg,
+      appBar: AppBar(title: Text(_title())),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),
+          children: <Widget>[
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: _buildBody(context),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TMZButton(
+                label: 'Save',
+                onPressed: _isSaving ? null : _save,
+                isLoading: _isSaving,
+                fullWidth: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceTypeField extends StatelessWidget {
+  const _ServiceTypeField({required this.value, required this.onChanged});
+
+  final String? value;
+  final ValueChanged<String?>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'SERVICE TYPE',
+          style: AppTypography.caption.copyWith(
+            fontWeight: FontWeight.w500,
+            color: AppColors.textTertiary,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: value,
+          onChanged: onChanged,
+          items: const <DropdownMenuItem<String>>[
+            DropdownMenuItem<String>(value: 'human', child: Text('Human')),
+            DropdownMenuItem<String>(value: 'product', child: Text('Product')),
+          ],
+          decoration: InputDecoration(
+            hintText: 'Select service type',
+            filled: true,
+            fillColor: AppColors.offWhite,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.brandBlue),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'This controls which verification flow your organisation can use. You can fill the service-specific IDs later in settings if needed.',
+          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServicePair extends StatelessWidget {
+  const _ServicePair({
+    required this.title,
+    required this.primaryLabel,
+    required this.primaryHint,
+    required this.primaryController,
+    required this.secondaryLabel,
+    required this.secondaryHint,
+    required this.secondaryController,
+    required this.backgroundColor,
+  });
+
+  final String title;
+  final String primaryLabel;
+  final String primaryHint;
+  final TextEditingController primaryController;
+  final String secondaryLabel;
+  final String secondaryHint;
+  final TextEditingController secondaryController;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(title, style: AppTypography.heading2),
+        const SizedBox(height: AppSpacing.x2),
+        Text(
+          'These fields are optional during signup and can be added later in settings.',
+          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: primaryLabel,
+          hint: primaryHint,
+          controller: primaryController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: secondaryLabel,
+          hint: secondaryHint,
+          controller: secondaryController,
+          backgroundColor: backgroundColor,
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceStack extends StatelessWidget {
+  const _ServiceStack({
+    required this.title,
+    required this.firstLabel,
+    required this.firstHint,
+    required this.firstController,
+    required this.secondLabel,
+    required this.secondHint,
+    required this.secondController,
+    required this.thirdLabel,
+    required this.thirdHint,
+    required this.thirdController,
+    required this.fourthLabel,
+    required this.fourthHint,
+    required this.fourthController,
+    required this.backgroundColor,
+  });
+
+  final String title;
+  final String firstLabel;
+  final String firstHint;
+  final TextEditingController firstController;
+  final String secondLabel;
+  final String secondHint;
+  final TextEditingController secondController;
+  final String thirdLabel;
+  final String thirdHint;
+  final TextEditingController thirdController;
+  final String fourthLabel;
+  final String fourthHint;
+  final TextEditingController fourthController;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(title, style: AppTypography.heading2),
+        const SizedBox(height: AppSpacing.x2),
+        Text(
+          'These fields are optional during signup and can be added later in settings.',
+          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: firstLabel,
+          hint: firstHint,
+          controller: firstController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: secondLabel,
+          hint: secondHint,
+          controller: secondController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: thirdLabel,
+          hint: thirdHint,
+          controller: thirdController,
+          backgroundColor: backgroundColor,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        TMZInput(
+          label: fourthLabel,
+          hint: fourthHint,
+          controller: fourthController,
+          backgroundColor: backgroundColor,
+        ),
+      ],
     );
   }
 }
@@ -1046,27 +1439,41 @@ class _SpaceIdsCard extends StatelessWidget {
     final bool isProduct = serviceType == 'product';
     final String humanSpaceId = profile?.humanSpaceId?.trim().isNotEmpty == true
         ? profile!.humanSpaceId!.trim()
-        : profile?.dhiwaySpaceId?.trim().isNotEmpty == true
-        ? profile!.dhiwaySpaceId!.trim()
+        : '—';
+    final String humanSchemaId =
+        profile?.humanSchemaId?.trim().isNotEmpty == true
+        ? profile!.humanSchemaId!.trim()
         : '—';
     final String productSpaceId =
         profile?.productSpaceId?.trim().isNotEmpty == true
         ? profile!.productSpaceId!.trim()
-        : profile?.dhiwaySpaceId?.trim().isNotEmpty == true
-        ? profile!.dhiwaySpaceId!.trim()
+        : '—';
+    final String productSchemaId =
+        profile?.productSchemaId?.trim().isNotEmpty == true
+        ? profile!.productSchemaId!.trim()
         : '—';
     final String warrantySpaceId =
         profile?.warrantySpaceId?.trim().isNotEmpty == true
         ? profile!.warrantySpaceId!.trim()
         : '—';
+    final String warrantySchemaId =
+        profile?.warrantySchemaId?.trim().isNotEmpty == true
+        ? profile!.warrantySchemaId!.trim()
+        : '—';
     final bool hasHumanSpaceId =
-        profile?.humanSpaceId?.trim().isNotEmpty == true ||
-        profile?.dhiwaySpaceId?.trim().isNotEmpty == true;
+        profile?.humanSpaceId?.trim().isNotEmpty == true;
+    final bool hasHumanSchemaId =
+        profile?.humanSchemaId?.trim().isNotEmpty == true;
     final bool hasProductSpaceId =
-        profile?.productSpaceId?.trim().isNotEmpty == true ||
-        profile?.dhiwaySpaceId?.trim().isNotEmpty == true;
+        profile?.productSpaceId?.trim().isNotEmpty == true;
+    final bool hasProductSchemaId =
+        profile?.productSchemaId?.trim().isNotEmpty == true;
     final bool hasWarrantySpaceId =
         profile?.warrantySpaceId?.trim().isNotEmpty == true;
+    final bool hasWarrantySchemaId =
+        profile?.warrantySchemaId?.trim().isNotEmpty == true;
+    final bool showHumanSection = serviceType.isEmpty || isHuman;
+    final bool showProductSection = serviceType.isEmpty || isProduct;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1085,7 +1492,7 @@ class _SpaceIdsCard extends StatelessWidget {
         SizedBox(height: s(12)),
         _FigmaInfoCard(
           rows: <_InfoRow>[
-            if (isHuman || serviceType.isEmpty)
+            if (showHumanSection)
               _InfoRow(
                 label: 'Human Space ID',
                 value: humanSpaceId,
@@ -1112,7 +1519,34 @@ class _SpaceIdsCard extends StatelessWidget {
                   ),
                 ),
               ),
-            if (isProduct || serviceType.isEmpty) ...<_InfoRow>[
+            if (showHumanSection)
+              _InfoRow(
+                label: 'Human Schema ID',
+                value: humanSchemaId,
+                trailing: TextButton.icon(
+                  onPressed: onEditSpaceIds,
+                  icon: Icon(
+                    hasHumanSchemaId ? Icons.edit_outlined : Icons.add_rounded,
+                    size: s(16),
+                  ),
+                  label: Text(hasHumanSchemaId ? 'Edit' : 'Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: Size.zero,
+                    padding: EdgeInsets.zero,
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.05859375,
+                      height: 16 / 12,
+                    ),
+                  ),
+                ),
+              ),
+            if (showProductSection) ...<_InfoRow>[
               _InfoRow(
                 label: 'Product Space ID',
                 value: productSpaceId,
@@ -1140,6 +1574,36 @@ class _SpaceIdsCard extends StatelessWidget {
                 ),
               ),
               _InfoRow(
+                label: 'Product Schema ID',
+                value: productSchemaId,
+                trailing: TextButton.icon(
+                  onPressed: onEditSpaceIds,
+                  icon: Icon(
+                    hasProductSchemaId
+                        ? Icons.edit_outlined
+                        : Icons.add_rounded,
+                    size: s(16),
+                  ),
+                  label: Text(hasProductSchemaId ? 'Edit' : 'Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: Size.zero,
+                    padding: EdgeInsets.zero,
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.05859375,
+                      height: 16 / 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (showProductSection) ...<_InfoRow>[
+              _InfoRow(
                 label: 'Warranty Space ID',
                 value: warrantySpaceId,
                 trailing: TextButton.icon(
@@ -1151,6 +1615,34 @@ class _SpaceIdsCard extends StatelessWidget {
                     size: s(16),
                   ),
                   label: Text(hasWarrantySpaceId ? 'Edit' : 'Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: Size.zero,
+                    padding: EdgeInsets.zero,
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.05859375,
+                      height: 16 / 12,
+                    ),
+                  ),
+                ),
+              ),
+              _InfoRow(
+                label: 'Warranty Schema ID',
+                value: warrantySchemaId,
+                trailing: TextButton.icon(
+                  onPressed: onEditSpaceIds,
+                  icon: Icon(
+                    hasWarrantySchemaId
+                        ? Icons.edit_outlined
+                        : Icons.add_rounded,
+                    size: s(16),
+                  ),
+                  label: Text(hasWarrantySchemaId ? 'Edit' : 'Add'),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.brandBlue,
                     visualDensity: VisualDensity.compact,

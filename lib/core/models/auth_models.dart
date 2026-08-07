@@ -81,6 +81,13 @@ class SignupOrganizationRequest {
     required this.phoneNumber,
     required this.password,
     required this.serviceType,
+    this.humanSpaceId,
+    this.productSpaceId,
+    this.warrantySpaceId,
+    this.humanSchemaId,
+    this.productSchemaId,
+    this.warrantySchemaId,
+    this.dhiwaySpaceId,
   });
 
   final String orgName;
@@ -88,14 +95,41 @@ class SignupOrganizationRequest {
   final String phoneNumber;
   final String password;
   final String serviceType;
+  final String? humanSpaceId;
+  final String? productSpaceId;
+  final String? warrantySpaceId;
+  final String? humanSchemaId;
+  final String? productSchemaId;
+  final String? warrantySchemaId;
+  final String? dhiwaySpaceId;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'org_name': orgName,
-    'email': email,
-    'phone_number': phoneNumber,
-    'password': password,
-    'service_type': serviceType,
-  };
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = <String, dynamic>{
+      'org_name': orgName,
+      'email': email,
+      'phone_number': phoneNumber,
+      'password': password,
+      'service_type': serviceType,
+    };
+
+    final String humanSpace = humanSpaceId?.trim() ?? '';
+    final String productSpace = productSpaceId?.trim() ?? '';
+    final String warrantySpace = warrantySpaceId?.trim() ?? '';
+    final String humanSchema = humanSchemaId?.trim() ?? '';
+    final String productSchema = productSchemaId?.trim() ?? '';
+    final String warrantySchema = warrantySchemaId?.trim() ?? '';
+    final String dhiwaySpace = dhiwaySpaceId?.trim() ?? '';
+
+    if (humanSpace.isNotEmpty) json['human_space_id'] = humanSpace;
+    if (productSpace.isNotEmpty) json['product_space_id'] = productSpace;
+    if (warrantySpace.isNotEmpty) json['warranty_space_id'] = warrantySpace;
+    if (humanSchema.isNotEmpty) json['human_schema_id'] = humanSchema;
+    if (productSchema.isNotEmpty) json['product_schema_id'] = productSchema;
+    if (warrantySchema.isNotEmpty) json['warranty_schema_id'] = warrantySchema;
+    if (dhiwaySpace.isNotEmpty) json['dhiway_space_id'] = dhiwaySpace;
+
+    return json;
+  }
 }
 
 class OtpVerifyRequest {
@@ -120,32 +154,118 @@ class ResendOtpRequest {
 
 class OrgOnboardingRequest {
   const OrgOnboardingRequest({
-    required this.industryType,
-    required this.gstin,
-    required this.businessRegNumber,
-    required this.addressLine1,
-    required this.addressLine2,
-    required this.addressLine3,
-    required this.useCases,
+    this.gstin,
+    this.businessRegNumber,
+    this.addressLine1,
+    this.addressLine2,
+    this.addressLine3,
   });
 
-  final List<String> industryType;
-  final String gstin;
-  final String businessRegNumber;
-  final String addressLine1;
-  final String addressLine2;
-  final String addressLine3;
-  final Map<String, dynamic> useCases;
+  final String? gstin;
+  final String? businessRegNumber;
+  final String? addressLine1;
+  final String? addressLine2;
+  final String? addressLine3;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'industry_type': industryType,
-    'gstin': gstin,
-    'business_reg_number': businessRegNumber,
-    'address_line1': addressLine1,
-    'address_line2': addressLine2,
-    'address_line3': addressLine3,
-    'use_cases': useCases,
-  };
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = <String, dynamic>{};
+    final String gstinValue = gstin?.trim() ?? '';
+    final String businessRegNumberValue = businessRegNumber?.trim() ?? '';
+    final String addressLine1Value = addressLine1?.trim() ?? '';
+    final String addressLine2Value = addressLine2?.trim() ?? '';
+    final String addressLine3Value = addressLine3?.trim() ?? '';
+
+    if (gstinValue.isNotEmpty) {
+      json['gstin'] = gstinValue;
+    }
+    if (businessRegNumberValue.isNotEmpty) {
+      json['business_reg_number'] = businessRegNumberValue;
+    }
+    if (addressLine1Value.isNotEmpty) {
+      json['address_line1'] = addressLine1Value;
+    }
+    if (addressLine2Value.isNotEmpty) {
+      json['address_line2'] = addressLine2Value;
+    }
+    if (addressLine3Value.isNotEmpty) {
+      json['address_line3'] = addressLine3Value;
+    }
+
+    return json;
+  }
+}
+
+class OrganizationProfileUpdateRequest {
+  const OrganizationProfileUpdateRequest({
+    this.organizationName,
+    this.fullName,
+    this.phoneNumber,
+    this.gstin,
+    this.businessRegNumber,
+    this.addressLine1,
+    this.addressLine2,
+    this.addressLine3,
+    this.serviceType,
+    this.humanSpaceId,
+    this.productSpaceId,
+    this.warrantySpaceId,
+    this.humanSchemaId,
+    this.productSchemaId,
+    this.warrantySchemaId,
+    this.dhiwaySpaceId,
+  });
+
+  final String? organizationName;
+  final String? fullName;
+  final String? phoneNumber;
+  final String? gstin;
+  final String? businessRegNumber;
+  final String? addressLine1;
+  final String? addressLine2;
+  final String? addressLine3;
+  final String? serviceType;
+  final String? humanSpaceId;
+  final String? productSpaceId;
+  final String? warrantySpaceId;
+  final String? humanSchemaId;
+  final String? productSchemaId;
+  final String? warrantySchemaId;
+  final String? dhiwaySpaceId;
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = <String, dynamic>{};
+
+    void putIfNonEmpty(String key, String? value) {
+      final String normalized = value?.trim() ?? '';
+      if (normalized.isNotEmpty) {
+        json[key] = normalized;
+      }
+    }
+
+    void putClearable(String key, String? value) {
+      if (value == null) return;
+      json[key] = value.trim();
+    }
+
+    putIfNonEmpty('organization_name', organizationName);
+    putClearable('full_name', fullName);
+    putClearable('phone_number', phoneNumber);
+    putClearable('gstin', gstin);
+    putClearable('business_reg_number', businessRegNumber);
+    putClearable('address_line1', addressLine1);
+    putClearable('address_line2', addressLine2);
+    putClearable('address_line3', addressLine3);
+    putIfNonEmpty('service_type', serviceType);
+    putIfNonEmpty('human_space_id', humanSpaceId);
+    putIfNonEmpty('product_space_id', productSpaceId);
+    putIfNonEmpty('warranty_space_id', warrantySpaceId);
+    putIfNonEmpty('human_schema_id', humanSchemaId);
+    putIfNonEmpty('product_schema_id', productSchemaId);
+    putIfNonEmpty('warranty_schema_id', warrantySchemaId);
+    putIfNonEmpty('dhiway_space_id', dhiwaySpaceId);
+
+    return json;
+  }
 }
 
 class UserProfile {
@@ -177,6 +297,9 @@ class UserProfile {
     required this.humanSpaceId,
     required this.productSpaceId,
     required this.warrantySpaceId,
+    required this.humanSchemaId,
+    required this.productSchemaId,
+    required this.warrantySchemaId,
     required this.storagePath,
     required this.createdAt,
   });
@@ -208,6 +331,9 @@ class UserProfile {
   final String? humanSpaceId;
   final String? productSpaceId;
   final String? warrantySpaceId;
+  final String? humanSchemaId;
+  final String? productSchemaId;
+  final String? warrantySchemaId;
   final String storagePath;
   final DateTime? createdAt;
 
@@ -297,6 +423,15 @@ class UserProfile {
             json['warrenty_space_id'] ??
             json['warrantySpaceId'] ??
             json['warrentySpaceId'],
+      ),
+      humanSchemaId: _readStringOrNull(
+        json['human_schema_id'] ?? json['humanSchemaId'],
+      ),
+      productSchemaId: _readStringOrNull(
+        json['product_schema_id'] ?? json['productSchemaId'],
+      ),
+      warrantySchemaId: _readStringOrNull(
+        json['warranty_schema_id'] ?? json['warrantySchemaId'],
       ),
       storagePath: (json['storage_path'] ?? '').toString(),
       createdAt: createdAt,
