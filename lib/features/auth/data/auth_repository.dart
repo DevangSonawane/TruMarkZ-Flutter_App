@@ -153,7 +153,8 @@ class AuthRepository {
   }
 
   Future<void> completeOrgOnboarding(OrgOnboardingRequest request) async {
-    await _api.post('/auth/onboarding', data: request.toJson());
+    final Map<String, dynamic> payload = request.toJson();
+    await _api.post('/auth/onboarding', data: payload.isEmpty ? null : payload);
   }
 
   Future<String?> getOrganizationIndustryType({required String orgId}) async {

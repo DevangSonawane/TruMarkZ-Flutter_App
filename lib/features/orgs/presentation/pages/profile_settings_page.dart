@@ -375,48 +375,78 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
         profile?.dhiwaysDetails ?? <DhiwayDetail>[];
     if (details.isNotEmpty) {
       _dhiwayDetails.addAll(details.map(_DhiwayDetailDraft.fromModel));
-      return;
+    } else {
+      final List<_DhiwayDetailDraft> legacy = <_DhiwayDetailDraft>[
+        if ((profile?.humanSpaceId?.trim().isNotEmpty ?? false) ||
+            (profile?.humanSchemaId?.trim().isNotEmpty ?? false))
+          _DhiwayDetailDraft(
+            spaceId: profile?.humanSpaceId?.trim() ?? '',
+            schemaId: profile?.humanSchemaId?.trim() ?? '',
+          ),
+        if ((profile?.productSpaceId?.trim().isNotEmpty ?? false) ||
+            (profile?.productSchemaId?.trim().isNotEmpty ?? false))
+          _DhiwayDetailDraft(
+            spaceId: profile?.productSpaceId?.trim() ?? '',
+            schemaId: profile?.productSchemaId?.trim() ?? '',
+          ),
+        if ((profile?.warrantySpaceId?.trim().isNotEmpty ?? false) ||
+            (profile?.warrantySchemaId?.trim().isNotEmpty ?? false))
+          _DhiwayDetailDraft(
+            spaceId: profile?.warrantySpaceId?.trim() ?? '',
+            schemaId: profile?.warrantySchemaId?.trim() ?? '',
+          ),
+        if ((profile?.dhiwaySpaceId?.trim().isNotEmpty ?? false))
+          _DhiwayDetailDraft(
+            spaceId: profile?.dhiwaySpaceId?.trim() ?? '',
+            schemaId: '',
+          ),
+      ];
+      _dhiwayDetails.addAll(legacy);
     }
 
-    final List<_DhiwayDetailDraft> legacy = <_DhiwayDetailDraft>[
-      if ((profile?.humanSpaceId?.trim().isNotEmpty ?? false) ||
-          (profile?.humanSchemaId?.trim().isNotEmpty ?? false))
-        _DhiwayDetailDraft(
-          spaceId: profile?.humanSpaceId?.trim() ?? '',
-          schemaId: profile?.humanSchemaId?.trim() ?? '',
-        ),
-      if ((profile?.productSpaceId?.trim().isNotEmpty ?? false) ||
-          (profile?.productSchemaId?.trim().isNotEmpty ?? false))
-        _DhiwayDetailDraft(
-          spaceId: profile?.productSpaceId?.trim() ?? '',
-          schemaId: profile?.productSchemaId?.trim() ?? '',
-        ),
-      if ((profile?.warrantySpaceId?.trim().isNotEmpty ?? false) ||
-          (profile?.warrantySchemaId?.trim().isNotEmpty ?? false))
-        _DhiwayDetailDraft(
-          spaceId: profile?.warrantySpaceId?.trim() ?? '',
-          schemaId: profile?.warrantySchemaId?.trim() ?? '',
-        ),
-      if ((profile?.dhiwaySpaceId?.trim().isNotEmpty ?? false))
-        _DhiwayDetailDraft(
-          spaceId: profile?.dhiwaySpaceId?.trim() ?? '',
-          schemaId: '',
-        ),
-    ];
-    _dhiwayDetails.addAll(legacy);
+    _normalizeDefaultSelection();
+  }
+
+  void _normalizeDefaultSelection() {
+    if (_dhiwayDetails.isEmpty) return;
+
+    final int selectedIndex = _dhiwayDetails.indexWhere(
+      (_DhiwayDetailDraft detail) => detail.isDefault,
+    );
+    final int normalizedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    for (int i = 0; i < _dhiwayDetails.length; i++) {
+      _dhiwayDetails[i].isDefault = i == normalizedIndex;
+    }
   }
 
   void _addDhiwayDetail() {
     setState(() {
       _dhiwayDetails.add(_DhiwayDetailDraft());
+      _normalizeDefaultSelection();
     });
   }
 
   void _removeDhiwayDetail(int index) {
     if (index < 0 || index >= _dhiwayDetails.length) return;
     setState(() {
+      final bool removedWasDefault = _dhiwayDetails[index].isDefault;
       final _DhiwayDetailDraft detail = _dhiwayDetails.removeAt(index);
       detail.dispose();
+      if (_dhiwayDetails.isNotEmpty) {
+        if (removedWasDefault) {
+          _dhiwayDetails.first.isDefault = true;
+        }
+        _normalizeDefaultSelection();
+      }
+    });
+  }
+
+  void _setDefaultDhiwayDetail(int index) {
+    if (index < 0 || index >= _dhiwayDetails.length) return;
+    setState(() {
+      for (int i = 0; i < _dhiwayDetails.length; i++) {
+        _dhiwayDetails[i].isDefault = i == index;
+      }
     });
   }
 
@@ -454,18 +484,25 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     try {
       switch (widget.mode) {
         case _OrgEditMode.profile:
-          final List<DhiwayDetail> dhiwaysDetails = _dhiwayDetails
-              .map(
-                (detail) => DhiwayDetail(
-                  spaceId: detail.spaceController.text.trim(),
-                  schemaId: detail.schemaController.text.trim(),
-                ),
-              )
+          final List<_DhiwayDetailDraft> validDetails = _dhiwayDetails
               .where(
-                (DhiwayDetail detail) =>
-                    detail.spaceId.isNotEmpty || detail.schemaId.isNotEmpty,
+                (_DhiwayDetailDraft detail) =>
+                    detail.spaceController.text.trim().isNotEmpty ||
+                    detail.schemaController.text.trim().isNotEmpty,
               )
               .toList();
+          final int defaultIndex = validDetails.indexWhere(
+            (_DhiwayDetailDraft detail) => detail.isDefault,
+          );
+          final int selectedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
+          final List<DhiwayDetail> dhiwaysDetails = <DhiwayDetail>[
+            for (int i = 0; i < validDetails.length; i++)
+              DhiwayDetail(
+                spaceId: validDetails[i].spaceController.text.trim(),
+                schemaId: validDetails[i].schemaController.text.trim(),
+                isDefault: i == selectedDefaultIndex,
+              ),
+          ];
           await ref
               .read(authNotifierProvider.notifier)
               .updateOrganizationProfile(
@@ -481,24 +518,31 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
               );
           break;
         case _OrgEditMode.serviceIds:
-          final List<DhiwayDetail> dhiwaysDetails = _dhiwayDetails
-              .map(
-                (detail) => DhiwayDetail(
-                  spaceId: detail.spaceController.text.trim(),
-                  schemaId: detail.schemaController.text.trim(),
-                ),
-              )
+          final List<_DhiwayDetailDraft> validDetails = _dhiwayDetails
               .where(
-                (DhiwayDetail detail) =>
-                    detail.spaceId.isNotEmpty || detail.schemaId.isNotEmpty,
+                (_DhiwayDetailDraft detail) =>
+                    detail.spaceController.text.trim().isNotEmpty ||
+                    detail.schemaController.text.trim().isNotEmpty,
               )
               .toList();
-          if (dhiwaysDetails.isEmpty) {
+          if (validDetails.isEmpty) {
             setState(() {
               _errorText = 'Please add at least one space and schema pair.';
             });
             return;
           }
+          final int defaultIndex = validDetails.indexWhere(
+            (_DhiwayDetailDraft detail) => detail.isDefault,
+          );
+          final int selectedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
+          final List<DhiwayDetail> dhiwaysDetails = <DhiwayDetail>[
+            for (int i = 0; i < validDetails.length; i++)
+              DhiwayDetail(
+                spaceId: validDetails[i].spaceController.text.trim(),
+                schemaId: validDetails[i].schemaController.text.trim(),
+                isDefault: i == selectedDefaultIndex,
+              ),
+          ];
           await ref
               .read(authNotifierProvider.notifier)
               .updateOrganizationProfile(
@@ -676,6 +720,7 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
               errorText: _errorText,
               onAdd: _addDhiwayDetail,
               onRemove: _removeDhiwayDetail,
+              onSelectDefault: _setDefaultDhiwayDetail,
             ),
           ],
         );
@@ -691,6 +736,7 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
               errorText: _errorText,
               onAdd: _addDhiwayDetail,
               onRemove: _removeDhiwayDetail,
+              onSelectDefault: _setDefaultDhiwayDetail,
             ),
           ],
         );
@@ -758,6 +804,7 @@ class _DhiwayDetailsEditor extends StatelessWidget {
     required this.errorText,
     required this.onAdd,
     required this.onRemove,
+    required this.onSelectDefault,
   });
 
   final List<_DhiwayDetailDraft> details;
@@ -765,6 +812,7 @@ class _DhiwayDetailsEditor extends StatelessWidget {
   final String? errorText;
   final VoidCallback onAdd;
   final void Function(int index) onRemove;
+  final void Function(int index) onSelectDefault;
 
   @override
   Widget build(BuildContext context) {
@@ -787,6 +835,7 @@ class _DhiwayDetailsEditor extends StatelessWidget {
             enabled: enabled,
             onRemove: () => onRemove(index),
             onAdd: onAdd,
+            onSelectDefault: () => onSelectDefault(index),
           ),
           if (index != visibleDetails.length - 1)
             const SizedBox(height: AppSpacing.x3),
@@ -811,6 +860,7 @@ class _DhiwayDetailCard extends StatelessWidget {
     required this.enabled,
     required this.onRemove,
     required this.onAdd,
+    required this.onSelectDefault,
   });
 
   final _DhiwayDetailDraft detail;
@@ -819,6 +869,7 @@ class _DhiwayDetailCard extends StatelessWidget {
   final bool enabled;
   final VoidCallback onRemove;
   final VoidCallback onAdd;
+  final VoidCallback onSelectDefault;
 
   @override
   Widget build(BuildContext context) {
@@ -841,6 +892,51 @@ class _DhiwayDetailCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              InkWell(
+                onTap: enabled ? onSelectDefault : null,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: detail.isDefault
+                        ? const Color(0xFFEFF6FF)
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: detail.isDefault
+                          ? const Color(0xFFBFDBFE)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        detail.isDefault
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 16,
+                        color: detail.isDefault
+                            ? AppColors.brandBlue
+                            : const Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Default',
+                        style: AppTypography.body2.copyWith(
+                          color: detail.isDefault
+                              ? AppColors.brandBlue
+                              : AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               IconButton(
                 onPressed: enabled ? onAdd : null,
                 icon: const Icon(Icons.add_circle_outline_rounded),
@@ -881,19 +977,24 @@ class _DhiwayDetailCard extends StatelessWidget {
 }
 
 class _DhiwayDetailDraft {
-  _DhiwayDetailDraft({String spaceId = '', String schemaId = ''})
-    : spaceController = TextEditingController(text: spaceId),
-      schemaController = TextEditingController(text: schemaId);
+  _DhiwayDetailDraft({
+    String spaceId = '',
+    String schemaId = '',
+    this.isDefault = false,
+  }) : spaceController = TextEditingController(text: spaceId),
+       schemaController = TextEditingController(text: schemaId);
 
   factory _DhiwayDetailDraft.fromModel(DhiwayDetail detail) {
     return _DhiwayDetailDraft(
       spaceId: detail.spaceId,
       schemaId: detail.schemaId,
+      isDefault: detail.isDefault == true,
     );
   }
 
   final TextEditingController spaceController;
   final TextEditingController schemaController;
+  bool isDefault;
 
   void dispose() {
     spaceController.dispose();
@@ -1568,18 +1669,161 @@ class _SpaceIdsCard extends StatelessWidget {
                 ),
               ),
             ),
-            for (int index = 0; index < dhiwaysDetails.length; index++)
-              _InfoRow(
-                label: 'Pair ${index + 1}',
-                value:
-                    '${dhiwaysDetails[index].spaceId.trim().isNotEmpty ? dhiwaysDetails[index].spaceId.trim() : '—'} • ${dhiwaysDetails[index].schemaId.trim().isNotEmpty ? dhiwaysDetails[index].schemaId.trim() : '—'}',
-              ),
             if (!hasDetails)
               const _InfoRow(
                 label: 'Note',
                 value: 'Add a space ID and schema ID pair to connect Dhiway.',
               ),
           ],
+        ),
+        if (hasDetails) ...<Widget>[
+          SizedBox(height: s(12)),
+          for (
+            int index = 0;
+            index < dhiwaysDetails.length;
+            index++
+          ) ...<Widget>[
+            _DhiwayPairBox(
+              title: 'Pair ${index + 1}',
+              spaceId: dhiwaysDetails[index].spaceId,
+              schemaId: dhiwaysDetails[index].schemaId,
+              isDefault: dhiwaysDetails[index].isDefault == true,
+            ),
+            if (index != dhiwaysDetails.length - 1) SizedBox(height: s(12)),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _DhiwayPairBox extends StatelessWidget {
+  const _DhiwayPairBox({
+    required this.title,
+    required this.spaceId,
+    required this.schemaId,
+    required this.isDefault,
+  });
+
+  final String title;
+  final String spaceId;
+  final String schemaId;
+  final bool isDefault;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final String normalizedSpaceId = spaceId.trim().isNotEmpty
+        ? spaceId.trim()
+        : '—';
+    final String normalizedSchemaId = schemaId.trim().isNotEmpty
+        ? schemaId.trim()
+        : '—';
+
+    return Container(
+      padding: EdgeInsets.all(s(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(s(16)),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(13),
+              fontWeight: FontWeight.w700,
+              height: 18 / 13,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          if (isDefault) ...<Widget>[
+            SizedBox(height: s(8)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: s(10),
+                  vertical: s(4),
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Text(
+                  'Default',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(11),
+                    fontWeight: FontWeight.w700,
+                    height: 16 / 11,
+                    color: const Color(0xFF2563EB),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          SizedBox(height: s(10)),
+          _DhiwayFieldRow(label: 'Space ID', value: normalizedSpaceId),
+          SizedBox(height: s(8)),
+          _DhiwayFieldRow(label: 'Schema ID', value: normalizedSchemaId),
+        ],
+      ),
+    );
+  }
+}
+
+class _DhiwayFieldRow extends StatelessWidget {
+  const _DhiwayFieldRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: s(86),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(12),
+              fontWeight: FontWeight.w600,
+              height: 16 / 12,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: s(12),
+              fontWeight: FontWeight.w500,
+              height: 16 / 12,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
         ),
       ],
     );

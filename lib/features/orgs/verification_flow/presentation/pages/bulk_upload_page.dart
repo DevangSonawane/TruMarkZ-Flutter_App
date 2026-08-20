@@ -25,6 +25,8 @@ import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
 import 'org_flow_display_label_utils.dart';
+import 'human_verification_checks_catalog.dart';
+import 'product_verification_checks_catalog.dart';
 
 class BulkUploadPage extends ConsumerStatefulWidget {
   const BulkUploadPage({super.key});
@@ -553,14 +555,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       barrierDismissible: true,
       barrierColor: Colors.black54,
       builder: (BuildContext dialogContext) {
-        final String verificationFilter = _verificationFilter(
-          category: 'human',
-        );
         return _HumanTemplateDialog(
           initialHeaders: initialHeaders,
           selectedChecks: _checks,
           selectedCheckIds: _checkIds,
-          verificationFilter: verificationFilter,
+          verificationFilter: 'human',
           onSave: (List<String> headers) {
             if (!mounted) return;
             setState(() {
@@ -1809,15 +1808,16 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final String apiIndustry = industryAsync.valueOrNull?.trim() ?? '';
     final String profileIndustry =
         authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
-    final String resolvedIndustry = _industry.trim().isNotEmpty
+    final String rawIndustry = _industry.trim().isNotEmpty
         ? _industry.trim()
         : apiIndustry.isNotEmpty
         ? apiIndustry
         : profileIndustry;
+    final String resolvedIndustry = _sanitizeIndustryFilter(rawIndustry);
     final String displayIndustry =
         OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
           profile: authAsync.valueOrNull?.userProfile,
-          fallback: _prettyIndustry(resolvedIndustry),
+          fallback: _prettyIndustry(rawIndustry),
         );
     final String verificationFilter = resolvedIndustry.isNotEmpty
         ? 'human::$resolvedIndustry'
@@ -1909,28 +1909,37 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                             ),
                           ),
                           SizedBox(width: s(12)),
-                          Text(
-                            'Bulk Upload',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
+                          Expanded(
+                            child: Text(
+                              'Bulk Upload',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: s(21),
+                                fontWeight: FontWeight.w600,
+                                height: 19.5 / 21,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                          const Spacer(),
-                          _IndustryPill(
-                            scale: scale,
-                            industryLabel: displayIndustry,
-                            onTap: () async {
-                              final String? picked = await _pickIndustry(
-                                scale: scale,
-                                current: resolvedIndustry,
-                              );
-                              if (!mounted || picked == null) return;
-                              setState(() => _industry = picked);
-                            },
+                          const SizedBox(width: 12),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: contentWidth * 0.42,
+                            ),
+                            child: _IndustryPill(
+                              scale: scale,
+                              industryLabel: displayIndustry,
+                              onTap: () async {
+                                final String? picked = await _pickIndustry(
+                                  scale: scale,
+                                  current: resolvedIndustry,
+                                );
+                                if (!mounted || picked == null) return;
+                                setState(() => _industry = picked);
+                              },
+                            ),
                           ),
                         ],
                       ),
@@ -2617,11 +2626,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final AsyncValue<String?> industryAsync = orgId == null
         ? const AsyncData<String?>(null)
         : ref.read(organizationIndustryTypeProvider(orgId));
-    final String apiIndustry = industryAsync.valueOrNull?.trim() ?? '';
-    final String profileIndustry =
-        authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
-    if (_industry.trim().isNotEmpty) return _industry.trim();
+    final String currentIndustry = _sanitizeIndustryFilter(_industry);
+    if (currentIndustry.isNotEmpty) return currentIndustry;
+
+    final String apiIndustry = _sanitizeIndustryFilter(
+      industryAsync.valueOrNull ?? '',
+    );
     if (apiIndustry.isNotEmpty) return apiIndustry;
+
+    final String profileIndustry = _sanitizeIndustryFilter(
+      authAsync.valueOrNull?.userProfile?.industry ?? '',
+    );
     return profileIndustry;
   }
 
@@ -2629,6 +2644,24 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final String selectedIndustry = (industry ?? _effectiveIndustry()).trim();
     if (selectedIndustry.isEmpty) return category;
     return '$category::$selectedIndustry';
+  }
+
+  String _sanitizeIndustryFilter(String raw) {
+    final String value = raw.trim();
+    if (value.isEmpty) return '';
+    if (value.contains('{') || value.contains('}')) return '';
+    if (value.contains(':')) return '';
+
+    final String normalized = value.toLowerCase();
+    if (normalized == 'all' || normalized == 'both') return '';
+    if (RegExp(r'^[0-9a-f-]{24,}$', caseSensitive: false).hasMatch(value)) {
+      return '';
+    }
+
+    final bool looksKnown = _industryOptions.any(
+      (String option) => option.toLowerCase() == normalized,
+    );
+    return looksKnown ? value : '';
   }
 }
 
@@ -2745,8 +2778,15 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       ];
       final String headersCsv = headers.join(',');
       final String verificationTypesCsv = sortedChecks.join(',');
+      final List<String> resolvedCheckPairs = <String>[
+        for (final String id in sortedChecks)
+          _formatCheckResolution(id.trim(), verificationTypesById),
+      ];
       debugPrint(
-        '[HumanTemplate] headers=$headersCsv verification_types=$verificationTypesCsv',
+        '[HumanTemplate] request headers=$headersCsv verification_types=$verificationTypesCsv',
+      );
+      debugPrint(
+        '[HumanTemplate] check resolutions=${resolvedCheckPairs.join(', ')}',
       );
       final VerificationBinaryResponse res = await repo.generateHumanTemplate(
         headers: headersCsv,
@@ -2757,6 +2797,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       final Uint8List templateBytes = _replaceVerificationIdsWithNames(
         res.bytes,
         verificationTypesById,
+      );
+      debugPrint(
+        '[HumanTemplate] generated file=${res.filename} bytes=${res.bytes.length} remappedBytes=${templateBytes.length}',
       );
 
       String savedUri = '';
@@ -2910,67 +2953,49 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
 
     try {
       final Excel excel = Excel.decodeBytes(bytes);
-      for (final String sheetName in excel.tables.keys) {
-        final Sheet? sheet = excel.tables[sheetName];
-        if (sheet == null) continue;
+      final Map<String, int> exactHits = <String, int>{};
+      final List<String> sampleChanges = <String>[];
+      int replacedCells = 0;
 
-        final List<List<Data?>> rows = sheet.rows;
-        for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
-          final List<Data?> row = rows[rowIndex];
-          for (int columnIndex = 0; columnIndex < row.length; columnIndex++) {
-            final Data? cell = row[columnIndex];
-            if (cell == null) continue;
+      final List<MapEntry<String, String>> replacementEntries =
+          replacements.entries.toList()
+            ..sort((MapEntry<String, String> a, MapEntry<String, String> b) {
+              return b.key.length.compareTo(a.key.length);
+            });
 
-            final String raw = (cell.value?.toString() ?? '').trim();
-            if (raw.isEmpty) continue;
-
-            final String? replacement = _remapVerificationCell(
-              raw,
-              replacements,
-            );
-            if (replacement == null || replacement == raw) continue;
-
-            sheet.updateCell(
-              CellIndex.indexByColumnRow(
-                columnIndex: columnIndex,
-                rowIndex: rowIndex,
-              ),
-              TextCellValue(replacement),
-            );
-          }
+      for (final MapEntry<String, String> entry in replacementEntries) {
+        final String from = entry.key;
+        final String to = entry.value;
+        int count = 0;
+        for (final Sheet sheet in excel.tables.values) {
+          count += sheet.findAndReplace(from, to);
+        }
+        if (count <= 0) continue;
+        replacedCells += count;
+        exactHits[from] = (exactHits[from] ?? 0) + count;
+        if (sampleChanges.length < 20) {
+          sampleChanges.add('"$from" => "$to" ($count matches)');
         }
       }
 
       final List<int>? encoded = excel.encode();
       if (encoded == null || encoded.isEmpty) return bytes;
+      debugPrint(
+        '[HumanTemplate] remap summary cells=$replacedCells exactHits=${exactHits.entries.map((MapEntry<String, int> e) => '${e.key}:${e.value}').join(', ')}',
+      );
+      if (sampleChanges.isNotEmpty) {
+        debugPrint(
+          '[HumanTemplate] remap samples=${sampleChanges.join(' | ')}',
+        );
+      } else {
+        debugPrint('[HumanTemplate] remap samples=none');
+      }
       return Uint8List.fromList(encoded);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[HumanTemplate] could not remap verification names: $e');
+      debugPrint('[HumanTemplate] remap stack trace:\n$st');
       return bytes;
     }
-  }
-
-  String? _remapVerificationCell(String raw, Map<String, String> replacements) {
-    final String normalized = raw.trim();
-    final String? direct = replacements[normalized.toLowerCase()];
-    if (direct != null) return direct;
-
-    String remapped = normalized;
-    bool changed = false;
-
-    final List<String> ids = replacements.keys.toList()
-      ..sort((String a, String b) => b.length.compareTo(a.length));
-    for (final String id in ids) {
-      final String replacement = replacements[id]!;
-      final RegExp pattern = RegExp(RegExp.escape(id), caseSensitive: false);
-      final String next = remapped.replaceAll(pattern, replacement);
-      if (next == remapped) continue;
-      remapped = next;
-      changed = true;
-    }
-
-    if (!changed) return null;
-    return remapped;
   }
 
   static String _verificationTypeDisplayName(VerificationTypeDefinition item) {
@@ -2980,6 +3005,18 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     final String label = item.label.trim();
     if (label.isNotEmpty) return label;
 
+    final HumanVerificationCheckDefinition? humanItem =
+        HumanVerificationChecksCatalog.byId[item.id.trim()];
+    if (humanItem != null && humanItem.title.trim().isNotEmpty) {
+      return humanItem.title.trim();
+    }
+
+    final ProductVerificationCheckDefinition? productItem =
+        ProductVerificationChecksCatalog.byId[item.id.trim()];
+    if (productItem != null && productItem.title.trim().isNotEmpty) {
+      return productItem.title.trim();
+    }
+
     final String fallback = item.id.trim();
     if (fallback.isEmpty) return '';
 
@@ -2987,6 +3024,15 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
         .replaceAll(RegExp(r'[_\-]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  static String _formatCheckResolution(
+    String id,
+    Map<String, VerificationTypeDefinition> verificationTypesById,
+  ) {
+    final VerificationTypeDefinition? item = verificationTypesById[id];
+    if (item == null) return '$id=>MISS';
+    return '$id=>${_verificationTypeDisplayName(item)}';
   }
 
   @override

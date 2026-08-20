@@ -29,6 +29,9 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
   final TextEditingController _address1 = TextEditingController();
   final TextEditingController _address2 = TextEditingController();
   final TextEditingController _address3 = TextEditingController();
+  final TextEditingController _spaceId = TextEditingController();
+  final TextEditingController _schemaId = TextEditingController();
+  final List<_DhiwayDetailDraft> _extraDhiwayDetails = <_DhiwayDetailDraft>[];
 
   static const List<String> _industryOptions = <String>[
     'Transport',
@@ -71,6 +74,10 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
     _address1.text = profile?.addressLine1?.trim() ?? '';
     _address2.text = profile?.addressLine2?.trim() ?? '';
     _address3.text = profile?.addressLine3?.trim() ?? '';
+    _seedDhiwayDetails(profile);
+    if (_extraDhiwayDetails.isEmpty) {
+      _extraDhiwayDetails.add(_DhiwayDetailDraft());
+    }
   }
 
   @override
@@ -81,11 +88,72 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
     _address1.dispose();
     _address2.dispose();
     _address3.dispose();
+    _spaceId.dispose();
+    _schemaId.dispose();
+    for (final _DhiwayDetailDraft detail in _extraDhiwayDetails) {
+      detail.dispose();
+    }
     super.dispose();
+  }
+
+  void _seedDhiwayDetails(UserProfile? profile) {
+    final List<DhiwayDetail> details =
+        profile?.dhiwaysDetails ?? <DhiwayDetail>[];
+    if (details.isNotEmpty) {
+      _spaceId.text = details.first.spaceId.trim();
+      _schemaId.text = details.first.schemaId.trim();
+      _extraDhiwayDetails.addAll(
+        details.skip(1).map(_DhiwayDetailDraft.fromModel),
+      );
+      return;
+    }
+
+    final String legacySpaceId =
+        profile?.dhiwaySpaceId?.trim() ??
+        profile?.humanSpaceId?.trim() ??
+        profile?.productSpaceId?.trim() ??
+        profile?.warrantySpaceId?.trim() ??
+        '';
+    final String legacySchemaId =
+        profile?.humanSchemaId?.trim() ??
+        profile?.productSchemaId?.trim() ??
+        profile?.warrantySchemaId?.trim() ??
+        '';
+    _spaceId.text = legacySpaceId;
+    _schemaId.text = legacySchemaId;
+  }
+
+  void _addDhiwayDetail() {
+    setState(() {
+      _extraDhiwayDetails.add(_DhiwayDetailDraft());
+    });
+  }
+
+  void _removeDhiwayDetail(int index) {
+    if (index < 0 || index >= _extraDhiwayDetails.length) return;
+    setState(() {
+      final _DhiwayDetailDraft detail = _extraDhiwayDetails.removeAt(index);
+      detail.dispose();
+    });
   }
 
   Future<void> _submit() async {
     if (_isSubmitting) return;
+
+    final String primarySpaceId = _spaceId.text.trim();
+    final String primarySchemaId = _schemaId.text.trim();
+    final List<DhiwayDetail> extraDhiwayDetails = _extraDhiwayDetails
+        .map(
+          (detail) => DhiwayDetail(
+            spaceId: detail.spaceController.text.trim(),
+            schemaId: detail.schemaController.text.trim(),
+          ),
+        )
+        .where(
+          (DhiwayDetail detail) =>
+              detail.spaceId.isNotEmpty || detail.schemaId.isNotEmpty,
+        )
+        .toList();
 
     final OrgOnboardingRequest request = OrgOnboardingRequest(
       gstin: _gstin.text,
@@ -94,7 +162,10 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
       addressLine2: _address2.text,
       addressLine3: _address3.text,
       industryType: _industryType,
+      spaceId: primarySpaceId,
+      schemaId: primarySchemaId,
       useCases: _parseUseCases(_useCases.text),
+      dhiwaysDetails: extraDhiwayDetails.isEmpty ? null : extraDhiwayDetails,
     );
 
     setState(() => _isSubmitting = true);
@@ -232,6 +303,37 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
                   backgroundColor: inputBg,
                 ),
                 const SizedBox(height: AppSpacing.x3),
+                Text(
+                  'Primary Dhiway Pair',
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TMZInput(
+                  label: 'Space ID (optional)',
+                  hint: 'Enter space id',
+                  controller: _spaceId,
+                  enabled: !_isSubmitting,
+                  backgroundColor: inputBg,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Schema ID (optional)',
+                  hint: 'Enter schema id',
+                  controller: _schemaId,
+                  enabled: !_isSubmitting,
+                  backgroundColor: inputBg,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                _DhiwayDetailsEditor(
+                  details: _extraDhiwayDetails,
+                  enabled: !_isSubmitting,
+                  onAdd: _addDhiwayDetail,
+                  onRemove: _removeDhiwayDetail,
+                ),
+                const SizedBox(height: AppSpacing.x3),
                 DropdownButtonFormField<String>(
                   initialValue: _industryType,
                   onChanged: _isSubmitting ? null : _setIndustryType,
@@ -286,5 +388,164 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
         ],
       ),
     );
+  }
+}
+
+class _DhiwayDetailsEditor extends StatelessWidget {
+  const _DhiwayDetailsEditor({
+    required this.details,
+    required this.enabled,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<_DhiwayDetailDraft> details;
+  final bool enabled;
+  final VoidCallback onAdd;
+  final void Function(int index) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Additional Dhiway Pairs',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: enabled ? onAdd : null,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add pair'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.x2),
+        Text(
+          'Optional extra space and schema pairs. The first pair above is treated as the primary onboarding pair.',
+          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.x2),
+        for (int index = 0; index < details.length; index++) ...<Widget>[
+          _DhiwayDetailCard(
+            detail: details[index],
+            index: index,
+            detailsCount: details.length,
+            enabled: enabled,
+            onAdd: onAdd,
+            onRemove: () => onRemove(index),
+          ),
+          if (index != details.length - 1)
+            const SizedBox(height: AppSpacing.x3),
+        ],
+      ],
+    );
+  }
+}
+
+class _DhiwayDetailCard extends StatelessWidget {
+  const _DhiwayDetailCard({
+    required this.detail,
+    required this.index,
+    required this.detailsCount,
+    required this.enabled,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final _DhiwayDetailDraft detail;
+  final int index;
+  final int detailsCount;
+  final bool enabled;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    const Color inputBg = Color(0xFFE9EEF3);
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                'Pair ${index + 1}',
+                style: AppTypography.body1.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: enabled ? onAdd : null,
+                icon: const Icon(Icons.add_circle_outline_rounded),
+                color: AppColors.brandBlue,
+                tooltip: 'Add another pair',
+              ),
+              if (enabled && detailsCount > 1)
+                IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  color: AppColors.error,
+                  tooltip: 'Remove this pair',
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          TMZInput(
+            label: 'Space ID',
+            hint: 'Enter space id',
+            controller: detail.spaceController,
+            enabled: enabled,
+            backgroundColor: inputBg,
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          TMZInput(
+            label: 'Schema ID',
+            hint: 'Enter schema id',
+            controller: detail.schemaController,
+            enabled: enabled,
+            backgroundColor: inputBg,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DhiwayDetailDraft {
+  _DhiwayDetailDraft({String spaceId = '', String schemaId = ''})
+    : spaceController = TextEditingController(text: spaceId),
+      schemaController = TextEditingController(text: schemaId);
+
+  factory _DhiwayDetailDraft.fromModel(DhiwayDetail detail) {
+    return _DhiwayDetailDraft(
+      spaceId: detail.spaceId,
+      schemaId: detail.schemaId,
+    );
+  }
+
+  final TextEditingController spaceController;
+  final TextEditingController schemaController;
+
+  void dispose() {
+    spaceController.dispose();
+    schemaController.dispose();
   }
 }

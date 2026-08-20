@@ -46,22 +46,39 @@ class LoginResponse {
 }
 
 class DhiwayDetail {
-  const DhiwayDetail({required this.spaceId, required this.schemaId});
+  const DhiwayDetail({
+    required this.spaceId,
+    required this.schemaId,
+    this.isDefault,
+  });
 
   final String spaceId;
   final String schemaId;
+  final bool? isDefault;
 
   factory DhiwayDetail.fromJson(Map<String, dynamic> json) {
+    final dynamic rawDefault = json['default'] ?? json['is_default'];
     return DhiwayDetail(
       spaceId: _readStringOrNull(json['space_id'] ?? json['spaceId']) ?? '',
       schemaId: _readStringOrNull(json['schema_id'] ?? json['schemaId']) ?? '',
+      isDefault: rawDefault is bool
+          ? rawDefault
+          : rawDefault == null
+          ? null
+          : rawDefault.toString().trim().toLowerCase() == 'true',
     );
   }
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'space_id': spaceId.trim(),
-    'schema_id': schemaId.trim(),
-  };
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = <String, dynamic>{
+      'space_id': spaceId.trim(),
+      'schema_id': schemaId.trim(),
+    };
+    if (isDefault != null) {
+      json['default'] = isDefault;
+    }
+    return json;
+  }
 }
 
 class RegisterIndividualRequest {
@@ -179,7 +196,10 @@ class OrgOnboardingRequest {
     this.addressLine2,
     this.addressLine3,
     this.industryType,
+    this.spaceId,
+    this.schemaId,
     this.useCases,
+    this.dhiwaysDetails,
   });
 
   final String? gstin;
@@ -188,18 +208,46 @@ class OrgOnboardingRequest {
   final String? addressLine2;
   final String? addressLine3;
   final String? industryType;
+  final String? spaceId;
+  final String? schemaId;
   final Map<String, dynamic>? useCases;
+  final List<DhiwayDetail>? dhiwaysDetails;
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = <String, dynamic>{
-      'gstin': gstin?.trim() ?? '',
-      'business_reg_number': businessRegNumber?.trim() ?? '',
-      'address_line1': addressLine1?.trim() ?? '',
-      'address_line2': addressLine2?.trim() ?? '',
-      'address_line3': addressLine3?.trim() ?? '',
-      'industry_type': industryType?.trim() ?? '',
-      'use_cases': useCases ?? <String, dynamic>{},
-    };
+    final Map<String, dynamic> json = <String, dynamic>{};
+
+    void putIfNonEmpty(String key, String? value) {
+      final String normalized = value?.trim() ?? '';
+      if (normalized.isNotEmpty) {
+        json[key] = normalized;
+      }
+    }
+
+    putIfNonEmpty('gstin', gstin);
+    putIfNonEmpty('business_reg_number', businessRegNumber);
+    putIfNonEmpty('address_line1', addressLine1);
+    putIfNonEmpty('address_line2', addressLine2);
+    putIfNonEmpty('address_line3', addressLine3);
+    putIfNonEmpty('industry_type', industryType);
+    putIfNonEmpty('space_id', spaceId);
+    putIfNonEmpty('schema_id', schemaId);
+    if (useCases != null && useCases!.isNotEmpty) {
+      json['use_cases'] = useCases;
+    }
+
+    if (dhiwaysDetails != null) {
+      final List<Map<String, dynamic>> details = dhiwaysDetails!
+          .map((DhiwayDetail detail) => detail.toJson())
+          .where(
+            (Map<String, dynamic> detail) =>
+                (detail['space_id'] ?? '').toString().trim().isNotEmpty ||
+                (detail['schema_id'] ?? '').toString().trim().isNotEmpty,
+          )
+          .toList();
+      if (details.isNotEmpty) {
+        json['dhiways_details'] = details;
+      }
+    }
 
     return json;
   }
@@ -616,6 +664,21 @@ Map<String, dynamic> _readStringMap(dynamic value) {
 
 List<DhiwayDetail> _readDhiwayDetails(Map<String, dynamic> json) {
   final dynamic rawDetails = json['dhiways_details'] ?? json['dhiwaysDetails'];
+  final List<DhiwayDetail> details = <DhiwayDetail>[];
+  final Set<String> seen = <String>{};
+
+  void addUnique(String? spaceId, String? schemaId, {bool? isDefault}) {
+    final String space = spaceId?.trim() ?? '';
+    final String schema = schemaId?.trim() ?? '';
+    if (space.isEmpty && schema.isEmpty) return;
+    final String key = '$space|$schema|${isDefault ?? ''}';
+    if (seen.add(key)) {
+      details.add(
+        DhiwayDetail(spaceId: space, schemaId: schema, isDefault: isDefault),
+      );
+    }
+  }
+
   if (rawDetails is List) {
     final List<DhiwayDetail> parsed = rawDetails
         .whereType<Map>()
@@ -626,26 +689,24 @@ List<DhiwayDetail> _readDhiwayDetails(Map<String, dynamic> json) {
               detail.schemaId.trim().isNotEmpty,
         )
         .toList();
-    if (parsed.isNotEmpty) return parsed;
+    for (final DhiwayDetail detail in parsed) {
+      addUnique(detail.spaceId, detail.schemaId, isDefault: detail.isDefault);
+    }
   }
 
-  final List<DhiwayDetail> legacy = <DhiwayDetail>[];
-  void addLegacy(String? spaceId, String? schemaId) {
-    final String space = spaceId?.trim() ?? '';
-    final String schema = schemaId?.trim() ?? '';
-    if (space.isEmpty && schema.isEmpty) return;
-    legacy.add(DhiwayDetail(spaceId: space, schemaId: schema));
-  }
-
-  addLegacy(
+  addUnique(
+    _readStringOrNull(json['space_id']),
+    _readStringOrNull(json['schema_id']),
+  );
+  addUnique(
     _readStringOrNull(json['human_space_id'] ?? json['humanSpaceId']),
     _readStringOrNull(json['human_schema_id'] ?? json['humanSchemaId']),
   );
-  addLegacy(
+  addUnique(
     _readStringOrNull(json['product_space_id'] ?? json['productSpaceId']),
     _readStringOrNull(json['product_schema_id'] ?? json['productSchemaId']),
   );
-  addLegacy(
+  addUnique(
     _readStringOrNull(
       json['warranty_space_id'] ??
           json['warrenty_space_id'] ??
@@ -654,12 +715,12 @@ List<DhiwayDetail> _readDhiwayDetails(Map<String, dynamic> json) {
     ),
     _readStringOrNull(json['warranty_schema_id'] ?? json['warrantySchemaId']),
   );
-  addLegacy(
+  addUnique(
     _readStringOrNull(json['dhiway_space_id']),
     _readStringOrNull(json['dhiway_schema_id'] ?? json['dhiwaySchemaId']),
   );
 
-  return legacy;
+  return details;
 }
 
 String? _joinNonEmpty(List<String?> values, {String separator = ', '}) {
