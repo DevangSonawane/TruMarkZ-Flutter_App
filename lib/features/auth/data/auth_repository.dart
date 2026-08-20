@@ -217,6 +217,20 @@ class AuthRepository {
     return UserProfile.fromJson(res);
   }
 
+  Future<VerifyGstResponse> verifyOrganizationGst({String? gstin}) async {
+    final String normalizedGstin = gstin?.trim() ?? '';
+    final Map<String, dynamic> payload = <String, dynamic>{};
+    if (normalizedGstin.isNotEmpty) {
+      payload['gstin'] = normalizedGstin;
+    }
+
+    final Map<String, dynamic> res = await _api.post(
+      '/auth/me/verify-gst',
+      data: payload,
+    );
+    return VerifyGstResponse.fromJson(res);
+  }
+
   Future<UserProfile> updateServiceType({required String serviceType}) async {
     final String normalized = serviceType.trim().toLowerCase();
     if (normalized != 'human' && normalized != 'product') {

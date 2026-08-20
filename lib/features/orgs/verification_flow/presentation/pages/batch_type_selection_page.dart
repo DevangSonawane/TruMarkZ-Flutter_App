@@ -39,8 +39,30 @@ class _BatchTypeSelectionPageState
     }
   }
 
-  void _continue(BuildContext context, _BatchType? selected) {
+  void _showGstRequiredSnack(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'GST verification is required before creating a batch.',
+        ),
+        action: SnackBarAction(
+          label: 'Open Profile',
+          onPressed: () => context.push(AppRouter.settingsPath),
+        ),
+      ),
+    );
+  }
+
+  void _continue(
+    BuildContext context,
+    _BatchType? selected, {
+    required bool gstVerified,
+  }) {
     if (selected == null) return;
+    if (!gstVerified) {
+      _showGstRequiredSnack(context);
+      return;
+    }
 
     switch (selected) {
       case _BatchType.human:
@@ -60,6 +82,8 @@ class _BatchTypeSelectionPageState
     final bool lockedToHuman = serviceType == 'human';
     final bool lockedToProduct = serviceType == 'product';
     final bool isLocked = lockedToHuman || lockedToProduct;
+    final bool gstVerified =
+        authAsync.valueOrNull?.userProfile?.gstVerified == true;
     final _BatchType? effectiveSelection = lockedToHuman
         ? _BatchType.human
         : lockedToProduct
@@ -233,9 +257,13 @@ class _BatchTypeSelectionPageState
                               scale: scale,
                               child: _ContinueButton(
                                 scale: scale,
-                                enabled: effectiveSelection != null,
-                                onTap: () =>
-                                    _continue(context, effectiveSelection),
+                                enabled:
+                                    effectiveSelection != null && gstVerified,
+                                onTap: () => _continue(
+                                  context,
+                                  effectiveSelection,
+                                  gstVerified: gstVerified,
+                                ),
                               ),
                             ),
                           ],

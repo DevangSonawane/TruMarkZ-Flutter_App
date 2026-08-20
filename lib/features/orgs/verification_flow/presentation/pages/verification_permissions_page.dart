@@ -1,22 +1,25 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
 
-class VerificationPermissionsPage extends StatefulWidget {
+class VerificationPermissionsPage extends ConsumerStatefulWidget {
   const VerificationPermissionsPage({super.key});
 
   @override
-  State<VerificationPermissionsPage> createState() =>
+  ConsumerState<VerificationPermissionsPage> createState() =>
       _VerificationPermissionsPageState();
 }
 
 class _VerificationPermissionsPageState
-    extends State<VerificationPermissionsPage> {
+    extends ConsumerState<VerificationPermissionsPage> {
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
 
@@ -40,10 +43,27 @@ class _VerificationPermissionsPageState
     super.didChangeDependencies();
   }
 
+  void _showGstRequiredSnack(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'GST verification is required before creating a batch.',
+        ),
+        action: SnackBarAction(
+          label: 'Open Profile',
+          onPressed: () => context.push(AppRouter.settingsPath),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final Uri uri = GoRouterState.of(context).uri;
     final Map<String, String> qp = uri.queryParameters;
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final bool gstVerified =
+        authAsync.valueOrNull?.userProfile?.gstVerified == true;
     final bool isProductFlow =
         (qp['flow'] ?? '').trim().toLowerCase() == 'product';
     final String stepText = isProductFlow ? 'STEP 3 OF 4' : 'STEP 2 OF 6';
@@ -241,7 +261,12 @@ class _VerificationPermissionsPageState
                               scale: scale,
                               child: _BottomContinue(
                                 scale: scale,
+                                enabled: gstVerified,
                                 onTap: () {
+                                  if (!gstVerified) {
+                                    _showGstRequiredSnack(context);
+                                    return;
+                                  }
                                   final List<String> checks = _checksFromRoute;
                                   final Map<String, String> qp =
                                       GoRouterState.of(
@@ -512,10 +537,15 @@ class _InfoBox extends StatelessWidget {
 }
 
 class _BottomContinue extends StatelessWidget {
-  const _BottomContinue({required this.scale, required this.onTap});
+  const _BottomContinue({
+    required this.scale,
+    required this.onTap,
+    required this.enabled,
+  });
 
   final double scale;
   final VoidCallback onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -546,7 +576,7 @@ class _BottomContinue extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(s(16)),
-          onTap: onTap,
+          onTap: enabled ? onTap : null,
           child: Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

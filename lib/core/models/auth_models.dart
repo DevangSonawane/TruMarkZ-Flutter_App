@@ -159,6 +159,8 @@ class OrgOnboardingRequest {
     this.addressLine1,
     this.addressLine2,
     this.addressLine3,
+    this.industryType,
+    this.useCases,
   });
 
   final String? gstin;
@@ -166,32 +168,57 @@ class OrgOnboardingRequest {
   final String? addressLine1;
   final String? addressLine2;
   final String? addressLine3;
+  final String? industryType;
+  final Map<String, dynamic>? useCases;
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = <String, dynamic>{};
-    final String gstinValue = gstin?.trim() ?? '';
-    final String businessRegNumberValue = businessRegNumber?.trim() ?? '';
-    final String addressLine1Value = addressLine1?.trim() ?? '';
-    final String addressLine2Value = addressLine2?.trim() ?? '';
-    final String addressLine3Value = addressLine3?.trim() ?? '';
-
-    if (gstinValue.isNotEmpty) {
-      json['gstin'] = gstinValue;
-    }
-    if (businessRegNumberValue.isNotEmpty) {
-      json['business_reg_number'] = businessRegNumberValue;
-    }
-    if (addressLine1Value.isNotEmpty) {
-      json['address_line1'] = addressLine1Value;
-    }
-    if (addressLine2Value.isNotEmpty) {
-      json['address_line2'] = addressLine2Value;
-    }
-    if (addressLine3Value.isNotEmpty) {
-      json['address_line3'] = addressLine3Value;
-    }
+    final Map<String, dynamic> json = <String, dynamic>{
+      'gstin': gstin?.trim() ?? '',
+      'business_reg_number': businessRegNumber?.trim() ?? '',
+      'address_line1': addressLine1?.trim() ?? '',
+      'address_line2': addressLine2?.trim() ?? '',
+      'address_line3': addressLine3?.trim() ?? '',
+      'industry_type': industryType?.trim() ?? '',
+      'use_cases': useCases ?? <String, dynamic>{},
+    };
 
     return json;
+  }
+}
+
+class VerifyGstResponse {
+  const VerifyGstResponse({
+    required this.gstVerified,
+    required this.gstin,
+    required this.organizationName,
+    required this.legalName,
+    required this.tradeName,
+    required this.gstStatus,
+    required this.matchedOn,
+    required this.message,
+  });
+
+  final bool gstVerified;
+  final String gstin;
+  final String organizationName;
+  final String legalName;
+  final String tradeName;
+  final String gstStatus;
+  final String matchedOn;
+  final String message;
+
+  factory VerifyGstResponse.fromJson(Map<String, dynamic> json) {
+    return VerifyGstResponse(
+      gstVerified: json['gst_verified'] == true,
+      gstin: (json['gstin'] ?? '').toString(),
+      organizationName: (json['organization_name'] ?? json['org_name'] ?? '')
+          .toString(),
+      legalName: (json['legal_name'] ?? '').toString(),
+      tradeName: (json['trade_name'] ?? '').toString(),
+      gstStatus: (json['gst_status'] ?? '').toString(),
+      matchedOn: (json['matched_on'] ?? '').toString(),
+      message: (json['message'] ?? '').toString(),
+    );
   }
 }
 
@@ -247,7 +274,7 @@ class OrganizationProfileUpdateRequest {
       json[key] = value.trim();
     }
 
-    putIfNonEmpty('organization_name', organizationName);
+    putIfNonEmpty('org_name', organizationName);
     putClearable('full_name', fullName);
     putClearable('phone_number', phoneNumber);
     putClearable('gstin', gstin);
@@ -290,6 +317,7 @@ class UserProfile {
     required this.onboardingCompleted,
     required this.isActive,
     required this.isVerified,
+    required this.gstVerified,
     required this.emailVerified,
     required this.mobileVerified,
     required this.skillTreeInitiated,
@@ -324,6 +352,7 @@ class UserProfile {
   final bool onboardingCompleted;
   final bool isActive;
   final bool isVerified;
+  final bool gstVerified;
   final bool emailVerified;
   final bool mobileVerified;
   final bool skillTreeInitiated;
@@ -354,7 +383,7 @@ class UserProfile {
       json['phone_number'] ?? json['mobile'],
     );
     final String? organizationName = _readStringOrNull(
-      json['organization_name'],
+      json['org_name'] ?? json['organization_name'],
     );
     final String? gstNumber =
         _readStringOrNull(json['gstin']) ??
@@ -386,6 +415,8 @@ class UserProfile {
     final bool emailVerified = json['email_verified'] == true;
     final bool isVerified =
         json['is_verified'] == true || emailVerified || onboardingCompleted;
+    final bool gstVerified =
+        json['gst_verified'] == true || json['gstVerified'] == true;
 
     return UserProfile(
       id: (json['id'] ?? '').toString(),
@@ -408,6 +439,7 @@ class UserProfile {
       onboardingCompleted: onboardingCompleted,
       isActive: json['is_active'] == true,
       isVerified: isVerified,
+      gstVerified: gstVerified,
       emailVerified: emailVerified,
       mobileVerified: json['mobile_verified'] == true,
       skillTreeInitiated: json['skill_tree_initiated'] == true,

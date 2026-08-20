@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,16 +23,59 @@ class OrgOnboardingPage extends ConsumerStatefulWidget {
 }
 
 class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
+  final TextEditingController _useCases = TextEditingController();
   final TextEditingController _gstin = TextEditingController();
   final TextEditingController _businessRegNumber = TextEditingController();
   final TextEditingController _address1 = TextEditingController();
   final TextEditingController _address2 = TextEditingController();
   final TextEditingController _address3 = TextEditingController();
 
+  static const List<String> _industryOptions = <String>[
+    'Transport',
+    'Healthcare',
+    'Education',
+    'Manufacturing',
+    'Security',
+    'Agriculture',
+    'Beauty & Cosmetics',
+    'Consumer Goods',
+    'Electronics & Appliances',
+    'EV & Automotive',
+    'Healthcare Products',
+    'Industrial Equipment',
+    'Insurance Policies',
+    'Agriculture Products',
+    'Luxury Products',
+    'Others',
+  ];
+
+  String? _industryType;
   bool _isSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    final UserProfile? profile = ref
+        .read(authNotifierProvider)
+        .valueOrNull
+        ?.userProfile;
+    final String? profileIndustry = profile?.industry?.trim();
+    if (_industryOptions.contains(profileIndustry)) {
+      _industryType = profileIndustry;
+    }
+    if (profile?.useCases.isNotEmpty == true) {
+      _useCases.text = jsonEncode(profile!.useCases);
+    }
+    _gstin.text = profile?.gstin?.trim() ?? '';
+    _businessRegNumber.text = profile?.businessRegNumber?.trim() ?? '';
+    _address1.text = profile?.addressLine1?.trim() ?? '';
+    _address2.text = profile?.addressLine2?.trim() ?? '';
+    _address3.text = profile?.addressLine3?.trim() ?? '';
+  }
+
+  @override
   void dispose() {
+    _useCases.dispose();
     _gstin.dispose();
     _businessRegNumber.dispose();
     _address1.dispose();
@@ -48,6 +93,8 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
       addressLine1: _address1.text,
       addressLine2: _address2.text,
       addressLine3: _address3.text,
+      industryType: _industryType,
+      useCases: _parseUseCases(_useCases.text),
     );
 
     setState(() => _isSubmitting = true);
@@ -75,6 +122,30 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  Map<String, dynamic> _parseUseCases(String raw) {
+    final String value = raw.trim();
+    if (value.isEmpty) return <String, dynamic>{};
+    try {
+      final dynamic decoded = jsonDecode(value);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      if (decoded is List) {
+        return <String, dynamic>{'items': decoded};
+      }
+    } catch (_) {
+      // Fall back to a simple summary object so the backend still receives
+      // the required `use_cases` key even when the user enters plain text.
+    }
+    return <String, dynamic>{'summary': value};
+  }
+
+  void _setIndustryType(String? value) {
+    setState(() {
+      _industryType = value;
+    });
   }
 
   @override
@@ -107,7 +178,7 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
           ),
           const SizedBox(height: AppSpacing.x2),
           Text(
-            'All fields are optional. Add any details you want to save now.',
+            'Add the details you want to save now. The app will submit the full onboarding payload even if some fields are left blank.',
             style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.x5),
@@ -157,6 +228,49 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
                   label: 'Address Line 3 (optional)',
                   hint: 'City / state',
                   controller: _address3,
+                  enabled: !_isSubmitting,
+                  backgroundColor: inputBg,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                DropdownButtonFormField<String>(
+                  initialValue: _industryType,
+                  onChanged: _isSubmitting ? null : _setIndustryType,
+                  items: _industryOptions
+                      .map(
+                        (String option) => DropdownMenuItem<String>(
+                          value: option,
+                          child: Text(option),
+                        ),
+                      )
+                      .toList(),
+                  decoration: InputDecoration(
+                    labelText: 'Industry Type',
+                    hintText: 'Select industry type',
+                    filled: true,
+                    fillColor: inputBg,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: scheme.outlineVariant),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: scheme.outlineVariant),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.brandBlue),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TMZInput(
+                  label: 'Use Cases (JSON or short text)',
+                  hint: '{"primary":"customer onboarding"}',
+                  controller: _useCases,
                   enabled: !_isSubmitting,
                   backgroundColor: inputBg,
                 ),

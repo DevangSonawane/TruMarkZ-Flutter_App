@@ -27,6 +27,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const double _orgBottomNavBarHeight = 71.016;
   static const List<String> _serviceTypeOptions = <String>['human', 'product'];
+  bool _isVerifyingGst = false;
 
   Future<void> _showOrgProfileDialog(UserProfile? profile) async {
     await Navigator.of(context).push<void>(
@@ -53,6 +54,109 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             _OrgEditPage(profile: profile, mode: _OrgEditMode.serviceType),
       ),
     );
+  }
+
+  Future<void> _verifyGst(UserProfile? profile) async {
+    final String organizationName = profile?.organizationName?.trim() ?? '';
+    final String gstin = profile?.gstin?.trim() ?? '';
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+
+    if (organizationName.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Organization name is required before GST verification.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (gstin.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('GSTIN is required before GST verification.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isVerifyingGst = true;
+    });
+
+    try {
+      final VerifyGstResponse response = await ref
+          .read(authNotifierProvider.notifier)
+          .verifyOrganizationGst();
+
+      if (!mounted) return;
+
+      if (response.gstVerified) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              response.message.isNotEmpty
+                  ? response.message
+                  : 'GSTIN verified successfully.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      debugPrint(
+        '[ProfileSettings][GST] mismatch org="$organizationName" '
+        'gstin=$gstin matchedOn=${response.matchedOn} '
+        'gstStatus=${response.gstStatus} legalName=${response.legalName} '
+        'tradeName=${response.tradeName}',
+      );
+
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('GST mismatch'),
+            content: SingleChildScrollView(
+              child: ListBody(
+                children: <Widget>[
+                  Text(
+                    response.message.isNotEmpty
+                        ? response.message
+                        : 'The GSTIN did not match the organisation name on this profile.',
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Profile organisation: $organizationName'),
+                  Text('GSTIN: $gstin'),
+                  if (response.legalName.isNotEmpty)
+                    Text('Registry legal name: ${response.legalName}'),
+                  if (response.tradeName.isNotEmpty)
+                    Text('Registry trade name: ${response.tradeName}'),
+                  if (response.gstStatus.isNotEmpty)
+                    Text('GST status: ${response.gstStatus}'),
+                  if (response.matchedOn.isNotEmpty)
+                    Text('Matched on: ${response.matchedOn}'),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVerifyingGst = false;
+        });
+      }
+    }
   }
 
   @override
@@ -145,6 +249,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                               profile: profile,
                               onEditServiceType: () =>
                                   _showServiceTypeDialog(profile),
+                              onVerifyGst: () => _verifyGst(profile),
+                              isVerifyingGst: _isVerifyingGst,
                             ),
                             SizedBox(height: s(24)),
                             _SpaceIdsCard(
@@ -1300,10 +1406,14 @@ class _OrganisationDetailsCard extends StatelessWidget {
   const _OrganisationDetailsCard({
     required this.profile,
     required this.onEditServiceType,
+    required this.onVerifyGst,
+    required this.isVerifyingGst,
   });
 
   final UserProfile? profile;
   final VoidCallback onEditServiceType;
+  final VoidCallback onVerifyGst;
+  final bool isVerifyingGst;
 
   @override
   Widget build(BuildContext context) {
@@ -1313,6 +1423,8 @@ class _OrganisationDetailsCard extends StatelessWidget {
     final String gstin = profile?.gstin?.trim().isNotEmpty == true
         ? profile!.gstin!.trim()
         : '—';
+    final bool hasGstin = profile?.gstin?.trim().isNotEmpty == true;
+    final bool isGstVerified = profile?.gstVerified == true;
     final String businessRegNumber =
         profile?.businessRegNumber?.trim().isNotEmpty == true
         ? profile!.businessRegNumber!.trim()
@@ -1337,7 +1449,74 @@ class _OrganisationDetailsCard extends StatelessWidget {
         SizedBox(height: s(12)),
         _FigmaInfoCard(
           rows: <_InfoRow>[
-            _InfoRow(label: 'GSTIN', value: gstin),
+            _InfoRow(
+              label: 'GSTIN',
+              value: gstin,
+              trailing: isGstVerified
+                  ? Container(
+                      height: s(34),
+                      padding: EdgeInsets.symmetric(horizontal: s(10)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(s(999)),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            Icons.verified_rounded,
+                            size: s(18),
+                            color: const Color(0xFF16A34A),
+                          ),
+                          SizedBox(width: s(6)),
+                          Text(
+                            'Verified',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: s(12),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.05859375,
+                              height: 16 / 12,
+                              color: const Color(0xFF16A34A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : SizedBox(
+                      height: s(34),
+                      child: OutlinedButton(
+                        onPressed: hasGstin && !isVerifyingGst
+                            ? onVerifyGst
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.brandBlue,
+                          side: const BorderSide(color: AppColors.brandBlue),
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: Size(s(84), s(34)),
+                          padding: EdgeInsets.symmetric(horizontal: s(12)),
+                          textStyle: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(12),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.05859375,
+                            height: 16 / 12,
+                          ),
+                        ),
+                        child: isVerifyingGst
+                            ? SizedBox(
+                                width: s(14),
+                                height: s(14),
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Verify'),
+                      ),
+                    ),
+            ),
             _InfoRow(label: 'Business Reg. Number', value: businessRegNumber),
             _InfoRow(
               label: 'Service Type',

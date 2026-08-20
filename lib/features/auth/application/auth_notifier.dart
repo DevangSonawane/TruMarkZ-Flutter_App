@@ -370,6 +370,57 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
+  Future<VerifyGstResponse> verifyOrganizationGst() async {
+    final AuthState? current = state.value;
+    final UserProfile? profile = current?.userProfile;
+    final String organizationName = profile?.organizationName?.trim() ?? '';
+    final String gstin = profile?.gstin?.trim() ?? '';
+
+    if (organizationName.isEmpty) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Organization name is required before GST verification.',
+      );
+    }
+
+    if (gstin.isEmpty) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'GSTIN is required before GST verification.',
+      );
+    }
+
+    String maskGstin(String value) {
+      if (value.length <= 4) return value;
+      return '${value.substring(0, 2)}***${value.substring(value.length - 2)}';
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '[Auth][GST] verify start org="$organizationName" gstin=${maskGstin(gstin)}',
+      );
+    }
+
+    final VerifyGstResponse response = await _repo.verifyOrganizationGst(
+      gstin: gstin,
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '[Auth][GST] verify result verified=${response.gstVerified} '
+        'gstin=${response.gstin} matchedOn=${response.matchedOn} '
+        'gstStatus=${response.gstStatus} legalName=${response.legalName} '
+        'tradeName=${response.tradeName} message=${response.message}',
+      );
+    }
+
+    if (response.gstVerified) {
+      await refreshCurrentUser();
+    }
+
+    return response;
+  }
+
   Future<void> refreshCurrentUser() async {
     try {
       final AuthState nextState = await _loadCurrentUserState();
