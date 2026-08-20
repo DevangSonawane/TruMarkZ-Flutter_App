@@ -239,6 +239,8 @@ class _PendingApprovalPageState extends State<PendingApprovalPage>
                     const SizedBox(height: AppSpacing.x3),
                     Text(
                       _orgName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.heading2.copyWith(fontSize: 16),
                     ),
                     const SizedBox(height: AppSpacing.x1),

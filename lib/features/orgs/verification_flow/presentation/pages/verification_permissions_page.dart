@@ -272,6 +272,8 @@ class _VerificationPermissionsPageState
                                       GoRouterState.of(
                                         context,
                                       ).uri.queryParameters;
+                                  final String rawCheckIds =
+                                      (qp['check_ids'] ?? '').trim();
                                   final String industry = (qp['industry'] ?? '')
                                       .trim();
                                   final bool isProductFlow =
@@ -281,6 +283,9 @@ class _VerificationPermissionsPageState
                                       <String, String>{};
                                   if (checks.isNotEmpty) {
                                     nextQp['checks'] = checks.join(',');
+                                  }
+                                  if (rawCheckIds.isNotEmpty) {
+                                    nextQp['check_ids'] = rawCheckIds;
                                   }
                                   nextQp['access'] = _mode.name;
                                   if (industry.isNotEmpty) {

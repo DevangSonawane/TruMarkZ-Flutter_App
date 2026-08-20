@@ -45,6 +45,25 @@ class LoginResponse {
   }
 }
 
+class DhiwayDetail {
+  const DhiwayDetail({required this.spaceId, required this.schemaId});
+
+  final String spaceId;
+  final String schemaId;
+
+  factory DhiwayDetail.fromJson(Map<String, dynamic> json) {
+    return DhiwayDetail(
+      spaceId: _readStringOrNull(json['space_id'] ?? json['spaceId']) ?? '',
+      schemaId: _readStringOrNull(json['schema_id'] ?? json['schemaId']) ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'space_id': spaceId.trim(),
+    'schema_id': schemaId.trim(),
+  };
+}
+
 class RegisterIndividualRequest {
   const RegisterIndividualRequest({
     required this.fullName,
@@ -240,6 +259,7 @@ class OrganizationProfileUpdateRequest {
     this.productSchemaId,
     this.warrantySchemaId,
     this.dhiwaySpaceId,
+    this.dhiwaysDetails,
   });
 
   final String? organizationName;
@@ -258,6 +278,7 @@ class OrganizationProfileUpdateRequest {
   final String? productSchemaId;
   final String? warrantySchemaId;
   final String? dhiwaySpaceId;
+  final List<DhiwayDetail>? dhiwaysDetails;
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = <String, dynamic>{};
@@ -290,6 +311,19 @@ class OrganizationProfileUpdateRequest {
     putIfNonEmpty('product_schema_id', productSchemaId);
     putIfNonEmpty('warranty_schema_id', warrantySchemaId);
     putIfNonEmpty('dhiway_space_id', dhiwaySpaceId);
+    if (dhiwaysDetails != null) {
+      final List<Map<String, dynamic>> details = dhiwaysDetails!
+          .map((DhiwayDetail detail) => detail.toJson())
+          .where(
+            (Map<String, dynamic> detail) =>
+                (detail['space_id'] ?? '').toString().trim().isNotEmpty ||
+                (detail['schema_id'] ?? '').toString().trim().isNotEmpty,
+          )
+          .toList();
+      if (details.isNotEmpty) {
+        json['dhiways_details'] = details;
+      }
+    }
 
     return json;
   }
@@ -321,6 +355,7 @@ class UserProfile {
     required this.emailVerified,
     required this.mobileVerified,
     required this.skillTreeInitiated,
+    required this.dhiwaysDetails,
     required this.dhiwaySpaceId,
     required this.humanSpaceId,
     required this.productSpaceId,
@@ -356,6 +391,7 @@ class UserProfile {
   final bool emailVerified;
   final bool mobileVerified;
   final bool skillTreeInitiated;
+  final List<DhiwayDetail> dhiwaysDetails;
   final String? dhiwaySpaceId;
   final String? humanSpaceId;
   final String? productSpaceId;
@@ -404,6 +440,7 @@ class UserProfile {
     final String? serviceType = _readStringOrNull(
       json['service_type'] ?? json['serviceType'],
     );
+    final List<DhiwayDetail> dhiwaysDetails = _readDhiwayDetails(json);
     final String? industry =
         _readStringOrNull(json['industry']) ??
         (industryTypes.isNotEmpty ? industryTypes.join(', ') : null);
@@ -443,6 +480,7 @@ class UserProfile {
       emailVerified: emailVerified,
       mobileVerified: json['mobile_verified'] == true,
       skillTreeInitiated: json['skill_tree_initiated'] == true,
+      dhiwaysDetails: dhiwaysDetails,
       dhiwaySpaceId: _readStringOrNull(json['dhiway_space_id']),
       humanSpaceId: _readStringOrNull(
         json['human_space_id'] ?? json['humanSpaceId'],
@@ -574,6 +612,54 @@ Map<String, dynamic> _readStringMap(dynamic value) {
     return Map<String, dynamic>.from(value);
   }
   return <String, dynamic>{};
+}
+
+List<DhiwayDetail> _readDhiwayDetails(Map<String, dynamic> json) {
+  final dynamic rawDetails = json['dhiways_details'] ?? json['dhiwaysDetails'];
+  if (rawDetails is List) {
+    final List<DhiwayDetail> parsed = rawDetails
+        .whereType<Map>()
+        .map((Map e) => DhiwayDetail.fromJson(Map<String, dynamic>.from(e)))
+        .where(
+          (DhiwayDetail detail) =>
+              detail.spaceId.trim().isNotEmpty ||
+              detail.schemaId.trim().isNotEmpty,
+        )
+        .toList();
+    if (parsed.isNotEmpty) return parsed;
+  }
+
+  final List<DhiwayDetail> legacy = <DhiwayDetail>[];
+  void addLegacy(String? spaceId, String? schemaId) {
+    final String space = spaceId?.trim() ?? '';
+    final String schema = schemaId?.trim() ?? '';
+    if (space.isEmpty && schema.isEmpty) return;
+    legacy.add(DhiwayDetail(spaceId: space, schemaId: schema));
+  }
+
+  addLegacy(
+    _readStringOrNull(json['human_space_id'] ?? json['humanSpaceId']),
+    _readStringOrNull(json['human_schema_id'] ?? json['humanSchemaId']),
+  );
+  addLegacy(
+    _readStringOrNull(json['product_space_id'] ?? json['productSpaceId']),
+    _readStringOrNull(json['product_schema_id'] ?? json['productSchemaId']),
+  );
+  addLegacy(
+    _readStringOrNull(
+      json['warranty_space_id'] ??
+          json['warrenty_space_id'] ??
+          json['warrantySpaceId'] ??
+          json['warrentySpaceId'],
+    ),
+    _readStringOrNull(json['warranty_schema_id'] ?? json['warrantySchemaId']),
+  );
+  addLegacy(
+    _readStringOrNull(json['dhiway_space_id']),
+    _readStringOrNull(json['dhiway_schema_id'] ?? json['dhiwaySchemaId']),
+  );
+
+  return legacy;
 }
 
 String? _joinNonEmpty(List<String?> values, {String separator = ', '}) {

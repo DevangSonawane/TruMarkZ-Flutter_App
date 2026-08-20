@@ -311,6 +311,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     String? productSchemaId,
     String? warrantySchemaId,
     String? dhiwaySpaceId,
+    List<DhiwayDetail>? dhiwaysDetails,
   }) async {
     state = AsyncData(
       (state.value ?? const AuthState()).copyWith(
@@ -336,6 +337,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         productSchemaId: productSchemaId,
         warrantySchemaId: warrantySchemaId,
         dhiwaySpaceId: dhiwaySpaceId,
+        dhiwaysDetails: dhiwaysDetails,
       );
       final AuthState nextState = AuthState(
         status: AuthStatus.authenticated,

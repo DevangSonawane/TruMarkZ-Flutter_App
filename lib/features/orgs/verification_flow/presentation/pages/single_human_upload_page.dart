@@ -8,7 +8,9 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_button.dart';
+import '../../../../auth/application/auth_notifier.dart';
 import '../../../data/verification_repository.dart';
+import 'org_flow_display_label_utils.dart';
 
 class SingleHumanUploadPage extends ConsumerStatefulWidget {
   const SingleHumanUploadPage({super.key});
@@ -165,6 +167,11 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
 
   @override
   Widget build(BuildContext context) {
+    final String displayIndustry =
+        OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
+          profile: ref.watch(authNotifierProvider).valueOrNull?.userProfile,
+          fallback: _industry,
+        );
     return Scaffold(
       backgroundColor: AppColors.pageBg,
       appBar: AppBar(
@@ -211,7 +218,9 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
                         const SizedBox(height: 8),
                         if (_industry.isNotEmpty)
                           Text(
-                            'Industry: $_industry',
+                            'Industry: $displayIndustry',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: AppTypography.body2.copyWith(height: 1.25),
                           ),
                         if (_access.isNotEmpty) ...<Widget>[

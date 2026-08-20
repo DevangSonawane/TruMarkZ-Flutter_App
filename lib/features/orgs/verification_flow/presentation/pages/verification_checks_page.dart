@@ -12,6 +12,7 @@ import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
+import 'org_flow_display_label_utils.dart';
 import 'product_verification_checks_catalog.dart';
 
 class VerificationChecksPage extends ConsumerStatefulWidget {
@@ -37,6 +38,12 @@ class _VerificationChecksPageState
   bool _supportsWarranty = true;
 
   final Set<String> _selected = <String>{};
+
+  Future<void> _goBack(BuildContext context) async {
+    final bool didPop = await Navigator.of(context).maybePop();
+    if (didPop || !context.mounted) return;
+    context.go(AppRouter.dashboardPath);
+  }
 
   static const List<_CheckItem> _warrantyItems = <_CheckItem>[
     _CheckItem(
@@ -212,6 +219,12 @@ class _VerificationChecksPageState
     return _warrantyItems;
   }
 
+  static String _checkDisplayName(_CheckItem item) {
+    final String title = item.title.trim();
+    if (title.isNotEmpty) return title;
+    return item.id.trim();
+  }
+
   void _ensureDefaultSelection(List<_CheckItem> items) {
     if (items.isEmpty) return;
     final bool hasValidSelection = _selected.any(
@@ -297,6 +310,16 @@ class _VerificationChecksPageState
       resolvedIndustryRaw,
     );
     final bool isProductFlow = _flow == 'product';
+    final String fallbackIndustryLabel = isProductFlow
+        ? 'Product'
+        : 'Real Estate';
+    final String displayLabel =
+        OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
+          profile: authAsync.valueOrNull?.userProfile,
+          fallback: resolvedIndustryLabel.isNotEmpty
+              ? resolvedIndustryLabel
+              : fallbackIndustryLabel,
+        );
     final AsyncValue<List<VerificationTypeDefinition>> verificationTypesAsync =
         _mode == 'warranty'
         ? const AsyncData<List<VerificationTypeDefinition>>(
@@ -309,293 +332,313 @@ class _VerificationChecksPageState
             verificationTypesAsync.valueOrNull ??
                 <VerificationTypeDefinition>[],
           );
+    final Map<String, String> checkNamesById = <String, String>{
+      for (final _CheckItem item in apiItems) item.id: _checkDisplayName(item),
+    };
     _ensureDefaultSelection(apiItems);
     final String stepText = isProductFlow ? 'STEP 3 OF 6' : 'STEP 1 OF 6';
     final String progressText = isProductFlow ? '50%' : '17%';
     final double progressFactor = isProductFlow ? 0.5 : 0.1667;
-    final String fallbackIndustryLabel = isProductFlow
-        ? 'Product'
-        : 'Real Estate';
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
-      body: SafeArea(
-        bottom: false,
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double contentWidth = constraints.maxWidth < _referenceWidth
-                ? constraints.maxWidth
-                : _referenceWidth;
-            final double scale = contentWidth / _referenceWidth;
-            double s(double v) => v * scale;
+      body: PopScope(
+        canPop: Navigator.of(context).canPop(),
+        onPopInvokedWithResult: (bool didPop, Object? result) {
+          if (didPop) return;
+          context.go(AppRouter.dashboardPath);
+        },
+        child: SafeArea(
+          bottom: false,
+          child: LayoutBuilder(
+            builder: (BuildContext layoutContext, BoxConstraints constraints) {
+              final double contentWidth = constraints.maxWidth < _referenceWidth
+                  ? constraints.maxWidth
+                  : _referenceWidth;
+              final double scale = contentWidth / _referenceWidth;
+              double s(double v) => v * scale;
 
-            return Center(
-              child: SizedBox(
-                width: contentWidth,
-                height: constraints.maxHeight,
-                child: Column(
-                  children: <Widget>[
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => context.pop(),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Text(
-                            'Checks',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const Spacer(),
-                          _IndustryPill(
-                            scale: scale,
-                            label: resolvedIndustryLabel.isEmpty
-                                ? fallbackIndustryLabel
-                                : resolvedIndustryLabel,
-                            onTap: () async {
-                              final String? picked = await _pickIndustry(
-                                scale: scale,
-                                current: resolvedIndustryRaw,
-                              );
-                              if (!mounted || picked == null) return;
-                              setState(() => _industry = picked);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: s(21)),
-                    Expanded(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: _panelBg,
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(s(20)),
-                          ),
-                        ),
-                        child: Column(
+              return Center(
+                child: SizedBox(
+                  width: contentWidth,
+                  height: constraints.maxHeight,
+                  child: Column(
+                    children: <Widget>[
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
+                        child: Row(
                           children: <Widget>[
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  s(16),
-                                  s(32),
-                                  s(16),
-                                  0,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Row(
-                                      children: <Widget>[
-                                        Text(
-                                          stepText,
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: s(10),
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: s(1),
-                                            height: 15 / 10,
-                                            color: const Color(0xFF94A3B8),
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        Text(
-                                          progressText,
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: s(10),
-                                            fontWeight: FontWeight.w700,
-                                            height: 15 / 10,
-                                            color: AppColors.brandBlue,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: s(8)),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                        s(9999),
-                                      ),
-                                      child: SizedBox(
-                                        height: s(4),
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: <Widget>[
-                                            const DecoratedBox(
-                                              decoration: BoxDecoration(
-                                                color: Color(0xFFE5E7EB),
-                                              ),
-                                            ),
-                                            FractionallySizedBox(
-                                              alignment: Alignment.centerLeft,
-                                              widthFactor: progressFactor,
-                                              child: const DecoratedBox(
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.brandBlue,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(height: s(24)),
-                                    Text(
-                                      'Select Verification Checks',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: s(24),
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: s(1.1833819),
-                                        height: 22.6 / 24,
-                                        color: const Color(0xFF3A3A3A),
-                                      ),
-                                    ),
-                                    SizedBox(height: s(12)),
-                                    Text(
-                                      'Customize your verification flow by selecting the\nnecessary checks for your candidates.',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: s(12),
-                                        fontWeight: FontWeight.w500,
-                                        letterSpacing: s(1.1833819),
-                                        height: 17.75 / 12,
-                                        color: const Color(0xFF94A3B8),
-                                      ),
-                                    ),
-                                    SizedBox(height: s(24)),
-                                    Expanded(
-                                      child:
-                                          verificationTypesAsync.isLoading &&
-                                              apiItems.isEmpty
-                                          ? const Center(
-                                              child:
-                                                  CircularProgressIndicator(),
-                                            )
-                                          : ListView.separated(
-                                              padding: EdgeInsets.only(
-                                                bottom: s(16),
-                                              ),
-                                              itemBuilder:
-                                                  (
-                                                    BuildContext context,
-                                                    int i,
-                                                  ) {
-                                                    final _CheckItem item =
-                                                        apiItems[i];
-                                                    final bool selected =
-                                                        _selected.contains(
-                                                          item.id,
-                                                        );
-                                                    return _CheckTile(
-                                                      scale: scale,
-                                                      item: item,
-                                                      selected: selected,
-                                                      onTap: () {
-                                                        setState(() {
-                                                          if (selected) {
-                                                            _selected.remove(
-                                                              item.id,
-                                                            );
-                                                          } else {
-                                                            _selected.add(
-                                                              item.id,
-                                                            );
-                                                          }
-                                                        });
-                                                      },
-                                                    );
-                                                  },
-                                              separatorBuilder:
-                                                  (
-                                                    BuildContext context,
-                                                    int i,
-                                                  ) => SizedBox(height: s(16)),
-                                              itemCount: apiItems.length,
-                                            ),
-                                    ),
-                                  ],
+                            InkResponse(
+                              onTap: () => _goBack(layoutContext),
+                              radius: s(22),
+                              child: SvgPicture.asset(
+                                'assets/icons/figma/new_batch_back.svg',
+                                width: s(24),
+                                height: s(24),
+                                colorFilter: const ColorFilter.mode(
+                                  Colors.white,
+                                  BlendMode.srcIn,
                                 ),
                               ),
                             ),
-                            _BottomNav(
-                              scale: scale,
-                              child: _BottomContinue(
+                            SizedBox(width: s(12)),
+                            Text(
+                              'Checks',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: s(21),
+                                fontWeight: FontWeight.w600,
+                                height: 19.5 / 21,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const Spacer(),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: contentWidth * 0.42,
+                              ),
+                              child: _IndustryPill(
                                 scale: scale,
-                                onTap: () {
-                                  final Map<String, String> qp =
-                                      <String, String>{};
-                                  if (_selected.isNotEmpty) {
-                                    final List<String> ids = _selected.toList()
-                                      ..sort();
-                                    qp['checks'] = ids.join(',');
-                                  }
-                                  if (_industry.trim().isNotEmpty) {
-                                    qp['industry'] = _industry.trim();
-                                  }
-                                  if (_flow == 'product') {
-                                    qp['flow'] = 'product';
-                                    qp['mode'] = _mode;
-                                    if (_industry.trim().isNotEmpty) {
-                                      qp['sector'] = _industry.trim();
-                                      qp['industry'] = _industry.trim();
-                                    }
-                                    if (_sectorTitle.trim().isNotEmpty) {
-                                      qp['sector_title'] = _sectorTitle.trim();
-                                    }
-                                    if (_categoryId.trim().isNotEmpty) {
-                                      qp['category_id'] = _categoryId.trim();
-                                    }
-                                    if (_warrantySupport.trim().isNotEmpty) {
-                                      qp['warranty_support'] = _warrantySupport
-                                          .trim();
-                                    }
-                                    if (_supportsWarranty) {
-                                      qp['supports_warranty'] = 'true';
-                                    }
-                                  }
-                                  final Uri uri = Uri(
-                                    path: _flow == 'product'
-                                        ? AppRouter.productBulkUploadPath
-                                        : AppRouter.verificationPermissionsPath,
-                                    queryParameters: qp,
+                                label: displayLabel,
+                                onTap: () async {
+                                  final String? picked = await _pickIndustry(
+                                    scale: scale,
+                                    current: resolvedIndustryRaw,
                                   );
-                                  context.push(
-                                    uri.toString(),
-                                    extra: _flow == 'product'
-                                        ? _industry
-                                        : null,
-                                  );
+                                  if (!mounted || picked == null) return;
+                                  setState(() => _industry = picked);
                                 },
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                      SizedBox(height: s(21)),
+                      Expanded(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: _panelBg,
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(s(20)),
+                            ),
+                          ),
+                          child: Column(
+                            children: <Widget>[
+                              Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    s(16),
+                                    s(32),
+                                    s(16),
+                                    0,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Row(
+                                        children: <Widget>[
+                                          Text(
+                                            stepText,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(10),
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: s(1),
+                                              height: 15 / 10,
+                                              color: const Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            progressText,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(10),
+                                              fontWeight: FontWeight.w700,
+                                              height: 15 / 10,
+                                              color: AppColors.brandBlue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: s(8)),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(
+                                          s(9999),
+                                        ),
+                                        child: SizedBox(
+                                          height: s(4),
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: <Widget>[
+                                              const DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color: Color(0xFFE5E7EB),
+                                                ),
+                                              ),
+                                              FractionallySizedBox(
+                                                alignment: Alignment.centerLeft,
+                                                widthFactor: progressFactor,
+                                                child: const DecoratedBox(
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.brandBlue,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(height: s(24)),
+                                      Text(
+                                        'Select Verification Checks',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(24),
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: s(1.1833819),
+                                          height: 22.6 / 24,
+                                          color: const Color(0xFF3A3A3A),
+                                        ),
+                                      ),
+                                      SizedBox(height: s(12)),
+                                      Text(
+                                        'Customize your verification flow by selecting the\nnecessary checks for your candidates.',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: s(12),
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: s(1.1833819),
+                                          height: 17.75 / 12,
+                                          color: const Color(0xFF94A3B8),
+                                        ),
+                                      ),
+                                      SizedBox(height: s(24)),
+                                      Expanded(
+                                        child:
+                                            verificationTypesAsync.isLoading &&
+                                                apiItems.isEmpty
+                                            ? const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              )
+                                            : ListView.separated(
+                                                padding: EdgeInsets.only(
+                                                  bottom: s(16),
+                                                ),
+                                                itemBuilder:
+                                                    (
+                                                      BuildContext context,
+                                                      int i,
+                                                    ) {
+                                                      final _CheckItem item =
+                                                          apiItems[i];
+                                                      final bool selected =
+                                                          _selected.contains(
+                                                            item.id,
+                                                          );
+                                                      return _CheckTile(
+                                                        scale: scale,
+                                                        item: item,
+                                                        selected: selected,
+                                                        onTap: () {
+                                                          setState(() {
+                                                            if (selected) {
+                                                              _selected.remove(
+                                                                item.id,
+                                                              );
+                                                            } else {
+                                                              _selected.add(
+                                                                item.id,
+                                                              );
+                                                            }
+                                                          });
+                                                        },
+                                                      );
+                                                    },
+                                                separatorBuilder:
+                                                    (
+                                                      BuildContext context,
+                                                      int i,
+                                                    ) =>
+                                                        SizedBox(height: s(16)),
+                                                itemCount: apiItems.length,
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              _BottomNav(
+                                scale: scale,
+                                child: _BottomContinue(
+                                  scale: scale,
+                                  onTap: () {
+                                    final Map<String, String> qp =
+                                        <String, String>{};
+                                    if (_selected.isNotEmpty) {
+                                      final List<String> ids =
+                                          _selected.toList()..sort();
+                                      qp['check_ids'] = ids.join(',');
+                                      qp['checks'] = ids
+                                          .map(
+                                            (String id) =>
+                                                checkNamesById[id] ?? id,
+                                          )
+                                          .join(',');
+                                    }
+                                    if (_industry.trim().isNotEmpty) {
+                                      qp['industry'] = _industry.trim();
+                                    }
+                                    if (_flow == 'product') {
+                                      qp['flow'] = 'product';
+                                      qp['mode'] = _mode;
+                                      if (_industry.trim().isNotEmpty) {
+                                        qp['sector'] = _industry.trim();
+                                        qp['industry'] = _industry.trim();
+                                      }
+                                      if (_sectorTitle.trim().isNotEmpty) {
+                                        qp['sector_title'] = _sectorTitle
+                                            .trim();
+                                      }
+                                      if (_categoryId.trim().isNotEmpty) {
+                                        qp['category_id'] = _categoryId.trim();
+                                      }
+                                      if (_warrantySupport.trim().isNotEmpty) {
+                                        qp['warranty_support'] =
+                                            _warrantySupport.trim();
+                                      }
+                                      if (_supportsWarranty) {
+                                        qp['supports_warranty'] = 'true';
+                                      }
+                                    }
+                                    final Uri uri = Uri(
+                                      path: _flow == 'product'
+                                          ? AppRouter.productBulkUploadPath
+                                          : AppRouter
+                                                .verificationPermissionsPath,
+                                      queryParameters: qp,
+                                    );
+                                    context.push(
+                                      uri.toString(),
+                                      extra: _flow == 'product'
+                                          ? _industry
+                                          : null,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -867,7 +910,6 @@ class _VerificationChecksPageState
         )
         .join(' ');
   }
-
 }
 
 class _IndustryPill extends StatelessWidget {
@@ -909,17 +951,19 @@ class _IndustryPill extends StatelessWidget {
               ),
             ),
             SizedBox(width: s(8)),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(11),
-                fontWeight: FontWeight.w600,
-                letterSpacing: s(0.0644531),
-                height: 16.5 / 11,
-                color: AppColors.brandBlue,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(11),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: s(0.0644531),
+                  height: 16.5 / 11,
+                  color: AppColors.brandBlue,
+                ),
               ),
             ),
             SizedBox(width: s(8)),

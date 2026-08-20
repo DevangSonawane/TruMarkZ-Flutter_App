@@ -259,6 +259,7 @@ class AuthRepository {
     String? productSchemaId,
     String? warrantySchemaId,
     String? dhiwaySpaceId,
+    List<DhiwayDetail>? dhiwaysDetails,
   }) async {
     if (serviceType != null) {
       final String normalizedServiceType = serviceType.trim().toLowerCase();
@@ -290,6 +291,7 @@ class AuthRepository {
           productSchemaId: productSchemaId,
           warrantySchemaId: warrantySchemaId,
           dhiwaySpaceId: dhiwaySpaceId,
+          dhiwaysDetails: dhiwaysDetails,
         );
 
     final Map<String, dynamic> payload = request.toJson();

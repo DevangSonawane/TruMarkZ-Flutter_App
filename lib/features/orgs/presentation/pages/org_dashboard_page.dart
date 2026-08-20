@@ -24,6 +24,12 @@ class OrgDashboardPage extends ConsumerStatefulWidget {
 class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
   static const double _sectionHeaderToCardGap = 12;
 
+  Future<void> _refreshDashboard() async {
+    final List<VerificationBatchSummary> _ = await ref.refresh(
+      verificationBatchesProvider.future,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
@@ -72,147 +78,155 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
       body: Stack(
         children: <Widget>[
           const Positioned.fill(child: ColoredBox(color: AppColors.brandBlue)),
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: <Widget>[
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: topSectionHeight,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: <Widget>[
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        top: bgTop,
-                        bottom: 0,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: AppColors.pageBg,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(20),
-                              topRight: Radius.circular(20),
+          RefreshIndicator(
+            color: AppColors.brandBlue,
+            onRefresh: _refreshDashboard,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              slivers: <Widget>[
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: topSectionHeight,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: <Widget>[
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: bgTop,
+                          bottom: 0,
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: AppColors.pageBg,
+                              borderRadius: BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        left: sideInset + 16,
-                        right: sideInset + 16,
-                        top: headerTop,
-                        height: 40,
-                        child: _HomeHeader(
-                          locationLine1: headerLine1,
-                          locationLine2: headerLine2,
-                          avatarAssetPath: 'assets/icons/dashbaord/profile.png',
-                          onAlertsTap: () => context.go(
-                            '${AppRouter.notificationsPath}?flow=org',
-                          ),
-                          onProfileTap: () =>
-                              context.go(AppRouter.settingsPath),
-                        ),
-                      ),
-                      Positioned(
-                        left: sideInset + 26,
-                        top: welcomeTop,
-                        child: _WelcomeMessage(
-                          greeting: 'Welcome back,',
-                          name: displayName,
-                        ),
-                      ),
-                      Positioned(
-                        left: sideInset + 16,
-                        right: sideInset + 16,
-                        top: drawerTop,
-                        child: _HomeDrawerCard(
-                          summary: summary,
-                          onTapNewBatch: () {
-                            if (serviceType == 'human') {
-                              context.go(AppRouter.verificationChecksPath);
-                              return;
-                            }
-                            if (serviceType == 'product') {
-                              context.go(AppRouter.productSectorSelectorPath);
-                              return;
-                            }
-                            context.go(AppRouter.batchTypeSelectionPath);
-                          },
-                          onTapScanQr: () =>
-                              context.go(AppRouter.qrScannerPath),
-                          onTapReports: () =>
-                              context.go(AppRouter.appReportsPath),
-                          onTapRegistry: () =>
-                              context.go(AppRouter.appRegistryPath),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Container(
-                  color: AppColors.pageBg,
-                  padding: EdgeInsets.fromLTRB(
-                    sideInset + 16,
-                    0,
-                    sideInset + 16,
-                    0,
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      const Expanded(
-                        child: _SectionTitle('RECENT BATCH PROCESS'),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            context.go(AppRouter.batchProgressPath),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: AppColors.brandBlue,
-                        ),
-                        child: const Text(
-                          'Certificates',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
+                        Positioned(
+                          left: sideInset + 16,
+                          right: sideInset + 16,
+                          top: headerTop,
+                          height: 40,
+                          child: _HomeHeader(
+                            locationLine1: headerLine1,
+                            locationLine2: headerLine2,
+                            avatarAssetPath:
+                                'assets/icons/dashbaord/profile.png',
+                            onAlertsTap: () => context.go(
+                              '${AppRouter.notificationsPath}?flow=org',
+                            ),
+                            onProfileTap: () =>
+                                context.go(AppRouter.settingsPath),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Container(
-                  color: AppColors.pageBg,
-                  padding: EdgeInsets.fromLTRB(
-                    sideInset + 16,
-                    _sectionHeaderToCardGap,
-                    sideInset + 16,
-                    0,
-                  ),
-                  child: _RecentSectionBody(
-                    batchesAsync: batchesAsync,
-                    summary: summary,
-                    onTapBatch: (String batchId) => context.push(
-                      '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
+                        Positioned(
+                          left: sideInset + 26,
+                          right: sideInset + 26,
+                          top: welcomeTop,
+                          child: _WelcomeMessage(
+                            greeting: 'Welcome back,',
+                            name: displayName,
+                          ),
+                        ),
+                        Positioned(
+                          left: sideInset + 16,
+                          right: sideInset + 16,
+                          top: drawerTop,
+                          child: _HomeDrawerCard(
+                            summary: summary,
+                            onTapNewBatch: () {
+                              if (serviceType == 'human') {
+                                context.go(AppRouter.verificationChecksPath);
+                                return;
+                              }
+                              if (serviceType == 'product') {
+                                context.go(AppRouter.productSectorSelectorPath);
+                                return;
+                              }
+                              context.go(AppRouter.batchTypeSelectionPath);
+                            },
+                            onTapScanQr: () =>
+                                context.go(AppRouter.qrScannerPath),
+                            onTapReports: () =>
+                                context.go(AppRouter.appReportsPath),
+                            onTapRegistry: () =>
+                                context.go(AppRouter.appRegistryPath),
+                          ),
+                        ),
+                      ],
                     ),
-                    onRetry: () => ref.refresh(verificationBatchesProvider),
                   ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: Container(
-                  color: AppColors.pageBg,
-                  height: navHeight + safeBottom + 140,
+                SliverToBoxAdapter(
+                  child: Container(
+                    color: AppColors.pageBg,
+                    padding: EdgeInsets.fromLTRB(
+                      sideInset + 16,
+                      0,
+                      sideInset + 16,
+                      0,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        const Expanded(
+                          child: _SectionTitle('RECENT BATCH PROCESS'),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              context.go(AppRouter.batchProgressPath),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: AppColors.brandBlue,
+                          ),
+                          child: const Text(
+                            'Certificates',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                SliverToBoxAdapter(
+                  child: Container(
+                    color: AppColors.pageBg,
+                    padding: EdgeInsets.fromLTRB(
+                      sideInset + 16,
+                      _sectionHeaderToCardGap,
+                      sideInset + 16,
+                      0,
+                    ),
+                    child: _RecentSectionBody(
+                      batchesAsync: batchesAsync,
+                      summary: summary,
+                      onTapBatch: (String batchId) => context.push(
+                        '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
+                      ),
+                      onRetry: () => ref.refresh(verificationBatchesProvider),
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Container(
+                    color: AppColors.pageBg,
+                    height: navHeight + safeBottom + 140,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -405,6 +419,8 @@ class _WelcomeMessage extends StatelessWidget {
         ),
         Text(
           name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontFamily: 'Inter',
             fontSize: 22.2857,

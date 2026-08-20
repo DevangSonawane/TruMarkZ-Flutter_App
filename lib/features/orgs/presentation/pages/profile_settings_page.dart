@@ -104,46 +104,55 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         return;
       }
 
-      debugPrint(
-        '[ProfileSettings][GST] mismatch org="$organizationName" '
-        'gstin=$gstin matchedOn=${response.matchedOn} '
-        'gstStatus=${response.gstStatus} legalName=${response.legalName} '
-        'tradeName=${response.tradeName}',
-      );
-
       await showDialog<void>(
         context: context,
         builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: const Text('GST mismatch'),
-            content: SingleChildScrollView(
-              child: ListBody(
+          return Dialog(
+            backgroundColor: AppColors.cardSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: AppColors.divider, width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Text(
-                    response.message.isNotEmpty
-                        ? response.message
-                        : 'The GSTIN did not match the organisation name on this profile.',
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.blueTint,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.info_outline_rounded,
+                      color: AppColors.brandBlue,
+                      size: 26,
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  Text('Profile organisation: $organizationName'),
-                  Text('GSTIN: $gstin'),
-                  if (response.legalName.isNotEmpty)
-                    Text('Registry legal name: ${response.legalName}'),
-                  if (response.tradeName.isNotEmpty)
-                    Text('Registry trade name: ${response.tradeName}'),
-                  if (response.gstStatus.isNotEmpty)
-                    Text('GST status: ${response.gstStatus}'),
-                  if (response.matchedOn.isNotEmpty)
-                    Text('Matched on: ${response.matchedOn}'),
+                  const SizedBox(height: 18),
+                  Text(
+                    'GSTIN is valid but its registered trade name does not match this account\'s organisation name.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.body1.copyWith(
+                      color: AppColors.textPrimary,
+                      height: 1.45,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TMZButton(
+                      label: 'Close',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
                 ],
               ),
             ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Close'),
-              ),
-            ],
           );
         },
       );
@@ -313,21 +322,10 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
   final TextEditingController _address1Controller = TextEditingController();
   final TextEditingController _address2Controller = TextEditingController();
   final TextEditingController _address3Controller = TextEditingController();
-  final TextEditingController _humanSpaceController = TextEditingController();
-  final TextEditingController _productSpaceController = TextEditingController();
-  final TextEditingController _warrantySpaceController =
-      TextEditingController();
-  final TextEditingController _humanSchemaController = TextEditingController();
-  final TextEditingController _productSchemaController =
-      TextEditingController();
-  final TextEditingController _warrantySchemaController =
-      TextEditingController();
+  final List<_DhiwayDetailDraft> _dhiwayDetails = <_DhiwayDetailDraft>[];
   String _serviceType = 'human';
   bool _isSaving = false;
   String? _errorText;
-
-  bool get _isHuman => _serviceType == 'human';
-  bool get _isProduct => _serviceType == 'product';
 
   @override
   void initState() {
@@ -341,17 +339,10 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     _address1Controller.text = profile?.addressLine1?.trim() ?? '';
     _address2Controller.text = profile?.addressLine2?.trim() ?? '';
     _address3Controller.text = profile?.addressLine3?.trim() ?? '';
-    _humanSpaceController.text =
-        profile?.humanSpaceId?.trim() ?? profile?.dhiwaySpaceId?.trim() ?? '';
-    _productSpaceController.text =
-        profile?.productSpaceId?.trim() ?? profile?.dhiwaySpaceId?.trim() ?? '';
-    _warrantySpaceController.text =
-        profile?.warrantySpaceId?.trim() ??
-        profile?.dhiwaySpaceId?.trim() ??
-        '';
-    _humanSchemaController.text = profile?.humanSchemaId?.trim() ?? '';
-    _productSchemaController.text = profile?.productSchemaId?.trim() ?? '';
-    _warrantySchemaController.text = profile?.warrantySchemaId?.trim() ?? '';
+    _seedDhiwayDetails(profile);
+    if (_dhiwayDetails.isEmpty) {
+      _dhiwayDetails.add(_DhiwayDetailDraft());
+    }
 
     final String currentServiceType =
         profile?.serviceType?.trim().toLowerCase() ?? '';
@@ -373,13 +364,60 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     _address1Controller.dispose();
     _address2Controller.dispose();
     _address3Controller.dispose();
-    _humanSpaceController.dispose();
-    _productSpaceController.dispose();
-    _warrantySpaceController.dispose();
-    _humanSchemaController.dispose();
-    _productSchemaController.dispose();
-    _warrantySchemaController.dispose();
+    for (final _DhiwayDetailDraft detail in _dhiwayDetails) {
+      detail.dispose();
+    }
     super.dispose();
+  }
+
+  void _seedDhiwayDetails(UserProfile? profile) {
+    final List<DhiwayDetail> details =
+        profile?.dhiwaysDetails ?? <DhiwayDetail>[];
+    if (details.isNotEmpty) {
+      _dhiwayDetails.addAll(details.map(_DhiwayDetailDraft.fromModel));
+      return;
+    }
+
+    final List<_DhiwayDetailDraft> legacy = <_DhiwayDetailDraft>[
+      if ((profile?.humanSpaceId?.trim().isNotEmpty ?? false) ||
+          (profile?.humanSchemaId?.trim().isNotEmpty ?? false))
+        _DhiwayDetailDraft(
+          spaceId: profile?.humanSpaceId?.trim() ?? '',
+          schemaId: profile?.humanSchemaId?.trim() ?? '',
+        ),
+      if ((profile?.productSpaceId?.trim().isNotEmpty ?? false) ||
+          (profile?.productSchemaId?.trim().isNotEmpty ?? false))
+        _DhiwayDetailDraft(
+          spaceId: profile?.productSpaceId?.trim() ?? '',
+          schemaId: profile?.productSchemaId?.trim() ?? '',
+        ),
+      if ((profile?.warrantySpaceId?.trim().isNotEmpty ?? false) ||
+          (profile?.warrantySchemaId?.trim().isNotEmpty ?? false))
+        _DhiwayDetailDraft(
+          spaceId: profile?.warrantySpaceId?.trim() ?? '',
+          schemaId: profile?.warrantySchemaId?.trim() ?? '',
+        ),
+      if ((profile?.dhiwaySpaceId?.trim().isNotEmpty ?? false))
+        _DhiwayDetailDraft(
+          spaceId: profile?.dhiwaySpaceId?.trim() ?? '',
+          schemaId: '',
+        ),
+    ];
+    _dhiwayDetails.addAll(legacy);
+  }
+
+  void _addDhiwayDetail() {
+    setState(() {
+      _dhiwayDetails.add(_DhiwayDetailDraft());
+    });
+  }
+
+  void _removeDhiwayDetail(int index) {
+    if (index < 0 || index >= _dhiwayDetails.length) return;
+    setState(() {
+      final _DhiwayDetailDraft detail = _dhiwayDetails.removeAt(index);
+      detail.dispose();
+    });
   }
 
   String _title() {
@@ -398,9 +436,7 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
       case _OrgEditMode.profile:
         return 'Only the fields you change will be updated.';
       case _OrgEditMode.serviceIds:
-        return _isHuman
-            ? 'Save the human credential space shared by the superadmin.'
-            : 'Save the product and warranty credential spaces shared by the superadmin.';
+        return 'Add one or more space and schema pairs for the selected service type.';
       case _OrgEditMode.serviceType:
         return 'Choose whether your organization is human-focused or product-focused. You can change this anytime.';
     }
@@ -418,6 +454,18 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     try {
       switch (widget.mode) {
         case _OrgEditMode.profile:
+          final List<DhiwayDetail> dhiwaysDetails = _dhiwayDetails
+              .map(
+                (detail) => DhiwayDetail(
+                  spaceId: detail.spaceController.text.trim(),
+                  schemaId: detail.schemaController.text.trim(),
+                ),
+              )
+              .where(
+                (DhiwayDetail detail) =>
+                    detail.spaceId.isNotEmpty || detail.schemaId.isNotEmpty,
+              )
+              .toList();
           await ref
               .read(authNotifierProvider.notifier)
               .updateOrganizationProfile(
@@ -429,54 +477,33 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
                 addressLine1: _address1Controller.text,
                 addressLine2: _address2Controller.text,
                 addressLine3: _address3Controller.text,
-                serviceType: _serviceType,
-                humanSpaceId: _isHuman ? _humanSpaceController.text : null,
-                productSpaceId: _isProduct
-                    ? _productSpaceController.text
-                    : null,
-                warrantySpaceId: _isProduct
-                    ? _warrantySpaceController.text
-                    : null,
-                humanSchemaId: _isHuman ? _humanSchemaController.text : null,
-                productSchemaId: _isProduct
-                    ? _productSchemaController.text
-                    : null,
-                warrantySchemaId: _isProduct
-                    ? _warrantySchemaController.text
-                    : null,
+                dhiwaysDetails: dhiwaysDetails.isEmpty ? null : dhiwaysDetails,
               );
           break;
         case _OrgEditMode.serviceIds:
-          final String humanSpaceId = _humanSpaceController.text.trim();
-          final String productSpaceId = _productSpaceController.text.trim();
-          final String warrantySpaceId = _warrantySpaceController.text.trim();
-          if (_isHuman && humanSpaceId.isEmpty) {
+          final List<DhiwayDetail> dhiwaysDetails = _dhiwayDetails
+              .map(
+                (detail) => DhiwayDetail(
+                  spaceId: detail.spaceController.text.trim(),
+                  schemaId: detail.schemaController.text.trim(),
+                ),
+              )
+              .where(
+                (DhiwayDetail detail) =>
+                    detail.spaceId.isNotEmpty || detail.schemaId.isNotEmpty,
+              )
+              .toList();
+          if (dhiwaysDetails.isEmpty) {
             setState(() {
-              _errorText = 'Please enter a Human Space ID.';
-            });
-            return;
-          }
-          if (_isProduct && productSpaceId.isEmpty && warrantySpaceId.isEmpty) {
-            setState(() {
-              _errorText = 'Please enter at least one Product Space ID.';
+              _errorText = 'Please add at least one space and schema pair.';
             });
             return;
           }
           await ref
               .read(authNotifierProvider.notifier)
               .updateOrganizationProfile(
-                humanSpaceId: _isHuman ? humanSpaceId : null,
-                productSpaceId: _isProduct ? productSpaceId : null,
-                warrantySpaceId: _isProduct ? warrantySpaceId : null,
-                humanSchemaId: _isHuman
-                    ? _humanSchemaController.text.trim()
-                    : null,
-                productSchemaId: _isProduct
-                    ? _productSchemaController.text.trim()
-                    : null,
-                warrantySchemaId: _isProduct
-                    ? _warrantySchemaController.text.trim()
-                    : null,
+                serviceType: _serviceType,
+                dhiwaysDetails: dhiwaysDetails,
               );
           break;
         case _OrgEditMode.serviceType:
@@ -643,54 +670,13 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
               enabled: !_isSaving,
             ),
             const SizedBox(height: 12),
-            _ServiceTypeField(
-              value: _serviceType,
-              onChanged: _isSaving
-                  ? null
-                  : (String? value) {
-                      if (value == null) return;
-                      setState(() {
-                        _serviceType = value;
-                        _errorText = null;
-                      });
-                    },
+            _DhiwayDetailsEditor(
+              details: _dhiwayDetails,
+              enabled: !_isSaving,
+              errorText: _errorText,
+              onAdd: _addDhiwayDetail,
+              onRemove: _removeDhiwayDetail,
             ),
-            if (_serviceType.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 12),
-              _serviceType == 'human'
-                  ? _ServicePair(
-                      title: 'Human Service Details',
-                      primaryLabel: 'Human Space ID (optional)',
-                      primaryHint:
-                          'Enter human space ID later in settings if needed',
-                      primaryController: _humanSpaceController,
-                      secondaryLabel: 'Human Schema ID (optional)',
-                      secondaryHint:
-                          'Enter human schema ID later in settings if needed',
-                      secondaryController: _humanSchemaController,
-                      backgroundColor: const Color(0xFFE9EEF3),
-                    )
-                  : _ServiceStack(
-                      title: 'Product Service Details',
-                      firstLabel: 'Product Space ID (optional)',
-                      firstHint:
-                          'Enter product space ID later in settings if needed',
-                      firstController: _productSpaceController,
-                      secondLabel: 'Product Schema ID (optional)',
-                      secondHint:
-                          'Enter product schema ID later in settings if needed',
-                      secondController: _productSchemaController,
-                      thirdLabel: 'Warranty Space ID (optional)',
-                      thirdHint:
-                          'Enter warranty space ID later in settings if needed',
-                      thirdController: _warrantySpaceController,
-                      fourthLabel: 'Warranty Schema ID (optional)',
-                      fourthHint:
-                          'Enter warranty schema ID later in settings if needed',
-                      fourthController: _warrantySchemaController,
-                      backgroundColor: const Color(0xFFE9EEF3),
-                    ),
-            ],
           ],
         );
       case _OrgEditMode.serviceIds:
@@ -699,55 +685,13 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
           children: <Widget>[
             Text(_subtitle(), style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 16),
-            if (_isHuman) ...<Widget>[
-              TMZInput(
-                label: 'Human Space ID',
-                hint: 'Enter human space id',
-                controller: _humanSpaceController,
-                enabled: !_isSaving,
-                errorText: _errorText,
-              ),
-              const SizedBox(height: 12),
-              TMZInput(
-                label: 'Human Schema ID',
-                hint: 'Enter human schema id',
-                controller: _humanSchemaController,
-                enabled: !_isSaving,
-                errorText: _errorText,
-              ),
-            ] else ...<Widget>[
-              TMZInput(
-                label: 'Product Space ID',
-                hint: 'Enter product space id',
-                controller: _productSpaceController,
-                enabled: !_isSaving,
-                errorText: _errorText,
-              ),
-              const SizedBox(height: 12),
-              TMZInput(
-                label: 'Product Schema ID',
-                hint: 'Enter product schema id',
-                controller: _productSchemaController,
-                enabled: !_isSaving,
-                errorText: _errorText,
-              ),
-              const SizedBox(height: 12),
-              TMZInput(
-                label: 'Warranty Space ID',
-                hint: 'Enter warranty space id',
-                controller: _warrantySpaceController,
-                enabled: !_isSaving,
-                errorText: _errorText,
-              ),
-              const SizedBox(height: 12),
-              TMZInput(
-                label: 'Warranty Schema ID',
-                hint: 'Enter warranty schema id',
-                controller: _warrantySchemaController,
-                enabled: !_isSaving,
-                errorText: _errorText,
-              ),
-            ],
+            _DhiwayDetailsEditor(
+              details: _dhiwayDetails,
+              enabled: !_isSaving,
+              errorText: _errorText,
+              onAdd: _addDhiwayDetail,
+              onRemove: _removeDhiwayDetail,
+            ),
           ],
         );
       case _OrgEditMode.serviceType:
@@ -807,191 +751,153 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
   }
 }
 
-class _ServiceTypeField extends StatelessWidget {
-  const _ServiceTypeField({required this.value, required this.onChanged});
+class _DhiwayDetailsEditor extends StatelessWidget {
+  const _DhiwayDetailsEditor({
+    required this.details,
+    required this.enabled,
+    required this.errorText,
+    required this.onAdd,
+    required this.onRemove,
+  });
 
-  final String? value;
-  final ValueChanged<String?>? onChanged;
+  final List<_DhiwayDetailDraft> details;
+  final bool enabled;
+  final String? errorText;
+  final VoidCallback onAdd;
+  final void Function(int index) onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final List<_DhiwayDetailDraft> visibleDetails = details.isNotEmpty
+        ? details
+        : <_DhiwayDetailDraft>[_DhiwayDetailDraft()];
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Text(
-          'SERVICE TYPE',
-          style: AppTypography.caption.copyWith(
-            fontWeight: FontWeight.w500,
-            color: AppColors.textTertiary,
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: value,
-          onChanged: onChanged,
-          items: const <DropdownMenuItem<String>>[
-            DropdownMenuItem<String>(value: 'human', child: Text('Human')),
-            DropdownMenuItem<String>(value: 'product', child: Text('Product')),
-          ],
-          decoration: InputDecoration(
-            hintText: 'Select service type',
-            filled: true,
-            fillColor: AppColors.offWhite,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.brandBlue),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'This controls which verification flow your organisation can use. You can fill the service-specific IDs later in settings if needed.',
+          'Add one or more space ID and schema ID pairs.',
           style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
         ),
+        const SizedBox(height: AppSpacing.x3),
+        for (int index = 0; index < visibleDetails.length; index++) ...<Widget>[
+          _DhiwayDetailCard(
+            detail: visibleDetails[index],
+            index: index,
+            detailsCount: visibleDetails.length,
+            enabled: enabled,
+            onRemove: () => onRemove(index),
+            onAdd: onAdd,
+          ),
+          if (index != visibleDetails.length - 1)
+            const SizedBox(height: AppSpacing.x3),
+        ],
+        if (errorText != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            errorText!,
+            style: const TextStyle(color: Colors.red, fontSize: 12),
+          ),
+        ],
       ],
     );
   }
 }
 
-class _ServicePair extends StatelessWidget {
-  const _ServicePair({
-    required this.title,
-    required this.primaryLabel,
-    required this.primaryHint,
-    required this.primaryController,
-    required this.secondaryLabel,
-    required this.secondaryHint,
-    required this.secondaryController,
-    required this.backgroundColor,
+class _DhiwayDetailCard extends StatelessWidget {
+  const _DhiwayDetailCard({
+    required this.detail,
+    required this.index,
+    required this.detailsCount,
+    required this.enabled,
+    required this.onRemove,
+    required this.onAdd,
   });
 
-  final String title;
-  final String primaryLabel;
-  final String primaryHint;
-  final TextEditingController primaryController;
-  final String secondaryLabel;
-  final String secondaryHint;
-  final TextEditingController secondaryController;
-  final Color backgroundColor;
+  final _DhiwayDetailDraft detail;
+  final int index;
+  final int detailsCount;
+  final bool enabled;
+  final VoidCallback onRemove;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(title, style: AppTypography.heading2),
-        const SizedBox(height: AppSpacing.x2),
-        Text(
-          'These fields are optional during signup and can be added later in settings.',
-          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: primaryLabel,
-          hint: primaryHint,
-          controller: primaryController,
-          backgroundColor: backgroundColor,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: secondaryLabel,
-          hint: secondaryHint,
-          controller: secondaryController,
-          backgroundColor: backgroundColor,
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                'Space and Schema',
+                style: AppTypography.heading2.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: enabled ? onAdd : null,
+                icon: const Icon(Icons.add_circle_outline_rounded),
+                color: AppColors.brandBlue,
+                tooltip: 'Add another pair',
+              ),
+              if (enabled && detailsCount > 1)
+                IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  color: AppColors.error,
+                  tooltip: 'Remove this pair',
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            children: <Widget>[
+              TMZInput(
+                label: 'Space ID',
+                hint: 'Enter space id',
+                controller: detail.spaceController,
+                enabled: enabled,
+              ),
+              const SizedBox(height: 12),
+              TMZInput(
+                label: 'Schema ID',
+                hint: 'Enter schema id',
+                controller: detail.schemaController,
+                enabled: enabled,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _ServiceStack extends StatelessWidget {
-  const _ServiceStack({
-    required this.title,
-    required this.firstLabel,
-    required this.firstHint,
-    required this.firstController,
-    required this.secondLabel,
-    required this.secondHint,
-    required this.secondController,
-    required this.thirdLabel,
-    required this.thirdHint,
-    required this.thirdController,
-    required this.fourthLabel,
-    required this.fourthHint,
-    required this.fourthController,
-    required this.backgroundColor,
-  });
+class _DhiwayDetailDraft {
+  _DhiwayDetailDraft({String spaceId = '', String schemaId = ''})
+    : spaceController = TextEditingController(text: spaceId),
+      schemaController = TextEditingController(text: schemaId);
 
-  final String title;
-  final String firstLabel;
-  final String firstHint;
-  final TextEditingController firstController;
-  final String secondLabel;
-  final String secondHint;
-  final TextEditingController secondController;
-  final String thirdLabel;
-  final String thirdHint;
-  final TextEditingController thirdController;
-  final String fourthLabel;
-  final String fourthHint;
-  final TextEditingController fourthController;
-  final Color backgroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(title, style: AppTypography.heading2),
-        const SizedBox(height: AppSpacing.x2),
-        Text(
-          'These fields are optional during signup and can be added later in settings.',
-          style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: firstLabel,
-          hint: firstHint,
-          controller: firstController,
-          backgroundColor: backgroundColor,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: secondLabel,
-          hint: secondHint,
-          controller: secondController,
-          backgroundColor: backgroundColor,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: thirdLabel,
-          hint: thirdHint,
-          controller: thirdController,
-          backgroundColor: backgroundColor,
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        TMZInput(
-          label: fourthLabel,
-          hint: fourthHint,
-          controller: fourthController,
-          backgroundColor: backgroundColor,
-        ),
-      ],
+  factory _DhiwayDetailDraft.fromModel(DhiwayDetail detail) {
+    return _DhiwayDetailDraft(
+      spaceId: detail.spaceId,
+      schemaId: detail.schemaId,
     );
+  }
+
+  final TextEditingController spaceController;
+  final TextEditingController schemaController;
+
+  void dispose() {
+    spaceController.dispose();
+    schemaController.dispose();
   }
 }
 
@@ -1613,52 +1519,15 @@ class _SpaceIdsCard extends StatelessWidget {
     final double scale = _FigmaScaleScope.of(context);
     double s(double v) => v * scale;
 
-    final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
-    final bool isHuman = serviceType == 'human';
-    final bool isProduct = serviceType == 'product';
-    final String humanSpaceId = profile?.humanSpaceId?.trim().isNotEmpty == true
-        ? profile!.humanSpaceId!.trim()
-        : '—';
-    final String humanSchemaId =
-        profile?.humanSchemaId?.trim().isNotEmpty == true
-        ? profile!.humanSchemaId!.trim()
-        : '—';
-    final String productSpaceId =
-        profile?.productSpaceId?.trim().isNotEmpty == true
-        ? profile!.productSpaceId!.trim()
-        : '—';
-    final String productSchemaId =
-        profile?.productSchemaId?.trim().isNotEmpty == true
-        ? profile!.productSchemaId!.trim()
-        : '—';
-    final String warrantySpaceId =
-        profile?.warrantySpaceId?.trim().isNotEmpty == true
-        ? profile!.warrantySpaceId!.trim()
-        : '—';
-    final String warrantySchemaId =
-        profile?.warrantySchemaId?.trim().isNotEmpty == true
-        ? profile!.warrantySchemaId!.trim()
-        : '—';
-    final bool hasHumanSpaceId =
-        profile?.humanSpaceId?.trim().isNotEmpty == true;
-    final bool hasHumanSchemaId =
-        profile?.humanSchemaId?.trim().isNotEmpty == true;
-    final bool hasProductSpaceId =
-        profile?.productSpaceId?.trim().isNotEmpty == true;
-    final bool hasProductSchemaId =
-        profile?.productSchemaId?.trim().isNotEmpty == true;
-    final bool hasWarrantySpaceId =
-        profile?.warrantySpaceId?.trim().isNotEmpty == true;
-    final bool hasWarrantySchemaId =
-        profile?.warrantySchemaId?.trim().isNotEmpty == true;
-    final bool showHumanSection = serviceType.isEmpty || isHuman;
-    final bool showProductSection = serviceType.isEmpty || isProduct;
+    final List<DhiwayDetail> dhiwaysDetails =
+        profile?.dhiwaysDetails ?? <DhiwayDetail>[];
+    final bool hasDetails = dhiwaysDetails.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Text(
-          'SPACE IDS',
+          'DHIWAY DETAILS',
           style: TextStyle(
             fontFamily: 'Inter',
             fontSize: s(12),
@@ -1671,174 +1540,45 @@ class _SpaceIdsCard extends StatelessWidget {
         SizedBox(height: s(12)),
         _FigmaInfoCard(
           rows: <_InfoRow>[
-            if (showHumanSection)
-              _InfoRow(
-                label: 'Human Space ID',
-                value: humanSpaceId,
-                trailing: TextButton.icon(
-                  onPressed: onEditSpaceIds,
-                  icon: Icon(
-                    hasHumanSpaceId ? Icons.edit_outlined : Icons.add_rounded,
-                    size: s(16),
-                  ),
-                  label: Text(hasHumanSpaceId ? 'Edit' : 'Add'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.brandBlue,
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: Size.zero,
-                    padding: EdgeInsets.zero,
-                    textStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.05859375,
-                      height: 16 / 12,
-                    ),
+            _InfoRow(
+              label: 'Saved Pairs',
+              value: hasDetails
+                  ? '${dhiwaysDetails.length} pair${dhiwaysDetails.length == 1 ? '' : 's'}'
+                  : 'No Dhiway details saved yet',
+              trailing: TextButton.icon(
+                onPressed: onEditSpaceIds,
+                icon: Icon(
+                  hasDetails ? Icons.edit_outlined : Icons.add_rounded,
+                  size: s(16),
+                ),
+                label: Text(hasDetails ? 'Edit' : 'Add'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandBlue,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: Size.zero,
+                  padding: EdgeInsets.zero,
+                  textStyle: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.05859375,
+                    height: 16 / 12,
                   ),
                 ),
               ),
-            if (showHumanSection)
+            ),
+            for (int index = 0; index < dhiwaysDetails.length; index++)
               _InfoRow(
-                label: 'Human Schema ID',
-                value: humanSchemaId,
-                trailing: TextButton.icon(
-                  onPressed: onEditSpaceIds,
-                  icon: Icon(
-                    hasHumanSchemaId ? Icons.edit_outlined : Icons.add_rounded,
-                    size: s(16),
-                  ),
-                  label: Text(hasHumanSchemaId ? 'Edit' : 'Add'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.brandBlue,
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: Size.zero,
-                    padding: EdgeInsets.zero,
-                    textStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.05859375,
-                      height: 16 / 12,
-                    ),
-                  ),
-                ),
+                label: 'Pair ${index + 1}',
+                value:
+                    '${dhiwaysDetails[index].spaceId.trim().isNotEmpty ? dhiwaysDetails[index].spaceId.trim() : '—'} • ${dhiwaysDetails[index].schemaId.trim().isNotEmpty ? dhiwaysDetails[index].schemaId.trim() : '—'}',
               ),
-            if (showProductSection) ...<_InfoRow>[
-              _InfoRow(
-                label: 'Product Space ID',
-                value: productSpaceId,
-                trailing: TextButton.icon(
-                  onPressed: onEditSpaceIds,
-                  icon: Icon(
-                    hasProductSpaceId ? Icons.edit_outlined : Icons.add_rounded,
-                    size: s(16),
-                  ),
-                  label: Text(hasProductSpaceId ? 'Edit' : 'Add'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.brandBlue,
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: Size.zero,
-                    padding: EdgeInsets.zero,
-                    textStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.05859375,
-                      height: 16 / 12,
-                    ),
-                  ),
-                ),
+            if (!hasDetails)
+              const _InfoRow(
+                label: 'Note',
+                value: 'Add a space ID and schema ID pair to connect Dhiway.',
               ),
-              _InfoRow(
-                label: 'Product Schema ID',
-                value: productSchemaId,
-                trailing: TextButton.icon(
-                  onPressed: onEditSpaceIds,
-                  icon: Icon(
-                    hasProductSchemaId
-                        ? Icons.edit_outlined
-                        : Icons.add_rounded,
-                    size: s(16),
-                  ),
-                  label: Text(hasProductSchemaId ? 'Edit' : 'Add'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.brandBlue,
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: Size.zero,
-                    padding: EdgeInsets.zero,
-                    textStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.05859375,
-                      height: 16 / 12,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            if (showProductSection) ...<_InfoRow>[
-              _InfoRow(
-                label: 'Warranty Space ID',
-                value: warrantySpaceId,
-                trailing: TextButton.icon(
-                  onPressed: onEditSpaceIds,
-                  icon: Icon(
-                    hasWarrantySpaceId
-                        ? Icons.edit_outlined
-                        : Icons.add_rounded,
-                    size: s(16),
-                  ),
-                  label: Text(hasWarrantySpaceId ? 'Edit' : 'Add'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.brandBlue,
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: Size.zero,
-                    padding: EdgeInsets.zero,
-                    textStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.05859375,
-                      height: 16 / 12,
-                    ),
-                  ),
-                ),
-              ),
-              _InfoRow(
-                label: 'Warranty Schema ID',
-                value: warrantySchemaId,
-                trailing: TextButton.icon(
-                  onPressed: onEditSpaceIds,
-                  icon: Icon(
-                    hasWarrantySchemaId
-                        ? Icons.edit_outlined
-                        : Icons.add_rounded,
-                    size: s(16),
-                  ),
-                  label: Text(hasWarrantySchemaId ? 'Edit' : 'Add'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.brandBlue,
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: Size.zero,
-                    padding: EdgeInsets.zero,
-                    textStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(12),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.05859375,
-                      height: 16 / 12,
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ],

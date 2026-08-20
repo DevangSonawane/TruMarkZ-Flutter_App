@@ -25,6 +25,7 @@ import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
+import 'org_flow_display_label_utils.dart';
 import 'flow_step_progress.dart';
 
 class ProductBulkUploadPage extends ConsumerStatefulWidget {
@@ -78,6 +79,29 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
   }
 
+  bool _hasVerifiedGst() {
+    return ref
+            .read(authNotifierProvider)
+            .valueOrNull
+            ?.userProfile
+            ?.gstVerified ==
+        true;
+  }
+
+  void _showGstRequiredSnack() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'GST verification is required before creating a batch.',
+        ),
+        action: SnackBarAction(
+          label: 'Open Profile',
+          onPressed: () => context.push(AppRouter.settingsPath),
+        ),
+      ),
+    );
+  }
+
   void _syncBatchName(String value) {
     final String cleaned = value.trim();
     if (cleaned.isEmpty) return;
@@ -114,9 +138,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   }
 
   static bool _isRowEmpty(List<Object?> row) {
-    return row.every(
-      (dynamic cell) => (cell?.toString() ?? '').trim().isEmpty,
-    );
+    return row.every((dynamic cell) => (cell?.toString() ?? '').trim().isEmpty);
   }
 
   static String _rowValue(List<Object?> row, int? index) {
@@ -382,6 +404,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     if (_creating) {
       return;
     }
+    if (!_hasVerifiedGst()) {
+      _showGstRequiredSnack();
+      return;
+    }
     if (pickedFile != null) {
       // Product uploads should follow the same lightweight client-side flow as
       // human bulk uploads: let the backend validate the spreadsheet.
@@ -415,6 +441,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   Future<void> _uploadAndNavigate(List<String> columns) async {
     if (_creating) return;
+    if (!_hasVerifiedGst()) {
+      _showGstRequiredSnack();
+      return;
+    }
     final PickedFile? pickedFile = _pickedFile;
     final bool isWarranty = _mode == 'warranty';
     if (pickedFile == null) {
@@ -426,25 +456,28 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     if (_productParseError != null || _parsedProductNames.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please upload a file with a valid product_name column.'),
+          content: Text(
+            'Please upload a file with a valid product_name column.',
+          ),
         ),
       );
       return;
     }
     final String resolvedIndustry = _effectiveIndustry();
 
-    final List<_ProductDocumentDraft> documentDrafts =
-        _documentCardIds
-            .map((int id) => _documentDrafts[id])
-            .whereType<_ProductDocumentDraft>()
-            .toList();
+    final List<_ProductDocumentDraft> documentDrafts = _documentCardIds
+        .map((int id) => _documentDrafts[id])
+        .whereType<_ProductDocumentDraft>()
+        .toList();
     final List<_ProductDocumentDraft> incompleteDocs = documentDrafts
-        .where(( _ProductDocumentDraft draft) => !draft.isComplete)
+        .where((_ProductDocumentDraft draft) => !draft.isComplete)
         .toList();
     if (incompleteDocs.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please finish all document entries before creating the batch.'),
+          content: Text(
+            'Please finish all document entries before creating the batch.',
+          ),
         ),
       );
       return;
@@ -454,20 +487,20 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final List<ProductBulkUploadDocumentInput> documents =
-          isWarranty
-              ? <ProductBulkUploadDocumentInput>[]
-              : documentDrafts
-              .where((_ProductDocumentDraft draft) => draft.isComplete)
-              .map(
-                (_ProductDocumentDraft draft) => ProductBulkUploadDocumentInput(
-                  productName: draft.productName!.trim(),
-                  label: draft.label.trim(),
-                  fileBytes: draft.file!.bytes,
-                  fileName: draft.file!.name,
-                ),
-              )
-              .toList();
+      final List<ProductBulkUploadDocumentInput> documents = isWarranty
+          ? <ProductBulkUploadDocumentInput>[]
+          : documentDrafts
+                .where((_ProductDocumentDraft draft) => draft.isComplete)
+                .map(
+                  (_ProductDocumentDraft draft) =>
+                      ProductBulkUploadDocumentInput(
+                        productName: draft.productName!.trim(),
+                        label: draft.label.trim(),
+                        fileBytes: draft.file!.bytes,
+                        fileName: draft.file!.name,
+                      ),
+                )
+                .toList();
       final BulkUploadResponse res = isWarranty
           ? await repo.uploadWarrantyProducts(
               batchName: _resolvedBatchName,
@@ -475,12 +508,13 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               documents: documentDrafts
                   .where((_ProductDocumentDraft draft) => draft.isComplete)
                   .map(
-                    (_ProductDocumentDraft draft) => ProductBulkUploadDocumentInput(
-                      productName: draft.productName!.trim(),
-                      label: draft.label.trim(),
-                      fileBytes: draft.file!.bytes,
-                      fileName: draft.file!.name,
-                    ),
+                    (_ProductDocumentDraft draft) =>
+                        ProductBulkUploadDocumentInput(
+                          productName: draft.productName!.trim(),
+                          label: draft.label.trim(),
+                          fileBytes: draft.file!.bytes,
+                          fileName: draft.file!.name,
+                        ),
                   )
                   .toList(),
               fileBytes: pickedFile.bytes,
@@ -552,13 +586,15 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   }
 
   String _resolvedVerificationTypesCsv() {
-    final List<String> checks = _checks
-        .map((String value) => value.trim())
-        .where((String value) => value.isNotEmpty)
-        .toList()
-      ..sort();
+    final List<String> checks =
+        _checks
+            .map((String value) => value.trim())
+            .where((String value) => value.isNotEmpty)
+            .toList()
+          ..sort();
     return checks.join(',');
   }
+
   List<String> _columns() {
     final List<String> source = _savedTemplateHeaders.isNotEmpty
         ? _savedTemplateHeaders
@@ -645,9 +681,16 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final bool gstVerified =
+        authAsync.valueOrNull?.userProfile?.gstVerified == true;
     final double referenceWidth = 402;
     final String resolvedIndustry = _effectiveIndustry();
-    final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final String displayIndustry =
+        OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
+          profile: authAsync.valueOrNull?.userProfile,
+          fallback: _prettyIndustry(resolvedIndustry),
+        );
     final String verificationFilter = resolvedIndustry.isNotEmpty
         ? 'product::$resolvedIndustry'
         : 'product';
@@ -940,12 +983,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                         statusText: _pickedFile == null
                                             ? 'Upload an Excel file first to enable document attachments.'
                                             : _productParseError != null
-                                                ? _productParseError!
-                                                : _parsedProductNames.isEmpty
-                                                    ? 'No product names found yet.'
-                                                    : isWarranty
-                                                        ? 'Warranty documents are required for every product in the Excel file.'
-                                                        : 'Pick a product name, label, and file to bundle documents with this batch.',
+                                            ? _productParseError!
+                                            : _parsedProductNames.isEmpty
+                                            ? 'No product names found yet.'
+                                            : isWarranty
+                                            ? 'Warranty documents are required for every product in the Excel file.'
+                                            : 'Pick a product name, label, and file to bundle documents with this batch.',
                                       ),
                                     ],
                                   ],
@@ -959,6 +1002,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                 isLoading: _creating,
                                 enabled:
                                     !_creating &&
+                                    gstVerified &&
                                     _pickedFile != null &&
                                     _resolvedBatchName.isNotEmpty &&
                                     _productParseError == null &&
@@ -1486,8 +1530,8 @@ class _ProductTemplateDialogState
                         _isGenerating
                             ? 'Generating...'
                             : widget.isWarranty
-                                ? 'Generate Warranty Template'
-                                : 'Generate Product Template',
+                            ? 'Generate Warranty Template'
+                            : 'Generate Product Template',
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.brandBlue,
@@ -2263,10 +2307,7 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
                 .map(
                   (String name) => DropdownMenuItem<String>(
                     value: name,
-                    child: Text(
-                      name,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(name, overflow: TextOverflow.ellipsis),
                   ),
                 )
                 .toList(),
@@ -2320,10 +2361,7 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
               foregroundColor: const Color(0xFF111827),
               backgroundColor: const Color(0xFFF8FAFC),
               side: const BorderSide(color: Color(0xFFE5E7EB)),
-              padding: EdgeInsets.symmetric(
-                horizontal: s(14),
-                vertical: s(14),
-              ),
+              padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(14)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(s(14)),
               ),

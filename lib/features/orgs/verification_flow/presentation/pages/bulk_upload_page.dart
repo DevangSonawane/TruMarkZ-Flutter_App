@@ -24,6 +24,7 @@ import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
+import 'org_flow_display_label_utils.dart';
 
 class BulkUploadPage extends ConsumerStatefulWidget {
   const BulkUploadPage({super.key});
@@ -47,16 +48,25 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   ];
   static const String _humanDocumentFieldsCsv =
       'full_name,email,phone_number,dob,aadhar_number,pan_number,address_line1,address_line2,address_line3,pincode,state,country';
+  static const List<String> _drivingLicenseTemplateHeaders = <String>[
+    'full_name',
+    'phone_number',
+    'email',
+    'dob',
+    'license_number',
+  ];
 
   String? _lastRouteSignature;
 
   late final TextEditingController _batchNameController;
   late final TextEditingController _columnsController;
   List<String> _savedTemplateHeaders = <String>[];
+  bool _seededRouteTemplate = false;
 
   String _industry = '';
   String _credentialVisibility = 'public_searchable';
   Set<String> _checks = <String>{};
+  Set<String> _checkIds = <String>{};
   bool _seededDefaultChecks = false;
 
   PickedFile? _pickedFile;
@@ -89,8 +99,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         .trim()
         .toLowerCase();
     final Set<String> nextChecks = _parseCsvSet(qp['checks']) ?? <String>{};
+    final Set<String> nextCheckIds =
+        _parseCsvSet(qp['check_ids']) ?? <String>{};
     final List<String> nextColumns =
-        _parseCsvList(qp['columns']) ?? _templateColumnsForChecks(nextChecks);
+        _parseCsvList(qp['columns']) ??
+        _templateColumnsForChecks(nextChecks, nextCheckIds);
 
     setState(() {
       _industry = nextIndustry;
@@ -98,9 +111,16 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         _credentialVisibility = nextVisibility;
       }
       _checks = nextChecks;
+      _checkIds = nextCheckIds;
       _seededDefaultChecks = false;
+      _savedTemplateHeaders = <String>[];
+      _seededRouteTemplate = false;
       _columnsController.text = nextColumns.join(',');
     });
+
+    debugPrint(
+      '[BulkUploadPage] route checks=${nextChecks.join(",")} check_ids=${nextCheckIds.join(",")} columns=${nextColumns.join(",")}',
+    );
   }
 
   @override
@@ -125,11 +145,62 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return list.isEmpty ? null : list;
   }
 
-  static List<String> _templateColumnsForChecks(Set<String> checks) {
-    // Keep the human template seeded with the exact default fields requested
-    // for first-time download. Users can still remove any of them in the
-    // template dialog before generating the file.
+  static bool _looksLikeDrivingLicenseToken(String value) {
+    final String normalized = value.trim().toLowerCase();
+    return normalized.contains('drive') || normalized.contains('license');
+  }
+
+  static bool _hasDrivingLicenseSelection(
+    Iterable<String> checks,
+    Iterable<String> checkIds,
+  ) {
+    for (final String value in <String>[...checks, ...checkIds]) {
+      if (_looksLikeDrivingLicenseToken(value)) return true;
+    }
+    return false;
+  }
+
+  static List<String> _templateColumnsForChecks(
+    Set<String> checks,
+    Set<String> checkIds,
+  ) {
+    if (_hasDrivingLicenseSelection(checks, checkIds)) {
+      // Driving license flows need a smaller starter set, but users can still
+      // add more columns in the template dialog before generating the file.
+      return List<String>.from(_drivingLicenseTemplateHeaders);
+    }
+    // Keep the human template seeded with the default fields requested for
+    // first-time download. Users can still remove any of them in the template
+    // dialog before generating the file.
     return List<String>.from(_defaultHumanTemplateHeaders);
+  }
+
+  static bool _looksLikeDrivingLicenseCheck(VerificationTypeDefinition item) {
+    final String haystack = <String>[
+      item.id,
+      item.name,
+      item.label,
+    ].join(' ').toLowerCase();
+    return haystack.contains('drive') || haystack.contains('license');
+  }
+
+  bool _shouldUseDrivingLicenseTemplate(
+    Set<String> checks,
+    Set<String> checkIds,
+    Map<String, VerificationTypeDefinition> verificationTypesById,
+  ) {
+    if (_hasDrivingLicenseSelection(checks, checkIds)) return true;
+    for (final String id in checkIds) {
+      final VerificationTypeDefinition? item = verificationTypesById[id];
+      if (item == null) continue;
+      if (_looksLikeDrivingLicenseCheck(item)) return true;
+    }
+    for (final String raw in checks) {
+      final VerificationTypeDefinition? item = verificationTypesById[raw];
+      if (item == null) continue;
+      if (_looksLikeDrivingLicenseCheck(item)) return true;
+    }
+    return false;
   }
 
   List<String> _columns() {
@@ -444,6 +515,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (email.isEmpty || phone.isEmpty) return null;
 
     final String? dob = _normalizeDob(valueAt('dob'));
+    final String licenseNumber = _normalizeAlphaNum(valueAt('license_number'));
     final String aadhar = _normalizeDigits(valueAt('aadhar_number'));
     final String pan = _normalizeAlphaNum(valueAt('pan_number'));
 
@@ -457,6 +529,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return <String, dynamic>{
       'full_name': fullName,
       if (dob case final String v) 'dob': v,
+      if (licenseNumber.isNotEmpty) 'license_number': licenseNumber,
       if (phone.isNotEmpty) 'phone_number': phone,
       if (email.isNotEmpty) 'email': email,
       if (aadhar.isNotEmpty) 'aadhar_number': aadhar,
@@ -486,6 +559,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         return _HumanTemplateDialog(
           initialHeaders: initialHeaders,
           selectedChecks: _checks,
+          selectedCheckIds: _checkIds,
           verificationFilter: verificationFilter,
           onSave: (List<String> headers) {
             if (!mounted) return;
@@ -1740,12 +1814,44 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         : apiIndustry.isNotEmpty
         ? apiIndustry
         : profileIndustry;
-    final String displayIndustry = _prettyIndustry(resolvedIndustry);
+    final String displayIndustry =
+        OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
+          profile: authAsync.valueOrNull?.userProfile,
+          fallback: _prettyIndustry(resolvedIndustry),
+        );
     final String verificationFilter = resolvedIndustry.isNotEmpty
         ? 'human::$resolvedIndustry'
         : 'human';
     final AsyncValue<List<VerificationTypeDefinition>> humanTypesAsync = ref
         .watch(verificationTypesProvider(verificationFilter));
+    final Map<String, VerificationTypeDefinition> humanTypesById =
+        <String, VerificationTypeDefinition>{
+          for (final VerificationTypeDefinition item
+              in humanTypesAsync.valueOrNull ?? <VerificationTypeDefinition>[])
+            item.id: item,
+        };
+    final bool useDrivingLicenseTemplate = _shouldUseDrivingLicenseTemplate(
+      _checks,
+      _checkIds,
+      humanTypesById,
+    );
+    if (useDrivingLicenseTemplate &&
+        !_seededRouteTemplate &&
+        _columnsController.text.trim() !=
+            _drivingLicenseTemplateHeaders.join(',')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_seededRouteTemplate) return;
+        setState(() {
+          _savedTemplateHeaders = <String>[];
+          _columnsController.text = _drivingLicenseTemplateHeaders.join(',');
+          _seededRouteTemplate = true;
+        });
+        debugPrint(
+          '[BulkUploadPage] driving-license template seeded from resolved check names',
+        );
+      });
+    }
     if (_checks.isEmpty &&
         !_seededDefaultChecks &&
         (humanTypesAsync.valueOrNull?.isNotEmpty == true ||
@@ -2530,12 +2636,14 @@ class _HumanTemplateDialog extends ConsumerStatefulWidget {
   const _HumanTemplateDialog({
     required this.initialHeaders,
     required this.selectedChecks,
+    required this.selectedCheckIds,
     required this.verificationFilter,
     required this.onSave,
   });
 
   final List<String> initialHeaders;
   final Set<String> selectedChecks;
+  final Set<String> selectedCheckIds;
   final String verificationFilter;
   final ValueChanged<List<String>> onSave;
 
@@ -2628,7 +2736,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
             for (final VerificationTypeDefinition item in verificationTypes)
               item.id: item,
           };
-      final List<String> sortedChecks = widget.selectedChecks.toList()..sort();
+      final List<String> sortedChecks = widget.selectedCheckIds.isNotEmpty
+          ? (widget.selectedCheckIds.toList()..sort())
+          : (widget.selectedChecks.toList()..sort());
       final List<String> headers = <String>[
         for (final String header in _headers)
           if (header.trim().isNotEmpty) header.trim(),
@@ -3244,17 +3354,19 @@ class _IndustryPill extends StatelessWidget {
               ),
             ),
             SizedBox(width: s(8)),
-            Text(
-              industryLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(11),
-                fontWeight: FontWeight.w600,
-                letterSpacing: s(0.0644531),
-                height: 16.5 / 11,
-                color: AppColors.brandBlue,
+            Flexible(
+              child: Text(
+                industryLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: s(11),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: s(0.0644531),
+                  height: 16.5 / 11,
+                  color: AppColors.brandBlue,
+                ),
               ),
             ),
             SizedBox(width: s(8)),
@@ -3849,9 +3961,10 @@ class _HumanReviewDialog extends StatefulWidget {
 class _HumanReviewDialogState extends State<_HumanReviewDialog> {
   static const List<String> _fieldKeys = <String>[
     'full_name',
-    'email',
     'phone_number',
+    'email',
     'dob',
+    'license_number',
     'aadhar_number',
     'pan_number',
     'address_line1',
@@ -4027,11 +4140,11 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                           const SizedBox(height: 12),
                           Row(
                             children: <Widget>[
-                              Expanded(child: field('email', 'Email')),
-                              const SizedBox(width: 12),
                               Expanded(
                                 child: field('phone_number', 'Phone number'),
                               ),
+                              const SizedBox(width: 12),
+                              Expanded(child: field('email', 'Email')),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -4042,16 +4155,29 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: field('aadhar_number', 'Aadhaar'),
+                                child: field(
+                                  'license_number',
+                                  'License number',
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 12),
                           Row(
                             children: <Widget>[
-                              Expanded(child: field('pan_number', 'PAN')),
+                              Expanded(
+                                child: field('aadhar_number', 'Aadhaar'),
+                              ),
                               const SizedBox(width: 12),
+                              Expanded(child: field('pan_number', 'PAN')),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: <Widget>[
                               Expanded(child: field('pincode', 'Pincode')),
+                              const SizedBox(width: 12),
+                              Expanded(child: field('state', 'State')),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -4061,13 +4187,7 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                           const SizedBox(height: 12),
                           field('address_line3', 'Address line 3'),
                           const SizedBox(height: 12),
-                          Row(
-                            children: <Widget>[
-                              Expanded(child: field('state', 'State')),
-                              const SizedBox(width: 12),
-                              Expanded(child: field('country', 'Country')),
-                            ],
-                          ),
+                          field('country', 'Country'),
                         ],
                       ),
                     );

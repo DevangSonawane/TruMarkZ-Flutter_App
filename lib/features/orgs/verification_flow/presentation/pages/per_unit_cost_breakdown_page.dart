@@ -38,6 +38,40 @@ class _PerUnitCostBreakdownPageState
     return parsed > 0 ? parsed : 1;
   }
 
+  static String _normalizeToken(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+  }
+
+  String? _resolveCheckId(
+    String raw,
+    List<VerificationTypeDefinition> types,
+    bool isProductFlow,
+  ) {
+    final String normalizedRaw = _normalizeToken(raw.trim());
+    if (normalizedRaw.isEmpty) return null;
+
+    for (final VerificationTypeDefinition item in types) {
+      final List<String> candidates = <String>[item.id, item.name, item.label];
+      if (candidates.any(
+        (String value) => _normalizeToken(value) == normalizedRaw,
+      )) {
+        return item.id;
+      }
+    }
+
+    if (isProductFlow) {
+      final ProductVerificationCheckDefinition? productItem =
+          ProductVerificationChecksCatalog.byId[raw.trim()];
+      if (productItem != null) return productItem.id;
+    } else {
+      final HumanVerificationCheckDefinition? humanItem =
+          HumanVerificationChecksCatalog.byId[raw.trim()];
+      if (humanItem != null) return humanItem.id;
+    }
+
+    return raw.trim();
+  }
+
   Map<String, _CheckPricing> _pricingFromTypes(
     List<VerificationTypeDefinition> types,
     List<String> ids,
@@ -87,17 +121,34 @@ class _PerUnitCostBreakdownPageState
     return pricing;
   }
 
-  List<String> _selectedChecks(BuildContext context) {
+  List<String> _selectedChecks(
+    BuildContext context,
+    List<VerificationTypeDefinition> types,
+  ) {
     final Map<String, String> qp = GoRouterState.of(
       context,
     ).uri.queryParameters;
-    final String raw = (qp['checks'] ?? '').trim();
-    if (raw.isEmpty) return const <String>[];
-    final List<String> ids = raw
-        .split(',')
-        .map((String e) => e.trim())
-        .where((String e) => e.isNotEmpty)
-        .toList();
+    final String rawCheckIds = (qp['check_ids'] ?? '').trim();
+    final String rawChecks = (qp['checks'] ?? '').trim();
+
+    final List<String> ids = rawCheckIds.isNotEmpty
+        ? rawCheckIds
+              .split(',')
+              .map((String e) => e.trim())
+              .where((String e) => e.isNotEmpty)
+              .toList()
+        : rawChecks.isEmpty
+        ? const <String>[]
+        : rawChecks
+              .split(',')
+              .map((String e) => e.trim())
+              .where((String e) => e.isNotEmpty)
+              .map(
+                (String token) =>
+                    _resolveCheckId(token, types, _isProductFlow()),
+              )
+              .whereType<String>()
+              .toList();
     ids.sort();
     return ids;
   }
@@ -160,16 +211,19 @@ class _PerUnitCostBreakdownPageState
     final String industry = (qp['industry'] ?? '').trim();
     final bool isWarrantyFlow =
         isProductFlow && (qp['mode'] ?? '').trim().toLowerCase() == 'warranty';
-    final List<String> ids = isWarrantyFlow
-        ? const <String>[]
-        : _selectedChecks(context);
-    final int userCount = _userCount(context);
     final String verificationFilter = industry.isNotEmpty
         ? '${isProductFlow ? 'product' : 'human'}::$industry'
         : (isProductFlow ? 'product' : 'human');
     final AsyncValue<List<VerificationTypeDefinition>> typesAsync = ref.watch(
       verificationTypesProvider(verificationFilter),
     );
+    final List<String> ids = isWarrantyFlow
+        ? const <String>[]
+        : _selectedChecks(
+            context,
+            typesAsync.valueOrNull ?? <VerificationTypeDefinition>[],
+          );
+    final int userCount = _userCount(context);
     final Map<String, _CheckPricing> pricing = _pricingFromTypes(
       typesAsync.valueOrNull ?? <VerificationTypeDefinition>[],
       ids,

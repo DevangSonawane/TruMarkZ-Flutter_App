@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -9,17 +10,20 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_input.dart';
+import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
 
 enum _BlockchainVisibility { publicRegistry, privateRegistry }
 
-class ProductBatchSetupPage extends StatefulWidget {
+class ProductBatchSetupPage extends ConsumerStatefulWidget {
   const ProductBatchSetupPage({super.key});
 
   @override
-  State<ProductBatchSetupPage> createState() => _ProductBatchSetupPageState();
+  ConsumerState<ProductBatchSetupPage> createState() =>
+      _ProductBatchSetupPageState();
 }
 
-class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
+class _ProductBatchSetupPageState extends ConsumerState<ProductBatchSetupPage> {
   bool _didInitFromRoute = false;
   String _sector = 'Consumer Goods';
   String _categoryId = '';
@@ -87,12 +91,33 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
     }
   }
 
+  void _showGstRequiredSnack(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'GST verification is required before creating a batch.',
+        ),
+        action: SnackBarAction(
+          label: 'Open Profile',
+          onPressed: () => context.push(AppRouter.settingsPath),
+        ),
+      ),
+    );
+  }
+
   int _units() => int.tryParse(_unitsController.text.trim()) ?? 0;
 
   bool get _canContinue =>
       _batchNameController.text.trim().isNotEmpty && _units() > 0;
 
   void _continue(BuildContext context) {
+    final bool gstVerified =
+        ref.read(authNotifierProvider).valueOrNull?.userProfile?.gstVerified ==
+        true;
+    if (!gstVerified) {
+      _showGstRequiredSnack(context);
+      return;
+    }
     if (!_canContinue) return;
 
     final Map<String, String> qp = <String, String>{
@@ -114,6 +139,9 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
+    final bool gstVerified =
+        authAsync.valueOrNull?.userProfile?.gstVerified == true;
     final String modeLabel = _mode == 'warranty' ? 'Warranty' : 'Verification';
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
@@ -364,7 +392,7 @@ class _ProductBatchSetupPageState extends State<ProductBatchSetupPage> {
                                 scale: scale,
                                 label: 'Continue',
                                 icon: Icons.arrow_forward_rounded,
-                                enabled: _canContinue,
+                                enabled: _canContinue && gstVerified,
                                 onPressed: () => _continue(context),
                               ),
                             ),
