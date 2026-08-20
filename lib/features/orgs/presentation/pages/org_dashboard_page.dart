@@ -818,7 +818,7 @@ class _RecentBatchCard extends StatelessWidget {
     final String badgeText = switch (batch.status) {
       _BatchStatus.processing => 'PROCESSING',
       _BatchStatus.complete => 'VERIFIED',
-      _BatchStatus.alert => 'ALERT',
+      _BatchStatus.alert => 'NEEDS ATTENTION',
     };
     final Color badgeFg = switch (batch.status) {
       _BatchStatus.processing => AppColors.brandBlue,
@@ -1195,7 +1195,7 @@ class _DashboardSummary {
             .map((VerificationBatchSummary item) {
               pending += item.pending;
               verified += item.verified;
-              failed += item.failed;
+              failed += item.issueCount;
               if (item.pending > 0) active++;
               return _DashboardBatchItem.fromSummary(item);
             })
@@ -1239,9 +1239,7 @@ class _DashboardBatchItem {
     final String shortId = item.batchId.length <= 10
         ? item.batchId
         : item.batchId.substring(0, 10);
-    final _BatchStatus status = item.failed > 0
-        ? _BatchStatus.alert
-        : (item.pending > 0 ? _BatchStatus.processing : _BatchStatus.complete);
+    final _BatchStatus status = _batchStatusFromSummary(item);
     final double progress = item.totalUsers > 0
         ? (item.verified / item.totalUsers).clamp(0.0, 1.0)
         : 0.0;
@@ -1259,4 +1257,20 @@ class _DashboardBatchItem {
       isHumanVerification: false,
     );
   }
+}
+
+_BatchStatus _batchStatusFromSummary(VerificationBatchSummary item) {
+  final String status = item.status.trim().toLowerCase();
+  if (item.hasIssues ||
+      status.contains('skip') ||
+      status.contains('error') ||
+      status.contains('fail')) {
+    return _BatchStatus.alert;
+  }
+  if (status.contains('verified') ||
+      status.contains('complete') ||
+      item.isComplete) {
+    return _BatchStatus.complete;
+  }
+  return _BatchStatus.processing;
 }

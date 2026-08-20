@@ -46,13 +46,25 @@ class _AllBatchesPageState extends ConsumerState<AllBatchesPage> {
     final List<VerificationBatchSummary> batches =
         batchesAsync.valueOrNull ?? const <VerificationBatchSummary>[];
     final List<_BatchDirectoryItem> directory = batches
-        .map((VerificationBatchSummary item) => _BatchDirectoryItem.fromSummary(item))
+        .map(
+          (VerificationBatchSummary item) =>
+              _BatchDirectoryItem.fromSummary(item),
+        )
         .toList();
 
     final int totalBatches = directory.length;
-    final int pending = directory.fold<int>(0, (int acc, _BatchDirectoryItem i) => acc + i.pendingCount);
-    final int verified = directory.fold<int>(0, (int acc, _BatchDirectoryItem i) => acc + i.verifiedCount);
-    final int failed = directory.fold<int>(0, (int acc, _BatchDirectoryItem i) => acc + i.failedCount);
+    final int pending = directory.fold<int>(
+      0,
+      (int acc, _BatchDirectoryItem i) => acc + i.pendingCount,
+    );
+    final int verified = directory.fold<int>(
+      0,
+      (int acc, _BatchDirectoryItem i) => acc + i.verifiedCount,
+    );
+    final int failed = directory.fold<int>(
+      0,
+      (int acc, _BatchDirectoryItem i) => acc + i.failedCount,
+    );
 
     final String search = _searchController.text.trim().toLowerCase();
     final List<_BatchDirectoryItem> filtered = directory.where((
@@ -123,10 +135,9 @@ class _AllBatchesPageState extends ConsumerState<AllBatchesPage> {
                                   title: 'All Batches',
                                   avatarAssetPath:
                                       'assets/icons/dashbaord/profile.png',
-                                  onAlertsTap: () =>
-                                      context.push(
-                                        '${AppRouter.notificationsPath}?flow=org',
-                                      ),
+                                  onAlertsTap: () => context.push(
+                                    '${AppRouter.notificationsPath}?flow=org',
+                                  ),
                                   onProfileTap: () =>
                                       context.push(AppRouter.settingsPath),
                                 ),
@@ -347,7 +358,9 @@ class _AllBatchesHeader extends StatelessWidget {
 enum _BatchTab { all, processing, verified, failed }
 
 _BatchTab _tabForItem(_BatchDirectoryItem item) {
-  if (item.failedCount > 0) return _BatchTab.failed;
+  if (item.failedCount > 0 || item.status == _BatchStatus.alert) {
+    return _BatchTab.failed;
+  }
   if (item.verifiedCount == item.records && item.records > 0) {
     return _BatchTab.verified;
   }
@@ -833,14 +846,10 @@ class _BatchDirectoryItem {
     final DateTime? created = DateTime.tryParse(item.createdAt);
     final int total = item.totalUsers;
     final int verified = item.verified;
-    final int failed = item.failed;
+    final int failed = item.issueCount;
     final int pending = item.pending;
     final double progress = total == 0 ? 0 : (verified / total);
-    final _BatchStatus status = failed > 0
-        ? _BatchStatus.alert
-        : (verified >= total && total > 0
-              ? _BatchStatus.completed
-              : _BatchStatus.processing);
+    final _BatchStatus status = _batchStatusFromSummary(item);
     final String batchName = item.batchName.trim().isNotEmpty
         ? item.batchName.trim()
         : (item.batchId.length <= 10
@@ -882,6 +891,22 @@ class _BatchDirectoryItem {
   }
 }
 
+_BatchStatus _batchStatusFromSummary(VerificationBatchSummary item) {
+  final String status = item.status.trim().toLowerCase();
+  if (item.hasIssues ||
+      status.contains('skip') ||
+      status.contains('error') ||
+      status.contains('fail')) {
+    return _BatchStatus.alert;
+  }
+  if (status.contains('verified') ||
+      status.contains('complete') ||
+      item.isComplete) {
+    return _BatchStatus.completed;
+  }
+  return _BatchStatus.processing;
+}
+
 class _BatchDirectoryCard extends StatelessWidget {
   const _BatchDirectoryCard({required this.item});
 
@@ -892,7 +917,7 @@ class _BatchDirectoryCard extends StatelessWidget {
     final String badgeText = switch (item.status) {
       _BatchStatus.processing => 'Processing',
       _BatchStatus.completed => 'Verified',
-      _BatchStatus.alert => 'Failed',
+      _BatchStatus.alert => 'Needs attention',
     };
 
     final Color badgeFg = switch (item.status) {
@@ -1170,6 +1195,7 @@ class _BatchDirectoryCard extends StatelessWidget {
 }
 
 String _statusLabel(_BatchDirectoryItem item) {
+  if (item.status == _BatchStatus.alert) return 'Needs attention';
   if (item.failedCount > 0) return 'Needs attention';
   if (item.verifiedCount == item.records && item.records > 0) {
     return 'Completed';

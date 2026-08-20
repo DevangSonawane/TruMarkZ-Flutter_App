@@ -84,9 +84,8 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
                       }
                       context.go(AppRouter.dashboardPath);
                     },
-                    onAlertsTap: () => context.push(
-                      '${AppRouter.notificationsPath}?flow=org',
-                    ),
+                    onAlertsTap: () =>
+                        context.push('${AppRouter.notificationsPath}?flow=org'),
                     onProfileTap: () => context.push(AppRouter.settingsPath),
                   ),
                 ),
@@ -121,9 +120,8 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
                           else if (batchesAsync.hasError)
                             _ErrorCard(
                               message: batchesAsync.error.toString(),
-                              onRetry: () => ref.refresh(
-                                verificationBatchesProvider,
-                              ),
+                              onRetry: () =>
+                                  ref.refresh(verificationBatchesProvider),
                             )
                           else
                             Column(
@@ -742,7 +740,7 @@ class _BatchDirectoryItem {
       records: item.totalUsers,
       pendingCount: item.pending,
       verifiedCount: item.verified,
-      failedCount: item.failed,
+      failedCount: item.issueCount,
     );
   }
 

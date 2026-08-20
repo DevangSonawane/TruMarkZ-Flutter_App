@@ -130,6 +130,25 @@ List<String> _readStringList(dynamic raw) {
   return const <String>[];
 }
 
+int _readIntValue(Map<String, dynamic> json, List<String> keys) {
+  for (final String key in keys) {
+    final Object? raw = json[key];
+    final int? parsed = raw is num
+        ? raw.toInt()
+        : int.tryParse(raw?.toString().trim() ?? '');
+    if (parsed != null) return parsed;
+  }
+  return 0;
+}
+
+String _readStringValue(Map<String, dynamic> json, List<String> keys) {
+  for (final String key in keys) {
+    final String value = (json[key] ?? '').toString().trim();
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
 class VerificationUser {
   const VerificationUser({
     required this.id,
@@ -339,6 +358,9 @@ class VerificationBatchSummary {
     required this.totalUsers,
     required this.verified,
     required this.failed,
+    required this.totalSkipped,
+    required this.errorCount,
+    required this.status,
     required this.createdAt,
     required this.excelStoragePath,
     required this.reportStoragePaths,
@@ -350,11 +372,19 @@ class VerificationBatchSummary {
   final int totalUsers;
   final int verified;
   final int failed;
+  final int totalSkipped;
+  final int errorCount;
+  final String status;
   final String createdAt;
   final String excelStoragePath;
   final List<String> reportStoragePaths;
 
   int get pending => (totalUsers - verified - failed).clamp(0, totalUsers);
+  int get issueCount => failed + totalSkipped + errorCount;
+  bool get hasIssues => issueCount > 0;
+  bool get isComplete => totalUsers > 0 && verified >= totalUsers && !hasIssues;
+  bool get isAttentionNeeded => hasIssues;
+  bool get isProcessing => !isComplete && !hasIssues;
 
   factory VerificationBatchSummary.fromJson(
     Map<String, dynamic> json, {
@@ -381,8 +411,37 @@ class VerificationBatchSummary {
             (json['total_users'] ?? json['totalUsers'] ?? '').toString(),
           ) ??
           0,
-      verified: int.tryParse((json['verified'] ?? '').toString()) ?? 0,
-      failed: int.tryParse((json['failed'] ?? '').toString()) ?? 0,
+      verified: _readIntValue(json, <String>[
+        'verified',
+        'verified_count',
+        'verifiedCount',
+      ]),
+      failed: _readIntValue(json, <String>[
+        'failed',
+        'failed_count',
+        'failedCount',
+      ]),
+      totalSkipped: _readIntValue(json, <String>[
+        'total_skipped',
+        'totalSkipped',
+        'skipped',
+        'skipped_count',
+        'skippedCount',
+      ]),
+      errorCount: _readIntValue(json, <String>[
+        'error_count',
+        'errors_count',
+        'errors',
+        'errorRows',
+        'error_rows',
+      ]),
+      status: _readStringValue(json, <String>[
+        'status',
+        'batch_status',
+        'batchStatus',
+        'verification_status',
+        'verificationStatus',
+      ]).toLowerCase(),
       createdAt: (json['created_at'] ?? json['createdAt'] ?? '')
           .toString()
           .trim(),
