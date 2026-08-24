@@ -364,6 +364,7 @@ class VerificationBatchSummary {
     required this.createdAt,
     required this.excelStoragePath,
     required this.reportStoragePaths,
+    required this.verificationProgress,
   });
 
   final String batchId;
@@ -378,11 +379,50 @@ class VerificationBatchSummary {
   final String createdAt;
   final String excelStoragePath;
   final List<String> reportStoragePaths;
+  final Map<String, dynamic> verificationProgress;
 
-  int get pending => (totalUsers - verified - failed).clamp(0, totalUsers);
+  String get sdcOrgId {
+    final dynamic sdc = verificationProgress['sdc'];
+    if (sdc is Map) {
+      return (sdc['org_id'] ??
+              sdc['orgId'] ??
+              sdc['schema_id'] ??
+              sdc['schemaId'] ??
+              '')
+          .toString()
+          .trim();
+    }
+    return '';
+  }
+
+  String get sdcSpaceId {
+    final dynamic sdc = verificationProgress['sdc'];
+    if (sdc is Map) {
+      return (sdc['space_id'] ?? sdc['spaceId'] ?? '').toString().trim();
+    }
+    return '';
+  }
+
+  bool get hasGeneratedSdc => sdcOrgId.isNotEmpty || sdcSpaceId.isNotEmpty;
+  bool get hasGeneratedReport => reportStoragePaths.isNotEmpty;
+  bool get hasTerminalStatus {
+    final String s = status.trim().toLowerCase();
+    return s.contains('sdc_generated') ||
+        s.contains('verified') ||
+        s.contains('complete') ||
+        s.contains('approved');
+  }
+
+  int get pending => hasGeneratedReport || hasGeneratedSdc || hasTerminalStatus
+      ? 0
+      : (totalUsers - verified - failed).clamp(0, totalUsers);
   int get issueCount => failed + totalSkipped + errorCount;
   bool get hasIssues => issueCount > 0;
-  bool get isComplete => totalUsers > 0 && verified >= totalUsers && !hasIssues;
+  bool get isComplete =>
+      hasGeneratedReport ||
+      hasGeneratedSdc ||
+      hasTerminalStatus ||
+      (totalUsers > 0 && verified >= totalUsers && !hasIssues);
   bool get isAttentionNeeded => hasIssues;
   bool get isProcessing => !isComplete && !hasIssues;
 
@@ -397,6 +437,10 @@ class VerificationBatchSummary {
               .where((String s) => s.isNotEmpty)
               .toList()
         : <String>[];
+    final Map<String, dynamic> verificationProgress =
+        json['verification_progress'] is Map
+        ? Map<String, dynamic>.from(json['verification_progress'] as Map)
+        : <String, dynamic>{};
 
     return VerificationBatchSummary(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
@@ -415,11 +459,17 @@ class VerificationBatchSummary {
         'verified',
         'verified_count',
         'verifiedCount',
+        'approved',
+        'approved_count',
+        'approvedCount',
       ]),
       failed: _readIntValue(json, <String>[
         'failed',
         'failed_count',
         'failedCount',
+        'rejected',
+        'rejected_count',
+        'rejectedCount',
       ]),
       totalSkipped: _readIntValue(json, <String>[
         'total_skipped',
@@ -450,6 +500,7 @@ class VerificationBatchSummary {
               .toString()
               .trim(),
       reportStoragePaths: reports,
+      verificationProgress: verificationProgress,
     );
   }
 }
@@ -524,7 +575,13 @@ class VerificationBatchDetailResponse {
   String get sdcOrgId {
     final dynamic sdc = verificationProgress['sdc'];
     if (sdc is Map) {
-      return (sdc['org_id'] ?? sdc['orgId'] ?? '').toString().trim();
+      return (sdc['org_id'] ??
+              sdc['orgId'] ??
+              sdc['schema_id'] ??
+              sdc['schemaId'] ??
+              '')
+          .toString()
+          .trim();
     }
     return '';
   }
@@ -536,6 +593,8 @@ class VerificationBatchDetailResponse {
     }
     return '';
   }
+
+  bool get hasGeneratedSdc => sdcOrgId.isNotEmpty || sdcSpaceId.isNotEmpty;
 
   factory VerificationBatchDetailResponse.fromJson(Map<String, dynamic> json) {
     final dynamic reportsRaw = json['report_storage_paths'];

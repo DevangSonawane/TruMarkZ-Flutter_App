@@ -49,7 +49,9 @@ class _IndividualSdcPageState extends ConsumerState<IndividualSdcPage> {
     final Map<String, String> qp = GoRouterState.of(
       context,
     ).uri.queryParameters;
-    _orgId = (qp['org_id'] ?? qp['orgId'] ?? '').trim();
+    _orgId =
+        (qp['org_id'] ?? qp['orgId'] ?? qp['schema_id'] ?? qp['schemaId'] ?? '')
+            .trim();
     _spaceId = (qp['space_id'] ?? qp['spaceId'] ?? '').trim();
     _batchId = (qp['batch_id'] ?? qp['batchId'] ?? '').trim();
     _batchName = (qp['batch_name'] ?? qp['batchName'] ?? '').trim();

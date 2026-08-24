@@ -250,6 +250,29 @@ class _BatchTrackingDetailPageState
                         data: (VerificationBatchDetailResponse res) {
                           final Map<String, int> derivedCounts =
                               _deriveUserStatusCounts(res.users);
+                          final bool hasGeneratedSdc = res.hasGeneratedSdc;
+                          final int verifiedCount = _readProgressOrFallback(
+                            res.verificationProgress,
+                            'verified',
+                            derivedCounts['verified'] ?? 0,
+                          );
+                          final int failedCount = _readProgressOrFallback(
+                            res.verificationProgress,
+                            'failed',
+                            derivedCounts['failed'] ?? 0,
+                          );
+                          final int pendingCount = hasGeneratedSdc
+                              ? 0
+                              : _readProgressOrFallback(
+                                  res.verificationProgress,
+                                  'pending',
+                                  derivedCounts['pending'] ?? 0,
+                                );
+                          final int effectiveVerifiedCount = hasGeneratedSdc
+                              ? (res.totalUsers - failedCount)
+                                    .clamp(0, res.totalUsers)
+                                    .toInt()
+                              : verifiedCount;
                           return ListView(
                             physics: const BouncingScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
@@ -262,21 +285,9 @@ class _BatchTrackingDetailPageState
                             ),
                             children: <Widget>[
                               _SummarySection(
-                                verified: _readProgressOrFallback(
-                                  res.verificationProgress,
-                                  'verified',
-                                  derivedCounts['verified'] ?? 0,
-                                ),
-                                pending: _readProgressOrFallback(
-                                  res.verificationProgress,
-                                  'pending',
-                                  derivedCounts['pending'] ?? 0,
-                                ),
-                                failed: _readProgressOrFallback(
-                                  res.verificationProgress,
-                                  'failed',
-                                  derivedCounts['failed'] ?? 0,
-                                ),
+                                verified: effectiveVerifiedCount,
+                                pending: pendingCount,
+                                failed: failedCount,
                               ),
                               const SizedBox(height: AppSpacing.x3),
                               const _SectionHeader(
@@ -288,6 +299,7 @@ class _BatchTrackingDetailPageState
                                   in res.users) ...<Widget>[
                                 _UserTile(
                                   user: u,
+                                  batchIsTerminal: hasGeneratedSdc,
                                   onTap: () {
                                     final String orgId = detail?.sdcOrgId ?? '';
                                     final String spaceId =
@@ -617,16 +629,20 @@ class _FigmaStatCard extends StatelessWidget {
 }
 
 class _UserTile extends StatelessWidget {
-  const _UserTile({required this.user, required this.onTap});
+  const _UserTile({
+    required this.user,
+    required this.batchIsTerminal,
+    required this.onTap,
+  });
 
   final VerificationUser user;
+  final bool batchIsTerminal;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final (_StatusStyle style, String label) = _statusStyle(
-      user.verificationStatus,
-    );
+    final String effectiveStatus = _effectiveStatus(user.verificationStatus);
+    final (_StatusStyle style, String label) = _statusStyle(effectiveStatus);
     final String? photoUrl = (user.photoUrl ?? '').trim().isEmpty
         ? null
         : user.photoUrl!.trim();
@@ -729,6 +745,22 @@ class _UserTile extends StatelessWidget {
       default:
         return (const _StatusStyle.pending(), 'Pending');
     }
+  }
+
+  String _effectiveStatus(String rawStatus) {
+    final String status = rawStatus.trim().toLowerCase();
+    if (status.contains('failed') || status.contains('rejected')) {
+      return 'failed';
+    }
+    if (status.contains('verified') ||
+        status.contains('approved') ||
+        status.contains('complete')) {
+      return 'verified';
+    }
+    if (batchIsTerminal) {
+      return 'verified';
+    }
+    return 'pending';
   }
 }
 

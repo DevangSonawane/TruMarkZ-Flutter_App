@@ -92,122 +92,136 @@ class _AllBatchesPageState extends ConsumerState<AllBatchesPage> {
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
-      body: Stack(
-        children: <Widget>[
-          const Positioned.fill(child: ColoredBox(color: AppColors.brandBlue)),
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: <Widget>[
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: topSectionHeight,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: <Widget>[
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        top: bgTop,
-                        bottom: 0,
-                        child: const DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Color(0xFFF7F9FC),
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(20),
-                              topRight: Radius.circular(20),
+      body: RefreshIndicator(
+        color: AppColors.brandBlue,
+        onRefresh: () async {
+          ref.invalidate(verificationBatchesProvider);
+          await ref.read(verificationBatchesProvider.future);
+        },
+        child: Stack(
+          children: <Widget>[
+            const Positioned.fill(
+              child: ColoredBox(color: AppColors.brandBlue),
+            ),
+            Positioned.fill(
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                slivers: <Widget>[
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: topSectionHeight,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: <Widget>[
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: bgTop,
+                            bottom: 0,
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Color(0xFFF7F9FC),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.topCenter,
-                        child: SizedBox(
-                          width: contentWidth,
-                          child: Stack(
-                            children: <Widget>[
-                              Positioned(
-                                left: pagePad,
-                                right: pagePad,
-                                top: safeTop,
-                                height: s(40),
-                                child: _AllBatchesHeader(
-                                  scale: scale,
-                                  title: 'All Batches',
-                                  avatarAssetPath:
-                                      'assets/icons/dashbaord/profile.png',
-                                  onAlertsTap: () => context.push(
-                                    '${AppRouter.notificationsPath}?flow=org',
+                          Align(
+                            alignment: Alignment.topCenter,
+                            child: SizedBox(
+                              width: contentWidth,
+                              child: Stack(
+                                children: <Widget>[
+                                  Positioned(
+                                    left: pagePad,
+                                    right: pagePad,
+                                    top: safeTop,
+                                    height: s(40),
+                                    child: _AllBatchesHeader(
+                                      scale: scale,
+                                      title: 'All Batches',
+                                      avatarAssetPath:
+                                          'assets/icons/dashbaord/profile.png',
+                                      onAlertsTap: () => context.push(
+                                        '${AppRouter.notificationsPath}?flow=org',
+                                      ),
+                                      onProfileTap: () =>
+                                          context.push(AppRouter.settingsPath),
+                                    ),
                                   ),
-                                  onProfileTap: () =>
-                                      context.push(AppRouter.settingsPath),
-                                ),
+                                  Positioned(
+                                    left: pagePad,
+                                    right: pagePad,
+                                    top: searchTop,
+                                    child: _FigmaFilterContainer(
+                                      scale: scale,
+                                      searchController: _searchController,
+                                      selected: _tab,
+                                      onSelect: (_BatchTab t) =>
+                                          setState(() => _tab = t),
+                                      totalBatches: totalBatches,
+                                      pendingRecords: pending,
+                                      verifiedRecords: verified,
+                                      failedRecords: failed,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Positioned(
-                                left: pagePad,
-                                right: pagePad,
-                                top: searchTop,
-                                child: _FigmaFilterContainer(
-                                  scale: scale,
-                                  searchController: _searchController,
-                                  selected: _tab,
-                                  onSelect: (_BatchTab t) =>
-                                      setState(() => _tab = t),
-                                  totalBatches: totalBatches,
-                                  pendingRecords: pending,
-                                  verifiedRecords: verified,
-                                  failedRecords: failed,
-                                ),
-                              ),
-                            ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Container(
+                      color: const Color(0xFFF7F9FC),
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: contentWidth,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(pagePad, 0, pagePad, 0),
+                          child: _BatchDirectoryHeader(
+                            onTapSeeAll: () => setState(() {
+                              _tab = _BatchTab.all;
+                            }),
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Container(
-                  color: const Color(0xFFF7F9FC),
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: contentWidth,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(pagePad, 0, pagePad, 0),
-                      child: _BatchDirectoryHeader(
-                        onTapSeeAll: () => setState(() {
-                          _tab = _BatchTab.all;
-                        }),
+                  SliverToBoxAdapter(
+                    child: Container(
+                      color: const Color(0xFFF7F9FC),
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: contentWidth,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            pagePad,
+                            s(11),
+                            pagePad,
+                            s(71.016) + safeBottom + s(140),
+                          ),
+                          child: _BatchesListBody(
+                            dataAsync: batchesAsync,
+                            filtered: filtered,
+                            onRetry: () =>
+                                ref.refresh(verificationBatchesProvider),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-              SliverToBoxAdapter(
-                child: Container(
-                  color: const Color(0xFFF7F9FC),
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: contentWidth,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        pagePad,
-                        s(11),
-                        pagePad,
-                        s(71.016) + safeBottom + s(140),
-                      ),
-                      child: _BatchesListBody(
-                        dataAsync: batchesAsync,
-                        filtered: filtered,
-                        onRetry: () => ref.refresh(verificationBatchesProvider),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

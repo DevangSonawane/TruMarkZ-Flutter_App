@@ -65,106 +65,131 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
 
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
-      body: SafeArea(
-        bottom: false,
-        child: Center(
-          child: SizedBox(
-            width: contentWidth,
-            child: Column(
-              children: <Widget>[
-                Padding(
-                  padding: EdgeInsets.fromLTRB(s(16), s(12), s(16), s(12)),
-                  child: _Header(
-                    scale: scale,
-                    title: 'View All Certificates',
-                    onBack: () {
-                      if (context.canPop()) {
-                        context.pop();
-                        return;
-                      }
-                      context.go(AppRouter.dashboardPath);
-                    },
-                    onAlertsTap: () =>
-                        context.push('${AppRouter.notificationsPath}?flow=org'),
-                    onProfileTap: () => context.push(AppRouter.settingsPath),
-                  ),
-                ),
-                SizedBox(height: s(21)),
-                Expanded(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF7F9FC),
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(s(20)),
-                      ),
-                    ),
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(
-                        s(16),
-                        s(32),
-                        s(16),
-                        s(24) + safeBottom + s(71.016),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          _SearchRow(
-                            scale: scale,
-                            controller: _searchController,
-                            onFilterTap: () {},
+      body: RefreshIndicator(
+        color: AppColors.brandBlue,
+        onRefresh: () async {
+          ref.invalidate(verificationBatchesProvider);
+          await ref.read(verificationBatchesProvider.future);
+        },
+        child: SafeArea(
+          bottom: false,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height,
+              child: Center(
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Column(
+                    children: <Widget>[
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          s(16),
+                          s(12),
+                          s(16),
+                          s(12),
+                        ),
+                        child: _Header(
+                          scale: scale,
+                          title: 'View All Certificates',
+                          onBack: () {
+                            if (context.canPop()) {
+                              context.pop();
+                              return;
+                            }
+                            context.go(AppRouter.dashboardPath);
+                          },
+                          onAlertsTap: () => context.push(
+                            '${AppRouter.notificationsPath}?flow=org',
                           ),
-                          SizedBox(height: s(24)),
-                          if (batchesAsync.isLoading)
-                            const Center(child: CircularProgressIndicator())
-                          else if (batchesAsync.hasError)
-                            _ErrorCard(
-                              message: batchesAsync.error.toString(),
-                              onRetry: () =>
-                                  ref.refresh(verificationBatchesProvider),
-                            )
-                          else
-                            Column(
+                          onProfileTap: () =>
+                              context.push(AppRouter.settingsPath),
+                        ),
+                      ),
+                      SizedBox(height: s(21)),
+                      Expanded(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF7F9FC),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(s(20)),
+                            ),
+                          ),
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            padding: EdgeInsets.fromLTRB(
+                              s(16),
+                              s(32),
+                              s(16),
+                              s(24) + safeBottom + s(71.016),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
-                                for (
-                                  int i = 0;
-                                  i < filtered.length;
-                                  i++
-                                ) ...<Widget>[
-                                  _BatchCertificatesSection(
-                                    scale: scale,
-                                    item: filtered[i],
-                                    imagePair: _carouselPairForIndex(i),
-                                    onViewAll: () => context.push(
-                                      '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeComponent(filtered[i].batchId)}',
+                                _SearchRow(
+                                  scale: scale,
+                                  controller: _searchController,
+                                  onFilterTap: () {},
+                                ),
+                                SizedBox(height: s(24)),
+                                if (batchesAsync.isLoading)
+                                  const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                else if (batchesAsync.hasError)
+                                  _ErrorCard(
+                                    message: batchesAsync.error.toString(),
+                                    onRetry: () => ref.refresh(
+                                      verificationBatchesProvider,
                                     ),
-                                  ),
-                                  if (i != filtered.length - 1)
-                                    SizedBox(height: s(55)),
-                                ],
-                                if (filtered.isEmpty)
-                                  Padding(
-                                    padding: EdgeInsets.only(top: s(24)),
-                                    child: Text(
-                                      'No batches found',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: s(14),
-                                        fontWeight: FontWeight.w600,
-                                        height: 20 / 14,
-                                        color: const Color(0xFF94A3B8),
-                                      ),
-                                    ),
+                                  )
+                                else
+                                  Column(
+                                    children: <Widget>[
+                                      for (
+                                        int i = 0;
+                                        i < filtered.length;
+                                        i++
+                                      ) ...<Widget>[
+                                        _BatchCertificatesSection(
+                                          scale: scale,
+                                          item: filtered[i],
+                                          imagePair: _carouselPairForIndex(i),
+                                          onViewAll: () => context.push(
+                                            '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeComponent(filtered[i].batchId)}',
+                                          ),
+                                        ),
+                                        if (i != filtered.length - 1)
+                                          SizedBox(height: s(55)),
+                                      ],
+                                      if (filtered.isEmpty)
+                                        Padding(
+                                          padding: EdgeInsets.only(top: s(24)),
+                                          child: Text(
+                                            'No batches found',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: s(14),
+                                              fontWeight: FontWeight.w600,
+                                              height: 20 / 14,
+                                              color: const Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                               ],
                             ),
-                        ],
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),

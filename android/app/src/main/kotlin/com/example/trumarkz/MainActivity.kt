@@ -43,46 +43,23 @@ class MainActivity : FlutterActivity() {
 
             try {
               val contentResolver = applicationContext.contentResolver
-              val displayName = fileName
-              val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-              val values = android.content.ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-                put(
-                  MediaStore.MediaColumns.MIME_TYPE,
-                  if (mimeType.isNotEmpty()) mimeType else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              val relativePath = Environment.DIRECTORY_DOWNLOADS + "/trumarkz_templates/"
+              val savedUri = saveToDownloads(
+                contentResolver = contentResolver,
+                desiredName = fileName,
+                mimeType = mimeType,
+                bytes = bytes,
+                relativePath = relativePath,
+              )
+              if (savedUri == null) {
+                result.error(
+                  "save_failed",
+                  "Failed to save the file to Downloads.",
+                  null,
                 )
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                  put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    Environment.DIRECTORY_DOWNLOADS + "/trumarkz_templates",
-                  )
-                  put(MediaStore.MediaColumns.IS_PENDING, 1)
-                }
-              }
-
-              val uri = contentResolver.insert(collection, values)
-              if (uri == null) {
-                result.error("save_failed", "Unable to create download entry", null)
                 return@setMethodCallHandler
               }
-
-              contentResolver.openOutputStream(uri)?.use { outputStream ->
-                outputStream.write(bytes)
-                outputStream.flush()
-              } ?: run {
-                contentResolver.delete(uri, null, null)
-                result.error("save_failed", "Unable to open output stream", null)
-                return@setMethodCallHandler
-              }
-
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val finalizeValues = android.content.ContentValues().apply {
-                  put(MediaStore.MediaColumns.IS_PENDING, 0)
-                }
-                contentResolver.update(uri, finalizeValues, null, null)
-              }
-
-              result.success(uri.toString())
+              result.success(savedUri.toString())
             } catch (e: Exception) {
               result.error("save_failed", e.message, null)
             }
@@ -90,5 +67,97 @@ class MainActivity : FlutterActivity() {
           else -> result.notImplemented()
         }
       }
+  }
+
+  private fun saveToDownloads(
+    contentResolver: android.content.ContentResolver,
+    desiredName: String,
+    mimeType: String,
+    bytes: ByteArray,
+    relativePath: String,
+  ): android.net.Uri? {
+    val cleanDesiredName = desiredName.trim()
+    if (cleanDesiredName.isEmpty()) return null
+
+    val dotIndex = cleanDesiredName.lastIndexOf('.')
+    val baseName = if (dotIndex > 0) {
+      cleanDesiredName.substring(0, dotIndex)
+    } else {
+      cleanDesiredName
+    }
+    val extension = if (dotIndex > 0) {
+      cleanDesiredName.substring(dotIndex)
+    } else {
+      ""
+    }
+
+    for (index in 0..999) {
+      val displayName = if (index == 0) {
+        cleanDesiredName
+      } else {
+        "${baseName}_$index$extension"
+      }
+      val uri = tryInsertDownload(
+        contentResolver = contentResolver,
+        displayName = displayName,
+        mimeType = mimeType,
+        bytes = bytes,
+        relativePath = relativePath,
+      )
+      if (uri != null) {
+        return uri
+      }
+    }
+
+    return null
+  }
+
+  private fun tryInsertDownload(
+    contentResolver: android.content.ContentResolver,
+    displayName: String,
+    mimeType: String,
+    bytes: ByteArray,
+    relativePath: String,
+  ): android.net.Uri? {
+    val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+    val values = android.content.ContentValues().apply {
+      put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+      put(
+        MediaStore.MediaColumns.MIME_TYPE,
+        if (mimeType.isNotEmpty()) mimeType else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+        put(MediaStore.MediaColumns.IS_PENDING, 1)
+      }
+    }
+
+    val uri = try {
+      contentResolver.insert(collection, values)
+    } catch (_: Exception) {
+      null
+    } ?: return null
+
+    try {
+      contentResolver.openOutputStream(uri)?.use { outputStream ->
+        outputStream.write(bytes)
+        outputStream.flush()
+      } ?: run {
+        contentResolver.delete(uri, null, null)
+        return null
+      }
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val finalizeValues = android.content.ContentValues().apply {
+          put(MediaStore.MediaColumns.IS_PENDING, 0)
+        }
+        contentResolver.update(uri, finalizeValues, null, null)
+      }
+
+      return uri
+    } catch (_: Exception) {
+      contentResolver.delete(uri, null, null)
+      return null
+    }
   }
 }

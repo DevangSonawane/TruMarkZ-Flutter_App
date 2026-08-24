@@ -50,7 +50,9 @@ class _IndividualSdcRecordDetailPageState
     ).uri.queryParameters;
     _publicId = (qp['public_id'] ?? qp['publicId'] ?? '').trim();
     _instanceKey = (qp['instance_key'] ?? qp['instanceKey'] ?? 'de').trim();
-    _orgId = (qp['org_id'] ?? qp['orgId'] ?? '').trim();
+    _orgId =
+        (qp['org_id'] ?? qp['orgId'] ?? qp['schema_id'] ?? qp['schemaId'] ?? '')
+            .trim();
     _spaceId = (qp['space_id'] ?? qp['spaceId'] ?? '').trim();
     _active = int.tryParse((qp['active'] ?? '').trim()) ?? 1;
     _page = int.tryParse((qp['page'] ?? '').trim()) ?? 1;

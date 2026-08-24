@@ -2794,12 +2794,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       );
       if (!mounted) return;
 
-      final Uint8List templateBytes = _replaceVerificationIdsWithNames(
-        res.bytes,
-        verificationTypesById,
-      );
+      final Uint8List templateBytes = res.bytes;
       debugPrint(
-        '[HumanTemplate] generated file=${res.filename} bytes=${res.bytes.length} remappedBytes=${templateBytes.length}',
+        '[HumanTemplate] generated file=${res.filename} bytes=${templateBytes.length}',
       );
 
       String savedUri = '';
@@ -2933,69 +2930,6 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
         );
       },
     );
-  }
-
-  Uint8List _replaceVerificationIdsWithNames(
-    Uint8List bytes,
-    Map<String, VerificationTypeDefinition> verificationTypesById,
-  ) {
-    if (verificationTypesById.isEmpty) return bytes;
-
-    final Map<String, String> replacements = <String, String>{
-      for (final MapEntry<String, VerificationTypeDefinition> entry
-          in verificationTypesById.entries)
-        entry.key.trim().toLowerCase(): _verificationTypeDisplayName(
-          entry.value,
-        ),
-    }..removeWhere((String key, String value) => key.isEmpty || value.isEmpty);
-
-    if (replacements.isEmpty) return bytes;
-
-    try {
-      final Excel excel = Excel.decodeBytes(bytes);
-      final Map<String, int> exactHits = <String, int>{};
-      final List<String> sampleChanges = <String>[];
-      int replacedCells = 0;
-
-      final List<MapEntry<String, String>> replacementEntries =
-          replacements.entries.toList()
-            ..sort((MapEntry<String, String> a, MapEntry<String, String> b) {
-              return b.key.length.compareTo(a.key.length);
-            });
-
-      for (final MapEntry<String, String> entry in replacementEntries) {
-        final String from = entry.key;
-        final String to = entry.value;
-        int count = 0;
-        for (final Sheet sheet in excel.tables.values) {
-          count += sheet.findAndReplace(from, to);
-        }
-        if (count <= 0) continue;
-        replacedCells += count;
-        exactHits[from] = (exactHits[from] ?? 0) + count;
-        if (sampleChanges.length < 20) {
-          sampleChanges.add('"$from" => "$to" ($count matches)');
-        }
-      }
-
-      final List<int>? encoded = excel.encode();
-      if (encoded == null || encoded.isEmpty) return bytes;
-      debugPrint(
-        '[HumanTemplate] remap summary cells=$replacedCells exactHits=${exactHits.entries.map((MapEntry<String, int> e) => '${e.key}:${e.value}').join(', ')}',
-      );
-      if (sampleChanges.isNotEmpty) {
-        debugPrint(
-          '[HumanTemplate] remap samples=${sampleChanges.join(' | ')}',
-        );
-      } else {
-        debugPrint('[HumanTemplate] remap samples=none');
-      }
-      return Uint8List.fromList(encoded);
-    } catch (e, st) {
-      debugPrint('[HumanTemplate] could not remap verification names: $e');
-      debugPrint('[HumanTemplate] remap stack trace:\n$st');
-      return bytes;
-    }
   }
 
   static String _verificationTypeDisplayName(VerificationTypeDefinition item) {
