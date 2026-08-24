@@ -404,6 +404,10 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
       _dhiwayDetails.addAll(legacy);
     }
 
+    if (_dhiwayDetails.isEmpty) {
+      _dhiwayDetails.add(_DhiwayDetailDraft());
+    }
+
     _normalizeDefaultSelection();
   }
 
@@ -432,12 +436,12 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
       final bool removedWasDefault = _dhiwayDetails[index].isDefault;
       final _DhiwayDetailDraft detail = _dhiwayDetails.removeAt(index);
       detail.dispose();
-      if (_dhiwayDetails.isNotEmpty) {
-        if (removedWasDefault) {
-          _dhiwayDetails.first.isDefault = true;
-        }
-        _normalizeDefaultSelection();
+      if (_dhiwayDetails.isEmpty) {
+        _dhiwayDetails.add(_DhiwayDetailDraft());
+      } else if (removedWasDefault) {
+        _dhiwayDetails.first.isDefault = true;
       }
+      _normalizeDefaultSelection();
     });
   }
 
@@ -816,9 +820,6 @@ class _DhiwayDetailsEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<_DhiwayDetailDraft> visibleDetails = details.isNotEmpty
-        ? details
-        : <_DhiwayDetailDraft>[_DhiwayDetailDraft()];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -827,17 +828,17 @@ class _DhiwayDetailsEditor extends StatelessWidget {
           style: AppTypography.body2.copyWith(color: AppColors.textTertiary),
         ),
         const SizedBox(height: AppSpacing.x3),
-        for (int index = 0; index < visibleDetails.length; index++) ...<Widget>[
+        for (int index = 0; index < details.length; index++) ...<Widget>[
           _DhiwayDetailCard(
-            detail: visibleDetails[index],
+            detail: details[index],
             index: index,
-            detailsCount: visibleDetails.length,
+            detailsCount: details.length,
             enabled: enabled,
             onRemove: () => onRemove(index),
             onAdd: onAdd,
             onSelectDefault: () => onSelectDefault(index),
           ),
-          if (index != visibleDetails.length - 1)
+          if (index != details.length - 1)
             const SizedBox(height: AppSpacing.x3),
         ],
         if (errorText != null) ...<Widget>[
@@ -873,83 +874,98 @@ class _DhiwayDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color borderColor = detail.isDefault
+        ? AppColors.brandBlue
+        : const Color(0xFFE2E8F0);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: borderColor,
+          width: detail.isDefault ? 1.5 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Row(
             children: <Widget>[
-              Text(
-                'Space and Schema',
-                style: AppTypography.heading2.copyWith(
-                  color: AppColors.textPrimary,
+              Expanded(
+                child: Text(
+                  'Space and Schema',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.heading2.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
-              const Spacer(),
-              InkWell(
-                onTap: enabled ? onSelectDefault : null,
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: detail.isDefault
-                        ? const Color(0xFFEFF6FF)
-                        : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: detail.isDefault
-                          ? const Color(0xFFBFDBFE)
-                          : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        detail.isDefault
-                            ? Icons.radio_button_checked_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        size: 16,
-                        color: detail.isDefault
-                            ? AppColors.brandBlue
-                            : const Color(0xFF94A3B8),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                alignment: WrapAlignment.end,
+                children: <Widget>[
+                  if (detail.isDefault)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: AppColors.brandBlue),
+                      ),
+                      child: Text(
                         'Default',
                         style: AppTypography.body2.copyWith(
-                          color: detail.isDefault
-                              ? AppColors.brandBlue
-                              : AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
+                          color: AppColors.brandBlue,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ],
+                    )
+                  else
+                    TextButton.icon(
+                      onPressed: enabled ? onSelectDefault : null,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.brandBlue,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        minimumSize: Size.zero,
+                      ),
+                      icon: const Icon(
+                        Icons.radio_button_unchecked_rounded,
+                        size: 16,
+                      ),
+                      label: const Text('Set default'),
+                    ),
+                  IconButton(
+                    onPressed: enabled ? onAdd : null,
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    color: AppColors.brandBlue,
+                    tooltip: 'Add another pair',
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
                   ),
-                ),
+                  if (enabled && detailsCount > 1)
+                    IconButton(
+                      onPressed: onRemove,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      color: AppColors.error,
+                      tooltip: 'Remove this pair',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
+                    ),
+                ],
               ),
-              IconButton(
-                onPressed: enabled ? onAdd : null,
-                icon: const Icon(Icons.add_circle_outline_rounded),
-                color: AppColors.brandBlue,
-                tooltip: 'Add another pair',
-              ),
-              if (enabled && detailsCount > 1)
-                IconButton(
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  color: AppColors.error,
-                  tooltip: 'Remove this pair',
-                ),
             ],
           ),
           const SizedBox(height: 12),
