@@ -281,9 +281,13 @@ class _IndividualSdcRecordDetailPageState
                                         _IdentityFieldRow(
                                           icon: Icons.calendar_today_rounded,
                                           label: 'Date',
-                                          value: record.uniqueIdValue,
-                                          onCopy: () => _copyText(
+                                          value: _formatDateOnly(
                                             record.uniqueIdValue,
+                                          ),
+                                          onCopy: () => _copyText(
+                                            _formatDateOnly(
+                                              record.uniqueIdValue,
+                                            ),
                                             'Date',
                                           ),
                                         ),
@@ -1174,10 +1178,101 @@ class _StatusChip extends StatelessWidget {
 }
 
 String _formatCardDate(String? raw) {
+  return _formatReadableDate(raw, emptyValue: 'Unknown');
+}
+
+String _formatDateOnly(String raw) {
+  return _formatReadableDate(raw, emptyValue: '—');
+}
+
+String _formatReadableDate(String? raw, {required String emptyValue}) {
   final String value = raw?.trim() ?? '';
-  if (value.isEmpty) return 'Unknown';
+  if (value.isEmpty) return emptyValue;
   final DateTime? parsed = DateTime.tryParse(value);
-  if (parsed == null) return value;
+  if (parsed != null) {
+    final DateTime local = parsed.toLocal();
+    const List<String> weekdays = <String>[
+      'Sun',
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+    ];
+    const List<String> months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${weekdays[local.weekday % 7]} ${local.day.toString().padLeft(2, '0')} ${months[local.month - 1]} ${local.year}';
+  }
+
+  final RegExpMatch? isoLike = RegExp(
+    r'^(\d{4})[-/](\d{2})[-/](\d{2})',
+  ).firstMatch(value);
+  if (isoLike != null) {
+    final int? year = int.tryParse(isoLike.group(1) ?? '');
+    final int? month = int.tryParse(isoLike.group(2) ?? '');
+    final int? day = int.tryParse(isoLike.group(3) ?? '');
+    if (year != null && month != null && day != null) {
+      return '${_weekdayFromYmd(year, month, day)} ${day.toString().padLeft(2, '0')} ${_monthName(month)} $year';
+    }
+  }
+
+  final RegExpMatch? dmyLike = RegExp(
+    r'^(\d{2})[-/](\d{2})[-/](\d{4})',
+  ).firstMatch(value);
+  if (dmyLike != null) {
+    final int? day = int.tryParse(dmyLike.group(1) ?? '');
+    final int? month = int.tryParse(dmyLike.group(2) ?? '');
+    final int? year = int.tryParse(dmyLike.group(3) ?? '');
+    if (year != null && month != null && day != null) {
+      return '${_weekdayFromYmd(year, month, day)} ${day.toString().padLeft(2, '0')} ${_monthName(month)} $year';
+    }
+  }
+
+  final RegExpMatch? rfcLike = RegExp(
+    r'^(?:[A-Za-z]{3},\s*)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})',
+  ).firstMatch(value);
+  if (rfcLike != null) {
+    final int? day = int.tryParse(rfcLike.group(1) ?? '');
+    final String monthToken = (rfcLike.group(2) ?? '').trim();
+    final int? year = int.tryParse(rfcLike.group(3) ?? '');
+    final int month = _monthIndex(monthToken);
+    if (day != null && year != null && month > 0) {
+      return '${_weekdayFromYmd(year, month, day)} ${day.toString().padLeft(2, '0')} ${_monthName(month)} $year';
+    }
+  }
+
+  final String compact = value.split(RegExp(r'[T\s]')).first.trim();
+  return compact.isEmpty ? emptyValue : compact;
+}
+
+String _weekdayFromYmd(int year, int month, int day) {
+  final DateTime local = DateTime(year, month, day);
+  const List<String> weekdays = <String>[
+    'Sun',
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+  ];
+  return weekdays[local.weekday % 7];
+}
+
+String _monthName(int month) {
   const List<String> months = <String>[
     'Jan',
     'Feb',
@@ -1192,11 +1287,38 @@ String _formatCardDate(String? raw) {
     'Nov',
     'Dec',
   ];
-  final String day = parsed.day.toString().padLeft(2, '0');
-  final String month = months[parsed.month - 1];
-  final String hours = parsed.hour.toString().padLeft(2, '0');
-  final String minutes = parsed.minute.toString().padLeft(2, '0');
-  return '$day $month ${parsed.year}, $hours:$minutes';
+  return months[month - 1];
+}
+
+int _monthIndex(String value) {
+  switch (value.trim().toLowerCase()) {
+    case 'jan':
+      return 1;
+    case 'feb':
+      return 2;
+    case 'mar':
+      return 3;
+    case 'apr':
+      return 4;
+    case 'may':
+      return 5;
+    case 'jun':
+      return 6;
+    case 'jul':
+      return 7;
+    case 'aug':
+      return 8;
+    case 'sep':
+      return 9;
+    case 'oct':
+      return 10;
+    case 'nov':
+      return 11;
+    case 'dec':
+      return 12;
+    default:
+      return 0;
+  }
 }
 
 double _sin(double value) => math.sin(value);
