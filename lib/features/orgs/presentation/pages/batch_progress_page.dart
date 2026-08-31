@@ -158,7 +158,7 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
                                           item: filtered[i],
                                           imagePair: _carouselPairForIndex(i),
                                           onViewAll: () => context.push(
-                                            '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeComponent(filtered[i].batchId)}',
+                                            '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeComponent(filtered[i].batchId)}${filtered[i].isWarrantyBatch ? '&mode=warranty' : ''}',
                                           ),
                                         ),
                                         if (i != filtered.length - 1)
@@ -738,6 +738,7 @@ class _BatchDirectoryItem {
     required this.batchId,
     required this.batchName,
     required this.updatedLabel,
+    required this.isWarrantyBatch,
     required this.records,
     required this.pendingCount,
     required this.verifiedCount,
@@ -747,6 +748,7 @@ class _BatchDirectoryItem {
   final String batchId;
   final String batchName;
   final String updatedLabel;
+  final bool isWarrantyBatch;
   final int records;
   final int pendingCount;
   final int verifiedCount;
@@ -762,6 +764,7 @@ class _BatchDirectoryItem {
       updatedLabel: createdAt == null
           ? 'Created -'
           : 'Created ${_formatDate(createdAt)}',
+      isWarrantyBatch: item.isWarrantyBatch,
       records: item.totalUsers,
       pendingCount: item.pending,
       verifiedCount: item.verified,

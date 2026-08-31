@@ -403,7 +403,16 @@ class VerificationBatchSummary {
     return '';
   }
 
+  String get sdcSpaceType {
+    final dynamic sdc = verificationProgress['sdc'];
+    if (sdc is Map) {
+      return (sdc['space_type'] ?? sdc['spaceType'] ?? '').toString().trim();
+    }
+    return '';
+  }
+
   bool get hasGeneratedSdc => sdcOrgId.isNotEmpty || sdcSpaceId.isNotEmpty;
+  bool get isWarrantyBatch => sdcSpaceType.toLowerCase() == 'warranty';
   bool get hasGeneratedReport => reportStoragePaths.isNotEmpty;
   bool get hasTerminalStatus {
     final String s = status.trim().toLowerCase();
@@ -549,6 +558,7 @@ class VerificationBatchDetailResponse {
   const VerificationBatchDetailResponse({
     required this.batchId,
     required this.batchName,
+    required this.batchType,
     required this.description,
     required this.industryTypes,
     required this.verificationTypes,
@@ -562,6 +572,7 @@ class VerificationBatchDetailResponse {
 
   final String batchId;
   final String batchName;
+  final String batchType;
   final String description;
   final List<String> industryTypes;
   final List<String> verificationTypes;
@@ -594,7 +605,20 @@ class VerificationBatchDetailResponse {
     return '';
   }
 
+  String get sdcSpaceType {
+    final dynamic sdc = verificationProgress['sdc'];
+    if (sdc is Map) {
+      return (sdc['space_type'] ?? sdc['spaceType'] ?? '').toString().trim();
+    }
+    return '';
+  }
+
   bool get hasGeneratedSdc => sdcOrgId.isNotEmpty || sdcSpaceId.isNotEmpty;
+  bool get isWarrantyBatch {
+    final String type = batchType.trim().toLowerCase();
+    if (type.isNotEmpty) return type == 'warranty';
+    return sdcSpaceType.toLowerCase() == 'warranty';
+  }
 
   factory VerificationBatchDetailResponse.fromJson(Map<String, dynamic> json) {
     final dynamic reportsRaw = json['report_storage_paths'];
@@ -632,6 +656,9 @@ class VerificationBatchDetailResponse {
     return VerificationBatchDetailResponse(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
       batchName: (json['batch_name'] ?? json['batchName'] ?? '')
+          .toString()
+          .trim(),
+      batchType: (json['batch_type'] ?? json['batchType'] ?? '')
           .toString()
           .trim(),
       description: (json['description'] ?? '').toString().trim(),
@@ -796,6 +823,7 @@ class WarrantyBatchStatusResponse {
     required this.approved,
     required this.rejected,
     required this.products,
+    required this.certificateIds,
   });
 
   final String batchId;
@@ -804,6 +832,7 @@ class WarrantyBatchStatusResponse {
   final int approved;
   final int rejected;
   final List<WarrantyBatchProduct> products;
+  final List<String> certificateIds;
 
   factory WarrantyBatchStatusResponse.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> summary = json['summary'] is Map
@@ -820,6 +849,14 @@ class WarrantyBatchStatusResponse {
               )
               .toList()
         : const <WarrantyBatchProduct>[];
+    final dynamic certificateIdsRaw =
+        json['certificate_ids'] ?? json['certificateIds'] ?? json['public_ids'];
+    final List<String> certificateIds = certificateIdsRaw is List
+        ? certificateIdsRaw
+              .map((dynamic e) => e?.toString().trim() ?? '')
+              .where((String s) => s.isNotEmpty)
+              .toList()
+        : <String>[];
 
     int readCount(List<String> keys, int fallback) {
       for (final String key in keys) {
@@ -837,6 +874,7 @@ class WarrantyBatchStatusResponse {
       approved: readCount(<String>['approved', 'approved_count'], 0),
       rejected: readCount(<String>['rejected', 'rejected_count'], 0),
       products: products,
+      certificateIds: certificateIds,
     );
   }
 }

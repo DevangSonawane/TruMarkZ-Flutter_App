@@ -209,8 +209,8 @@ class AppRouter {
 
   static String sdcRecordLocation({
     String publicId = '',
-    required String orgId,
-    required String spaceId,
+    String orgId = '',
+    String spaceId = '',
     String instanceKey = 'de',
     int active = 1,
     int page = 1,
@@ -223,8 +223,8 @@ class AppRouter {
     final Map<String, String> queryParameters = <String, String>{
       if (cleanPublicId.isNotEmpty) 'public_id': cleanPublicId,
       'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
-      'org_id': cleanOrgId,
-      'space_id': cleanSpaceId,
+      if (cleanOrgId.isNotEmpty) 'org_id': cleanOrgId,
+      if (cleanSpaceId.isNotEmpty) 'space_id': cleanSpaceId,
       'active': active.toString(),
       'page': page.toString(),
       'pageSize': pageSize.toString(),

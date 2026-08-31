@@ -43,45 +43,51 @@ class _BatchTrackingDetailPageState
   }
 
   Future<void> _load() async {
-    if (_isWarrantyMode) {
-      setState(() => _warrantyData = const AsyncLoading());
-    } else {
-      setState(() => _detailData = const AsyncLoading());
-    }
+    setState(() {
+      _detailData = const AsyncLoading();
+      _warrantyData = const AsyncLoading();
+    });
+    final VerificationRepository repo = ref.read(verificationRepositoryProvider);
+
     try {
-      final VerificationRepository repo = ref.read(
-        verificationRepositoryProvider,
+      final VerificationBatchDetailResponse res = await repo.getBatchDetails(
+        _batchId,
       );
-      if (_isWarrantyMode) {
-        final WarrantyBatchStatusResponse res = await repo
-            .getWarrantyBatchStatus(_batchId);
-        if (!mounted) return;
-        setState(() => _warrantyData = AsyncData(res));
-      } else {
-        final VerificationBatchDetailResponse res = await repo.getBatchDetails(
-          _batchId,
-        );
-        if (!mounted) return;
-        setState(() => _detailData = AsyncData(res));
-      }
+      if (!mounted) return;
+      setState(() => _detailData = AsyncData(res));
     } on ApiException catch (e, st) {
       if (!mounted) return;
-      if (_isWarrantyMode) {
-        setState(() => _warrantyData = AsyncError(e, st));
-      } else {
-        setState(() => _detailData = AsyncError(e, st));
-      }
+      setState(() => _detailData = AsyncError(e, st));
     } catch (e, st) {
       if (!mounted) return;
-      if (_isWarrantyMode) {
-        setState(() => _warrantyData = AsyncError(e, st));
-      } else {
-        setState(() => _detailData = AsyncError(e, st));
-      }
+      setState(() => _detailData = AsyncError(e, st));
+    }
+
+    final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
+    if (detail == null || !detail.isWarrantyBatch) return;
+
+    try {
+      final WarrantyBatchStatusResponse res = await repo.getWarrantyBatchStatus(
+        _batchId,
+      );
+      if (!mounted) return;
+      setState(() => _warrantyData = AsyncData(res));
+    } on ApiException catch (e, st) {
+      if (!mounted) return;
+      setState(() => _warrantyData = AsyncError(e, st));
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _warrantyData = AsyncError(e, st));
     }
   }
 
-  bool get _isWarrantyMode => _mode == 'warranty';
+  bool get _isWarrantyMode {
+    final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
+    if (detail != null) {
+      return detail.isWarrantyBatch;
+    }
+    return _mode == 'warranty';
+  }
 
   void _goBack(BuildContext context) {
     final GoRouter router = GoRouter.of(context);
@@ -174,6 +180,8 @@ class _BatchTrackingDetailPageState
                           ),
                         ),
                         data: (WarrantyBatchStatusResponse res) {
+                          final VerificationBatchDetailResponse? warrantyDetail =
+                              _detailData.valueOrNull;
                           return ListView(
                             physics: const BouncingScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
@@ -196,9 +204,31 @@ class _BatchTrackingDetailPageState
                                 subtitle: 'Warranty records in this batch',
                               ),
                               const SizedBox(height: AppSpacing.x3),
-                              for (final WarrantyBatchProduct product
-                                  in res.products) ...<Widget>[
-                                _WarrantyProductTile(product: product),
+                              for (final MapEntry<int, WarrantyBatchProduct>
+                                  entry in res.products.asMap().entries) ...<Widget>[
+                                _WarrantyProductTile(
+                                  product: entry.value,
+                                  onTap: entry.key < res.certificateIds.length
+                                      ? () {
+                                          final String publicId =
+                                              res.certificateIds[entry.key]
+                                                  .trim();
+                                          if (publicId.isEmpty) return;
+                                          context.push(
+                                            AppRouter.sdcRecordLocation(
+                                              publicId: publicId,
+                                              orgId: warrantyDetail?.sdcOrgId ??
+                                                  '',
+                                              spaceId: warrantyDetail
+                                                      ?.sdcSpaceId ??
+                                                  '',
+                                              instanceKey: 'de',
+                                              search: publicId,
+                                            ),
+                                          );
+                                        }
+                                      : null,
+                                ),
                                 const SizedBox(height: AppSpacing.x2),
                               ],
                               if (res.products.isEmpty)
@@ -765,9 +795,10 @@ class _UserTile extends StatelessWidget {
 }
 
 class _WarrantyProductTile extends StatelessWidget {
-  const _WarrantyProductTile({required this.product});
+  const _WarrantyProductTile({required this.product, this.onTap});
 
   final WarrantyBatchProduct product;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -776,6 +807,7 @@ class _WarrantyProductTile extends StatelessWidget {
     );
 
     return TMZCard(
+      onTap: onTap,
       padding: const EdgeInsets.all(AppSpacing.x4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -802,32 +834,6 @@ class _WarrantyProductTile extends StatelessWidget {
               _StatusBadge(label: label, style: style),
             ],
           ),
-          const SizedBox(height: AppSpacing.x2),
-          Text(
-            product.category.trim().isEmpty
-                ? product.serialNumber.trim()
-                : '${product.category} • ${product.serialNumber}'.trim(),
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              height: 18 / 13,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x2),
-          Wrap(
-            spacing: AppSpacing.x2,
-            runSpacing: AppSpacing.x2,
-            children: <Widget>[
-              _WarrantyMetaChip(label: 'Purchase', value: product.purchaseDate),
-              _WarrantyMetaChip(
-                label: 'Start',
-                value: product.warrantyStartDate,
-              ),
-              _WarrantyMetaChip(label: 'End', value: product.warrantyEndDate),
-            ],
-          ),
         ],
       ),
     );
@@ -845,35 +851,6 @@ class _WarrantyProductTile extends StatelessWidget {
       default:
         return (const _StatusStyle.pending(), 'Pending');
     }
-  }
-}
-
-class _WarrantyMetaChip extends StatelessWidget {
-  const _WarrantyMetaChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Text(
-        '$label: ${value.trim().isEmpty ? '—' : value}',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 11,
-          height: 15 / 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
-        ),
-      ),
-    );
   }
 }
 

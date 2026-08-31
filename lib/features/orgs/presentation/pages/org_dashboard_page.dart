@@ -213,7 +213,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       batchesAsync: batchesAsync,
                       summary: summary,
                       onTapBatch: (String batchId) => context.push(
-                        '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}',
+                        '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(batchId)}${summary.isWarrantyBatch(batchId) ? '&mode=warranty' : ''}',
                       ),
                       onRetry: () => ref.refresh(verificationBatchesProvider),
                     ),
@@ -1164,6 +1164,17 @@ class _DashboardSummary {
   final int failed;
   final int activeBatches;
   final List<_DashboardBatchItem> recentBatches;
+
+  bool isWarrantyBatch(String batchId) {
+    final String needle = batchId.trim();
+    if (needle.isEmpty) return false;
+    for (final _DashboardBatchItem item in recentBatches) {
+      if (item.batchId.trim() == needle) {
+        return !item.isHumanVerification;
+      }
+    }
+    return false;
+  }
 
   static _DashboardSummary fromBatches(
     List<VerificationBatchSummary> batches, {

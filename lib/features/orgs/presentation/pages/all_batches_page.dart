@@ -834,6 +834,7 @@ class _BatchDirectoryItem {
     required this.batchId,
     required this.batchName,
     required this.status,
+    required this.isWarrantyBatch,
     required this.progress,
     required this.records,
     required this.verifiedCount,
@@ -847,6 +848,7 @@ class _BatchDirectoryItem {
   final String batchId;
   final String batchName;
   final _BatchStatus status;
+  final bool isWarrantyBatch;
   final double progress;
   final int records;
   final int verifiedCount;
@@ -874,6 +876,7 @@ class _BatchDirectoryItem {
       batchId: item.batchId,
       batchName: batchName,
       status: status,
+      isWarrantyBatch: item.isWarrantyBatch,
       progress: progress,
       records: total,
       verifiedCount: verified,
@@ -1005,13 +1008,14 @@ class _BatchDirectoryCard extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         final double localScale = (constraints.maxWidth / 370).clamp(0.0, 1.0);
         double s(double v) => v * localScale;
+        final String modeQuery = item.isWarrantyBatch ? '&mode=warranty' : '';
 
         return Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: () {
               context.push(
-                '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(item.batchId)}',
+                '${AppRouter.appBatchTrackingDetailPath}?batch_id=${Uri.encodeQueryComponent(item.batchId)}$modeQuery',
               );
             },
             borderRadius: BorderRadius.circular(s(16)),
