@@ -218,6 +218,12 @@ class _IndividualSdcRecordDetailPageState
                       ],
                     ),
                   ),
+                  IconButton(
+                    tooltip: 'Refresh certificate',
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh_rounded),
+                    color: Colors.white,
+                  ),
                 ],
               ),
             ),
@@ -237,152 +243,161 @@ class _IndividualSdcRecordDetailPageState
                     return LayoutBuilder(
                       builder:
                           (BuildContext context, BoxConstraints constraints) {
-                            return SingleChildScrollView(
-                              physics: const BouncingScrollPhysics(),
-                              padding: EdgeInsets.fromLTRB(
-                                AppSpacing.x4,
-                                AppSpacing.x4,
-                                AppSpacing.x4,
-                                AppSpacing.x6 +
-                                    MediaQuery.viewPaddingOf(context).bottom +
-                                    72,
-                              ),
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: constraints.maxHeight,
+                            return RefreshIndicator(
+                              onRefresh: _load,
+                              child: SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(
+                                  parent: BouncingScrollPhysics(),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: <Widget>[
-                                    if (_sharedWithOrg == false) ...<Widget>[
-                                      const _SharingGateBanner(),
+                                padding: EdgeInsets.fromLTRB(
+                                  AppSpacing.x4,
+                                  AppSpacing.x4,
+                                  AppSpacing.x4,
+                                  AppSpacing.x6 +
+                                      MediaQuery.viewPaddingOf(context).bottom +
+                                      72,
+                                ),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: <Widget>[
+                                      if (_sharedWithOrg == false) ...<Widget>[
+                                        const _SharingGateBanner(),
+                                        const SizedBox(height: AppSpacing.x4),
+                                      ],
+                                      _HeroCard(
+                                        record: record,
+                                        instanceKey: _instanceKey,
+                                        onDownload: canDownload
+                                            ? () => _downloadPdf(record)
+                                            : null,
+                                        isDownloadEnabled: canDownload,
+                                      ),
                                       const SizedBox(height: AppSpacing.x4),
-                                    ],
-                                    _HeroCard(
-                                      record: record,
-                                      instanceKey: _instanceKey,
-                                      onDownload: canDownload
-                                          ? () => _downloadPdf(record)
-                                          : null,
-                                      isDownloadEnabled: canDownload,
-                                    ),
-                                    const SizedBox(height: AppSpacing.x4),
-                                    _SectionCard(
-                                      title: 'Identity',
-                                      children: <Widget>[
-                                        _IdentityFieldRow(
-                                          icon: Icons.badge_outlined,
-                                          label: 'Public ID',
-                                          value: record.publicId,
-                                          onCopy: () => _copyText(
-                                            record.publicId,
-                                            'Public ID',
+                                      _SectionCard(
+                                        title: 'Identity',
+                                        children: <Widget>[
+                                          _IdentityFieldRow(
+                                            icon: Icons.badge_outlined,
+                                            label: 'Public ID',
+                                            value: record.publicId,
+                                            onCopy: () => _copyText(
+                                              record.publicId,
+                                              'Public ID',
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 18),
-                                        _IdentityFieldRow(
-                                          icon: Icons.pin_outlined,
-                                          label: 'Record ID',
-                                          value: record.id,
-                                          onCopy: () =>
-                                              _copyText(record.id, 'Record ID'),
-                                        ),
-                                        const SizedBox(height: 18),
-                                        _IdentityFieldRow(
-                                          icon: Icons.calendar_today_rounded,
-                                          label: 'Date',
-                                          value: _formatDateOnly(
-                                            record.uniqueIdValue,
+                                          const SizedBox(height: 18),
+                                          _IdentityFieldRow(
+                                            icon: Icons.pin_outlined,
+                                            label: 'Record ID',
+                                            value: record.id,
+                                            onCopy: () => _copyText(
+                                              record.id,
+                                              'Record ID',
+                                            ),
                                           ),
-                                          onCopy: () => _copyText(
-                                            _formatDateOnly(
+                                          const SizedBox(height: 18),
+                                          _IdentityFieldRow(
+                                            icon: Icons.calendar_today_rounded,
+                                            label: 'Date',
+                                            value: _formatDateOnly(
                                               record.uniqueIdValue,
                                             ),
-                                            'Date',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: AppSpacing.x4),
-                                    _SectionCard(
-                                      title: 'Timeline',
-                                      children: <Widget>[
-                                        _TimelineItem(
-                                          icon: Icons.description_outlined,
-                                          iconColor: const Color(0xFF16A34A),
-                                          title: 'Created',
-                                          dateTime: _formatCardDate(
-                                            record.createdAt,
-                                          ),
-                                          description: 'Record created',
-                                          isLast: false,
-                                        ),
-                                        _TimelineItem(
-                                          icon: Icons.anchor_rounded,
-                                          iconColor: const Color(0xFF2563EB),
-                                          title: 'Anchored',
-                                          dateTime: _formatCardDate(
-                                            record.anchorTime,
-                                          ),
-                                          description:
-                                              'Record anchored on blockchain',
-                                          isLast: false,
-                                        ),
-                                        _TimelineItem(
-                                          icon: Icons.star_outline_rounded,
-                                          iconColor: const Color(0xFF7C3AED),
-                                          title: 'Latest Version',
-                                          dateTime: _formatCardDate(
-                                            record.updatedAt,
-                                          ),
-                                          description:
-                                              'This is the latest version',
-                                          isLast: false,
-                                        ),
-                                        _TimelineItem(
-                                          icon: Icons
-                                              .check_circle_outline_rounded,
-                                          iconColor: const Color(0xFF16A34A),
-                                          title: 'Active',
-                                          dateTime: _formatCardDate(
-                                            record.updatedAt,
-                                          ),
-                                          description: record.active
-                                              ? 'Record is active and valid'
-                                              : 'Record is inactive',
-                                          isLast: true,
-                                          showConnector: false,
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: AppSpacing.x4),
-                                    _SectionCard(
-                                      title: 'Recipients',
-                                      children: <Widget>[
-                                        if (record.recipients.isEmpty)
-                                          Text(
-                                            'No recipients listed.',
-                                            style: AppTypography.body2.copyWith(
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          )
-                                        else
-                                          ...record.recipients.map(
-                                            (String recipient) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: AppSpacing.x2,
+                                            onCopy: () => _copyText(
+                                              _formatDateOnly(
+                                                record.uniqueIdValue,
                                               ),
-                                              child: _RecipientTile(
-                                                name: recipient,
-                                              ),
+                                              'Date',
                                             ),
                                           ),
-                                        const SizedBox(height: AppSpacing.x3),
-                                        const _AboutRecordCard(),
-                                      ],
-                                    ),
-                                  ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: AppSpacing.x4),
+                                      _SectionCard(
+                                        title: 'Timeline',
+                                        children: <Widget>[
+                                          _TimelineItem(
+                                            icon: Icons.description_outlined,
+                                            iconColor: const Color(0xFF16A34A),
+                                            title: 'Created',
+                                            dateTime: _formatCardDate(
+                                              record.createdAt,
+                                            ),
+                                            description: 'Record created',
+                                            isLast: false,
+                                          ),
+                                          _TimelineItem(
+                                            icon: Icons.anchor_rounded,
+                                            iconColor: const Color(0xFF2563EB),
+                                            title: 'Anchored',
+                                            dateTime: _formatCardDate(
+                                              record.anchorTime,
+                                            ),
+                                            description:
+                                                'Record anchored on blockchain',
+                                            isLast: false,
+                                          ),
+                                          _TimelineItem(
+                                            icon: Icons.star_outline_rounded,
+                                            iconColor: const Color(0xFF7C3AED),
+                                            title: 'Latest Version',
+                                            dateTime: _formatCardDate(
+                                              record.updatedAt,
+                                            ),
+                                            description:
+                                                'This is the latest version',
+                                            isLast: false,
+                                          ),
+                                          _TimelineItem(
+                                            icon: Icons
+                                                .check_circle_outline_rounded,
+                                            iconColor: const Color(0xFF16A34A),
+                                            title: 'Active',
+                                            dateTime: _formatCardDate(
+                                              record.updatedAt,
+                                            ),
+                                            description: record.active
+                                                ? 'Record is active and valid'
+                                                : 'Record is inactive',
+                                            isLast: true,
+                                            showConnector: false,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: AppSpacing.x4),
+                                      _SectionCard(
+                                        title: 'Recipients',
+                                        children: <Widget>[
+                                          if (record.recipients.isEmpty)
+                                            Text(
+                                              'No recipients listed.',
+                                              style: AppTypography.body2
+                                                  .copyWith(
+                                                    color:
+                                                        AppColors.textSecondary,
+                                                  ),
+                                            )
+                                          else
+                                            ...record.recipients.map(
+                                              (String recipient) => Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: AppSpacing.x2,
+                                                ),
+                                                child: _RecipientTile(
+                                                  name: recipient,
+                                                ),
+                                              ),
+                                            ),
+                                          const SizedBox(height: AppSpacing.x3),
+                                          const _AboutRecordCard(),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             );

@@ -802,6 +802,13 @@ class VerificationRepository {
     return WarrantyBatchStatusResponse.fromJson(res);
   }
 
+  Future<WarrantyBatchStatusResponse> getSdcBatchStatus(String batchId) async {
+    final Map<String, dynamic> res = await _api.verificationGet(
+      '/sdc/batches/${Uri.encodeComponent(batchId)}/status',
+    );
+    return WarrantyBatchStatusResponse.fromJson(res);
+  }
+
   Future<VerificationListResponse> getAllVerifications({
     String? orgId,
     String? batchId,

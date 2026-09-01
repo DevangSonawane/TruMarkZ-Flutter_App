@@ -1,5 +1,56 @@
 import 'dart:convert';
 
+bool _readSharedWithOrg(Map<String, dynamic> json) {
+  final List<Map<String, dynamic>> sources = <Map<String, dynamic>>[
+    json,
+    if (json['summary'] is Map)
+      Map<String, dynamic>.from(json['summary'] as Map),
+    if (json['batch'] is Map) Map<String, dynamic>.from(json['batch'] as Map),
+    if (json['workflow'] is Map)
+      Map<String, dynamic>.from(json['workflow'] as Map),
+    if (json['verification_progress'] is Map)
+      Map<String, dynamic>.from(json['verification_progress'] as Map),
+  ];
+  const List<String> sharingKeys = <String>[
+    'shared_with_org',
+    'sharedWithOrg',
+    'shared_with_organization',
+    'sharedWithOrganization',
+    'shared',
+  ];
+  for (final Map<String, dynamic> source in sources) {
+    for (final String key in sharingKeys) {
+      final dynamic raw = source[key];
+      if (raw is bool && raw) return true;
+      if (raw is num && raw != 0) return true;
+      final String value = raw?.toString().trim().toLowerCase() ?? '';
+      if (value == 'true' || value == '1' || value == 'yes') return true;
+    }
+  }
+  for (final Map<String, dynamic> source in sources) {
+    final String status =
+        (source['status'] ??
+                source['batch_status'] ??
+                source['batchStatus'] ??
+                source['workflow_status'] ??
+                source['workflowStatus'] ??
+                source['current_status'] ??
+                source['currentStatus'] ??
+                '')
+            .toString()
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[\s-]+'), '_');
+    if (status == 'send_to_organization' ||
+        status == 'sent_to_organization' ||
+        status == 'shared_with_organization' ||
+        status == 'shared') {
+      return true;
+    }
+  }
+  return false;
+}
+
 class VerificationDocument {
   const VerificationDocument({
     required this.id,
@@ -456,8 +507,7 @@ class VerificationBatchSummary {
         json['verification_progress'] is Map
         ? Map<String, dynamic>.from(json['verification_progress'] as Map)
         : <String, dynamic>{};
-    final bool sharedWithOrg =
-        json['shared_with_org'] == true || json['sharedWithOrg'] == true;
+    final bool sharedWithOrg = _readSharedWithOrg(json);
 
     return VerificationBatchSummary(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
@@ -669,8 +719,7 @@ class VerificationBatchDetailResponse {
               )
               .toList()
         : const <VerificationUser>[];
-    final bool sharedWithOrg =
-        json['shared_with_org'] == true || json['sharedWithOrg'] == true;
+    final bool sharedWithOrg = _readSharedWithOrg(json);
 
     return VerificationBatchDetailResponse(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
@@ -883,8 +932,7 @@ class WarrantyBatchStatusResponse {
               .where((String s) => s.isNotEmpty)
               .toList()
         : <String>[];
-    final bool sharedWithOrg =
-        json['shared_with_org'] == true || json['sharedWithOrg'] == true;
+    final bool sharedWithOrg = _readSharedWithOrg(json);
 
     int readCount(List<String> keys, int fallback) {
       for (final String key in keys) {

@@ -28,6 +28,8 @@ class _BatchTrackingDetailPageState
   AsyncValue<VerificationBatchDetailResponse> _detailData =
       const AsyncLoading();
   AsyncValue<WarrantyBatchStatusResponse> _warrantyData = const AsyncLoading();
+  AsyncValue<WarrantyBatchStatusResponse> _sdcData = const AsyncLoading();
+  VerificationBatchSummary? _batchSummary;
 
   @override
   void didChangeDependencies() {
@@ -46,6 +48,8 @@ class _BatchTrackingDetailPageState
     setState(() {
       _detailData = const AsyncLoading();
       _warrantyData = const AsyncLoading();
+      _sdcData = const AsyncLoading();
+      _batchSummary = null;
     });
     final VerificationRepository repo = ref.read(
       verificationRepositoryProvider,
@@ -66,20 +70,53 @@ class _BatchTrackingDetailPageState
     }
 
     final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
-    if (detail == null || !detail.isWarrantyBatch) return;
+    if (detail == null) return;
 
     try {
-      final WarrantyBatchStatusResponse res = await repo.getWarrantyBatchStatus(
-        _batchId,
-      );
+      final List<VerificationBatchSummary> batches = await repo.getBatches();
+      final String batchId = _batchId.trim();
+      VerificationBatchSummary? summary;
+      for (final VerificationBatchSummary batch in batches) {
+        if (batch.batchId.trim() == batchId) {
+          summary = batch;
+          break;
+        }
+      }
+      if (mounted) setState(() => _batchSummary = summary);
+    } catch (_) {
+      // Batch details and SDC status remain the primary sources.
+    }
+
+    try {
+      final WarrantyBatchStatusResponse res = detail.isWarrantyBatch
+          ? await repo.getWarrantyBatchStatus(_batchId)
+          : await repo.getSdcBatchStatus(_batchId);
       if (!mounted) return;
-      setState(() => _warrantyData = AsyncData(res));
+      setState(() {
+        if (detail.isWarrantyBatch) {
+          _warrantyData = AsyncData(res);
+        } else {
+          _sdcData = AsyncData(res);
+        }
+      });
     } on ApiException catch (e, st) {
       if (!mounted) return;
-      setState(() => _warrantyData = AsyncError(e, st));
+      setState(() {
+        if (detail.isWarrantyBatch) {
+          _warrantyData = AsyncError(e, st);
+        } else {
+          _sdcData = AsyncError(e, st);
+        }
+      });
     } catch (e, st) {
       if (!mounted) return;
-      setState(() => _warrantyData = AsyncError(e, st));
+      setState(() {
+        if (detail.isWarrantyBatch) {
+          _warrantyData = AsyncError(e, st);
+        } else {
+          _sdcData = AsyncError(e, st);
+        }
+      });
     }
   }
 
@@ -143,6 +180,12 @@ class _BatchTrackingDetailPageState
                       ),
                     ),
                   ),
+                  IconButton(
+                    tooltip: 'Refresh batch',
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh_rounded),
+                    color: Colors.white,
+                  ),
                 ],
               ),
             ),
@@ -186,80 +229,85 @@ class _BatchTrackingDetailPageState
                           warrantyDetail = _detailData.valueOrNull;
                           final bool sharedWithOrg =
                               res.sharedWithOrg ||
-                              warrantyDetail?.sharedWithOrg == true;
-                          return ListView(
-                            physics: const BouncingScrollPhysics(),
-                            padding: EdgeInsets.fromLTRB(
-                              AppSpacing.x4,
-                              AppSpacing.x4,
-                              AppSpacing.x4,
-                              AppSpacing.x6 +
-                                  MediaQuery.viewPaddingOf(context).bottom +
-                                  navBarHeight,
-                            ),
-                            children: <Widget>[
-                              if (!sharedWithOrg) ...<Widget>[
-                                const _SharingGateBanner(),
-                                const SizedBox(height: AppSpacing.x3),
-                              ],
-                              _WarrantySummarySection(
-                                pending: res.pending,
-                                approved: res.approved,
-                                rejected: res.rejected,
+                              warrantyDetail?.sharedWithOrg == true ||
+                              _batchSummary?.sharedWithOrg == true;
+                          return RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView(
+                              physics: const BouncingScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(
+                                AppSpacing.x4,
+                                AppSpacing.x4,
+                                AppSpacing.x4,
+                                AppSpacing.x6 +
+                                    MediaQuery.viewPaddingOf(context).bottom +
+                                    navBarHeight,
                               ),
-                              const SizedBox(height: AppSpacing.x4),
-                              const _SectionHeader(
-                                title: 'PRODUCTS',
-                                subtitle: 'Warranty records in this batch',
-                              ),
-                              const SizedBox(height: AppSpacing.x3),
-                              for (final MapEntry<int, WarrantyBatchProduct>
-                                  entry
-                                  in res.products.asMap().entries) ...<Widget>[
-                                _WarrantyProductTile(
-                                  product: entry.value,
-                                  onTap:
-                                      sharedWithOrg &&
-                                          entry.key < res.certificateIds.length
-                                      ? () {
-                                          final String publicId = res
-                                              .certificateIds[entry.key]
-                                              .trim();
-                                          if (publicId.isEmpty) return;
-                                          context.push(
-                                            AppRouter.sdcRecordLocation(
-                                              publicId: publicId,
-                                              orgId:
-                                                  warrantyDetail?.sdcOrgId ??
-                                                  '',
-                                              spaceId:
-                                                  warrantyDetail?.sdcSpaceId ??
-                                                  '',
-                                              instanceKey: 'de',
-                                              sharedWithOrg: sharedWithOrg,
-                                              search: publicId,
-                                            ),
-                                          );
-                                        }
-                                      : null,
+                              children: <Widget>[
+                                if (!sharedWithOrg) ...<Widget>[
+                                  const _SharingGateBanner(),
+                                  const SizedBox(height: AppSpacing.x3),
+                                ],
+                                _WarrantySummarySection(
+                                  pending: res.pending,
+                                  approved: res.approved,
+                                  rejected: res.rejected,
                                 ),
-                                const SizedBox(height: AppSpacing.x2),
-                              ],
-                              if (res.products.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: AppSpacing.x6,
+                                const SizedBox(height: AppSpacing.x4),
+                                const _SectionHeader(
+                                  title: 'PRODUCTS',
+                                  subtitle: 'Warranty records in this batch',
+                                ),
+                                const SizedBox(height: AppSpacing.x3),
+                                for (final MapEntry<int, WarrantyBatchProduct>
+                                    entry
+                                    in res.products
+                                        .asMap()
+                                        .entries) ...<Widget>[
+                                  _WarrantyProductTile(
+                                    product: entry.value,
+                                    onTap: entry.key < res.certificateIds.length
+                                        ? () {
+                                            final String publicId = res
+                                                .certificateIds[entry.key]
+                                                .trim();
+                                            if (publicId.isEmpty) return;
+                                            context.push(
+                                              AppRouter.sdcRecordLocation(
+                                                publicId: publicId,
+                                                orgId:
+                                                    warrantyDetail?.sdcOrgId ??
+                                                    '',
+                                                spaceId:
+                                                    warrantyDetail
+                                                        ?.sdcSpaceId ??
+                                                    '',
+                                                instanceKey: 'de',
+                                                sharedWithOrg: sharedWithOrg,
+                                                search: publicId,
+                                              ),
+                                            );
+                                          }
+                                        : null,
                                   ),
-                                  child: Center(
-                                    child: Text(
-                                      'No records found.',
-                                      style: AppTypography.body2.copyWith(
-                                        color: AppColors.textSecondary,
+                                  const SizedBox(height: AppSpacing.x2),
+                                ],
+                                if (res.products.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: AppSpacing.x6,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'No records found.',
+                                        style: AppTypography.body2.copyWith(
+                                          color: AppColors.textSecondary,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           );
                         },
                       )
@@ -295,7 +343,10 @@ class _BatchTrackingDetailPageState
                           final Map<String, int> derivedCounts =
                               _deriveUserStatusCounts(res.users);
                           final bool hasGeneratedSdc = res.hasGeneratedSdc;
-                          final bool sharedWithOrg = res.sharedWithOrg;
+                          final bool sharedWithOrg =
+                              res.sharedWithOrg ||
+                              _sdcData.valueOrNull?.sharedWithOrg == true ||
+                              _batchSummary?.sharedWithOrg == true;
                           final int verifiedCount = _readProgressOrFallback(
                             res.verificationProgress,
                             'verified',
@@ -318,89 +369,90 @@ class _BatchTrackingDetailPageState
                                     .clamp(0, res.totalUsers)
                                     .toInt()
                               : verifiedCount;
-                          return ListView(
-                            physics: const BouncingScrollPhysics(),
-                            padding: EdgeInsets.fromLTRB(
-                              AppSpacing.x4,
-                              AppSpacing.x4,
-                              AppSpacing.x4,
-                              AppSpacing.x6 +
-                                  MediaQuery.viewPaddingOf(context).bottom +
-                                  navBarHeight,
-                            ),
-                            children: <Widget>[
-                              if (!sharedWithOrg) ...<Widget>[
-                                const _SharingGateBanner(),
-                                const SizedBox(height: AppSpacing.x3),
-                              ],
-                              _SummarySection(
-                                verified: effectiveVerifiedCount,
-                                pending: pendingCount,
-                                failed: failedCount,
+                          return RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView(
+                              physics: const BouncingScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(
+                                AppSpacing.x4,
+                                AppSpacing.x4,
+                                AppSpacing.x4,
+                                AppSpacing.x6 +
+                                    MediaQuery.viewPaddingOf(context).bottom +
+                                    navBarHeight,
                               ),
-                              const SizedBox(height: AppSpacing.x3),
-                              const _SectionHeader(
-                                title: 'RECORDS',
-                                subtitle: 'Items in this batch',
-                              ),
-                              const SizedBox(height: AppSpacing.x3),
-                              for (final VerificationUser u
-                                  in res.users) ...<Widget>[
-                                _UserTile(
-                                  user: u,
-                                  batchIsTerminal: hasGeneratedSdc,
-                                  onTap: sharedWithOrg
-                                      ? () {
-                                          final String orgId =
-                                              detail?.sdcOrgId ?? '';
-                                          final String spaceId =
-                                              detail?.sdcSpaceId ?? '';
-                                          final String searchTerm =
-                                              u.fullName.trim().isNotEmpty
-                                              ? u.fullName.trim()
-                                              : (u.email.trim().isNotEmpty
-                                                    ? u.email.trim()
-                                                    : u.id.trim());
-                                          final String publicId =
-                                              u.publicId.trim().isNotEmpty
-                                              ? u.publicId.trim()
-                                              : '';
-                                          debugPrint(
-                                            '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
-                                          );
-                                          context.push(
-                                            AppRouter.sdcRecordLocation(
-                                              publicId: publicId,
-                                              orgId: orgId,
-                                              spaceId: spaceId,
-                                              instanceKey: 'de',
-                                              sharedWithOrg: sharedWithOrg,
-                                              active: 1,
-                                              page: 1,
-                                              pageSize: 30,
-                                              search: searchTerm,
-                                            ),
-                                          );
-                                        }
-                                      : null,
+                              children: <Widget>[
+                                if (!sharedWithOrg) ...<Widget>[
+                                  const _SharingGateBanner(),
+                                  const SizedBox(height: AppSpacing.x3),
+                                ],
+                                _SummarySection(
+                                  verified: effectiveVerifiedCount,
+                                  pending: pendingCount,
+                                  failed: failedCount,
                                 ),
-                                const SizedBox(height: AppSpacing.x2),
-                              ],
-                              if (res.users.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: AppSpacing.x6,
+                                const SizedBox(height: AppSpacing.x3),
+                                const _SectionHeader(
+                                  title: 'RECORDS',
+                                  subtitle: 'Items in this batch',
+                                ),
+                                const SizedBox(height: AppSpacing.x3),
+                                for (final VerificationUser u
+                                    in res.users) ...<Widget>[
+                                  _UserTile(
+                                    user: u,
+                                    batchIsTerminal: hasGeneratedSdc,
+                                    onTap: () {
+                                      final String orgId =
+                                          detail?.sdcOrgId ?? '';
+                                      final String spaceId =
+                                          detail?.sdcSpaceId ?? '';
+                                      final String searchTerm =
+                                          u.fullName.trim().isNotEmpty
+                                          ? u.fullName.trim()
+                                          : (u.email.trim().isNotEmpty
+                                                ? u.email.trim()
+                                                : u.id.trim());
+                                      final String publicId =
+                                          u.publicId.trim().isNotEmpty
+                                          ? u.publicId.trim()
+                                          : '';
+                                      debugPrint(
+                                        '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
+                                      );
+                                      context.push(
+                                        AppRouter.sdcRecordLocation(
+                                          publicId: publicId,
+                                          orgId: orgId,
+                                          spaceId: spaceId,
+                                          instanceKey: 'de',
+                                          sharedWithOrg: sharedWithOrg,
+                                          active: 1,
+                                          page: 1,
+                                          pageSize: 30,
+                                          search: searchTerm,
+                                        ),
+                                      );
+                                    },
                                   ),
-                                  child: Center(
-                                    child: Text(
-                                      'No records found.',
-                                      style: AppTypography.body2.copyWith(
-                                        color: AppColors.textSecondary,
+                                  const SizedBox(height: AppSpacing.x2),
+                                ],
+                                if (res.users.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: AppSpacing.x6,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'No records found.',
+                                        style: AppTypography.body2.copyWith(
+                                          color: AppColors.textSecondary,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           );
                         },
                       ),
