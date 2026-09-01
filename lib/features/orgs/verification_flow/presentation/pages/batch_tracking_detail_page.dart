@@ -47,7 +47,9 @@ class _BatchTrackingDetailPageState
       _detailData = const AsyncLoading();
       _warrantyData = const AsyncLoading();
     });
-    final VerificationRepository repo = ref.read(verificationRepositoryProvider);
+    final VerificationRepository repo = ref.read(
+      verificationRepositoryProvider,
+    );
 
     try {
       final VerificationBatchDetailResponse res = await repo.getBatchDetails(
@@ -180,8 +182,11 @@ class _BatchTrackingDetailPageState
                           ),
                         ),
                         data: (WarrantyBatchStatusResponse res) {
-                          final VerificationBatchDetailResponse? warrantyDetail =
-                              _detailData.valueOrNull;
+                          final VerificationBatchDetailResponse?
+                          warrantyDetail = _detailData.valueOrNull;
+                          final bool sharedWithOrg =
+                              res.sharedWithOrg ||
+                              warrantyDetail?.sharedWithOrg == true;
                           return ListView(
                             physics: const BouncingScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
@@ -193,6 +198,10 @@ class _BatchTrackingDetailPageState
                                   navBarHeight,
                             ),
                             children: <Widget>[
+                              if (!sharedWithOrg) ...<Widget>[
+                                const _SharingGateBanner(),
+                                const SizedBox(height: AppSpacing.x3),
+                              ],
                               _WarrantySummarySection(
                                 pending: res.pending,
                                 approved: res.approved,
@@ -205,24 +214,29 @@ class _BatchTrackingDetailPageState
                               ),
                               const SizedBox(height: AppSpacing.x3),
                               for (final MapEntry<int, WarrantyBatchProduct>
-                                  entry in res.products.asMap().entries) ...<Widget>[
+                                  entry
+                                  in res.products.asMap().entries) ...<Widget>[
                                 _WarrantyProductTile(
                                   product: entry.value,
-                                  onTap: entry.key < res.certificateIds.length
+                                  onTap:
+                                      sharedWithOrg &&
+                                          entry.key < res.certificateIds.length
                                       ? () {
-                                          final String publicId =
-                                              res.certificateIds[entry.key]
-                                                  .trim();
+                                          final String publicId = res
+                                              .certificateIds[entry.key]
+                                              .trim();
                                           if (publicId.isEmpty) return;
                                           context.push(
                                             AppRouter.sdcRecordLocation(
                                               publicId: publicId,
-                                              orgId: warrantyDetail?.sdcOrgId ??
+                                              orgId:
+                                                  warrantyDetail?.sdcOrgId ??
                                                   '',
-                                              spaceId: warrantyDetail
-                                                      ?.sdcSpaceId ??
+                                              spaceId:
+                                                  warrantyDetail?.sdcSpaceId ??
                                                   '',
                                               instanceKey: 'de',
+                                              sharedWithOrg: sharedWithOrg,
                                               search: publicId,
                                             ),
                                           );
@@ -281,6 +295,7 @@ class _BatchTrackingDetailPageState
                           final Map<String, int> derivedCounts =
                               _deriveUserStatusCounts(res.users);
                           final bool hasGeneratedSdc = res.hasGeneratedSdc;
+                          final bool sharedWithOrg = res.sharedWithOrg;
                           final int verifiedCount = _readProgressOrFallback(
                             res.verificationProgress,
                             'verified',
@@ -314,6 +329,10 @@ class _BatchTrackingDetailPageState
                                   navBarHeight,
                             ),
                             children: <Widget>[
+                              if (!sharedWithOrg) ...<Widget>[
+                                const _SharingGateBanner(),
+                                const SizedBox(height: AppSpacing.x3),
+                              ],
                               _SummarySection(
                                 verified: effectiveVerifiedCount,
                                 pending: pendingCount,
@@ -330,36 +349,40 @@ class _BatchTrackingDetailPageState
                                 _UserTile(
                                   user: u,
                                   batchIsTerminal: hasGeneratedSdc,
-                                  onTap: () {
-                                    final String orgId = detail?.sdcOrgId ?? '';
-                                    final String spaceId =
-                                        detail?.sdcSpaceId ?? '';
-                                    final String searchTerm =
-                                        u.fullName.trim().isNotEmpty
-                                        ? u.fullName.trim()
-                                        : (u.email.trim().isNotEmpty
-                                              ? u.email.trim()
-                                              : u.id.trim());
-                                    final String publicId =
-                                        u.publicId.trim().isNotEmpty
-                                        ? u.publicId.trim()
-                                        : '';
-                                    debugPrint(
-                                      '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
-                                    );
-                                    context.push(
-                                      AppRouter.sdcRecordLocation(
-                                        publicId: publicId,
-                                        orgId: orgId,
-                                        spaceId: spaceId,
-                                        instanceKey: 'de',
-                                        active: 1,
-                                        page: 1,
-                                        pageSize: 30,
-                                        search: searchTerm,
-                                      ),
-                                    );
-                                  },
+                                  onTap: sharedWithOrg
+                                      ? () {
+                                          final String orgId =
+                                              detail?.sdcOrgId ?? '';
+                                          final String spaceId =
+                                              detail?.sdcSpaceId ?? '';
+                                          final String searchTerm =
+                                              u.fullName.trim().isNotEmpty
+                                              ? u.fullName.trim()
+                                              : (u.email.trim().isNotEmpty
+                                                    ? u.email.trim()
+                                                    : u.id.trim());
+                                          final String publicId =
+                                              u.publicId.trim().isNotEmpty
+                                              ? u.publicId.trim()
+                                              : '';
+                                          debugPrint(
+                                            '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
+                                          );
+                                          context.push(
+                                            AppRouter.sdcRecordLocation(
+                                              publicId: publicId,
+                                              orgId: orgId,
+                                              spaceId: spaceId,
+                                              instanceKey: 'de',
+                                              sharedWithOrg: sharedWithOrg,
+                                              active: 1,
+                                              page: 1,
+                                              pageSize: 30,
+                                              search: searchTerm,
+                                            ),
+                                          );
+                                        }
+                                      : null,
                                 ),
                                 const SizedBox(height: AppSpacing.x2),
                               ],
@@ -571,6 +594,42 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+class _SharingGateBanner extends StatelessWidget {
+  const _SharingGateBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFCD34D)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(Icons.lock_rounded, color: Color(0xFFF59E0B), size: 20),
+          const SizedBox(width: AppSpacing.x3),
+          const Expanded(
+            child: Text(
+              'Certificates not yet shared with your organization.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                height: 18 / 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF7C2D12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FigmaStatCard extends StatelessWidget {
   const _FigmaStatCard({
     required this.label,
@@ -662,12 +721,12 @@ class _UserTile extends StatelessWidget {
   const _UserTile({
     required this.user,
     required this.batchIsTerminal,
-    required this.onTap,
+    this.onTap,
   });
 
   final VerificationUser user;
   final bool batchIsTerminal;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

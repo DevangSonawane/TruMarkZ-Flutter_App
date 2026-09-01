@@ -49,7 +49,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   String _mode = 'verification'; // 'verification' | 'warranty'
   String _access = 'public_searchable';
   final Set<String> _checks = <String>{};
-  final List<String> _parsedProductNames = <String>[];
+  final List<_ParsedProductRow> _parsedProductRows = <_ParsedProductRow>[];
   final List<int> _documentCardIds = <int>[];
   final Map<int, _ProductDocumentDraft> _documentDrafts =
       <int, _ProductDocumentDraft>{};
@@ -88,12 +88,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         true;
   }
 
-  String get _entryNameFieldLabel =>
-      _mode == 'warranty' ? 'customer_name' : 'product_name';
-
-  String get _entryNameDisplayLabel =>
-      _mode == 'warranty' ? 'Customer Name' : 'Product Name';
-
   void _showGstRequiredSnack() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -129,20 +123,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     return header.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
   }
 
-  List<String> _dedupeNames(List<String> names) {
-    final List<String> ordered = <String>[];
-    final Set<String> seen = <String>{};
-    for (final String raw in names) {
-      final String cleaned = raw.trim();
-      if (cleaned.isEmpty) continue;
-      final String key = cleaned.toLowerCase();
-      if (seen.add(key)) {
-        ordered.add(cleaned);
-      }
-    }
-    return ordered;
-  }
-
   static bool _isRowEmpty(List<Object?> row) {
     return row.every((dynamic cell) => (cell?.toString() ?? '').trim().isEmpty);
   }
@@ -152,98 +132,159 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     return row[index]?.toString().trim() ?? '';
   }
 
-  List<String> _parseNamedValuesFromCsv(
-    Uint8List bytes,
-    String expectedHeader,
-  ) {
+  _ParsedProductRowsResult _parseProductRowsFromCsv(Uint8List bytes) {
     final String text = utf8.decode(bytes, allowMalformed: true);
     final List<List<dynamic>> table = const CsvToListConverter(
       eol: '\n',
       shouldParseNumbers: false,
     ).convert(text);
-    if (table.isEmpty) return <String>[];
+    if (table.isEmpty) {
+      return const _ParsedProductRowsResult(rows: <_ParsedProductRow>[]);
+    }
 
     int headerIndex = 0;
     while (headerIndex < table.length && _isRowEmpty(table[headerIndex])) {
       headerIndex += 1;
     }
-    if (headerIndex >= table.length) return <String>[];
+    if (headerIndex >= table.length) {
+      return const _ParsedProductRowsResult(rows: <_ParsedProductRow>[]);
+    }
 
     final List<String> header = table[headerIndex]
         .map((dynamic v) => (v?.toString() ?? '').trim())
         .toList();
+    final bool requiresSku = _mode != 'warranty';
     final int nameIndex = header.indexWhere(
-      (String value) => _normalizeHeader(value) == expectedHeader,
+      (String value) =>
+          _normalizeHeader(value) ==
+          (requiresSku ? 'productname' : 'customername'),
     );
-    if (nameIndex < 0) return <String>[];
+    final int skuIndex = header.indexWhere(
+      (String value) => _normalizeHeader(value) == 'skuno',
+    );
+    if (nameIndex < 0) {
+      return const _ParsedProductRowsResult(
+        rows: <_ParsedProductRow>[],
+        error: 'Missing required column: product_name',
+      );
+    }
+    if (requiresSku && skuIndex < 0) {
+      return const _ParsedProductRowsResult(
+        rows: <_ParsedProductRow>[],
+        error: 'Missing required column: sku_no',
+      );
+    }
 
-    final List<String> names = <String>[];
+    final List<_ParsedProductRow> rows = <_ParsedProductRow>[];
+    final Set<String> seenSkus = <String>{};
     for (int i = headerIndex + 1; i < table.length; i++) {
       final List<dynamic> row = table[i];
       if (_isRowEmpty(row)) continue;
       final String name = _rowValue(row, nameIndex).trim();
-      if (name.isNotEmpty) names.add(name);
+      final String sku = requiresSku ? _rowValue(row, skuIndex).trim() : '';
+      if (name.isEmpty && sku.isEmpty) continue;
+      if (!requiresSku) {
+        rows.add(_ParsedProductRow(productName: name, skuNo: sku));
+        continue;
+      }
+      if (sku.isEmpty) continue;
+      final String skuKey = sku.toLowerCase();
+      if (seenSkus.add(skuKey)) {
+        rows.add(_ParsedProductRow(productName: name, skuNo: sku));
+      }
     }
-    return _dedupeNames(names);
+    return _ParsedProductRowsResult(rows: rows);
   }
 
-  List<String> _parseNamedValuesFromXlsx(
-    Uint8List bytes,
-    String expectedHeader,
-  ) {
+  _ParsedProductRowsResult _parseProductRowsFromXlsx(Uint8List bytes) {
     Excel excel;
     try {
       excel = Excel.decodeBytes(bytes);
     } catch (_) {
-      return <String>[];
+      return const _ParsedProductRowsResult(rows: <_ParsedProductRow>[]);
     }
     final List<String> sheetNames = excel.tables.keys.toList();
-    if (sheetNames.isEmpty) return <String>[];
+    if (sheetNames.isEmpty) {
+      return const _ParsedProductRowsResult(rows: <_ParsedProductRow>[]);
+    }
     final Sheet? sheet = excel.tables[sheetNames.first];
-    if (sheet == null) return <String>[];
+    if (sheet == null) {
+      return const _ParsedProductRowsResult(rows: <_ParsedProductRow>[]);
+    }
 
     final List<List<Data?>> rows = sheet.rows;
-    if (rows.isEmpty) return <String>[];
+    if (rows.isEmpty) {
+      return const _ParsedProductRowsResult(rows: <_ParsedProductRow>[]);
+    }
 
     int headerIndex = 0;
     while (headerIndex < rows.length && _isRowEmpty(rows[headerIndex])) {
       headerIndex += 1;
     }
-    if (headerIndex >= rows.length) return <String>[];
+    if (headerIndex >= rows.length) {
+      return const _ParsedProductRowsResult(rows: <_ParsedProductRow>[]);
+    }
 
     final List<String> header = rows[headerIndex]
         .map((Data? cell) => (cell?.value?.toString() ?? '').trim())
         .toList();
+    final bool requiresSku = _mode != 'warranty';
     final int nameIndex = header.indexWhere(
-      (String value) => _normalizeHeader(value) == expectedHeader,
+      (String value) =>
+          _normalizeHeader(value) ==
+          (requiresSku ? 'productname' : 'customername'),
     );
-    if (nameIndex < 0) return <String>[];
+    final int skuIndex = header.indexWhere(
+      (String value) => _normalizeHeader(value) == 'skuno',
+    );
+    if (nameIndex < 0) {
+      return const _ParsedProductRowsResult(
+        rows: <_ParsedProductRow>[],
+        error: 'Missing required column: product_name',
+      );
+    }
+    if (requiresSku && skuIndex < 0) {
+      return const _ParsedProductRowsResult(
+        rows: <_ParsedProductRow>[],
+        error: 'Missing required column: sku_no',
+      );
+    }
 
-    final List<String> names = <String>[];
+    final List<_ParsedProductRow> parsedRows = <_ParsedProductRow>[];
+    final Set<String> seenSkus = <String>{};
     for (int i = headerIndex + 1; i < rows.length; i++) {
       final List<Data?> row = rows[i];
       if (_isRowEmpty(row)) continue;
       final String name = (row[nameIndex]?.value?.toString() ?? '').trim();
-      if (name.isNotEmpty) names.add(name);
+      final String sku = requiresSku
+          ? (row[skuIndex]?.value?.toString() ?? '').trim()
+          : '';
+      if (name.isEmpty && sku.isEmpty) continue;
+      if (!requiresSku) {
+        parsedRows.add(_ParsedProductRow(productName: name, skuNo: sku));
+        continue;
+      }
+      if (sku.isEmpty) continue;
+      final String skuKey = sku.toLowerCase();
+      if (seenSkus.add(skuKey)) {
+        parsedRows.add(_ParsedProductRow(productName: name, skuNo: sku));
+      }
     }
-    return _dedupeNames(names);
+    return _ParsedProductRowsResult(rows: parsedRows);
   }
 
-  List<String> _parseEntryNamesFromPickedFile(PickedFile file) {
-    final String expectedHeader = _mode == 'warranty'
-        ? 'customername'
-        : 'productname';
+  _ParsedProductRowsResult _parseProductRowsFromPickedFile(PickedFile file) {
     final String safeName = file.name.trim();
     final String ext = safeName.contains('.')
         ? safeName.split('.').last.toLowerCase()
         : file.extension.toLowerCase();
     if (ext == 'csv') {
-      return _parseNamedValuesFromCsv(file.bytes, expectedHeader);
+      return _parseProductRowsFromCsv(file.bytes);
     }
     if (ext == 'xlsx' && !_looksLikeZip(file.bytes)) {
-      return _parseNamedValuesFromCsv(file.bytes, expectedHeader);
+      return _parseProductRowsFromCsv(file.bytes);
     }
-    return _parseNamedValuesFromXlsx(file.bytes, expectedHeader);
+    return _parseProductRowsFromXlsx(file.bytes);
   }
 
   @override
@@ -338,10 +379,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
     return <String>[
       'product_name',
-      'serial_number',
-      'model',
-      'batch_number',
-      'certificate_number',
+      'sku_no',
+      'model_no',
+      'brand',
+      'third+party+qr2',
     ];
   }
 
@@ -355,6 +396,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       builder: (BuildContext dialogContext) {
         return _ProductTemplateDialog(
           initialHeaders: initialHeaders,
+          requiredHeaders: _mode == 'warranty'
+              ? const <String>{}
+              : const <String>{'product_name', 'sku_no'},
           categoryId: _categoryId,
           isWarranty: _mode == 'warranty',
           onSave: (List<String> headers) {
@@ -377,21 +421,27 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   Future<void> _setPickedFile(PickedFile picked) async {
     setState(() {
       _pickedFile = picked;
-      _parsedProductNames.clear();
+      _parsedProductRows.clear();
       _productParseError = null;
       _documentCardIds.clear();
       _documentDrafts.clear();
       _nextDocumentCardId = 0;
     });
-    final List<String> productNames = _parseEntryNamesFromPickedFile(picked);
+    final _ParsedProductRowsResult parsed = _parseProductRowsFromPickedFile(
+      picked,
+    );
     if (!mounted) return;
     setState(() {
-      _parsedProductNames
+      _parsedProductRows
         ..clear()
-        ..addAll(productNames);
-      _productParseError = productNames.isEmpty
-          ? 'Could not find any $_entryNameFieldLabel values in the selected file.'
-          : null;
+        ..addAll(parsed.rows);
+      _productParseError =
+          parsed.error ??
+          (parsed.rows.isEmpty
+              ? (_mode == 'warranty'
+                    ? 'Could not find any valid customer_name rows in the selected file.'
+                    : 'Could not find any valid product_name and sku_no rows in the selected file.')
+              : null);
     });
   }
 
@@ -414,6 +464,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     setState(() {
       _documentDrafts[draft.cardId] = draft;
     });
+  }
+
+  bool _isDocumentComplete(_ProductDocumentDraft draft) {
+    return draft.isComplete ||
+        (_mode == 'warranty' &&
+            (draft.productName ?? '').trim().isNotEmpty &&
+            draft.label.trim().isNotEmpty &&
+            draft.file != null);
   }
 
   Future<void> _confirmAndCreateBatch() async {
@@ -470,11 +528,13 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       );
       return;
     }
-    if (_productParseError != null || _parsedProductNames.isEmpty) {
+    if (_productParseError != null || _parsedProductRows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please upload a file with a valid $_entryNameFieldLabel column.',
+            isWarranty
+                ? 'Please upload a file with valid customer_name rows.'
+                : 'Please upload a file with valid product_name and sku_no columns.',
           ),
         ),
       );
@@ -487,7 +547,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         .whereType<_ProductDocumentDraft>()
         .toList();
     final List<_ProductDocumentDraft> incompleteDocs = documentDrafts
-        .where((_ProductDocumentDraft draft) => !draft.isComplete)
+        .where((_ProductDocumentDraft draft) => !_isDocumentComplete(draft))
         .toList();
     if (incompleteDocs.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -507,11 +567,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final List<ProductBulkUploadDocumentInput> documents = isWarranty
           ? <ProductBulkUploadDocumentInput>[]
           : documentDrafts
-                .where((_ProductDocumentDraft draft) => draft.isComplete)
+                .where(
+                  (_ProductDocumentDraft draft) => _isDocumentComplete(draft),
+                )
                 .map(
                   (_ProductDocumentDraft draft) =>
                       ProductBulkUploadDocumentInput(
                         productName: draft.productName!.trim(),
+                        skuNo: draft.skuNo!.trim(),
                         label: draft.label.trim(),
                         fileBytes: draft.file!.bytes,
                         fileName: draft.file!.name,
@@ -523,11 +586,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               batchName: _resolvedBatchName,
               description: _resolvedDescription(),
               documents: documentDrafts
-                  .where((_ProductDocumentDraft draft) => draft.isComplete)
+                  .where(
+                    (_ProductDocumentDraft draft) => _isDocumentComplete(draft),
+                  )
                   .map(
                     (_ProductDocumentDraft draft) =>
                         ProductBulkUploadDocumentInput(
                           productName: draft.productName!.trim(),
+                          skuNo: draft.skuNo?.trim() ?? '',
                           label: draft.label.trim(),
                           fileBytes: draft.file!.bytes,
                           fileName: draft.file!.name,
@@ -707,7 +773,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
           profile: authAsync.valueOrNull?.userProfile,
           fallback: _prettyIndustry(resolvedIndustry),
-          );
+        );
     final String verificationFilter = resolvedIndustry.isNotEmpty
         ? 'product::$resolvedIndustry'
         : 'product';
@@ -724,7 +790,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String uploadHint = isWarranty
         ? 'Download template based on your selected sector.\nUpload your Excel, and optionally add documents before confirming the batch.'
         : 'Download template based on your selected sector.\nUpload your Excel, optionally add documents, then confirm the batch.';
-    final String entryNameDisplayLabel = _entryNameDisplayLabel;
     final int currentStep = isWarranty ? 3 : 4;
     final int totalSteps = isWarranty ? 5 : 6;
     final String stepLabel = 'STEP $currentStep OF $totalSteps';
@@ -989,7 +1054,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                       SizedBox(height: s(20)),
                                       _DocumentUploadsSection(
                                         scale: scale,
-                                        productNames: _parsedProductNames,
+                                        productRows: _parsedProductRows,
                                         isWarranty: isWarranty,
                                         cardIds: _documentCardIds,
                                         onAddCard: _addDocumentCard,
@@ -998,16 +1063,16 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                         enabled:
                                             _pickedFile != null &&
                                             _productParseError == null &&
-                                            _parsedProductNames.isNotEmpty,
+                                            _parsedProductRows.isNotEmpty,
                                         statusText: _pickedFile == null
                                             ? 'Upload an Excel file first to enable document attachments.'
                                             : _productParseError != null
                                             ? _productParseError!
-                                            : _parsedProductNames.isEmpty
-                                            ? 'No ${entryNameDisplayLabel.toLowerCase()}s found yet.'
+                                            : _parsedProductRows.isEmpty
+                                            ? 'No valid product_name and sku_no rows found yet.'
                                             : isWarranty
                                             ? 'Warranty documents are required for every product in the Excel file.'
-                                            : 'Pick a ${entryNameDisplayLabel.toLowerCase()}, label, and file to bundle documents with this batch.',
+                                            : 'Pick a product, label, and file to bundle documents with this batch.',
                                       ),
                                     ],
                                   ],
@@ -1025,7 +1090,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     _pickedFile != null &&
                                     _resolvedBatchName.isNotEmpty &&
                                     _productParseError == null &&
-                                    _parsedProductNames.isNotEmpty,
+                                    _parsedProductRows.isNotEmpty,
                                 onTap: _confirmAndCreateBatch,
                                 label: 'Create Batch',
                               ),
@@ -1112,12 +1177,14 @@ class _ProductBatchNameField extends StatelessWidget {
 class _ProductTemplateDialog extends ConsumerStatefulWidget {
   const _ProductTemplateDialog({
     required this.initialHeaders,
+    required this.requiredHeaders,
     required this.categoryId,
     required this.isWarranty,
     required this.onSave,
   });
 
   final List<String> initialHeaders;
+  final Set<String> requiredHeaders;
   final String categoryId;
   final bool isWarranty;
   final ValueChanged<List<String>> onSave;
@@ -1143,6 +1210,14 @@ class _ProductTemplateDialogState
     super.initState();
     _headerInputController = TextEditingController();
     _headers = _normalizeHeaders(widget.initialHeaders);
+    for (final String requiredHeader in widget.requiredHeaders) {
+      final bool present = _headers.any(
+        (String header) => header.trim().toLowerCase() == requiredHeader,
+      );
+      if (!present) {
+        _headers.add(requiredHeader);
+      }
+    }
     _headersSaved = _headers.isNotEmpty;
   }
 
@@ -1167,6 +1242,11 @@ class _ProductTemplateDialogState
     return merged;
   }
 
+  bool _isRequired(String header) {
+    final String normalized = header.trim().toLowerCase();
+    return widget.requiredHeaders.contains(normalized);
+  }
+
   void _addHeader() {
     final String cleaned = _headerInputController.text.trim();
     if (cleaned.isEmpty) {
@@ -1187,7 +1267,9 @@ class _ProductTemplateDialogState
     setState(() {
       _headers = List<String>.from(_headers)
         ..removeWhere(
-          (String value) => value.toLowerCase() == header.toLowerCase(),
+          (String value) =>
+              value.toLowerCase() == header.toLowerCase() &&
+              !_isRequired(value),
         );
       _headersSaved = _headers.isNotEmpty;
     });
@@ -1367,16 +1449,33 @@ class _ProductTemplateDialogState
               runSpacing: 8,
               children: <Widget>[
                 for (final String header in widget.initialHeaders)
-                  Chip(
+                  InputChip(
                     label: Text(header),
-                    backgroundColor: AppColors.brandBlue.withAlpha(20),
+                    backgroundColor: _isRequired(header)
+                        ? AppColors.brandBlue
+                        : AppColors.brandBlue.withAlpha(20),
                     labelStyle: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(12),
                       fontWeight: FontWeight.w600,
                       height: 16.5 / 12,
-                      color: AppColors.brandBlue,
+                      color: _isRequired(header)
+                          ? Colors.white
+                          : AppColors.brandBlue,
                     ),
+                    onDeleted: _isRequired(header)
+                        ? null
+                        : () => _removeHeader(header),
+                    deleteIcon: _isRequired(header)
+                        ? const Icon(
+                            Icons.lock_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          )
+                        : const Icon(Icons.close_rounded),
+                    deleteIconColor: _isRequired(header)
+                        ? Colors.white
+                        : AppColors.brandBlue,
                   ),
               ],
             ),
@@ -1479,12 +1578,21 @@ class _ProductTemplateDialogState
                     for (final String header in _headers)
                       InputChip(
                         label: Text(header),
-                        backgroundColor: AppColors.brandBlue,
-                        deleteIcon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                        ),
-                        onDeleted: () => _removeHeader(header),
+                        backgroundColor: _isRequired(header)
+                            ? AppColors.brandBlue
+                            : AppColors.brandBlue,
+                        deleteIcon: _isRequired(header)
+                            ? const Icon(
+                                Icons.lock_rounded,
+                                color: Colors.white,
+                              )
+                            : const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                              ),
+                        onDeleted: _isRequired(header)
+                            ? null
+                            : () => _removeHeader(header),
                         labelStyle: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: s(12),
@@ -1502,7 +1610,7 @@ class _ProductTemplateDialogState
               Text(
                 widget.isWarranty
                     ? 'Warranty fields locked. You can generate the template now.'
-                    : 'Headers saved. You can generate the template now.',
+                    : 'Required fields are locked. Add custom headers if needed, then generate the template.',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(12),
@@ -2041,21 +2149,45 @@ class _UploadButton extends StatelessWidget {
   }
 }
 
+class _ParsedProductRow {
+  const _ParsedProductRow({required this.productName, required this.skuNo});
+
+  final String productName;
+  final String skuNo;
+
+  String get displayLabel {
+    final String name = productName.trim().isEmpty
+        ? 'Unnamed product'
+        : productName.trim();
+    return '$name (SKU: ${skuNo.trim()})';
+  }
+}
+
+class _ParsedProductRowsResult {
+  const _ParsedProductRowsResult({required this.rows, this.error});
+
+  final List<_ParsedProductRow> rows;
+  final String? error;
+}
+
 class _ProductDocumentDraft {
   const _ProductDocumentDraft({
     required this.cardId,
     this.productName,
+    this.skuNo,
     this.label = 'certificate',
     this.file,
   });
 
   final int cardId;
   final String? productName;
+  final String? skuNo;
   final String label;
   final PickedFile? file;
 
   bool get isComplete =>
       (productName ?? '').trim().isNotEmpty &&
+      (skuNo ?? '').trim().isNotEmpty &&
       label.trim().isNotEmpty &&
       file != null;
 }
@@ -2063,7 +2195,7 @@ class _ProductDocumentDraft {
 class _DocumentUploadsSection extends StatelessWidget {
   const _DocumentUploadsSection({
     required this.scale,
-    required this.productNames,
+    required this.productRows,
     required this.isWarranty,
     required this.cardIds,
     required this.onAddCard,
@@ -2074,7 +2206,7 @@ class _DocumentUploadsSection extends StatelessWidget {
   });
 
   final double scale;
-  final List<String> productNames;
+  final List<_ParsedProductRow> productRows;
   final bool isWarranty;
   final List<int> cardIds;
   final VoidCallback onAddCard;
@@ -2112,7 +2244,7 @@ class _DocumentUploadsSection extends StatelessWidget {
                   Text(
                     isWarranty
                         ? 'Attach docs to the exact customer_name from your Excel. Keep the same order across customer names, labels, and files.'
-                        : 'Attach docs to the exact product_name from your Excel. Keep the same order across product names, labels, and files.',
+                        : 'Attach docs to the exact SKU from your Excel. Keep the same order across SKU numbers, labels, and files.',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(11),
@@ -2150,7 +2282,7 @@ class _DocumentUploadsSection extends StatelessWidget {
             _ProductDocumentCard(
               key: ValueKey<int>(cardId),
               scale: scale,
-              productNames: productNames,
+              productRows: productRows,
               isWarranty: isWarranty,
               cardId: cardId,
               onRemove: () => onRemoveCard(cardId),
@@ -2178,7 +2310,7 @@ class _ProductDocumentCard extends ConsumerStatefulWidget {
   const _ProductDocumentCard({
     super.key,
     required this.scale,
-    required this.productNames,
+    required this.productRows,
     required this.isWarranty,
     required this.cardId,
     required this.onRemove,
@@ -2186,7 +2318,7 @@ class _ProductDocumentCard extends ConsumerStatefulWidget {
   });
 
   final double scale;
-  final List<String> productNames;
+  final List<_ParsedProductRow> productRows;
   final bool isWarranty;
   final int cardId;
   final VoidCallback onRemove;
@@ -2198,7 +2330,7 @@ class _ProductDocumentCard extends ConsumerStatefulWidget {
 }
 
 class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
-  String? _productName;
+  _ParsedProductRow? _productRow;
   late final TextEditingController _documentLabelController;
   PickedFile? _pickedFile;
 
@@ -2219,11 +2351,11 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
   @override
   void didUpdateWidget(covariant _ProductDocumentCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_productName != null &&
-        widget.productNames.isNotEmpty &&
-        !widget.productNames.contains(_productName)) {
+    if (_productRow != null &&
+        widget.productRows.isNotEmpty &&
+        !widget.productRows.contains(_productRow)) {
       setState(() {
-        _productName = null;
+        _productRow = null;
       });
       _emitDraft();
     }
@@ -2242,7 +2374,8 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
     widget.onChanged(
       _ProductDocumentDraft(
         cardId: widget.cardId,
-        productName: _productName,
+        productName: _productRow?.productName,
+        skuNo: _productRow?.skuNo,
         label: _documentLabelController.text.trim(),
         file: _pickedFile,
       ),
@@ -2252,7 +2385,7 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * widget.scale;
-    final bool hasProductNames = widget.productNames.isNotEmpty;
+    final bool hasProductRows = widget.productRows.isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -2326,31 +2459,35 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
             ],
           ),
           SizedBox(height: s(14)),
-          DropdownButtonFormField<String>(
-            initialValue: _productName,
+          DropdownButtonFormField<_ParsedProductRow>(
+            initialValue: _productRow,
             isExpanded: true,
-            items: widget.productNames
+            items: widget.productRows
                 .map(
-                  (String name) => DropdownMenuItem<String>(
-                    value: name,
-                    child: Text(name, overflow: TextOverflow.ellipsis),
-                  ),
+                  (_ParsedProductRow row) =>
+                      DropdownMenuItem<_ParsedProductRow>(
+                        value: row,
+                        child: Text(
+                          row.displayLabel,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                 )
                 .toList(),
-            onChanged: hasProductNames
-                ? (String? value) {
+            onChanged: hasProductRows
+                ? (_ParsedProductRow? value) {
                     setState(() {
-                      _productName = value;
+                      _productRow = value;
                     });
                     _emitDraft();
                   }
                 : null,
             decoration: InputDecoration(
-              labelText: widget.isWarranty ? 'Customer Name' : 'Product Name',
-              hintText: hasProductNames
+              labelText: widget.isWarranty ? 'Customer Name' : 'Product SKU',
+              hintText: hasProductRows
                   ? widget.isWarranty
-                      ? 'Select a customer from the Excel file'
-                      : 'Select a product from the Excel file'
+                        ? 'Select a customer from the Excel file'
+                        : 'Select a product SKU from the Excel file'
                   : 'Upload an Excel file first',
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
@@ -2430,10 +2567,10 @@ class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
           ],
           SizedBox(height: s(8)),
           Text(
-            hasProductNames
+            hasProductRows
                 ? widget.isWarranty
-                    ? 'Match the dropdown to the customer_name value from Excel. Labels can be any text.'
-                    : 'Match the dropdown to the product_name value from Excel. Labels can be any text.'
+                      ? 'Match the dropdown to the customer_name value from Excel. Labels can be any text.'
+                      : 'Match the dropdown to the sku_no value from Excel. Labels can be any text.'
                 : 'Wait until the Excel file is parsed before choosing a product.',
             style: TextStyle(
               fontFamily: 'Inter',

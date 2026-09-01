@@ -62,12 +62,14 @@ final verificationTypesProvider = FutureProvider.family
 class ProductBulkUploadDocumentInput {
   const ProductBulkUploadDocumentInput({
     required this.productName,
+    this.skuNo = '',
     required this.label,
     required this.fileBytes,
     required this.fileName,
   });
 
   final String productName;
+  final String skuNo;
   final String label;
   final Uint8List fileBytes;
   final String fileName;
@@ -380,7 +382,7 @@ class VerificationRepository {
     final List<ProductBulkUploadDocumentInput> cleanDocuments = documents
         .where(
           (ProductBulkUploadDocumentInput doc) =>
-              doc.productName.trim().isNotEmpty &&
+              doc.skuNo.trim().isNotEmpty &&
               doc.label.trim().isNotEmpty &&
               doc.fileBytes.isNotEmpty,
         )
@@ -388,11 +390,9 @@ class VerificationRepository {
     if (cleanDocuments.isNotEmpty) {
       formData.fields.add(
         MapEntry(
-          'doc_product_names',
+          'doc_sku_nos',
           cleanDocuments
-              .map(
-                (ProductBulkUploadDocumentInput doc) => doc.productName.trim(),
-              )
+              .map((ProductBulkUploadDocumentInput doc) => doc.skuNo.trim())
               .join(','),
         ),
       );

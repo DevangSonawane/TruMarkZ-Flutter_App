@@ -365,6 +365,9 @@ class VerificationBatchSummary {
     required this.excelStoragePath,
     required this.reportStoragePaths,
     required this.verificationProgress,
+    required this.sharedWithOrg,
+    required this.sharedAt,
+    required this.sharedBy,
   });
 
   final String batchId;
@@ -380,6 +383,9 @@ class VerificationBatchSummary {
   final String excelStoragePath;
   final List<String> reportStoragePaths;
   final Map<String, dynamic> verificationProgress;
+  final bool sharedWithOrg;
+  final String? sharedAt;
+  final String? sharedBy;
 
   String get sdcOrgId {
     final dynamic sdc = verificationProgress['sdc'];
@@ -450,6 +456,8 @@ class VerificationBatchSummary {
         json['verification_progress'] is Map
         ? Map<String, dynamic>.from(json['verification_progress'] as Map)
         : <String, dynamic>{};
+    final bool sharedWithOrg =
+        json['shared_with_org'] == true || json['sharedWithOrg'] == true;
 
     return VerificationBatchSummary(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
@@ -510,6 +518,9 @@ class VerificationBatchSummary {
               .trim(),
       reportStoragePaths: reports,
       verificationProgress: verificationProgress,
+      sharedWithOrg: sharedWithOrg,
+      sharedAt: (json['shared_at'] ?? json['sharedAt'])?.toString().trim(),
+      sharedBy: (json['shared_by'] ?? json['sharedBy'])?.toString().trim(),
     );
   }
 }
@@ -568,6 +579,9 @@ class VerificationBatchDetailResponse {
     required this.users,
     required this.excelStoragePath,
     required this.reportStoragePaths,
+    required this.sharedWithOrg,
+    required this.sharedAt,
+    required this.sharedBy,
   });
 
   final String batchId;
@@ -582,6 +596,9 @@ class VerificationBatchDetailResponse {
   final List<VerificationUser> users;
   final String excelStoragePath;
   final List<String> reportStoragePaths;
+  final bool sharedWithOrg;
+  final String? sharedAt;
+  final String? sharedBy;
 
   String get sdcOrgId {
     final dynamic sdc = verificationProgress['sdc'];
@@ -652,6 +669,8 @@ class VerificationBatchDetailResponse {
               )
               .toList()
         : const <VerificationUser>[];
+    final bool sharedWithOrg =
+        json['shared_with_org'] == true || json['sharedWithOrg'] == true;
 
     return VerificationBatchDetailResponse(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
@@ -681,6 +700,9 @@ class VerificationBatchDetailResponse {
               .toString()
               .trim(),
       reportStoragePaths: reports,
+      sharedWithOrg: sharedWithOrg,
+      sharedAt: (json['shared_at'] ?? json['sharedAt'])?.toString().trim(),
+      sharedBy: (json['shared_by'] ?? json['sharedBy'])?.toString().trim(),
     );
   }
 }
@@ -824,6 +846,8 @@ class WarrantyBatchStatusResponse {
     required this.rejected,
     required this.products,
     required this.certificateIds,
+    required this.sharedWithOrg,
+    required this.sharedAt,
   });
 
   final String batchId;
@@ -833,6 +857,8 @@ class WarrantyBatchStatusResponse {
   final int rejected;
   final List<WarrantyBatchProduct> products;
   final List<String> certificateIds;
+  final bool sharedWithOrg;
+  final String? sharedAt;
 
   factory WarrantyBatchStatusResponse.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> summary = json['summary'] is Map
@@ -857,6 +883,8 @@ class WarrantyBatchStatusResponse {
               .where((String s) => s.isNotEmpty)
               .toList()
         : <String>[];
+    final bool sharedWithOrg =
+        json['shared_with_org'] == true || json['sharedWithOrg'] == true;
 
     int readCount(List<String> keys, int fallback) {
       for (final String key in keys) {
@@ -875,6 +903,8 @@ class WarrantyBatchStatusResponse {
       rejected: readCount(<String>['rejected', 'rejected_count'], 0),
       products: products,
       certificateIds: certificateIds,
+      sharedWithOrg: sharedWithOrg,
+      sharedAt: (json['shared_at'] ?? json['sharedAt'])?.toString().trim(),
     );
   }
 }

@@ -36,6 +36,7 @@ class _IndividualSdcRecordDetailPageState
   int _page = 1;
   int _pageSize = 30;
   String _search = '';
+  bool? _sharedWithOrg;
 
   AsyncValue<SdcRecord> _data = const AsyncLoading();
 
@@ -58,6 +59,8 @@ class _IndividualSdcRecordDetailPageState
     _page = int.tryParse((qp['page'] ?? '').trim()) ?? 1;
     _pageSize = int.tryParse((qp['pageSize'] ?? '').trim()) ?? 30;
     _search = (qp['search'] ?? '').trim();
+    final String sharedRaw = (qp['shared_with_org'] ?? '').trim().toLowerCase();
+    _sharedWithOrg = sharedRaw.isEmpty ? null : sharedRaw == 'true';
     debugPrint(
       '[sdc-detail] init publicId=$_publicId instanceKey=$_instanceKey orgId=$_orgId spaceId=$_spaceId active=$_active page=$_page pageSize=$_pageSize search=$_search',
     );
@@ -230,6 +233,7 @@ class _IndividualSdcRecordDetailPageState
                   error: (Object err, _) =>
                       _PendingSdcErrorState(error: err, onRetry: _load),
                   data: (SdcRecord record) {
+                    final bool canDownload = _sharedWithOrg != false;
                     return LayoutBuilder(
                       builder:
                           (BuildContext context, BoxConstraints constraints) {
@@ -251,10 +255,17 @@ class _IndividualSdcRecordDetailPageState
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: <Widget>[
+                                    if (_sharedWithOrg == false) ...<Widget>[
+                                      const _SharingGateBanner(),
+                                      const SizedBox(height: AppSpacing.x4),
+                                    ],
                                     _HeroCard(
                                       record: record,
                                       instanceKey: _instanceKey,
-                                      onDownload: () => _downloadPdf(record),
+                                      onDownload: canDownload
+                                          ? () => _downloadPdf(record)
+                                          : null,
+                                      isDownloadEnabled: canDownload,
                                     ),
                                     const SizedBox(height: AppSpacing.x4),
                                     _SectionCard(
@@ -398,6 +409,15 @@ class _IndividualSdcRecordDetailPageState
   }
 
   Future<void> _downloadPdf(SdcRecord record) async {
+    if (_sharedWithOrg == false) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Certificates not yet shared with your organization.'),
+        ),
+      );
+      return;
+    }
     try {
       debugPrint(
         '[sdc-detail] download requested publicId=${record.publicId} title=${record.title}',
@@ -431,6 +451,19 @@ class _IndividualSdcRecordDetailPageState
       await Share.shareXFiles(<XFile>[
         XFile(file.path, mimeType: 'application/pdf'),
       ], text: 'SDC record PDF');
+    } on ApiException catch (e, st) {
+      debugPrint('[sdc-detail] pdf download api failure: $e');
+      debugPrintStack(stackTrace: st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.statusCode == 403
+                ? 'Certificates not yet shared with your organization.'
+                : 'Unable to download PDF right now.',
+          ),
+        ),
+      );
     } catch (e, st) {
       debugPrint('[sdc-detail] pdf download failed: $e');
       debugPrintStack(stackTrace: st);
@@ -447,11 +480,13 @@ class _HeroCard extends StatelessWidget {
     required this.record,
     required this.instanceKey,
     required this.onDownload,
+    required this.isDownloadEnabled,
   });
 
   final SdcRecord record;
   final String instanceKey;
-  final VoidCallback onDownload;
+  final VoidCallback? onDownload;
+  final bool isDownloadEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -569,8 +604,12 @@ class _HeroCard extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: onDownload,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
+                backgroundColor: isDownloadEnabled
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFFE2E8F0),
+                foregroundColor: isDownloadEnabled
+                    ? Colors.white
+                    : const Color(0xFF64748B),
                 elevation: 0,
                 minimumSize: const Size.fromHeight(54),
                 shape: RoundedRectangleBorder(
@@ -578,9 +617,11 @@ class _HeroCard extends StatelessWidget {
                 ),
               ),
               icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text(
-                'Download Certificate',
-                style: TextStyle(
+              label: Text(
+                isDownloadEnabled
+                    ? 'Download Certificate'
+                    : 'Certificate Locked',
+                style: const TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -834,6 +875,42 @@ class _AboutRecordCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SharingGateBanner extends StatelessWidget {
+  const _SharingGateBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFCD34D)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(Icons.lock_rounded, color: Color(0xFFF59E0B), size: 20),
+          const SizedBox(width: AppSpacing.x3),
+          const Expanded(
+            child: Text(
+              'Certificates not yet shared with your organization.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                height: 18 / 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF7C2D12),
+              ),
             ),
           ),
         ],

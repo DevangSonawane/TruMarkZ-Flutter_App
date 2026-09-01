@@ -212,6 +212,7 @@ class AppRouter {
     String orgId = '',
     String spaceId = '',
     String instanceKey = 'de',
+    bool? sharedWithOrg,
     int active = 1,
     int page = 1,
     int pageSize = 30,
@@ -225,6 +226,8 @@ class AppRouter {
       'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
       if (cleanOrgId.isNotEmpty) 'org_id': cleanOrgId,
       if (cleanSpaceId.isNotEmpty) 'space_id': cleanSpaceId,
+      if (sharedWithOrg != null)
+        'shared_with_org': sharedWithOrg ? 'true' : 'false',
       'active': active.toString(),
       'page': page.toString(),
       'pageSize': pageSize.toString(),
