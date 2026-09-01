@@ -87,50 +87,22 @@ class _IndividualSdcRecordDetailPageState
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      debugPrint(
-        '[sdc-detail] loading /sdc/records orgId=$_orgId spaceId=$_spaceId active=$_active page=$_page pageSize=$_pageSize search=$_search',
-      );
-      SdcRecord? selected;
-
-      Future<void> loadFromList({String? search}) async {
-        final String effectiveSearch = (search ?? _search).trim();
-        final SdcRecordsResponse res = await repo.getSdcRecords(
-          orgId: _orgId.isNotEmpty ? _orgId : null,
-          spaceId: _spaceId.isNotEmpty ? _spaceId : null,
-          active: _active,
-          page: _page,
-          pageSize: _pageSize,
-          search: effectiveSearch,
-        );
-        debugPrint(
-          '[sdc-detail] /sdc/records returned count=${res.count} page=${res.page} pageSize=${res.pageSize} records=${res.records.length} instanceKey=${res.instanceKey}',
-        );
-        selected = _matchRecord(res.records, searchHint: effectiveSearch);
-        debugPrint(
-          '[sdc-detail] match=${selected == null ? 'none' : selected!.publicId}',
+      if (_publicId.isEmpty) {
+        throw StateError(
+          'This batch record does not have a certificate public ID yet.',
         );
       }
-
-      final String initialSearch = _search.isNotEmpty ? _search : _publicId;
-      await loadFromList(search: initialSearch);
-      if (selected == null && _publicId.isNotEmpty && _search != _publicId) {
-        debugPrint('[sdc-detail] retrying /sdc/records with search=$_publicId');
-        await loadFromList(search: _publicId);
-      }
-
-      if (!mounted) return;
-      if (selected == null) {
-        debugPrint('[sdc-detail] record not found after lookup');
-        setState(() {
-          _data = AsyncError(
-            StateError('Record not found in the loaded page.'),
-            StackTrace.current,
-          );
-        });
+      if (_sharedWithOrg == false) {
+        setState(() => _data = AsyncData(_placeholderRecord()));
         return;
       }
-
-      setState(() => _data = AsyncData(selected!));
+      debugPrint('[sdc-detail] loading direct certificate publicId=$_publicId');
+      final SdcRecordDetailResponse detail = await repo.getSdcRecord(
+        publicId: _publicId,
+        instanceKey: _instanceKey,
+      );
+      if (!mounted) return;
+      setState(() => _data = AsyncData(_recordFromDetail(detail)));
     } on ApiException catch (e, st) {
       if (!mounted) return;
       setState(() => _data = AsyncError(e, st));
@@ -140,24 +112,40 @@ class _IndividualSdcRecordDetailPageState
     }
   }
 
-  SdcRecord? _matchRecord(List<SdcRecord> records, {String? searchHint}) {
-    final String hint = (searchHint ?? '').trim().toLowerCase();
-    for (final SdcRecord record in records) {
-      if (record.publicId.trim() == _publicId.trim() ||
-          record.id.trim() == _publicId.trim()) {
-        return record;
-      }
-      if (hint.isNotEmpty) {
-        final String title = record.title.trim().toLowerCase();
-        if (title == hint || title.contains(hint)) return record;
-        if (record.recipients.any(
-          (String recipient) => recipient.trim().toLowerCase() == hint,
-        )) {
-          return record;
-        }
-      }
-    }
-    return records.length == 1 ? records.first : null;
+  SdcRecord _recordFromDetail(SdcRecordDetailResponse detail) {
+    return SdcRecord(
+      id: detail.publicId,
+      revoked: false,
+      uniqueIdValue: '',
+      edited: false,
+      anchorTime: null,
+      latest: true,
+      publicId: detail.publicId.isEmpty ? _publicId : detail.publicId,
+      title: _search.isEmpty ? _publicId : _search,
+      recipients: const <String>[],
+      active: true,
+      expires: null,
+      createdAt: '',
+      updatedAt: '',
+    );
+  }
+
+  SdcRecord _placeholderRecord() {
+    return SdcRecord(
+      id: _publicId,
+      revoked: false,
+      uniqueIdValue: '',
+      edited: false,
+      anchorTime: null,
+      latest: true,
+      publicId: _publicId,
+      title: _search.isEmpty ? _publicId : _search,
+      recipients: const <String>[],
+      active: true,
+      expires: null,
+      createdAt: '',
+      updatedAt: '',
+    );
   }
 
   void _goBack(BuildContext context) {

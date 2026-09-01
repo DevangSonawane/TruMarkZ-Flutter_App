@@ -55,6 +55,22 @@ class _BatchTrackingDetailPageState
       verificationRepositoryProvider,
     );
 
+    // Organization certificate access starts with the authorized SDC status
+    // endpoint. It returns the certificate_ids owned by this batch.
+    try {
+      final WarrantyBatchStatusResponse status = await repo.getSdcBatchStatus(
+        _batchId,
+      );
+      if (!mounted) return;
+      setState(() => _sdcData = AsyncData(status));
+    } on ApiException catch (e, st) {
+      if (!mounted) return;
+      setState(() => _sdcData = AsyncError(e, st));
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _sdcData = AsyncError(e, st));
+    }
+
     try {
       final VerificationBatchDetailResponse res = await repo.getBatchDetails(
         _batchId,
@@ -87,10 +103,12 @@ class _BatchTrackingDetailPageState
       // Batch details and SDC status remain the primary sources.
     }
 
+    if (!detail.isWarrantyBatch) return;
+
     try {
-      final WarrantyBatchStatusResponse res = detail.isWarrantyBatch
-          ? await repo.getWarrantyBatchStatus(_batchId)
-          : await repo.getSdcBatchStatus(_batchId);
+      final WarrantyBatchStatusResponse res = await repo.getWarrantyBatchStatus(
+        _batchId,
+      );
       if (!mounted) return;
       setState(() {
         if (detail.isWarrantyBatch) {
@@ -397,26 +415,33 @@ class _BatchTrackingDetailPageState
                                   subtitle: 'Items in this batch',
                                 ),
                                 const SizedBox(height: AppSpacing.x3),
-                                for (final VerificationUser u
-                                    in res.users) ...<Widget>[
+                                for (final MapEntry<int, VerificationUser> entry
+                                    in res.users.asMap().entries) ...<Widget>[
                                   _UserTile(
-                                    user: u,
+                                    user: entry.value,
                                     batchIsTerminal: hasGeneratedSdc,
                                     onTap: () {
                                       final String orgId =
                                           detail?.sdcOrgId ?? '';
                                       final String spaceId =
                                           detail?.sdcSpaceId ?? '';
-                                      final String searchTerm =
-                                          u.fullName.trim().isNotEmpty
-                                          ? u.fullName.trim()
-                                          : (u.email.trim().isNotEmpty
-                                                ? u.email.trim()
-                                                : u.id.trim());
+                                      final VerificationUser u = entry.value;
+                                      final String searchTerm = u.fullName
+                                          .trim();
+                                      final WarrantyBatchStatusResponse?
+                                      status = _sdcData.valueOrNull;
                                       final String publicId =
                                           u.publicId.trim().isNotEmpty
                                           ? u.publicId.trim()
-                                          : '';
+                                          : (entry.key <
+                                                    (status
+                                                            ?.certificateIds
+                                                            .length ??
+                                                        0)
+                                                ? status!
+                                                      .certificateIds[entry.key]
+                                                      .trim()
+                                                : '');
                                       debugPrint(
                                         '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
                                       );
