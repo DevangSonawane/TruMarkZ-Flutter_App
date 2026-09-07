@@ -51,13 +51,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   final Set<String> _checks = <String>{};
   final List<_ParsedProductRow> _parsedProductRows = <_ParsedProductRow>[];
   WarrantySerialReservationResponse? _warrantyReservation;
-  bool _reservingWarrantySerials = false;
-  String? _warrantyReservationError;
   final Map<String, _WarrantyDocumentDraft> _warrantyDocumentDrafts =
       <String, _WarrantyDocumentDraft>{};
   String? _productParseError;
 
   PickedFile? _pickedFile;
+  bool _parsingFile = false;
   bool _creating = false;
   List<String> _savedTemplateHeaders = <String>[];
   String get _resolvedBatchName {
@@ -124,36 +123,65 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     return header.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
   }
 
+  static bool _matchesAnyHeader(String header, Set<String> names) {
+    return names.contains(_normalizeHeader(header));
+  }
+
   static bool _isRowEmpty(List<Object?> row) {
-    return row.every((dynamic cell) => (cell?.toString() ?? '').trim().isEmpty);
+    return row.every((Object? cell) => _cellText(cell).trim().isEmpty);
   }
 
   static String _rowValue(List<Object?> row, int? index) {
     if (index == null || index < 0 || index >= row.length) return '';
-    return row[index]?.toString().trim() ?? '';
+    return _cellText(row[index]).trim();
+  }
+
+  static String _cellText(Object? value) {
+    if (value == null) return '';
+    if (value is Data) return _cellText(value.value);
+    if (value is TextCellValue) return (value.value.text ?? '').trim();
+    if (value is IntCellValue) return value.value.toString();
+    if (value is DoubleCellValue) return value.value.toString();
+    if (value is BoolCellValue) return value.value.toString();
+    if (value is DateCellValue) return value.toString();
+    if (value is DateTimeCellValue) return value.toString();
+    if (value is TimeCellValue) return value.toString();
+    if (value is FormulaCellValue) return value.formula.trim();
+    return value.toString().trim();
+  }
+
+  static String _warrantyRowKey(_ParsedProductRow row, int index) {
+    return '$index|${row.productName.trim().toLowerCase()}|${row.skuNo.trim().toLowerCase()}';
   }
 
   void _resetWarrantyState() {
     _warrantyReservation = null;
-    _warrantyReservationError = null;
-    _reservingWarrantySerials = false;
     _warrantyDocumentDrafts.clear();
   }
 
   void _upsertWarrantyDocumentDraft(_WarrantyDocumentDraft draft) {
     setState(() {
-      _warrantyDocumentDrafts[draft.serialNo] = draft;
+      _warrantyDocumentDrafts[draft.rowKey] = draft;
     });
   }
 
   List<WarrantyBulkUploadDocumentInput> _buildWarrantyDocuments() {
-    final WarrantySerialReservationResponse? reservation = _warrantyReservation;
-    if (reservation == null) return const <WarrantyBulkUploadDocumentInput>[];
     final List<WarrantyBulkUploadDocumentInput> docs =
         <WarrantyBulkUploadDocumentInput>[];
-    for (final WarrantySerialReservationRow row in reservation.rows) {
-      final _WarrantyDocumentDraft? draft =
-          _warrantyDocumentDrafts[row.serialNo];
+    final List<WarrantySerialReservationRow> rows =
+        _warrantyReservation?.rows ?? const <WarrantySerialReservationRow>[];
+    for (int i = 0; i < rows.length; i++) {
+      final WarrantySerialReservationRow row = rows[i];
+      final String rowKey = row.serialNo.trim().isNotEmpty
+          ? row.serialNo.trim()
+          : _warrantyRowKey(
+              _ParsedProductRow(
+                productName: row.customerName,
+                skuNo: row.modelNo,
+              ),
+              i,
+            );
+      final _WarrantyDocumentDraft? draft = _warrantyDocumentDrafts[rowKey];
       if (draft == null) continue;
       final PickedFile? warrantyReport = draft.warrantyReport;
       final PickedFile? productDetails = draft.productDetails;
@@ -182,43 +210,31 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   }
 
   Future<void> _reserveWarrantySerials(PickedFile file) async {
+    final VerificationRepository repo = ref.read(
+      verificationRepositoryProvider,
+    );
+    final WarrantySerialReservationResponse response = await repo
+        .reserveWarrantySerials(fileBytes: file.bytes, fileName: file.name);
+    final List<WarrantySerialReservationRow> validRows = response.rows
+        .where((WarrantySerialReservationRow row) => row.serialNo.isNotEmpty)
+        .toList();
     if (!mounted) return;
     setState(() {
-      _reservingWarrantySerials = true;
-      _warrantyReservation = null;
-      _warrantyReservationError = null;
+      _warrantyReservation = response;
+      _parsedProductRows
+        ..clear()
+        ..addAll(
+          validRows.map(
+            (WarrantySerialReservationRow row) => _ParsedProductRow(
+              productName: row.customerName,
+              skuNo: row.modelNo,
+            ),
+          ),
+        );
+      _productParseError = validRows.isEmpty
+          ? 'No valid warranty rows were reserved from this file.'
+          : null;
     });
-    try {
-      final VerificationRepository repo = ref.read(
-        verificationRepositoryProvider,
-      );
-      final WarrantySerialReservationResponse response = await repo
-          .reserveWarrantySerials(fileBytes: file.bytes, fileName: file.name);
-      if (!mounted) return;
-      setState(() {
-        _warrantyReservation = response;
-        _warrantyReservationError = response.rows.isEmpty
-            ? 'No valid warranty rows were reserved from the file.'
-            : null;
-      });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _warrantyReservationError = e.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _warrantyReservationError =
-            'Something went wrong while reserving serial numbers.';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _reservingWarrantySerials = false;
-        });
-      }
-    }
   }
 
   _ParsedProductRowsResult _parseProductRowsFromCsv(Uint8List bytes) {
@@ -244,12 +260,18 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         .toList();
     final bool requiresSku = _mode != 'warranty';
     final int nameIndex = header.indexWhere(
-      (String value) =>
-          _normalizeHeader(value) ==
-          (requiresSku ? 'productname' : 'customername'),
+      (String value) => requiresSku
+          ? _matchesAnyHeader(value, const <String>{'productname'})
+          : _matchesAnyHeader(value, const <String>{'customername', 'name'}),
     );
     final int skuIndex = header.indexWhere(
-      (String value) => _normalizeHeader(value) == 'skuno',
+      (String value) => requiresSku
+          ? _matchesAnyHeader(value, const <String>{'skuno', 'sku'})
+          : _matchesAnyHeader(value, const <String>{
+              'modelno',
+              'modelnumber',
+              'model',
+            }),
     );
     if (nameIndex < 0) {
       return const _ParsedProductRowsResult(
@@ -263,6 +285,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         error: 'Missing required column: sku_no',
       );
     }
+    if (!requiresSku && skuIndex < 0) {
+      return const _ParsedProductRowsResult(
+        rows: <_ParsedProductRow>[],
+        error: 'Missing required column: model_no',
+      );
+    }
 
     final List<_ParsedProductRow> rows = <_ParsedProductRow>[];
     final Set<String> seenSkus = <String>{};
@@ -270,12 +298,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       final List<dynamic> row = table[i];
       if (_isRowEmpty(row)) continue;
       final String name = _rowValue(row, nameIndex).trim();
-      final String sku = requiresSku ? _rowValue(row, skuIndex).trim() : '';
+      final String sku = _rowValue(row, skuIndex).trim();
       if (name.isEmpty && sku.isEmpty) continue;
-      if (!requiresSku) {
-        rows.add(_ParsedProductRow(productName: name, skuNo: sku));
-        continue;
-      }
       if (sku.isEmpty) continue;
       final String skuKey = sku.toLowerCase();
       if (seenSkus.add(skuKey)) {
@@ -315,16 +339,22 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     }
 
     final List<String> header = rows[headerIndex]
-        .map((Data? cell) => (cell?.value?.toString() ?? '').trim())
+        .map((Data? cell) => _cellText(cell?.value))
         .toList();
     final bool requiresSku = _mode != 'warranty';
     final int nameIndex = header.indexWhere(
-      (String value) =>
-          _normalizeHeader(value) ==
-          (requiresSku ? 'productname' : 'customername'),
+      (String value) => requiresSku
+          ? _matchesAnyHeader(value, const <String>{'productname'})
+          : _matchesAnyHeader(value, const <String>{'customername', 'name'}),
     );
     final int skuIndex = header.indexWhere(
-      (String value) => _normalizeHeader(value) == 'skuno',
+      (String value) => requiresSku
+          ? _matchesAnyHeader(value, const <String>{'skuno', 'sku'})
+          : _matchesAnyHeader(value, const <String>{
+              'modelno',
+              'modelnumber',
+              'model',
+            }),
     );
     if (nameIndex < 0) {
       return const _ParsedProductRowsResult(
@@ -338,21 +368,21 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         error: 'Missing required column: sku_no',
       );
     }
+    if (!requiresSku && skuIndex < 0) {
+      return const _ParsedProductRowsResult(
+        rows: <_ParsedProductRow>[],
+        error: 'Missing required column: model_no',
+      );
+    }
 
     final List<_ParsedProductRow> parsedRows = <_ParsedProductRow>[];
     final Set<String> seenSkus = <String>{};
     for (int i = headerIndex + 1; i < rows.length; i++) {
       final List<Data?> row = rows[i];
       if (_isRowEmpty(row)) continue;
-      final String name = (row[nameIndex]?.value?.toString() ?? '').trim();
-      final String sku = requiresSku
-          ? (row[skuIndex]?.value?.toString() ?? '').trim()
-          : '';
+      final String name = _cellText(row[nameIndex]?.value);
+      final String sku = _cellText(row[skuIndex]?.value);
       if (name.isEmpty && sku.isEmpty) continue;
-      if (!requiresSku) {
-        parsedRows.add(_ParsedProductRow(productName: name, skuNo: sku));
-        continue;
-      }
       if (sku.isEmpty) continue;
       final String skuKey = sku.toLowerCase();
       if (seenSkus.add(skuKey)) {
@@ -511,28 +541,51 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   Future<void> _setPickedFile(PickedFile picked) async {
     setState(() {
       _pickedFile = picked;
+      _parsingFile = true;
       _parsedProductRows.clear();
       _productParseError = null;
       _resetWarrantyState();
     });
-    final _ParsedProductRowsResult parsed = _parseProductRowsFromPickedFile(
-      picked,
-    );
-    if (!mounted) return;
-    setState(() {
-      _parsedProductRows
-        ..clear()
-        ..addAll(parsed.rows);
-      _productParseError =
-          parsed.error ??
-          (parsed.rows.isEmpty
-              ? (_mode == 'warranty'
-                    ? 'Could not find any valid customer_name rows in the selected file.'
-                    : 'Could not find any valid product_name and sku_no rows in the selected file.')
-              : null);
-    });
-    if (_mode == 'warranty' && parsed.rows.isNotEmpty) {
-      await _reserveWarrantySerials(picked);
+    await Future<void>.delayed(const Duration(milliseconds: 140));
+    try {
+      if (_mode == 'warranty') {
+        await _reserveWarrantySerials(picked);
+        return;
+      }
+      final _ParsedProductRowsResult parsed = _parseProductRowsFromPickedFile(
+        picked,
+      );
+      if (!mounted) return;
+      setState(() {
+        _parsedProductRows
+          ..clear()
+          ..addAll(parsed.rows);
+        _productParseError =
+            parsed.error ??
+            (parsed.rows.isEmpty
+                ? (_mode == 'warranty'
+                      ? 'Could not find any valid customer_name and model_no rows in the selected file.'
+                      : 'Could not find any valid product_name and sku_no rows in the selected file.')
+                : null);
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _productParseError = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _productParseError = _mode == 'warranty'
+            ? 'Failed to process the uploaded warranty file.'
+            : 'Failed to read the uploaded file.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _parsingFile = false;
+        });
+      }
     }
   }
 
@@ -595,32 +648,24 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         SnackBar(
           content: Text(
             isWarranty
-                ? 'Please upload a file with valid customer_name rows.'
+                ? 'Please upload a warranty file with valid reserved rows.'
                 : 'Please upload a file with valid product_name and sku_no columns.',
           ),
         ),
       );
       return;
     }
-    final String resolvedIndustry = _effectiveIndustry();
-
     final WarrantySerialReservationResponse? reservation = _warrantyReservation;
     if (isWarranty && (reservation == null || reservation.rows.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Reserve warranty serial numbers before submitting the batch.',
-          ),
+          content: Text('Please wait for warranty row processing to finish.'),
         ),
       );
       return;
     }
-    if (isWarranty && _warrantyReservationError != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_warrantyReservationError!)));
-      return;
-    }
+    final String resolvedIndustry = _effectiveIndustry();
+
     setState(() => _creating = true);
     try {
       final VerificationRepository repo = ref.read(
@@ -821,7 +866,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         };
     final bool isWarranty = _mode == 'warranty';
     final String uploadHint = isWarranty
-        ? 'Download template based on your selected sector.\nUpload your Excel, and optionally add documents before confirming the batch.'
+        ? 'Use the warranty template fields from the sheet.\nUpload your Excel and optionally attach documents per row before confirming the batch.'
         : 'Download template based on your selected sector.\nUpload your Excel, then confirm the batch.';
     final int currentStep = isWarranty ? 3 : 4;
     final int totalSteps = isWarranty ? 5 : 6;
@@ -1079,18 +1124,37 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                         fileSizeLabel: _formatBytes(
                                           _pickedFile!.bytes.length,
                                         ),
-                                        onRemove: () =>
-                                            setState(() => _pickedFile = null),
+                                        onRemove: () => setState(() {
+                                          _pickedFile = null;
+                                          _parsingFile = false;
+                                          _parsedProductRows.clear();
+                                          _productParseError = null;
+                                          _resetWarrantyState();
+                                        }),
                                       ),
+                                      if (_parsingFile) ...<Widget>[
+                                        SizedBox(height: s(12)),
+                                        _ParsingFileCard(
+                                          scale: scale,
+                                          isWarranty: isWarranty,
+                                        ),
+                                      ] else if (_pickedFile !=
+                                          null) ...<Widget>[
+                                        SizedBox(height: s(12)),
+                                        _ParseStatusCard(
+                                          scale: scale,
+                                          errorText: _productParseError,
+                                          parsedRows: _parsedProductRows.length,
+                                          isWarranty: isWarranty,
+                                        ),
+                                      ],
                                     ],
                                     SizedBox(height: s(20)),
-                                    if (isWarranty)
+                                    if (isWarranty && !_parsingFile)
                                       _WarrantyDocumentUploadsSection(
                                         scale: scale,
                                         reservation: _warrantyReservation,
-                                        loading: _reservingWarrantySerials,
-                                        errorText: _warrantyReservationError,
-                                        draftsBySerial: _warrantyDocumentDrafts,
+                                        draftsByRowKey: _warrantyDocumentDrafts,
                                         onDraftChanged:
                                             _upsertWarrantyDocumentDraft,
                                       ),
@@ -1107,12 +1171,17 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                     !_creating &&
                                     gstVerified &&
                                     _pickedFile != null &&
+                                    !_parsingFile &&
                                     _resolvedBatchName.isNotEmpty &&
                                     _productParseError == null &&
                                     _parsedProductRows.isNotEmpty &&
                                     (!isWarranty ||
-                                        (_warrantyReservation != null &&
-                                            !_reservingWarrantySerials)),
+                                        ((_warrantyReservation
+                                                    ?.rows
+                                                    .isNotEmpty ??
+                                                false) &&
+                                            !_parsingFile)) &&
+                                    (!_creating),
                                 onTap: _confirmAndCreateBatch,
                                 label: 'Create Batch',
                               ),
@@ -2098,6 +2167,174 @@ class _SelectedFileCard extends StatelessWidget {
   }
 }
 
+class _ParsingFileCard extends StatelessWidget {
+  const _ParsingFileCard({required this.scale, required this.isWarranty});
+
+  final double scale;
+  final bool isWarranty;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(s(14)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(s(16)),
+        border: Border.all(color: const Color(0xFFBFD6FF), width: s(1)),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: s(22),
+            height: s(22),
+            child: CircularProgressIndicator(
+              strokeWidth: s(2.4),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.brandBlue,
+              ),
+            ),
+          ),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  isWarranty ? 'Processing warranty rows' : 'Parsing Excel',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(13),
+                    fontWeight: FontWeight.w700,
+                    height: 18 / 13,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: s(2)),
+                Text(
+                  isWarranty
+                      ? 'Reserving serial numbers for valid rows...'
+                      : 'Reading rows from the uploaded file...',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(11),
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ParseStatusCard extends StatelessWidget {
+  const _ParseStatusCard({
+    required this.scale,
+    required this.errorText,
+    required this.parsedRows,
+    required this.isWarranty,
+  });
+
+  final double scale;
+  final String? errorText;
+  final int parsedRows;
+  final bool isWarranty;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+    final String error = errorText?.trim() ?? '';
+    final bool hasError = error.isNotEmpty;
+    final bool hasRows = parsedRows > 0;
+    final Color bg = hasError
+        ? const Color(0xFFFFF7ED)
+        : hasRows
+        ? const Color(0xFFECFDF5)
+        : const Color(0xFFF8FAFC);
+    final Color border = hasError
+        ? const Color(0xFFFCD34D)
+        : hasRows
+        ? const Color(0xFFA7F3D0)
+        : const Color(0xFFE5E7EB);
+    final Color iconColor = hasError
+        ? const Color(0xFFB45309)
+        : hasRows
+        ? const Color(0xFF059669)
+        : const Color(0xFF64748B);
+    final String title = hasError
+        ? 'Could not parse file'
+        : hasRows
+        ? 'Parsed $parsedRows ${isWarranty ? 'warranty' : 'product'} rows'
+        : 'No rows found';
+    final String subtitle = hasError
+        ? error
+        : hasRows
+        ? 'You can attach documents and create the batch.'
+        : isWarranty
+        ? 'Expected columns: customer_name and model_no.'
+        : 'Expected columns: product_name and sku_no.';
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(s(14)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(s(16)),
+        border: Border.all(color: border, width: s(1)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            hasError
+                ? Icons.warning_amber_rounded
+                : hasRows
+                ? Icons.check_circle_rounded
+                : Icons.info_outline_rounded,
+            size: s(22),
+            color: iconColor,
+          ),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(13),
+                    fontWeight: FontWeight.w700,
+                    height: 18 / 13,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: s(2)),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(11),
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UploadButton extends StatelessWidget {
   const _UploadButton({
     required this.scale,
@@ -2181,7 +2418,8 @@ class _ParsedProductRow {
     final String name = productName.trim().isEmpty
         ? 'Unnamed product'
         : productName.trim();
-    return '$name (SKU: ${skuNo.trim()})';
+    final String secondary = skuNo.trim();
+    return secondary.isEmpty ? name : '$name • $secondary';
   }
 }
 
@@ -2216,14 +2454,14 @@ class _ProductDocumentDraft {
 
 class _WarrantyDocumentDraft {
   const _WarrantyDocumentDraft({
-    required this.serialNo,
+    required this.rowKey,
     required this.customerName,
     required this.modelNo,
     this.warrantyReport,
     this.productDetails,
   });
 
-  final String serialNo;
+  final String rowKey;
   final String customerName;
   final String modelNo;
   final PickedFile? warrantyReport;
@@ -2236,7 +2474,7 @@ class _WarrantyDocumentDraft {
     bool clearProductDetails = false,
   }) {
     return _WarrantyDocumentDraft(
-      serialNo: serialNo,
+      rowKey: rowKey,
       customerName: customerName,
       modelNo: modelNo,
       warrantyReport: clearWarrantyReport
@@ -2253,24 +2491,20 @@ class _WarrantyDocumentUploadsSection extends StatelessWidget {
   const _WarrantyDocumentUploadsSection({
     required this.scale,
     required this.reservation,
-    required this.loading,
-    required this.errorText,
-    required this.draftsBySerial,
+    required this.draftsByRowKey,
     required this.onDraftChanged,
   });
 
   final double scale;
   final WarrantySerialReservationResponse? reservation;
-  final bool loading;
-  final String? errorText;
-  final Map<String, _WarrantyDocumentDraft> draftsBySerial;
+  final Map<String, _WarrantyDocumentDraft> draftsByRowKey;
   final ValueChanged<_WarrantyDocumentDraft> onDraftChanged;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
     final List<WarrantySerialReservationRow> rows =
-        reservation?.rows ?? <WarrantySerialReservationRow>[];
+        reservation?.rows ?? const <WarrantySerialReservationRow>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2294,11 +2528,9 @@ class _WarrantyDocumentUploadsSection extends StatelessWidget {
                   ),
                   SizedBox(height: s(4)),
                   Text(
-                    loading
-                        ? 'Reserving serial numbers from the uploaded Excel…'
-                        : rows.isEmpty
-                        ? 'Upload a warranty Excel file to reserve serial numbers.'
-                        : 'Each row is keyed by its reserved serial number. Attach Warranty Report and Product Details files per row.',
+                    rows.isEmpty
+                        ? 'Upload a warranty Excel file first.'
+                        : 'Each row is keyed by its reserved warranty serial. Attach Warranty Report and Product Details files per row.',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(11),
@@ -2312,34 +2544,10 @@ class _WarrantyDocumentUploadsSection extends StatelessWidget {
             ),
           ],
         ),
-        if (errorText != null && errorText!.trim().isNotEmpty) ...<Widget>[
-          SizedBox(height: s(12)),
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(s(12)),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED),
-              borderRadius: BorderRadius.circular(s(14)),
-              border: Border.all(color: const Color(0xFFFCD34D)),
-            ),
-            child: Text(
-              errorText!,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(11),
-                fontWeight: FontWeight.w500,
-                height: 16 / 11,
-                color: const Color(0xFF7C2D12),
-              ),
-            ),
-          ),
-        ],
         SizedBox(height: s(14)),
         if (rows.isEmpty)
           Text(
-            loading
-                ? 'Waiting for serial reservation...'
-                : 'No reserved rows are available yet.',
+            'No parsed warranty rows are available yet.',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: s(11),
@@ -2351,16 +2559,17 @@ class _WarrantyDocumentUploadsSection extends StatelessWidget {
         else
           Column(
             children: <Widget>[
-              for (final WarrantySerialReservationRow row in rows) ...<Widget>[
+              for (int index = 0; index < rows.length; index++) ...<Widget>[
                 _WarrantyDocumentCard(
+                  rowKey: _rowKey(rows[index], index),
                   scale: scale,
-                  row: row,
+                  row: rows[index],
                   draft:
-                      draftsBySerial[row.serialNo] ??
+                      draftsByRowKey[_rowKey(rows[index], index)] ??
                       _WarrantyDocumentDraft(
-                        serialNo: row.serialNo,
-                        customerName: row.customerName,
-                        modelNo: row.modelNo,
+                        rowKey: _rowKey(rows[index], index),
+                        customerName: rows[index].customerName,
+                        modelNo: rows[index].modelNo,
                       ),
                   onDraftChanged: onDraftChanged,
                 ),
@@ -2371,17 +2580,25 @@ class _WarrantyDocumentUploadsSection extends StatelessWidget {
       ],
     );
   }
+
+  static String _rowKey(WarrantySerialReservationRow row, int index) {
+    final String serial = row.serialNo.trim();
+    if (serial.isNotEmpty) return serial;
+    return '$index|${row.customerName.trim().toLowerCase()}|${row.modelNo.trim().toLowerCase()}';
+  }
 }
 
 class _WarrantyDocumentCard extends StatefulWidget {
   const _WarrantyDocumentCard({
     required this.scale,
+    required this.rowKey,
     required this.row,
     required this.onDraftChanged,
     this.draft,
   });
 
   final double scale;
+  final String rowKey;
   final WarrantySerialReservationRow row;
   final _WarrantyDocumentDraft? draft;
   final ValueChanged<_WarrantyDocumentDraft> onDraftChanged;
@@ -2399,7 +2616,7 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
     _draft =
         widget.draft ??
         _WarrantyDocumentDraft(
-          serialNo: widget.row.serialNo,
+          rowKey: widget.rowKey,
           customerName: widget.row.customerName,
           modelNo: widget.row.modelNo,
         );
@@ -2411,11 +2628,11 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
     final _WarrantyDocumentDraft incoming =
         widget.draft ??
         _WarrantyDocumentDraft(
-          serialNo: widget.row.serialNo,
+          rowKey: widget.rowKey,
           customerName: widget.row.customerName,
           modelNo: widget.row.modelNo,
         );
-    if (incoming.serialNo != _draft.serialNo ||
+    if (incoming.rowKey != _draft.rowKey ||
         incoming.warrantyReport != _draft.warrantyReport ||
         incoming.productDetails != _draft.productDetails) {
       _draft = incoming;
@@ -2503,7 +2720,7 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
                   children: <Widget>[
                     Text(
                       draft.customerName.isEmpty
-                          ? 'Reserved serial ${draft.serialNo}'
+                          ? 'Warranty row ${widget.rowKey}'
                           : draft.customerName,
                       style: TextStyle(
                         fontFamily: 'Inter',
@@ -2515,7 +2732,7 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
                     ),
                     SizedBox(height: s(2)),
                     Text(
-                      'Serial: ${draft.serialNo}${draft.modelNo.trim().isNotEmpty ? ' • Model: ${draft.modelNo}' : ''}',
+                      '${widget.row.serialNo.trim().isNotEmpty ? 'Serial: ${widget.row.serialNo}' : 'Ready for attachment'}${draft.modelNo.trim().isNotEmpty ? ' | Model: ${draft.modelNo}' : ''}',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: s(11),

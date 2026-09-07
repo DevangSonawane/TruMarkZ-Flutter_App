@@ -3,13 +3,14 @@ POST
 Upload Product Warranty Excel
 
 
-Org uploads the filled warranty Excel with warranty documents. Each product is created with warranty_status = 'pending'. Super admin then reviews and approves/rejects.
+Org uploads the filled warranty Excel after first reserving serial numbers. Each product is created with warranty_status = 'pending'. Super admin then reviews and approves/rejects.
 
-**Required:** batch_name, file (Excel), doc_product_names, doc_labels, doc_files
-**Optional:** description
+**Required:** batch_name, file (Excel), batch_type, use_reserved_serials, reserved_serial_nos
+**Optional:** description, doc_serial_nos, doc_labels, doc_files
 
-**Documents:** Each product must have warranty documents attached.
-- doc_product_names: comma-separated product names (must match Excel exactly)
+**Documents:** Warranty documents are attached by reserved serial number.
+- reserved_serial_nos: comma-separated serial_no values returned by /verification/products/warranty-reserve-serials
+- doc_serial_nos: comma-separated serial_no values in the same order as doc_labels and doc_files
 - doc_labels: comma-separated document labels (warranty_card, warranty_certificate, etc.)
 - doc_files: files in same order as names and labels
 Parameters
@@ -24,15 +25,24 @@ string
 description
 file *
 string($binary)
-doc_product_names *
+batch_type *
 string
-Comma-separated product names for docs
+warranty
+use_reserved_serials *
+string
+true
+reserved_serial_nos *
+string
+Comma-separated reserved warranty serial numbers
+doc_serial_nos
+string
+Comma-separated serial numbers for docs
 
-doc_labels *
+doc_labels
 string
 Comma-separated document labels
 
-doc_files *
+doc_files
 array
 Document files in same order
 
