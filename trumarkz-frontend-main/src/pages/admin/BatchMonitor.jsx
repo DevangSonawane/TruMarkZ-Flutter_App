@@ -62,9 +62,12 @@ const buildHtmlBody = (name, uploadUrl) => `<!DOCTYPE html>
 </table>
 </body></html>`;
 
-// "Send to Organization" has no backend concept (batch.status stops at
-// sdc_generated) — it's a purely local notify-action, tracked client-side
-// only, shown as an extra badge alongside the real status.
+// Local-only UI conveniences that genuinely have no backend endpoint (a
+// renamed batch display label, a generated verifier-upload link, mock
+// "sent" email tracking for Smart Send). "Send to Organization" is NOT one
+// of these — it's a real, persisted backend action (see
+// verificationAPI.shareWithOrganization / Batch.shared_with_org) and must
+// never be tracked here; sharedWithOrg comes from normaliseApiBatch instead.
 const BATCH_WORKFLOW_KEY = 'trumarkz_admin_batch_workflow_mock';
 
 const statusBadge = (status) => {
@@ -159,6 +162,23 @@ const getCertificateSerialNumber = (rec) =>
   rec?.credentialSubject?.serial_number ||
   null;
 
+// Plain Product batches have no serial_number field at all (their schema is
+// product_name/sku_no/model_no/brand/QR — see VERIFICATION_REQUIRED_HEADERS;
+// sku_no is a pre-upload document-matching key only and, per the backend's
+// own architecture docs, must never be used for certificate correlation),
+// so title/email matching permanently fails for them: the list endpoint
+// (GET /sdc/records) echoes the certificate's own publicId into `title` and
+// leaves `recipients` empty for products, carrying no identity back to the
+// batch record at all. Confirmed live in a single-record detail fetch
+// (GET /sdc/records/{publicId}) that credentialSubject.product_id IS present
+// there — same shape as serial_no above — so that's the reliable key for
+// products, at the cost of one extra request per unmatched candidate.
+const getCertificateProductId = (rec) =>
+  rec?.credential?.credentialSubject?.product_id ||
+  rec?.credentialSubject?.product_id ||
+  rec?.record?.credentialSubject?.product_id ||
+  null;
+
 // verification_type_label is just "Manual"/"Automatic" (a category, per the
 // submitted-reports docs) — not a display name. The readable name has to
 // come from slugifying verification_type_name (e.g. "police_verification" →
@@ -204,6 +224,12 @@ const normaliseApiBatch = (b) => {
     batchType: b.batch_type || null,
     latestCreatedAt: createdAt,
     sdcInfo: b.verification_progress?.sdc || null,
+    // Real, persisted sharing state from the backend (Batch.shared_with_org)
+    // — the actual security gate for certificate visibility, not a local
+    // notify-action. See handleSendToOrganization / shareWithOrganization.
+    sharedWithOrg: !!b.shared_with_org,
+    sharedAt: b.shared_at || null,
+    sharedBy: b.shared_by || null,
   };
 };
 
@@ -776,26 +802,24 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  // "Send to Organization" — same purely-local notify-action as the generic
-  // Control Center modal (no backend stage past sdc_generated), tracked in
-  // the same localStorage-backed workflow map so it persists per batch_id
-  // across modal opens/closes and app sessions alike.
-  const [sharedWithOrganization, setSharedWithOrganization] = useState(
-    () => !!getStoredWorkflow()[batchId]?.orgShared
-  );
+  // "Send to Organization" — real, persisted backend action. Sharing state
+  // is read straight off this batch's own fetched status (shared_with_org),
+  // never localStorage, so it reflects what's actually in the database and
+  // agrees with what the org side sees.
+  const sharedWithOrganization = !!data?.shared_with_org;
   const [sendingToOrg, setSendingToOrg] = useState(false);
-
-  useEffect(() => {
-    setSharedWithOrganization(!!getStoredWorkflow()[batchId]?.orgShared);
-  }, [batchId]);
 
   const handleSendToOrganization = async () => {
     setSendingToOrg(true);
     try {
-      const next = { ...getStoredWorkflow(), [batchId]: { ...(getStoredWorkflow()[batchId] || {}), orgShared: true, lastAction: new Date().toISOString() } };
-      localStorage.setItem(BATCH_WORKFLOW_KEY, JSON.stringify(next));
-      setSharedWithOrganization(true);
+      await verificationAPI.shareWithOrganization(batchId);
       toast.success(`${batchName} shared with the organization`);
+      // Reflect the backend's own change immediately rather than a full
+      // refetch — the rest of `data` (products, certs) is unaffected by this
+      // action, so there's nothing else that needs to reload.
+      setData((prev) => (prev ? { ...prev, shared_with_org: true, shared_at: new Date().toISOString() } : prev));
+    } catch (err) {
+      toast.error(getApiError(err, 'Failed to share batch with organization'));
     } finally {
       setSendingToOrg(false);
     }
@@ -1517,7 +1541,11 @@ export const BatchMonitor = () => {
       createdAt: batch.latestCreatedAt || null,
       status,
       statusMeta: batchStatusMeta[status] || batchStatusMeta.pending,
-      sharedWithOrganization: !!stored.orgShared,
+      // Source of truth is the backend's Batch.shared_with_org (see
+      // normaliseApiBatch) — never localStorage, which only ever reflected
+      // what this browser tab last clicked, not what's actually persisted.
+      sharedWithOrganization: !!batch.sharedWithOrg,
+      sharedAt: batch.sharedAt,
       uploadLink: stored.uploadLink || null,
       sentRequests: stored.sentRequests || (stored.requestId ? [{
         verification_type_name: 'Manual Verification',
@@ -1731,6 +1759,65 @@ export const BatchMonitor = () => {
           };
         }
       });
+
+      // Product records never match by the pass above — they have no email,
+      // and Dhiway echoes the certificate's own publicId into `title` for
+      // this batch type (confirmed live), so title === recordName never
+      // holds either. The list endpoint carries nothing identity-based for
+      // products, but a single-record detail fetch does: credentialSubject.
+      // product_id (confirmed live via GET /sdc/records/{publicId}). Only
+      // chase this down for whichever records are still unmatched, and only
+      // among the most-recently-created still-unclaimed certs, so this stays
+      // a handful of extra requests rather than one per cert in the space.
+      const unmatchedProductRecords = detailRecords.filter((record) => {
+        const recordId = record?.id || record?.user_id || record?.entity_id;
+        return isProductRecord(record) && recordId && !matchedByRecordId[recordId];
+      });
+
+      if (unmatchedProductRecords.length > 0) {
+        const candidatePool = allRecords
+          .filter((item) => item?.publicId && !seenPublicIds.has(item.publicId))
+          .sort((a, b) => new Date(b.createdAt || b.anchorTime || 0) - new Date(a.createdAt || a.anchorTime || 0))
+          .slice(0, Math.max(unmatchedProductRecords.length * 4, 20));
+
+        const detailed = await Promise.all(
+          candidatePool.map((item) =>
+            sdcAPI.getRecord(item.publicId)
+              .then(({ data }) => ({ item, productId: getCertificateProductId(data) }))
+              .catch(() => null)
+          )
+        );
+
+        const certByProductId = new Map();
+        detailed.forEach((entry) => {
+          if (entry?.productId && !certByProductId.has(entry.productId)) {
+            certByProductId.set(entry.productId, entry.item);
+          }
+        });
+
+        unmatchedProductRecords.forEach((record) => {
+          const recordId = record?.id || record?.user_id || record?.entity_id;
+          const match = certByProductId.get(recordId);
+          if (!match?.publicId || seenPublicIds.has(match.publicId)) return;
+          seenPublicIds.add(match.publicId);
+          matchedRecords.push(match);
+          matchedByRecordId[recordId] = {
+            id: match.id,
+            publicId: match.publicId,
+            title: match.title,
+            recipients: match.recipients || [],
+            anchorTime: match.anchorTime || null,
+            revoked: !!match.revoked,
+            issued: !!match.anchorTime && !match.revoked,
+            active: !!match.active,
+            latest: !!match.latest,
+            edited: !!match.edited,
+            createdAt: match.createdAt || null,
+            updatedAt: match.updatedAt || null,
+          };
+        });
+      }
+
       setBatchSdcRecords(matchedRecords);
       setBatchSdcByRecordId(matchedByRecordId);
     } catch {
@@ -1919,7 +2006,17 @@ export const BatchMonitor = () => {
     setDecidingRequestId(requestId);
     try {
       const { data } = await verificationAPI.updateManualVerificationStatus(requestId, status, reason);
-      toast.success(data?.message || `Marked ${status}`);
+      // "Reject wins" precedence (backend, Sept 2026): an approval decision
+      // can never silently un-reject a user already rejected elsewhere in a
+      // split-verifier batch. users_protected_from_downgrade tells us when
+      // that guard actually fired — surface it, or an admin approving a
+      // request that reports users_updated: 0 has no way to know why.
+      const protectedCount = data?.users_protected_from_downgrade || 0;
+      toast.success(
+        protectedCount > 0
+          ? `${data?.message || `Marked ${status}`} — ${protectedCount} already-rejected user${protectedCount === 1 ? '' : 's'} protected from being re-approved`
+          : (data?.message || `Marked ${status}`)
+      );
       setRejectingRequestId(null);
       setRejectReason('');
       const batchId = selectedBatch?.id;
@@ -1940,14 +2037,22 @@ export const BatchMonitor = () => {
   };
 
   // ── Action: Send to Organization ──────────────────────────────────────────
-  // Purely a local notify-action — the backend has no such stage (batch.status
-  // stops at sdc_generated) — so it's tracked client-side only, as an extra
-  // badge alongside the real status rather than a stage of it.
+  // Real, persisted backend action — POST /verification/batches/{id}/
+  // share-with-organization sets shared_with_org/shared_at/shared_by and
+  // commits it. This is the actual security gate: until it succeeds, the org
+  // caller's GET /sdc/batches/{id}/status returns certificate_ids: [] and
+  // GET /sdc/records/{public_id} 403s, regardless of anything shown here. The
+  // success toast must never fire before the API call actually succeeds, and
+  // the UI must reflect the backend's own state afterward — not a locally
+  // guessed value — hence the refetch rather than an optimistic local flip.
   const handleSendToOrganization = async (batch) => {
     setSendingToOrg(true);
     try {
-      updateBatchWorkflow(batch.id, { orgShared: true });
+      await verificationAPI.shareWithOrganization(batch.id);
       toast.success(`${batch.name} shared with the organization`);
+      await fetchData(true);
+    } catch (err) {
+      toast.error(getApiError(err, 'Failed to share batch with organization'));
     } finally {
       setSendingToOrg(false);
     }
@@ -2516,8 +2621,13 @@ export const BatchMonitor = () => {
                     onClick={() => setSdcGenerateBatch(selectedBatch)}>
                     {sdcInfo?.status ? 'Regenerate SDC' : 'Generate SDC'}
                   </Button>
-                  {/* Send to org — once verification is done (completed or SDC issued) and not yet shared */}
-                  {(selectedBatch.status === 'verification_completed' || selectedBatch.status === 'sdc_generated') && !selectedBatch.sharedWithOrganization && (
+                  {/* Send to org — only once SDC has actually been generated for this
+                      batch, never merely on "verification completed": sharing a batch
+                      with no certificates yet just sends the org to an empty/broken
+                      view. sdcInfo?.status is set by Generate SDC itself (draft_created
+                      or sdc_created) — the same signal "Regenerate SDC" above already
+                      keys off — so this button and that label always agree. */}
+                  {!!sdcInfo?.status && !selectedBatch.sharedWithOrganization && (
                     <Button variant="success" size="sm" icon={sendingToOrg ? RefreshCw : Send}
                       className="justify-start" disabled={sendingToOrg}
                       onClick={() => handleSendToOrganization(selectedBatch)}>

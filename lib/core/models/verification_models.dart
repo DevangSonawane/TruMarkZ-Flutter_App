@@ -181,6 +181,14 @@ List<String> _readStringList(dynamic raw) {
   return const <String>[];
 }
 
+String _readFirstString(Map<String, dynamic> json, List<String> keys) {
+  for (final String key in keys) {
+    final String value = (json[key] ?? '').toString().trim();
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
 int _readIntValue(Map<String, dynamic> json, List<String> keys) {
   for (final String key in keys) {
     final Object? raw = json[key];
@@ -304,13 +312,24 @@ class VerificationUser {
         : const <VerificationDocument>[];
 
     return VerificationUser(
-      id: readString(json['id']),
+      id: readString(json['id']).trim().isNotEmpty
+          ? readString(json['id'])
+          : (readString(json['user_id']).trim().isNotEmpty
+                ? readString(json['user_id'])
+                : readString(json['entity_id'])),
       batchId: readString(json['batch_id']),
       batchName: readBatchName(json),
       orgId: readString(json['org_id']),
-      publicId: readString(json['public_id']).trim().isNotEmpty
-          ? readString(json['public_id'])
-          : readString(json['publicId']),
+      publicId: _readFirstString(json, const <String>[
+        'public_id',
+        'publicId',
+        'certificate_id',
+        'certificateId',
+        'certificate_public_id',
+        'certificatePublicId',
+        'sdc_public_id',
+        'sdcPublicId',
+      ]),
       fullName: readString(json['full_name']),
       dob: json['dob']?.toString(),
       phoneNumber: readString(json['phone_number']),
@@ -681,6 +700,39 @@ class VerificationBatchDetailResponse {
   }
 
   bool get hasGeneratedSdc => sdcOrgId.isNotEmpty || sdcSpaceId.isNotEmpty;
+
+  List<String> get sdcCertificateIds {
+    final Set<String> ids = <String>{};
+    void addFrom(dynamic raw) {
+      ids.addAll(_readStringList(raw));
+    }
+
+    addFrom(verificationProgress['certificate_ids']);
+    addFrom(verificationProgress['certificateIds']);
+    addFrom(verificationProgress['public_ids']);
+    final dynamic sdc = verificationProgress['sdc'];
+    if (sdc is Map) {
+      final Map<String, dynamic> sdcJson = Map<String, dynamic>.from(sdc);
+      addFrom(sdcJson['certificate_ids']);
+      addFrom(sdcJson['certificateIds']);
+      addFrom(sdcJson['public_ids']);
+      addFrom(sdcJson['publicIds']);
+      final String direct = _readFirstString(sdcJson, const <String>[
+        'public_id',
+        'publicId',
+        'certificate_id',
+        'certificateId',
+        'certificate_public_id',
+        'certificatePublicId',
+      ]);
+      if (direct.isNotEmpty) ids.add(direct);
+    }
+    for (final VerificationUser user in users) {
+      if (user.publicId.trim().isNotEmpty) ids.add(user.publicId.trim());
+    }
+    return ids.toList();
+  }
+
   bool get isWarrantyBatch {
     final String type = batchType.trim().toLowerCase();
     if (type.isNotEmpty) return type == 'warranty';
@@ -839,6 +891,7 @@ class VerificationIndustryType {
 class WarrantyBatchProduct {
   const WarrantyBatchProduct({
     required this.id,
+    required this.publicId,
     required this.productName,
     required this.category,
     required this.serialNumber,
@@ -850,6 +903,7 @@ class WarrantyBatchProduct {
   });
 
   final String id;
+  final String publicId;
   final String productName;
   final String category;
   final String serialNumber;
@@ -864,6 +918,16 @@ class WarrantyBatchProduct {
 
     return WarrantyBatchProduct(
       id: readString(json['id']),
+      publicId: _readFirstString(json, const <String>[
+        'public_id',
+        'publicId',
+        'certificate_id',
+        'certificateId',
+        'certificate_public_id',
+        'certificatePublicId',
+        'sdc_public_id',
+        'sdcPublicId',
+      ]),
       productName: readString(
         json['product_name'] ?? json['productName'] ?? json['name'],
       ),
@@ -886,6 +950,80 @@ class WarrantyBatchProduct {
   }
 }
 
+class WarrantySerialReservationRow {
+  const WarrantySerialReservationRow({
+    required this.row,
+    required this.customerName,
+    required this.modelNo,
+    required this.serialNo,
+  });
+
+  final int row;
+  final String customerName;
+  final String modelNo;
+  final String serialNo;
+
+  factory WarrantySerialReservationRow.fromJson(Map<String, dynamic> json) {
+    return WarrantySerialReservationRow(
+      row: int.tryParse((json['row'] ?? '').toString()) ?? 0,
+      customerName: (json['customer_name'] ?? json['customerName'] ?? '')
+          .toString()
+          .trim(),
+      modelNo: (json['model_no'] ?? json['modelNo'] ?? '').toString().trim(),
+      serialNo: (json['serial_no'] ?? json['serialNo'] ?? '').toString().trim(),
+    );
+  }
+}
+
+class WarrantySerialReservationResponse {
+  const WarrantySerialReservationResponse({
+    required this.totalReserved,
+    required this.totalSkipped,
+    required this.rows,
+    required this.skipped,
+  });
+
+  final int totalReserved;
+  final int totalSkipped;
+  final List<WarrantySerialReservationRow> rows;
+  final List<String> skipped;
+
+  factory WarrantySerialReservationResponse.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final dynamic rowsRaw = json['rows'];
+    final dynamic skippedRaw = json['skipped'];
+    return WarrantySerialReservationResponse(
+      totalReserved:
+          int.tryParse(
+            (json['total_reserved'] ?? json['totalReserved'] ?? '').toString(),
+          ) ??
+          0,
+      totalSkipped:
+          int.tryParse(
+            (json['total_skipped'] ?? json['totalSkipped'] ?? '').toString(),
+          ) ??
+          0,
+      rows: rowsRaw is List
+          ? rowsRaw
+                .whereType<Map>()
+                .map(
+                  (Map e) => WarrantySerialReservationRow.fromJson(
+                    Map<String, dynamic>.from(e),
+                  ),
+                )
+                .toList()
+          : const <WarrantySerialReservationRow>[],
+      skipped: skippedRaw is List
+          ? skippedRaw
+                .map((dynamic e) => e?.toString().trim() ?? '')
+                .where((String s) => s.isNotEmpty)
+                .toList()
+          : <String>[],
+    );
+  }
+}
+
 class WarrantyBatchStatusResponse {
   const WarrantyBatchStatusResponse({
     required this.batchId,
@@ -897,6 +1035,11 @@ class WarrantyBatchStatusResponse {
     required this.certificateIds,
     required this.sharedWithOrg,
     required this.sharedAt,
+    required this.done,
+    required this.ready,
+    required this.stalled,
+    required this.stalledReason,
+    required this.sdcStatus,
   });
 
   final String batchId;
@@ -908,6 +1051,11 @@ class WarrantyBatchStatusResponse {
   final List<String> certificateIds;
   final bool sharedWithOrg;
   final String? sharedAt;
+  final bool done;
+  final int ready;
+  final bool stalled;
+  final String? stalledReason;
+  final String sdcStatus;
 
   factory WarrantyBatchStatusResponse.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> summary = json['summary'] is Map
@@ -924,15 +1072,57 @@ class WarrantyBatchStatusResponse {
               )
               .toList()
         : const <WarrantyBatchProduct>[];
-    final dynamic certificateIdsRaw =
-        json['certificate_ids'] ?? json['certificateIds'] ?? json['public_ids'];
-    final List<String> certificateIds = certificateIdsRaw is List
-        ? certificateIdsRaw
-              .map((dynamic e) => e?.toString().trim() ?? '')
-              .where((String s) => s.isNotEmpty)
-              .toList()
-        : <String>[];
+    final Set<String> certificateIds = <String>{};
+    void addCertificateIds(dynamic raw) {
+      certificateIds.addAll(_readStringList(raw));
+    }
+
+    addCertificateIds(json['certificate_ids']);
+    addCertificateIds(json['certificateIds']);
+    addCertificateIds(json['public_ids']);
+    addCertificateIds(json['publicIds']);
+    addCertificateIds(summary['certificate_ids']);
+    addCertificateIds(summary['certificateIds']);
+    final dynamic sdcRaw = json['sdc'] ?? json['verification_progress'];
+    if (sdcRaw is Map) {
+      final Map<String, dynamic> sdc = Map<String, dynamic>.from(sdcRaw);
+      final dynamic nestedSdc = sdc['sdc'];
+      addCertificateIds(sdc['certificate_ids']);
+      addCertificateIds(sdc['certificateIds']);
+      addCertificateIds(sdc['public_ids']);
+      if (nestedSdc is Map) {
+        final Map<String, dynamic> nested = Map<String, dynamic>.from(
+          nestedSdc,
+        );
+        addCertificateIds(nested['certificate_ids']);
+        addCertificateIds(nested['certificateIds']);
+        addCertificateIds(nested['public_ids']);
+      }
+    }
     final bool sharedWithOrg = _readSharedWithOrg(json);
+    final bool done =
+        (json['done'] ?? summary['done']) == true ||
+        (json['done']?.toString().trim().toLowerCase() == 'true');
+    final int ready =
+        int.tryParse((json['ready'] ?? summary['ready'] ?? '').toString()) ?? 0;
+    final bool stalled =
+        (json['stalled'] ?? summary['stalled']) == true ||
+        (json['stalled']?.toString().trim().toLowerCase() == 'true');
+    final String? stalledReason =
+        (json['stalled_reason'] ??
+                json['stalledReason'] ??
+                summary['stalled_reason'] ??
+                summary['stalledReason'])
+            ?.toString()
+            .trim();
+    final String sdcStatus =
+        (json['sdc_status'] ??
+                json['sdcStatus'] ??
+                summary['sdc_status'] ??
+                summary['sdcStatus'] ??
+                '')
+            .toString()
+            .trim();
 
     int readCount(List<String> keys, int fallback) {
       for (final String key in keys) {
@@ -950,9 +1140,78 @@ class WarrantyBatchStatusResponse {
       approved: readCount(<String>['approved', 'approved_count'], 0),
       rejected: readCount(<String>['rejected', 'rejected_count'], 0),
       products: products,
-      certificateIds: certificateIds,
+      certificateIds: certificateIds.toList(),
       sharedWithOrg: sharedWithOrg,
       sharedAt: (json['shared_at'] ?? json['sharedAt'])?.toString().trim(),
+      done: done,
+      ready: ready,
+      stalled: stalled,
+      stalledReason: stalledReason?.isEmpty == true ? null : stalledReason,
+      sdcStatus: sdcStatus,
+    );
+  }
+}
+
+class SdcGenerateResponse {
+  const SdcGenerateResponse({
+    required this.batchId,
+    required this.recordsSent,
+    required this.createdAt,
+    required this.spaceType,
+    required this.spaceId,
+    required this.sdcStatus,
+    required this.dhiwayStatus,
+    required this.dhiwayResponse,
+    required this.issuedCount,
+    required this.issuePending,
+  });
+
+  final String batchId;
+  final int recordsSent;
+  final String createdAt;
+  final String spaceType;
+  final String spaceId;
+  final String sdcStatus;
+  final int dhiwayStatus;
+  final Map<String, dynamic> dhiwayResponse;
+  final int issuedCount;
+  final bool issuePending;
+
+  factory SdcGenerateResponse.fromJson(Map<String, dynamic> json) {
+    final dynamic dhiwayResponseRaw = json['dhiway_response'];
+    return SdcGenerateResponse(
+      batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
+      recordsSent:
+          int.tryParse(
+            (json['records_sent'] ?? json['recordsSent'] ?? '').toString(),
+          ) ??
+          0,
+      createdAt: (json['created_at'] ?? json['createdAt'] ?? '')
+          .toString()
+          .trim(),
+      spaceType: (json['space_type'] ?? json['spaceType'] ?? '')
+          .toString()
+          .trim(),
+      spaceId: (json['space_id'] ?? json['spaceId'] ?? '').toString().trim(),
+      sdcStatus: (json['sdc_status'] ?? json['sdcStatus'] ?? '')
+          .toString()
+          .trim(),
+      dhiwayStatus:
+          int.tryParse(
+            (json['dhiway_status'] ?? json['dhiwayStatus'] ?? '').toString(),
+          ) ??
+          0,
+      dhiwayResponse: dhiwayResponseRaw is Map
+          ? Map<String, dynamic>.from(dhiwayResponseRaw)
+          : <String, dynamic>{},
+      issuedCount:
+          int.tryParse(
+            (json['issued_count'] ?? json['issuedCount'] ?? '').toString(),
+          ) ??
+          0,
+      issuePending:
+          (json['issue_pending'] ?? json['issuePending']) == true ||
+          (json['issue_pending']?.toString().trim().toLowerCase() == 'true'),
     );
   }
 }

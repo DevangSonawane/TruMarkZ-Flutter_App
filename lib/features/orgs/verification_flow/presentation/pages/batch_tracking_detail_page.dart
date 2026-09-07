@@ -30,6 +30,7 @@ class _BatchTrackingDetailPageState
   AsyncValue<WarrantyBatchStatusResponse> _warrantyData = const AsyncLoading();
   AsyncValue<WarrantyBatchStatusResponse> _sdcData = const AsyncLoading();
   VerificationBatchSummary? _batchSummary;
+  WarrantyBatchStatusResponse? _lastOpenSdcStatus;
 
   @override
   void didChangeDependencies() {
@@ -50,26 +51,11 @@ class _BatchTrackingDetailPageState
       _warrantyData = const AsyncLoading();
       _sdcData = const AsyncLoading();
       _batchSummary = null;
+      _lastOpenSdcStatus = null;
     });
     final VerificationRepository repo = ref.read(
       verificationRepositoryProvider,
     );
-
-    // Organization certificate access starts with the authorized SDC status
-    // endpoint. It returns the certificate_ids owned by this batch.
-    try {
-      final WarrantyBatchStatusResponse status = await repo.getSdcBatchStatus(
-        _batchId,
-      );
-      if (!mounted) return;
-      setState(() => _sdcData = AsyncData(status));
-    } on ApiException catch (e, st) {
-      if (!mounted) return;
-      setState(() => _sdcData = AsyncError(e, st));
-    } catch (e, st) {
-      if (!mounted) return;
-      setState(() => _sdcData = AsyncError(e, st));
-    }
 
     try {
       final VerificationBatchDetailResponse res = await repo.getBatchDetails(
@@ -101,6 +87,15 @@ class _BatchTrackingDetailPageState
       if (mounted) setState(() => _batchSummary = summary);
     } catch (_) {
       // Batch details and SDC status remain the primary sources.
+    }
+
+    try {
+      final WarrantyBatchStatusResponse res = await repo.getSdcBatchStatus(
+        _batchId,
+      );
+      if (mounted) setState(() => _sdcData = AsyncData(res));
+    } catch (e, st) {
+      if (mounted) setState(() => _sdcData = AsyncError(e, st));
     }
 
     if (!detail.isWarrantyBatch) return;
@@ -136,6 +131,168 @@ class _BatchTrackingDetailPageState
         }
       });
     }
+  }
+
+  Future<void> _openSdcRecord({
+    required String search,
+    required String orgId,
+    required String spaceId,
+    required bool sharedWithOrg,
+    required String recordId,
+    required bool isProductRecord,
+    String publicId = '',
+  }) async {
+    if (!sharedWithOrg) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Certificates not yet shared with your organization.'),
+        ),
+      );
+      return;
+    }
+    String resolvedPublicId = publicId.trim();
+    if (resolvedPublicId.isEmpty) {
+      try {
+        final VerificationRepository repo = ref.read(
+          verificationRepositoryProvider,
+        );
+        final WarrantyBatchStatusResponse status = await repo.getSdcBatchStatus(
+          _batchId,
+        );
+        _lastOpenSdcStatus = status;
+        if (mounted) setState(() => _sdcData = AsyncData(status));
+        final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
+        final List<String> certificateIds =
+            <String>{...status.certificateIds, ...?detail?.sdcCertificateIds}
+                .map((String value) => value.trim())
+                .where((String value) => value.isNotEmpty)
+                .toList();
+        debugPrint(
+          '[org-flow] sdc ids status=${status.certificateIds.length} detail=${detail?.sdcCertificateIds.length ?? 0} merged=${certificateIds.length} ready=${status.ready} shared=${status.sharedWithOrg}',
+        );
+        final String normalizedRecordId = recordId.trim();
+        final String normalizedSearch = search.trim().toLowerCase();
+        if (certificateIds.length == 1) resolvedPublicId = certificateIds.first;
+        for (final String certificateId in certificateIds) {
+          if (resolvedPublicId.isNotEmpty) break;
+          final SdcRecordDetailResponse detail = await repo.getSdcRecord(
+            publicId: certificateId,
+            instanceKey: 'de',
+          );
+          if (isProductRecord &&
+              _certificateMatchesProduct(
+                detail,
+                normalizedRecordId,
+                normalizedSearch,
+              )) {
+            resolvedPublicId = certificateId;
+            break;
+          }
+          if (!isProductRecord &&
+              normalizedSearch.isNotEmpty &&
+              _certificateMatchesHuman(detail, normalizedSearch)) {
+            resolvedPublicId = certificateId;
+            break;
+          }
+        }
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+        return;
+      }
+    }
+    if (!mounted) return;
+    if (resolvedPublicId.isEmpty) {
+      final WarrantyBatchStatusResponse? status = _lastOpenSdcStatus;
+      final String message =
+          status != null &&
+              (status.pending > 0 || !status.done || status.ready == 0)
+          ? 'The SDC is still being created. Please refresh in a moment.'
+          : 'The SDC is ready, but the certificate ID is missing.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+    context.push(
+      AppRouter.sdcRecordLocation(
+        publicId: resolvedPublicId,
+        orgId: orgId,
+        spaceId: spaceId,
+        instanceKey: 'de',
+        sharedWithOrg: sharedWithOrg,
+        search: search,
+      ),
+    );
+  }
+
+  static bool _certificateMatchesProduct(
+    SdcRecordDetailResponse detail,
+    String normalizedRecordId,
+    String normalizedSearch,
+  ) {
+    bool matches(dynamic value) {
+      if (value is! Map) return false;
+      final Map<String, dynamic> json = Map<String, dynamic>.from(value);
+      final dynamic subjectRaw =
+          json['credentialSubject'] ?? json['credential_subject'];
+      if (subjectRaw is Map) {
+        final Map<String, dynamic> subject = Map<String, dynamic>.from(
+          subjectRaw,
+        );
+        final String productId =
+            (subject['product_id'] ?? subject['productId'] ?? '')
+                .toString()
+                .trim();
+        if (normalizedRecordId.isNotEmpty && productId == normalizedRecordId) {
+          return true;
+        }
+        final String productName =
+            (subject['product_name'] ?? subject['productName'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+        if (normalizedSearch.isNotEmpty && productName == normalizedSearch) {
+          return true;
+        }
+      }
+      return matches(json['credential']) || matches(json['record']);
+    }
+
+    return matches(detail.credential);
+  }
+
+  static bool _certificateMatchesHuman(
+    SdcRecordDetailResponse detail,
+    String normalizedSearch,
+  ) {
+    bool matches(dynamic value) {
+      if (value is! Map) return false;
+      final Map<String, dynamic> json = Map<String, dynamic>.from(value);
+      final dynamic subjectRaw =
+          json['credentialSubject'] ?? json['credential_subject'];
+      if (subjectRaw is Map) {
+        final Map<String, dynamic> subject = Map<String, dynamic>.from(
+          subjectRaw,
+        );
+        final List<String> candidates = <String>[
+          subject['full_name']?.toString() ?? '',
+          subject['fullName']?.toString() ?? '',
+          subject['name']?.toString() ?? '',
+          subject['email']?.toString() ?? '',
+        ];
+        if (candidates.any(
+          (String value) => value.trim().toLowerCase() == normalizedSearch,
+        )) {
+          return true;
+        }
+      }
+      return matches(json['credential']) || matches(json['record']);
+    }
+
+    return matches(detail.credential);
   }
 
   bool get _isWarrantyMode {
@@ -284,29 +441,21 @@ class _BatchTrackingDetailPageState
                                         .entries) ...<Widget>[
                                   _WarrantyProductTile(
                                     product: entry.value,
-                                    onTap: entry.key < res.certificateIds.length
-                                        ? () {
-                                            final String publicId = res
-                                                .certificateIds[entry.key]
-                                                .trim();
-                                            if (publicId.isEmpty) return;
-                                            context.push(
-                                              AppRouter.sdcRecordLocation(
-                                                publicId: publicId,
-                                                orgId:
-                                                    warrantyDetail?.sdcOrgId ??
-                                                    '',
-                                                spaceId:
-                                                    warrantyDetail
-                                                        ?.sdcSpaceId ??
-                                                    '',
-                                                instanceKey: 'de',
-                                                sharedWithOrg: sharedWithOrg,
-                                                search: publicId,
-                                              ),
-                                            );
-                                          }
-                                        : null,
+                                    onTap: () => _openSdcRecord(
+                                      publicId:
+                                          entry.value.publicId.trim().isNotEmpty
+                                          ? entry.value.publicId
+                                          : (entry.key <
+                                                    res.certificateIds.length
+                                                ? res.certificateIds[entry.key]
+                                                : ''),
+                                      search: entry.value.serialNumber,
+                                      orgId: warrantyDetail?.sdcOrgId ?? '',
+                                      spaceId: warrantyDetail?.sdcSpaceId ?? '',
+                                      sharedWithOrg: sharedWithOrg,
+                                      recordId: entry.value.id,
+                                      isProductRecord: true,
+                                    ),
                                   ),
                                   const SizedBox(height: AppSpacing.x2),
                                 ],
@@ -428,35 +577,22 @@ class _BatchTrackingDetailPageState
                                       final VerificationUser u = entry.value;
                                       final String searchTerm = u.fullName
                                           .trim();
-                                      final WarrantyBatchStatusResponse?
-                                      status = _sdcData.valueOrNull;
-                                      final String publicId =
-                                          u.publicId.trim().isNotEmpty
-                                          ? u.publicId.trim()
-                                          : (entry.key <
-                                                    (status
-                                                            ?.certificateIds
-                                                            .length ??
-                                                        0)
-                                                ? status!
-                                                      .certificateIds[entry.key]
-                                                      .trim()
-                                                : '');
+                                      final String publicId = u.publicId.trim();
                                       debugPrint(
                                         '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
                                       );
-                                      context.push(
-                                        AppRouter.sdcRecordLocation(
-                                          publicId: publicId,
-                                          orgId: orgId,
-                                          spaceId: spaceId,
-                                          instanceKey: 'de',
-                                          sharedWithOrg: sharedWithOrg,
-                                          active: 1,
-                                          page: 1,
-                                          pageSize: 30,
-                                          search: searchTerm,
-                                        ),
+                                      _openSdcRecord(
+                                        publicId: publicId,
+                                        orgId: orgId,
+                                        spaceId: spaceId,
+                                        sharedWithOrg: sharedWithOrg,
+                                        search: searchTerm,
+                                        recordId: u.id,
+                                        isProductRecord:
+                                            res.batchType
+                                                .trim()
+                                                .toLowerCase() ==
+                                            'product',
                                       );
                                     },
                                   ),

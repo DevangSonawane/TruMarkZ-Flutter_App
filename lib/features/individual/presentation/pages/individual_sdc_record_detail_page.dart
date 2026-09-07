@@ -37,6 +37,7 @@ class _IndividualSdcRecordDetailPageState
   int _pageSize = 30;
   String _search = '';
   bool? _sharedWithOrg;
+  bool _downloadingPdf = false;
 
   AsyncValue<SdcRecord> _data = const AsyncLoading();
 
@@ -260,10 +261,12 @@ class _IndividualSdcRecordDetailPageState
                                       _HeroCard(
                                         record: record,
                                         instanceKey: _instanceKey,
-                                        onDownload: canDownload
+                                        onDownload:
+                                            canDownload && !_downloadingPdf
                                             ? () => _downloadPdf(record)
                                             : null,
                                         isDownloadEnabled: canDownload,
+                                        isDownloading: _downloadingPdf,
                                       ),
                                       const SizedBox(height: AppSpacing.x4),
                                       _SectionCard(
@@ -421,6 +424,8 @@ class _IndividualSdcRecordDetailPageState
       );
       return;
     }
+    if (_downloadingPdf) return;
+    setState(() => _downloadingPdf = true);
     try {
       debugPrint(
         '[sdc-detail] download requested publicId=${record.publicId} title=${record.title}',
@@ -474,6 +479,8 @@ class _IndividualSdcRecordDetailPageState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to download PDF right now.')),
       );
+    } finally {
+      if (mounted) setState(() => _downloadingPdf = false);
     }
   }
 }
@@ -484,12 +491,14 @@ class _HeroCard extends StatelessWidget {
     required this.instanceKey,
     required this.onDownload,
     required this.isDownloadEnabled,
+    required this.isDownloading,
   });
 
   final SdcRecord record;
   final String instanceKey;
   final VoidCallback? onDownload;
   final bool isDownloadEnabled;
+  final bool isDownloading;
 
   @override
   Widget build(BuildContext context) {
@@ -619,9 +628,20 @@ class _HeroCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              icon: const Icon(Icons.download_rounded, size: 18),
+              icon: isDownloading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.download_rounded, size: 18),
               label: Text(
-                isDownloadEnabled
+                isDownloading
+                    ? 'Preparing Download...'
+                    : isDownloadEnabled
                     ? 'Download Certificate'
                     : 'Certificate Locked',
                 style: const TextStyle(

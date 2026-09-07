@@ -75,6 +75,20 @@ class ProductBulkUploadDocumentInput {
   final String fileName;
 }
 
+class WarrantyBulkUploadDocumentInput {
+  const WarrantyBulkUploadDocumentInput({
+    required this.serialNo,
+    required this.label,
+    required this.fileBytes,
+    required this.fileName,
+  });
+
+  final String serialNo;
+  final String label;
+  final Uint8List fileBytes;
+  final String fileName;
+}
+
 class BulkUploadDocumentInput {
   const BulkUploadDocumentInput({
     required this.fileBytes,
@@ -306,13 +320,16 @@ class VerificationRepository {
     final Map<String, String> queryParameters = <String, String>{
       'instance_key': instanceKey.trim().isEmpty ? 'de' : instanceKey.trim(),
     };
+    final String encodedPublicId = Uri.encodeComponent(publicId.trim());
+
     debugPrint(
-      '[verification-repo] GET /sdc/records/$publicId instanceKey=${queryParameters['instance_key']}',
+      '[verification-repo] GET /sdc/records/$encodedPublicId instanceKey=${queryParameters['instance_key']}',
     );
     final dynamic res = await _api.verificationGetAny(
-      '/sdc/records/${Uri.encodeComponent(publicId.trim())}',
+      '/sdc/records/$encodedPublicId',
       queryParameters: queryParameters,
     );
+
     if (res is Map<String, dynamic>) {
       return SdcRecordDetailResponse.fromJson(res);
     }
@@ -724,8 +741,9 @@ class VerificationRepository {
   Future<BulkUploadResponse> uploadWarrantyProducts({
     required String batchName,
     String? description,
-    List<ProductBulkUploadDocumentInput> documents =
-        const <ProductBulkUploadDocumentInput>[],
+    List<String> reservedSerialNos = const <String>[],
+    List<WarrantyBulkUploadDocumentInput> documents =
+        const <WarrantyBulkUploadDocumentInput>[],
     required Uint8List fileBytes,
     required String fileName,
   }) async {
@@ -735,6 +753,7 @@ class VerificationRepository {
     final MediaType contentType = _mediaTypeForFileName(safeName);
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
+      'batch_type': 'warranty',
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
       'file': MultipartFile.fromBytes(
@@ -743,10 +762,23 @@ class VerificationRepository {
         contentType: contentType,
       ),
     });
-    final List<ProductBulkUploadDocumentInput> cleanDocuments = documents
+    final List<String> cleanReservedSerialNos = reservedSerialNos
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toList();
+    if (cleanReservedSerialNos.isNotEmpty) {
+      formData.fields.add(
+        MapEntry('reserved_serial_nos', cleanReservedSerialNos.join(',')),
+      );
+      formData.fields.add(
+        const MapEntry<String, String>('use_reserved_serials', 'true'),
+      );
+    }
+
+    final List<WarrantyBulkUploadDocumentInput> cleanDocuments = documents
         .where(
-          (ProductBulkUploadDocumentInput doc) =>
-              doc.productName.trim().isNotEmpty &&
+          (WarrantyBulkUploadDocumentInput doc) =>
+              doc.serialNo.trim().isNotEmpty &&
               doc.label.trim().isNotEmpty &&
               doc.fileBytes.isNotEmpty,
         )
@@ -754,11 +786,9 @@ class VerificationRepository {
     if (cleanDocuments.isNotEmpty) {
       formData.fields.add(
         MapEntry(
-          'doc_product_names',
+          'doc_serial_nos',
           cleanDocuments
-              .map(
-                (ProductBulkUploadDocumentInput doc) => doc.productName.trim(),
-              )
+              .map((WarrantyBulkUploadDocumentInput doc) => doc.serialNo.trim())
               .join(','),
         ),
       );
@@ -766,11 +796,11 @@ class VerificationRepository {
         MapEntry(
           'doc_labels',
           cleanDocuments
-              .map((ProductBulkUploadDocumentInput doc) => doc.label.trim())
+              .map((WarrantyBulkUploadDocumentInput doc) => doc.label.trim())
               .join(','),
         ),
       );
-      for (final ProductBulkUploadDocumentInput doc in cleanDocuments) {
+      for (final WarrantyBulkUploadDocumentInput doc in cleanDocuments) {
         final String safeDocName = doc.fileName.trim().isEmpty
             ? 'document.pdf'
             : doc.fileName.trim();
@@ -793,6 +823,28 @@ class VerificationRepository {
     return BulkUploadResponse.fromJson(res);
   }
 
+  Future<WarrantySerialReservationResponse> reserveWarrantySerials({
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final String safeName = fileName.trim().isEmpty
+        ? 'warranty.xlsx'
+        : fileName;
+    final MediaType contentType = _mediaTypeForFileName(safeName);
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'file': MultipartFile.fromBytes(
+        fileBytes,
+        filename: safeName,
+        contentType: contentType,
+      ),
+    });
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/products/warranty-reserve-serials',
+      formData,
+    );
+    return WarrantySerialReservationResponse.fromJson(res);
+  }
+
   Future<WarrantyBatchStatusResponse> getWarrantyBatchStatus(
     String batchId,
   ) async {
@@ -803,10 +855,23 @@ class VerificationRepository {
   }
 
   Future<WarrantyBatchStatusResponse> getSdcBatchStatus(String batchId) async {
+    final String encodedBatchId = Uri.encodeComponent(batchId.trim());
     final Map<String, dynamic> res = await _api.verificationGet(
-      '/sdc/batches/${Uri.encodeComponent(batchId)}/status',
+      '/sdc/batches/$encodedBatchId/status',
     );
     return WarrantyBatchStatusResponse.fromJson(res);
+  }
+
+  Future<SdcGenerateResponse> generateSdcBatch({
+    required String batchId,
+    bool publish = true,
+    bool active = true,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '/sdc/batches/${Uri.encodeComponent(batchId.trim())}/generate',
+      data: <String, dynamic>{'publish': publish, 'active': active},
+    );
+    return SdcGenerateResponse.fromJson(res);
   }
 
   Future<VerificationListResponse> getAllVerifications({

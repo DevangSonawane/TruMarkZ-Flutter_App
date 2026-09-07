@@ -466,15 +466,12 @@ export const verificationAPI = {
     appendFormValue(formData, 'verification_types', options.verificationTypes || options.verification_types);
     appendFormValue(formData, 'template_id', options.templateId || options.template_id);
 
-    // Document attachments — doc_files must be appended individually (not joined)
-    const docNames  = options.docProductNames || options.doc_product_names;
-    const docLabels = options.docLabels       || options.doc_labels;
-    const docFiles  = options.docFiles        || options.doc_files;
-
-    if (Array.isArray(docNames)  && docNames.length  > 0) formData.append('doc_product_names', docNames.join(','));
-    if (Array.isArray(docLabels) && docLabels.length > 0) formData.append('doc_labels', docLabels.join(','));
-    if (Array.isArray(docFiles))  docFiles.forEach((f) => formData.append('doc_files', f));
-
+    // No document attachments here — Product Excel upload no longer supports
+    // row-level document attachment at all (doc_files/doc_sku_nos/doc_labels/
+    // doc_product_names). Product QR1/QR2 now come exclusively from the
+    // verifier-report workflow (qr_slot, backend-assigned); any internal-only
+    // product document goes through the standalone POST /products/upload-doc
+    // endpoint instead, never through this bulk-upload call.
     return verificationApi.post('/verification/bulk-upload/products', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: onProgress
@@ -550,6 +547,18 @@ export const verificationAPI = {
       params: batchType ? { batch_type: batchType } : undefined,
     }),
   getBatchDetails: (batchId) => verificationApi.get(`/verification/batches/${batchId}`),
+
+  // POST /verification/batches/{batch_id}/share-with-organization —
+  // Superadmin only. The real, persisted "Send to Organization" action:
+  // backend sets shared_with_org=true, records shared_at/shared_by, and
+  // commits it — this is the actual security gate for certificate/SDC
+  // visibility (GET /sdc/batches/{batch_id}/status and
+  // GET /sdc/records/{public_id} both withhold data for an org caller until
+  // this has been called). No request body; idempotent — calling it again
+  // on an already-shared batch safely returns the existing state unchanged.
+  shareWithOrganization: (batchId) =>
+    verificationApi.post(`/verification/batches/${batchId}/share-with-organization`),
+
   // DELETE /verification/batches/{batch_id}/users/{batch_user_id} —
   // superadmin only. Permanently removes one customer from a batch (cascades
   // their documents/audit logs) without touching the batch or its other
@@ -637,12 +646,27 @@ export const verificationAPI = {
     }),
 
   // ── Approve/reject a submitted manual verification report ──────────────────
-  // status: "verified" | "rejected" — updates every batch user assigned to
-  // this request for that verification type.
+  // status: "approved" | "rejected" — updates every batch user assigned to
+  // this request for that verification type. "Reject wins" precedence
+  // (backend, Sept 2026): if a user already carries "rejected" from another
+  // request/verifier for the same batch+type, a later "approved" decision
+  // here can never flip them back — the response's
+  // users_protected_from_downgrade count says how many users that guard
+  // applied to. A later "rejected" decision can still correct an earlier
+  // "approved" one.
   updateManualVerificationStatus: (requestId, status, reason) =>
     verificationApi.patch(`/verification/manual/requests/${requestId}/status`, cleanObject({ status, reason })),
 
   // ── Email Drafts ──────────────────────────────────────────────────────────
+  // NOTE: the latest backend integration doc documents these five CRUD
+  // routes at a bare `/email-drafts/...` prefix (no `/verification`). The
+  // paths below are the ones already live and working in this app — left
+  // unchanged here rather than guessed-rewritten from doc text, per this
+  // project's own rule of trusting a live swagger check over changelog docs
+  // when the two disagree. Verify against swagger before touching these; if
+  // the backend really did move them, update all four in one pass together
+  // with the two new below (which use the documented path since they're
+  // brand new and can't yet be "already working" one way or the other).
   createEmailDraft: (payload) =>
     verificationApi.post('/verification/email-drafts', cleanObject({
       verification_type: payload.verification_type,
@@ -664,6 +688,38 @@ export const verificationAPI = {
   deleteEmailDraft: (draftId) =>
     verificationApi.delete(`/verification/email-drafts/${draftId}`),
 
+  // GET /email-drafts/admin/all — Superadmin only: reusable draft templates
+  // across every organization (unlike getEmailDraftsByType, which is always
+  // scoped to the caller's own org). organizationId/verificationType filter,
+  // limit defaults to 50 server-side (max 200).
+  getEmailDraftsAdmin: (filters = {}) =>
+    verificationApi.get('/email-drafts/admin/all', {
+      params: cleanObject({
+        organization_id: filters.organizationId || filters.organization_id,
+        verification_type: filters.verificationType || filters.verification_type,
+        limit: filters.limit,
+        offset: filters.offset,
+      }),
+    }),
+
+  // GET /email-drafts/history — actual email SEND history, distinct from the
+  // reusable draft library above (manual_verification_requests, not
+  // email_drafts). Org callers are auto-scoped to their own org; superadmin
+  // may pass organization_id to view one org or omit it for all. Only ever
+  // contains rows where SMTP delivery actually succeeded — a failed dispatch
+  // never appears here, by backend design.
+  getEmailHistory: (filters = {}) =>
+    verificationApi.get('/email-drafts/history', {
+      params: cleanObject({
+        organization_id: filters.organizationId || filters.organization_id,
+        batch_id: filters.batchId || filters.batch_id,
+        verification_type: filters.verificationType || filters.verification_type,
+        email_draft_id: filters.emailDraftId || filters.email_draft_id,
+        limit: filters.limit,
+        offset: filters.offset,
+      }),
+    }),
+
   // ── Run automatic verification ────────────────────────────────────────────
   runAutoVerification: (verificationTypeName, userId) =>
     verificationApi.post(`/verification/verification/automatic/${verificationTypeName}/${userId}`),
@@ -672,23 +728,48 @@ export const verificationAPI = {
   downloadWarrantyTemplate: () =>
     verificationApi.get('/verification/products/warranty-template', { responseType: 'blob' }),
 
-  uploadWarrantyExcel: (file, batchName, description = '', maybeOptions, maybeProgress) => {
+  // POST /verification/products/warranty-reserve-serials — pre-batch step.
+  // Reserves a globally-unique TMZ-W-XXXXXXXX serial per valid row from a
+  // central registry, WITHOUT creating any Batch or BatchUser yet. Response:
+  // { total_reserved, reserved_serial_nos: [...] } — pass reserved_serial_nos
+  // back verbatim, in the same order, when calling uploadWarrantyExcel. Never
+  // reorder, split, or generate serials client-side.
+  reserveWarrantySerials: (file) => {
     const formData = new FormData();
-    const { options, onProgress } = normalizeUploadArgs(maybeOptions, maybeProgress);
+    formData.append('file', file);
+    return verificationApi.post('/verification/products/warranty-reserve-serials', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // reservedSerialNos: the ordered serial_no values from
+  // reserveWarrantySerials's rows[], sent back verbatim as ONE comma-joined
+  // string — sets use_reserved_serials=true whenever any are supplied, per
+  // the verified backend contract.
+  // documents: [{ file, serialNo, label }] — pre-batch documents staged on
+  // the Template step, one entry per attached file (a record may contribute
+  // 0, 1, or 2 entries). Per the verified contract: doc_files is a repeated
+  // multipart field (one entry per file), while doc_serial_nos and
+  // doc_labels are each ONE comma-joined string, positionally aligned with
+  // doc_files by array order — never repeated fields for those two. The
+  // backend matches all three purely by index.
+  uploadWarrantyExcel: (file, batchName, description = '', reservedSerialNos = [], documents = [], maybeProgress) => {
+    const formData = new FormData();
+    const { onProgress } = normalizeUploadArgs(undefined, maybeProgress);
 
     formData.append('file', file);
     formData.append('batch_name', batchName);
     formData.append('batch_type', 'warranty');
     if (description) formData.append('description', description);
-
-    // Document attachments
-    const docNames  = options.docProductNames || options.doc_product_names;
-    const docLabels = options.docLabels       || options.doc_labels;
-    const docFiles  = options.docFiles        || options.doc_files;
-
-    if (Array.isArray(docNames)  && docNames.length  > 0) formData.append('doc_product_names', docNames.join(','));
-    if (Array.isArray(docLabels) && docLabels.length > 0) formData.append('doc_labels', docLabels.join(','));
-    if (Array.isArray(docFiles))  docFiles.forEach((f) => formData.append('doc_files', f));
+    if (Array.isArray(reservedSerialNos) && reservedSerialNos.length > 0) {
+      formData.append('reserved_serial_nos', reservedSerialNos.join(','));
+      formData.append('use_reserved_serials', 'true');
+    }
+    if (Array.isArray(documents) && documents.length > 0) {
+      documents.forEach(({ file: docFile }) => formData.append('doc_files', docFile));
+      formData.append('doc_serial_nos', documents.map((d) => d.serialNo).join(','));
+      formData.append('doc_labels', documents.map((d) => d.label).join(','));
+    }
 
     return verificationApi.post('/verification/products/warranty-upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
