@@ -56,6 +56,17 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     );
   }
 
+  Future<void> _refreshProfile() async {
+    try {
+      await ref.read(authNotifierProvider.notifier).refreshCurrentUser();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   Future<void> _verifyGst(UserProfile? profile) async {
     final String organizationName = profile?.organizationName?.trim() ?? '';
     final String gstin = profile?.gstin?.trim() ?? '';
@@ -234,58 +245,65 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                           top: Radius.circular(s(20)),
                         ),
                       ),
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(
-                          s(16),
-                          s(37),
-                          s(16),
-                          s(24) + bottomInset + _orgBottomNavBarHeight,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            _OrgProfileHeader(
-                              onEdit: () => _showOrgProfileDialog(profile),
-                              displayName: displayName,
-                              email: email,
-                              phoneNumber: phoneNumber,
-                              isVerified: isVerified,
-                            ),
-                            SizedBox(height: s(24)),
-                            _GeneralInfoCard(profile: profile),
-                            SizedBox(height: s(24)),
-                            _OrganisationDetailsCard(
-                              profile: profile,
-                              onEditServiceType: () =>
-                                  _showServiceTypeDialog(profile),
-                              onVerifyGst: () => _verifyGst(profile),
-                              isVerifyingGst: _isVerifyingGst,
-                            ),
-                            SizedBox(height: s(24)),
-                            _SpaceIdsCard(
-                              profile: profile,
-                              onEditSpaceIds: () =>
-                                  _showServiceIdsDialog(profile),
-                            ),
-                            SizedBox(height: s(24)),
-                            _AddressAndRecordsCard(profile: profile),
-                            SizedBox(height: s(24)),
-                            _AccountStatusCard(profile: profile),
-                            SizedBox(height: s(24)),
-                            const _TeamAccessCard(),
-                            SizedBox(height: s(24)),
-                            _LogoutCard(
-                              onLogout: () async {
-                                await ref
-                                    .read(authNotifierProvider.notifier)
-                                    .logout();
-                                if (context.mounted) {
-                                  context.go(AppRouter.roleSelectionPath);
-                                }
-                              },
-                            ),
-                            SizedBox(height: s(24)),
-                          ],
+                      child: RefreshIndicator(
+                        color: AppColors.brandBlue,
+                        onRefresh: _refreshProfile,
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics(),
+                          ),
+                          padding: EdgeInsets.fromLTRB(
+                            s(16),
+                            s(37),
+                            s(16),
+                            s(24) + bottomInset + _orgBottomNavBarHeight,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              _OrgProfileHeader(
+                                onEdit: () => _showOrgProfileDialog(profile),
+                                displayName: displayName,
+                                email: email,
+                                phoneNumber: phoneNumber,
+                                isVerified: isVerified,
+                              ),
+                              SizedBox(height: s(24)),
+                              _GeneralInfoCard(profile: profile),
+                              SizedBox(height: s(24)),
+                              _OrganisationDetailsCard(
+                                profile: profile,
+                                onEditServiceType: () =>
+                                    _showServiceTypeDialog(profile),
+                                onVerifyGst: () => _verifyGst(profile),
+                                isVerifyingGst: _isVerifyingGst,
+                              ),
+                              SizedBox(height: s(24)),
+                              _SpaceIdsCard(
+                                profile: profile,
+                                onEditSpaceIds: () =>
+                                    _showServiceIdsDialog(profile),
+                              ),
+                              SizedBox(height: s(24)),
+                              _AddressAndRecordsCard(profile: profile),
+                              SizedBox(height: s(24)),
+                              _AccountStatusCard(profile: profile),
+                              SizedBox(height: s(24)),
+                              const _TeamAccessCard(),
+                              SizedBox(height: s(24)),
+                              _LogoutCard(
+                                onLogout: () async {
+                                  await ref
+                                      .read(authNotifierProvider.notifier)
+                                      .logout();
+                                  if (context.mounted) {
+                                    context.go(AppRouter.roleSelectionPath);
+                                  }
+                                },
+                              ),
+                              SizedBox(height: s(24)),
+                            ],
+                          ),
                         ),
                       ),
                     ),
