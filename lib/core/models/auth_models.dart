@@ -216,6 +216,8 @@ class OrgOnboardingRequest {
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = <String, dynamic>{};
 
+    String normalize(String? value) => value?.trim() ?? '';
+
     void putIfNonEmpty(String key, String? value) {
       final String normalized = value?.trim() ?? '';
       if (normalized.isNotEmpty) {
@@ -223,17 +225,15 @@ class OrgOnboardingRequest {
       }
     }
 
-    putIfNonEmpty('gstin', gstin);
-    putIfNonEmpty('business_reg_number', businessRegNumber);
-    putIfNonEmpty('address_line1', addressLine1);
-    putIfNonEmpty('address_line2', addressLine2);
-    putIfNonEmpty('address_line3', addressLine3);
-    putIfNonEmpty('industry_type', industryType);
+    json['gstin'] = normalize(gstin);
+    json['business_reg_number'] = normalize(businessRegNumber);
+    json['address_line1'] = normalize(addressLine1);
+    json['address_line2'] = normalize(addressLine2);
+    json['address_line3'] = normalize(addressLine3);
+    json['industry_type'] = normalize(industryType);
     putIfNonEmpty('space_id', spaceId);
     putIfNonEmpty('schema_id', schemaId);
-    if (useCases != null && useCases!.isNotEmpty) {
-      json['use_cases'] = useCases;
-    }
+    json['use_cases'] = useCases ?? <String, dynamic>{};
 
     if (dhiwaysDetails != null) {
       final List<Map<String, dynamic>> details = dhiwaysDetails!
