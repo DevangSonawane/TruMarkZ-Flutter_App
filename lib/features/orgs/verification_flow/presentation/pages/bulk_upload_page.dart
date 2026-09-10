@@ -49,7 +49,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     'gender',
   ];
   static const String _humanDocumentFieldsCsv =
-      'full_name,email,phone_number,dob,aadhar_number,pan_number,address_line1,address_line2,address_line3,pincode,state,country';
+      'full_name,name,email,phone_number,dob,license_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
   static const List<String> _drivingLicenseTemplateHeaders = <String>[
     'full_name',
     'phone_number',
@@ -718,15 +718,25 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     setIfMissing('full_name', <String>[
       'full_name',
+      'name',
       'name_english',
       'name_hindi',
+    ]);
+    setIfMissing('license_number', <String>[
+      'license_number',
+      'dl_no',
+      'dl_number',
+      'driving_license_number',
+      'driver_license_number',
     ]);
     setIfMissing('aadhar_number', <String>['aadhar_number', 'aadhaar_number']);
     setIfMissing('address_line1', <String>[
       'address_line1',
+      'address',
       'address_english',
       'address_hindi',
     ]);
+    setIfMissing('pincode', <String>['pincode', 'pin', 'pin_code']);
 
     return mapped;
   }
@@ -752,8 +762,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       );
       final dynamic res = await repo.extractHumanOcr(
         files: imageBytes,
-        fields:
-            'full_name,email,phone_number,dob,aadhar_number,pan_number,address_line1,address_line2,address_line3,pincode,state,country',
+        fields: _humanDocumentFieldsCsv,
         docType: docs.first.label,
       );
       return _applyOcrFieldAliases(_normalizeOcrMap(res));
@@ -1405,6 +1414,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         final int localIndex = _findMatchingDraftIndex(serverUser, i);
         if (localIndex < 0) continue;
         userIdsByIndex[localIndex] = serverUser.userId;
+        if (serverUser.extracted.isNotEmpty) {
+          _mergeOcrIntoUser(
+            localIndex,
+            _applyOcrFieldAliases(_normalizeOcrMap(serverUser.extracted)),
+          );
+        }
       }
 
       if (!mounted) return;
@@ -3945,6 +3960,13 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
     'email',
     'dob',
     'license_number',
+    'doi',
+    'valid_till',
+    'cov_lmv_doi',
+    'cov_mcwg_doi',
+    'blood_group',
+    'sdw_of',
+    'issuing_authority',
     'aadhar_number',
     'pan_number',
     'address_line1',
@@ -4013,6 +4035,31 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
     return 'User ${index + 1}';
   }
 
+  bool _isDrivingLicenseUser(
+    Map<String, dynamic> user,
+    List<_HumanDocumentDraft> docs,
+  ) {
+    bool hasValue(String key) => (user[key] ?? '').toString().trim().isNotEmpty;
+    if (hasValue('license_number') ||
+        hasValue('dl_no') ||
+        hasValue('doi') ||
+        hasValue('valid_till') ||
+        hasValue('cov_lmv_doi') ||
+        hasValue('cov_mcwg_doi') ||
+        hasValue('issuing_authority')) {
+      return true;
+    }
+    return docs.any(((_HumanDocumentDraft doc) {
+      final String label = doc.label.toLowerCase();
+      final String name = doc.file.name.toLowerCase();
+      return label.contains('license') ||
+          label.contains('licence') ||
+          label.contains('dl') ||
+          name.contains('license') ||
+          name.contains('licence');
+    }));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -4073,6 +4120,10 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                     final List<_HumanDocumentDraft> docs =
                         widget.documentsByUser[pageIndex] ??
                         <_HumanDocumentDraft>[];
+                    final bool isDrivingLicense = _isDrivingLicenseUser(
+                      user,
+                      docs,
+                    );
 
                     Widget field(String key, String label, {String? hint}) {
                       return TextFormField(
@@ -4142,6 +4193,50 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                               ),
                             ],
                           ),
+                          if (isDrivingLicense) ...<Widget>[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: field(
+                                    'doi',
+                                    'Date of issue',
+                                    hint: 'DD-MM-YYYY',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: field('valid_till', 'Valid till'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: field('cov_lmv_doi', 'LMV DOI'),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: field('cov_mcwg_doi', 'MCWG DOI'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: field('blood_group', 'Blood group'),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: field('issuing_authority', 'RTO'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            field('sdw_of', 'S/D/W of'),
+                          ],
                           const SizedBox(height: 12),
                           Row(
                             children: <Widget>[

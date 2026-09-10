@@ -1264,6 +1264,7 @@ class BulkUploadSuccessUser {
     required this.email,
     required this.phoneNumber,
     required this.fullName,
+    required this.extracted,
     required this.token,
     required this.inviteLink,
   });
@@ -1273,6 +1274,7 @@ class BulkUploadSuccessUser {
   final String email;
   final String phoneNumber;
   final String fullName;
+  final Map<String, dynamic> extracted;
   final String token;
   final String inviteLink;
 
@@ -1288,6 +1290,9 @@ class BulkUploadSuccessUser {
           (json['phone_number'] ?? json['phone'] ?? json['contact_phone'] ?? '')
               .toString(),
       fullName: (json['full_name'] ?? productName).toString(),
+      extracted: json['extracted'] is Map
+          ? Map<String, dynamic>.from(json['extracted'] as Map)
+          : const <String, dynamic>{},
       token: (json['token'] ?? json['invite_token'] ?? '').toString(),
       inviteLink: (json['invite_link'] ?? json['link'] ?? '').toString(),
     );
