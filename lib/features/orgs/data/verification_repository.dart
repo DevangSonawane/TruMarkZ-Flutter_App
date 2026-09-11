@@ -89,6 +89,38 @@ class WarrantyBulkUploadDocumentInput {
   final String fileName;
 }
 
+class ManualVerifierInput {
+  const ManualVerifierInput({
+    required this.verificationTypeName,
+    required this.verifierEmail,
+    this.emailSubject,
+    this.emailBody,
+    this.userIds = const <String>[],
+  });
+
+  final String verificationTypeName;
+  final String verifierEmail;
+  final String? emailSubject;
+  final String? emailBody;
+  final List<String> userIds;
+
+  Map<String, dynamic> toJson({required bool includeUserIds}) {
+    return <String, dynamic>{
+      'verification_type_name': verificationTypeName.trim(),
+      'verifier_email': verifierEmail.trim(),
+      if (emailSubject != null && emailSubject!.trim().isNotEmpty)
+        'email_subject': emailSubject!.trim(),
+      if (emailBody != null && emailBody!.trim().isNotEmpty)
+        'email_body': emailBody!.trim(),
+      if (includeUserIds)
+        'user_ids': userIds
+            .map((String value) => value.trim())
+            .where((String value) => value.isNotEmpty)
+            .toList(),
+    };
+  }
+}
+
 class BulkUploadDocumentInput {
   const BulkUploadDocumentInput({
     required this.fileBytes,
@@ -390,6 +422,7 @@ class VerificationRepository {
         'industry_type': industryType.trim(),
       if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
         'verification_types': verificationTypes.trim(),
+      'batch_type': 'product',
       'file': MultipartFile.fromBytes(
         fileBytes,
         filename: safeName,
@@ -445,8 +478,8 @@ class VerificationRepository {
   }
 
   Future<VerificationBinaryResponse> generateProductsTemplate({
-    required String categoryId,
-    required List<String> headers,
+    String? categoryId,
+    List<String> headers = const <String>[],
   }) async {
     final List<String> cleanHeaders = headers
         .map((String h) => h.trim())
@@ -456,9 +489,10 @@ class VerificationRepository {
     return _api.verificationPostFormUrlEncodedBinary(
       '/verification/products/template',
       data: <String, dynamic>{
-        'category_id': categoryId.trim(),
+        if (categoryId != null && categoryId.trim().isNotEmpty)
+          'category_id': categoryId.trim(),
         // Backend expects a string in x-www-form-urlencoded.
-        'headers': headersCsv,
+        if (headersCsv.isNotEmpty) 'headers': headersCsv,
       },
     );
   }
@@ -864,14 +898,65 @@ class VerificationRepository {
 
   Future<SdcGenerateResponse> generateSdcBatch({
     required String batchId,
-    bool publish = true,
-    bool active = true,
+    bool publish = false,
+    bool active = false,
   }) async {
     final Map<String, dynamic> res = await _api.verificationPost(
       '/sdc/batches/${Uri.encodeComponent(batchId.trim())}/generate',
       data: <String, dynamic>{'publish': publish, 'active': active},
     );
     return SdcGenerateResponse.fromJson(res);
+  }
+
+  Future<Map<String, dynamic>> sendManualBulkVerification({
+    required String batchId,
+    required List<ManualVerifierInput> verifiers,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '/verification/manual/send-bulk',
+      skipAuth: true,
+      data: <String, dynamic>{
+        'batch_id': batchId.trim(),
+        'verifiers': verifiers
+            .map(
+              (ManualVerifierInput verifier) =>
+                  verifier.toJson(includeUserIds: false),
+            )
+            .toList(),
+      },
+    );
+    return res;
+  }
+
+  Future<Map<String, dynamic>> smartSendManualVerification({
+    required String batchId,
+    required List<ManualVerifierInput> verifiers,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '/verification/manual/smart-send',
+      skipAuth: true,
+      data: <String, dynamic>{
+        'batch_id': batchId.trim(),
+        'verifiers': verifiers
+            .map(
+              (ManualVerifierInput verifier) =>
+                  verifier.toJson(includeUserIds: true),
+            )
+            .toList(),
+      },
+    );
+    return res;
+  }
+
+  Future<Map<String, dynamic>> updateManualRequestStatus({
+    required String requestId,
+    required String status,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPatch(
+      '/verification/manual/requests/${Uri.encodeComponent(requestId.trim())}/status',
+      data: <String, dynamic>{'status': status.trim()},
+    );
+    return res;
   }
 
   Future<VerificationListResponse> getAllVerifications({

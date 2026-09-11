@@ -509,6 +509,8 @@ class _BatchTrackingDetailPageState
                         data: (VerificationBatchDetailResponse res) {
                           final Map<String, int> derivedCounts =
                               _deriveUserStatusCounts(res.users);
+                          final bool isProductBatch =
+                              res.batchType.trim().toLowerCase() == 'product';
                           final bool hasGeneratedSdc = res.hasGeneratedSdc;
                           final bool sharedWithOrg =
                               res.sharedWithOrg ||
@@ -569,14 +571,16 @@ class _BatchTrackingDetailPageState
                                   _UserTile(
                                     user: entry.value,
                                     batchIsTerminal: hasGeneratedSdc,
+                                    isProductRecord: isProductBatch,
                                     onTap: () {
                                       final String orgId =
                                           detail?.sdcOrgId ?? '';
                                       final String spaceId =
                                           detail?.sdcSpaceId ?? '';
                                       final VerificationUser u = entry.value;
-                                      final String searchTerm = u.fullName
-                                          .trim();
+                                      final String searchTerm = isProductBatch
+                                          ? u.productName.trim()
+                                          : u.fullName.trim();
                                       final String publicId = u.publicId.trim();
                                       debugPrint(
                                         '[org-flow] sdc record tap batch=${_batchId.trim()} publicId=$publicId orgId=$orgId spaceId=$spaceId active=1 page=1 pageSize=30 search=$searchTerm',
@@ -588,11 +592,7 @@ class _BatchTrackingDetailPageState
                                         sharedWithOrg: sharedWithOrg,
                                         search: searchTerm,
                                         recordId: u.id,
-                                        isProductRecord:
-                                            res.batchType
-                                                .trim()
-                                                .toLowerCase() ==
-                                            'product',
+                                        isProductRecord: isProductBatch,
                                       );
                                     },
                                   ),
@@ -649,7 +649,7 @@ class _BatchTrackingDetailPageState
     int failed = 0;
     for (final VerificationUser user in users) {
       final String status = user.verificationStatus.trim().toLowerCase();
-      if (status.contains('verified')) {
+      if (status.contains('verified') || status.contains('approved')) {
         verified++;
       } else if (status.contains('failed') || status.contains('rejected')) {
         failed++;
@@ -934,20 +934,35 @@ class _UserTile extends StatelessWidget {
   const _UserTile({
     required this.user,
     required this.batchIsTerminal,
+    required this.isProductRecord,
     this.onTap,
   });
 
   final VerificationUser user;
   final bool batchIsTerminal;
+  final bool isProductRecord;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final String effectiveStatus = _effectiveStatus(user.verificationStatus);
     final (_StatusStyle style, String label) = _statusStyle(effectiveStatus);
-    final String? photoUrl = (user.photoUrl ?? '').trim().isEmpty
-        ? null
-        : user.photoUrl!.trim();
+    final String imageUrl = isProductRecord
+        ? user.productImageUrl
+        : (user.photoUrl ?? '').trim();
+    final String? photoUrl = imageUrl.trim().isEmpty ? null : imageUrl.trim();
+    final String title = isProductRecord
+        ? (user.productName.trim().isEmpty
+              ? 'Unnamed product'
+              : user.productName)
+        : (user.fullName.trim().isEmpty ? 'Unnamed' : user.fullName);
+    final String subtitle = isProductRecord
+        ? <String>[
+            if (user.skuNo.trim().isNotEmpty) 'SKU ${user.skuNo.trim()}',
+            if (user.modelNo.trim().isNotEmpty) 'Model ${user.modelNo.trim()}',
+            if (user.brand.trim().isNotEmpty) user.brand.trim(),
+          ].join(' • ')
+        : user.email;
 
     return TMZCard(
       padding: const EdgeInsets.symmetric(
@@ -964,8 +979,10 @@ class _UserTile extends StatelessWidget {
               height: 36,
               color: const Color(0xFFEAF2FF),
               child: photoUrl == null
-                  ? const Icon(
-                      Icons.person_rounded,
+                  ? Icon(
+                      isProductRecord
+                          ? Icons.inventory_2_rounded
+                          : Icons.person_rounded,
                       size: 20,
                       color: AppColors.brandBlue,
                     )
@@ -978,7 +995,7 @@ class _UserTile extends StatelessWidget {
                             Object error,
                             StackTrace? stackTrace,
                           ) => const Icon(
-                            Icons.person_rounded,
+                            Icons.image_not_supported_rounded,
                             size: 20,
                             color: AppColors.brandBlue,
                           ),
@@ -994,7 +1011,7 @@ class _UserTile extends StatelessWidget {
               children: <Widget>[
                 const SizedBox(height: 6),
                 Text(
-                  user.fullName.trim().isEmpty ? 'Unnamed' : user.fullName,
+                  title,
                   textAlign: TextAlign.left,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1007,19 +1024,20 @@ class _UserTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 1),
-                Text(
-                  user.email,
-                  textAlign: TextAlign.left,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 11,
-                    height: 15 / 11,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
+                if (subtitle.trim().isNotEmpty)
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.left,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      height: 15 / 11,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.start,

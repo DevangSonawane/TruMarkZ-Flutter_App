@@ -274,12 +274,16 @@ class ApiClient {
   Future<Map<String, dynamic>> verificationPost(
     String path, {
     Object? data,
+    bool skipAuth = false,
   }) async {
     try {
       final Response<dynamic> res = await _verificationDio.post<dynamic>(
         path,
         data: data,
-        options: Options(contentType: Headers.jsonContentType),
+        options: Options(
+          contentType: Headers.jsonContentType,
+          extra: skipAuth ? <String, dynamic>{'skipAuth': true} : null,
+        ),
       );
       return _asMap(res.data);
     } on DioException catch (e) {
@@ -288,7 +292,10 @@ class ApiClient {
           final Response<dynamic> res = await _dio.post<dynamic>(
             path,
             data: data,
-            options: Options(contentType: Headers.jsonContentType),
+            options: Options(
+              contentType: Headers.jsonContentType,
+              extra: skipAuth ? <String, dynamic>{'skipAuth': true} : null,
+            ),
           );
           return _asMap(res.data);
         } on DioException catch (e2) {

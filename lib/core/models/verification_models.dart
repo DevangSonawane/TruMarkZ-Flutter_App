@@ -236,6 +236,8 @@ class VerificationUser {
     required this.createdAt,
     required this.updatedAt,
     required this.documents,
+    required this.customFields,
+    required this.verificationTypeStatus,
   });
 
   final String id;
@@ -265,6 +267,43 @@ class VerificationUser {
   final String createdAt;
   final String updatedAt;
   final List<VerificationDocument> documents;
+  final Map<String, dynamic> customFields;
+  final Map<String, dynamic> verificationTypeStatus;
+
+  String get productName {
+    final String direct = _readFirstString(customFields, const <String>[
+      'product_name',
+      'productName',
+      'name',
+    ]);
+    if (direct.isNotEmpty) return direct;
+    return fullName.trim();
+  }
+
+  String get skuNo =>
+      _readFirstString(customFields, const <String>['sku_no', 'skuNo', 'sku']);
+
+  String get modelNo => _readFirstString(customFields, const <String>[
+    'model_no',
+    'modelNo',
+    'model',
+  ]);
+
+  String get brand => _readFirstString(customFields, const <String>['brand']);
+
+  String get productImageUrl => _readFirstString(customFields, const <String>[
+    'product_image_url',
+    'productImageUrl',
+    'product_image',
+    'productImage',
+  ]);
+
+  String get blowUpImageUrl => _readFirstString(customFields, const <String>[
+    'blow_up_image_url',
+    'blowUpImageUrl',
+    'blow_up_image',
+    'blowUpImage',
+  ]);
 
   factory VerificationUser.fromJson(Map<String, dynamic> json) {
     String readString(dynamic v) => (v ?? '').toString();
@@ -310,6 +349,17 @@ class VerificationUser {
               )
               .toList()
         : const <VerificationDocument>[];
+    final Map<String, dynamic> customFields = json['custom_fields'] is Map
+        ? Map<String, dynamic>.from(json['custom_fields'] as Map)
+        : json['customFields'] is Map
+        ? Map<String, dynamic>.from(json['customFields'] as Map)
+        : <String, dynamic>{};
+    final Map<String, dynamic> verificationTypeStatus =
+        json['verification_type_status'] is Map
+        ? Map<String, dynamic>.from(json['verification_type_status'] as Map)
+        : json['verificationTypeStatus'] is Map
+        ? Map<String, dynamic>.from(json['verificationTypeStatus'] as Map)
+        : <String, dynamic>{};
 
     return VerificationUser(
       id: readString(json['id']).trim().isNotEmpty
@@ -330,7 +380,14 @@ class VerificationUser {
         'sdc_public_id',
         'sdcPublicId',
       ]),
-      fullName: readString(json['full_name']),
+      fullName: readString(
+        json['full_name'] ??
+            json['fullName'] ??
+            json['product_name'] ??
+            json['productName'] ??
+            customFields['product_name'] ??
+            customFields['productName'],
+      ),
       dob: json['dob']?.toString(),
       phoneNumber: readString(json['phone_number']),
       email: readString(json['email']),
@@ -351,6 +408,8 @@ class VerificationUser {
       createdAt: readString(json['created_at']),
       updatedAt: readString(json['updated_at']),
       documents: docs,
+      customFields: customFields,
+      verificationTypeStatus: verificationTypeStatus,
     );
   }
 
@@ -381,6 +440,8 @@ class VerificationUser {
     'created_at': createdAt,
     'updated_at': updatedAt,
     'documents': documents.map((VerificationDocument d) => d.toJson()).toList(),
+    'custom_fields': customFields,
+    'verification_type_status': verificationTypeStatus,
   };
 }
 
@@ -651,6 +712,7 @@ class VerificationBatchDetailResponse {
     required this.sharedWithOrg,
     required this.sharedAt,
     required this.sharedBy,
+    required this.canGenerateSdc,
   });
 
   final String batchId;
@@ -668,6 +730,7 @@ class VerificationBatchDetailResponse {
   final bool sharedWithOrg;
   final String? sharedAt;
   final String? sharedBy;
+  final bool canGenerateSdc;
 
   String get sdcOrgId {
     final dynamic sdc = verificationProgress['sdc'];
@@ -699,7 +762,20 @@ class VerificationBatchDetailResponse {
     return '';
   }
 
-  bool get hasGeneratedSdc => sdcOrgId.isNotEmpty || sdcSpaceId.isNotEmpty;
+  bool get hasGeneratedSdc {
+    final dynamic sdc = verificationProgress['sdc'];
+    final Map<String, dynamic> nestedSdc = sdc is Map
+        ? Map<String, dynamic>.from(sdc)
+        : <String, dynamic>{};
+    final String status = _readFirstString(
+      <String, dynamic>{...verificationProgress, ...nestedSdc},
+      const <String>['sdc_status', 'sdcStatus', 'status'],
+    ).toLowerCase();
+    return sdcOrgId.isNotEmpty ||
+        sdcSpaceId.isNotEmpty ||
+        status == 'draft_created' ||
+        status == 'sdc_generated';
+  }
 
   List<String> get sdcCertificateIds {
     final Set<String> ids = <String>{};
@@ -804,6 +880,11 @@ class VerificationBatchDetailResponse {
       sharedWithOrg: sharedWithOrg,
       sharedAt: (json['shared_at'] ?? json['sharedAt'])?.toString().trim(),
       sharedBy: (json['shared_by'] ?? json['sharedBy'])?.toString().trim(),
+      canGenerateSdc:
+          json['can_generate_sdc'] == true ||
+          json['canGenerateSdc'] == true ||
+          json['can_generate_sdc']?.toString().trim().toLowerCase() == 'true' ||
+          json['canGenerateSdc']?.toString().trim().toLowerCase() == 'true',
     );
   }
 }

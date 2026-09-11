@@ -19,7 +19,6 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
-import '../../../../../core/widgets/tmz_input.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
@@ -502,7 +501,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       'sku_no',
       'model_no',
       'brand',
-      'third+party+qr2',
+      'product_image',
+      'blow_up_image',
     ];
   }
 
@@ -518,7 +518,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
           initialHeaders: initialHeaders,
           requiredHeaders: _mode == 'warranty'
               ? const <String>{}
-              : const <String>{'product_name', 'sku_no'},
+              : const <String>{
+                  'product_name',
+                  'sku_no',
+                  'model_no',
+                  'brand',
+                  'product_image',
+                  'blow_up_image',
+                },
           categoryId: _categoryId,
           isWarranty: _mode == 'warranty',
           onSave: (List<String> headers) {
@@ -867,7 +874,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final bool isWarranty = _mode == 'warranty';
     final String uploadHint = isWarranty
         ? 'Use the warranty template fields from the sheet.\nUpload your Excel and optionally attach documents per row before confirming the batch.'
-        : 'Download template based on your selected sector.\nUpload your Excel, then confirm the batch.';
+        : 'Download the product template, fill product_name and sku_no, and optionally place images in the product_image or blow_up_image cells.';
     final int currentStep = isWarranty ? 3 : 4;
     final int totalSteps = isWarranty ? 5 : 6;
     final String stepLabel = 'STEP $currentStep OF $totalSteps';
@@ -1369,17 +1376,6 @@ class _ProductTemplateDialogState
 
   Future<void> _generateTemplate() async {
     if (_headers.isEmpty || _isGenerating) return;
-    if (!widget.isWarranty && widget.categoryId.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Missing sector category. Please go back and reselect.',
-          ),
-        ),
-      );
-      return;
-    }
-
     setState(() {
       _isGenerating = true;
     });
@@ -1511,7 +1507,7 @@ class _ProductTemplateDialogState
             Text(
               widget.isWarranty
                   ? 'Use the fixed warranty template, then fill it out and upload it back.'
-                  : 'Add headers one at a time. Added headers are saved automatically, then generate the product template.',
+                  : 'Use the canonical product fields. Images must be placed inside the product_image and blow_up_image cells in Excel.',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: s(12),
@@ -1701,7 +1697,7 @@ class _ProductTemplateDialogState
               Text(
                 widget.isWarranty
                     ? 'Warranty fields locked. You can generate the template now.'
-                    : 'Required fields are locked. Add custom headers if needed, then generate the template.',
+                    : 'Product fields are locked. QR fields are assigned by verification requests after upload.',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: s(12),
@@ -2053,7 +2049,7 @@ class _DropZone extends StatelessWidget {
                 ),
                 SizedBox(height: s(8)),
                 Text(
-                  'Upload your Excel file here',
+                  'Upload .xlsx, .xls, or .csv',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(12),
@@ -2276,10 +2272,12 @@ class _ParseStatusCard extends StatelessWidget {
     final String subtitle = hasError
         ? error
         : hasRows
-        ? 'You can attach documents and create the batch.'
+        ? isWarranty
+              ? 'You can attach documents and create the batch.'
+              : 'Embedded product images will be processed by the backend.'
         : isWarranty
         ? 'Expected columns: customer_name and model_no.'
-        : 'Expected columns: product_name and sku_no.';
+        : 'Expected columns: product_name and sku_no. Images are optional.';
 
     return Container(
       width: double.infinity,
@@ -2428,28 +2426,6 @@ class _ParsedProductRowsResult {
 
   final List<_ParsedProductRow> rows;
   final String? error;
-}
-
-class _ProductDocumentDraft {
-  const _ProductDocumentDraft({
-    required this.cardId,
-    this.productName,
-    this.skuNo,
-    this.label = 'certificate',
-    this.file,
-  });
-
-  final int cardId;
-  final String? productName;
-  final String? skuNo;
-  final String label;
-  final PickedFile? file;
-
-  bool get isComplete =>
-      (productName ?? '').trim().isNotEmpty &&
-      (skuNo ?? '').trim().isNotEmpty &&
-      label.trim().isNotEmpty &&
-      file != null;
 }
 
 class _WarrantyDocumentDraft {
@@ -2837,400 +2813,6 @@ class _DocumentSlot extends StatelessWidget {
                 TextButton(onPressed: onClear, child: const Text('Clear')),
               ],
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DocumentUploadsSection extends StatelessWidget {
-  const _DocumentUploadsSection({
-    required this.scale,
-    required this.productRows,
-    required this.isWarranty,
-    required this.cardIds,
-    required this.onAddCard,
-    required this.onRemoveCard,
-    required this.onChanged,
-    required this.enabled,
-    required this.statusText,
-  });
-
-  final double scale;
-  final List<_ParsedProductRow> productRows;
-  final bool isWarranty;
-  final List<int> cardIds;
-  final VoidCallback onAddCard;
-  final ValueChanged<int> onRemoveCard;
-  final ValueChanged<_ProductDocumentDraft> onChanged;
-  final bool enabled;
-  final String statusText;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-    final bool hasCards = cardIds.isNotEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Add Documents',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(14),
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: s(0.2),
-                      height: 20 / 14,
-                      color: const Color(0xFF111827),
-                    ),
-                  ),
-                  SizedBox(height: s(4)),
-                  Text(
-                    isWarranty
-                        ? 'Attach docs to the exact customer_name from your Excel. Keep the same order across customer names, labels, and files.'
-                        : 'Attach docs to the exact SKU from your Excel. Keep the same order across SKU numbers, labels, and files.',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(11),
-                      fontWeight: FontWeight.w500,
-                      height: 16 / 11,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            TextButton.icon(
-              onPressed: enabled ? onAddCard : null,
-              icon: Icon(Icons.add_rounded, size: s(16)),
-              label: const Text('Add Documents'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandBlue,
-                padding: EdgeInsets.symmetric(
-                  horizontal: s(12),
-                  vertical: s(10),
-                ),
-                textStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w700,
-                  height: 16 / 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: s(14)),
-        if (hasCards) ...<Widget>[
-          for (final int cardId in cardIds) ...<Widget>[
-            _ProductDocumentCard(
-              key: ValueKey<int>(cardId),
-              scale: scale,
-              productRows: productRows,
-              isWarranty: isWarranty,
-              cardId: cardId,
-              onRemove: () => onRemoveCard(cardId),
-              onChanged: onChanged,
-            ),
-            SizedBox(height: s(12)),
-          ],
-        ] else
-          Text(
-            statusText,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w500,
-              height: 16 / 11,
-              color: const Color(0xFF64748B),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _ProductDocumentCard extends ConsumerStatefulWidget {
-  const _ProductDocumentCard({
-    super.key,
-    required this.scale,
-    required this.productRows,
-    required this.isWarranty,
-    required this.cardId,
-    required this.onRemove,
-    required this.onChanged,
-  });
-
-  final double scale;
-  final List<_ParsedProductRow> productRows;
-  final bool isWarranty;
-  final int cardId;
-  final VoidCallback onRemove;
-  final ValueChanged<_ProductDocumentDraft> onChanged;
-
-  @override
-  ConsumerState<_ProductDocumentCard> createState() =>
-      _ProductDocumentCardState();
-}
-
-class _ProductDocumentCardState extends ConsumerState<_ProductDocumentCard> {
-  _ParsedProductRow? _productRow;
-  late final TextEditingController _documentLabelController;
-  PickedFile? _pickedFile;
-
-  @override
-  void initState() {
-    super.initState();
-    _documentLabelController = TextEditingController();
-    _documentLabelController.addListener(_emitDraft);
-  }
-
-  @override
-  void dispose() {
-    _documentLabelController.removeListener(_emitDraft);
-    _documentLabelController.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProductDocumentCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_productRow != null &&
-        widget.productRows.isNotEmpty &&
-        !widget.productRows.contains(_productRow)) {
-      setState(() {
-        _productRow = null;
-      });
-      _emitDraft();
-    }
-  }
-
-  Future<void> _pickDocument() async {
-    final PickedFile? picked = await FilePickerUtil.pickDocument();
-    if (!mounted || picked == null) return;
-    setState(() {
-      _pickedFile = picked;
-    });
-    _emitDraft();
-  }
-
-  void _emitDraft() {
-    widget.onChanged(
-      _ProductDocumentDraft(
-        cardId: widget.cardId,
-        productName: _productRow?.productName,
-        skuNo: _productRow?.skuNo,
-        label: _documentLabelController.text.trim(),
-        file: _pickedFile,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * widget.scale;
-    final bool hasProductRows = widget.productRows.isNotEmpty;
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(s(14)),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(s(18)),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: s(1)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withAlpha(6),
-            blurRadius: s(18),
-            offset: Offset(0, s(8)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: s(36),
-                height: s(36),
-                decoration: BoxDecoration(
-                  color: AppColors.brandBlue.withAlpha(14),
-                  borderRadius: BorderRadius.circular(s(12)),
-                ),
-                child: Icon(
-                  Icons.description_rounded,
-                  size: s(20),
-                  color: AppColors.brandBlue,
-                ),
-              ),
-              SizedBox(width: s(10)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Document entry',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(14),
-                        fontWeight: FontWeight.w700,
-                        height: 20 / 14,
-                        color: const Color(0xFF111827),
-                      ),
-                    ),
-                    SizedBox(height: s(2)),
-                    Text(
-                      'Picked files are bundled into the batch upload.',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(11),
-                        fontWeight: FontWeight.w500,
-                        height: 16 / 11,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: widget.onRemove,
-                icon: const Icon(Icons.close_rounded),
-                color: const Color(0xFF94A3B8),
-                tooltip: 'Remove document card',
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-          SizedBox(height: s(14)),
-          DropdownButtonFormField<_ParsedProductRow>(
-            initialValue: _productRow,
-            isExpanded: true,
-            items: widget.productRows
-                .map(
-                  (_ParsedProductRow row) =>
-                      DropdownMenuItem<_ParsedProductRow>(
-                        value: row,
-                        child: Text(
-                          row.displayLabel,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                )
-                .toList(),
-            onChanged: hasProductRows
-                ? (_ParsedProductRow? value) {
-                    setState(() {
-                      _productRow = value;
-                    });
-                    _emitDraft();
-                  }
-                : null,
-            decoration: InputDecoration(
-              labelText: widget.isWarranty ? 'Customer Name' : 'Product SKU',
-              hintText: hasProductRows
-                  ? widget.isWarranty
-                        ? 'Select a customer from the Excel file'
-                        : 'Select a product SKU from the Excel file'
-                  : 'Upload an Excel file first',
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(s(14)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(s(14)),
-                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(s(14)),
-                borderSide: BorderSide(
-                  color: AppColors.brandBlue,
-                  width: s(1.2),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: s(12)),
-          TMZInput(
-            label: 'Document Label',
-            hint: 'Type any label, e.g. certificate, warranty, invoice',
-            controller: _documentLabelController,
-          ),
-          SizedBox(height: s(12)),
-          OutlinedButton.icon(
-            onPressed: _pickDocument,
-            icon: const Icon(Icons.attach_file_rounded),
-            label: Text(
-              _pickedFile == null ? 'Choose file' : _pickedFile!.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF111827),
-              backgroundColor: const Color(0xFFF8FAFC),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
-              padding: EdgeInsets.symmetric(horizontal: s(14), vertical: s(14)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(s(14)),
-              ),
-              textStyle: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(13),
-                fontWeight: FontWeight.w600,
-                height: 18 / 13,
-              ),
-            ),
-          ),
-          if (_pickedFile != null) ...<Widget>[
-            SizedBox(height: s(10)),
-            Row(
-              children: <Widget>[
-                Icon(
-                  Icons.check_circle_rounded,
-                  color: Colors.green.shade600,
-                  size: s(16),
-                ),
-                SizedBox(width: s(6)),
-                Expanded(
-                  child: Text(
-                    'Selected: ${_pickedFile!.name}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(11),
-                      fontWeight: FontWeight.w500,
-                      height: 16 / 11,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          SizedBox(height: s(8)),
-          Text(
-            hasProductRows
-                ? widget.isWarranty
-                      ? 'Match the dropdown to the customer_name value from Excel. Labels can be any text.'
-                      : 'Match the dropdown to the sku_no value from Excel. Labels can be any text.'
-                : 'Wait until the Excel file is parsed before choosing a product.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(11),
-              fontWeight: FontWeight.w500,
-              height: 16 / 11,
-              color: const Color(0xFF64748B),
-            ),
-          ),
         ],
       ),
     );
