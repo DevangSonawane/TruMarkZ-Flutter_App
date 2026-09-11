@@ -196,13 +196,19 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                                       ),
                                     ),
                                     SizedBox(height: s(20)),
-                                    _SwipeableCertificateCards(
-                                      scale: scale,
-                                      selectedIndex: _selectedTemplateIndex,
-                                      isProductFlow: isProductFlow,
-                                      onSelected: (int i) => setState(() {
-                                        _selectedTemplateIndex = i;
-                                      }),
+                                    Visibility(
+                                      visible: false,
+                                      maintainSize: true,
+                                      maintainAnimation: true,
+                                      maintainState: true,
+                                      child: _SwipeableCertificateCards(
+                                        scale: scale,
+                                        selectedIndex: _selectedTemplateIndex,
+                                        isProductFlow: isProductFlow,
+                                        onSelected: (int i) => setState(() {
+                                          _selectedTemplateIndex = i;
+                                        }),
+                                      ),
                                     ),
                                     SizedBox(height: s(24)),
                                     Padding(
