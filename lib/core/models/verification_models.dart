@@ -305,6 +305,23 @@ class VerificationUser {
     'blowUpImage',
   ]);
 
+  String get firstImageDocumentUrl {
+    for (final VerificationDocument document in documents) {
+      final String url = document.documentUrl.trim();
+      if (url.isEmpty) continue;
+      final String lower = url.toLowerCase();
+      final String path = lower.split('?').first;
+      if (path.endsWith('.jpg') ||
+          path.endsWith('.jpeg') ||
+          path.endsWith('.png') ||
+          path.endsWith('.webp') ||
+          path.endsWith('.gif')) {
+        return url;
+      }
+    }
+    return '';
+  }
+
   factory VerificationUser.fromJson(Map<String, dynamic> json) {
     String readString(dynamic v) => (v ?? '').toString();
 

@@ -614,8 +614,8 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     final String displayIndustry = _prettyIndustry(resolvedIndustry);
     final String description = _resolvedDescription();
     final String checks = _resolvedVerificationTypesCsv();
-    final Uri previewUri = Uri(
-      path: AppRouter.certificatePreviewPath,
+    final Uri paymentUri = Uri(
+      path: AppRouter.perUnitCostBreakdownPath,
       queryParameters: <String, String>{
         if (checks.isNotEmpty) 'checks': checks,
         'industry': resolvedIndustry,
@@ -633,7 +633,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     );
     Future<void> confirmAction() => _uploadAndNavigate(columns);
     // ignore: use_build_context_synchronously
-    await context.push(previewUri.toString(), extra: confirmAction);
+    await context.push(paymentUri.toString(), extra: confirmAction);
   }
 
   Future<void> _uploadAndNavigate(List<String> columns) async {

@@ -1290,8 +1290,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (!mounted) return;
       final String resolvedIndustry = _industry.trim();
       final String verificationChecks = _verificationTypesCsv();
-      final Uri previewUri = Uri(
-        path: AppRouter.certificatePreviewPath,
+      final Uri paymentUri = Uri(
+        path: AppRouter.perUnitCostBreakdownPath,
         queryParameters: <String, String>{
           if (verificationChecks.isNotEmpty) 'checks': verificationChecks,
           if (resolvedIndustry.isNotEmpty) 'industry': resolvedIndustry,
@@ -1321,7 +1321,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       }
 
       // ignore: use_build_context_synchronously
-      await context.push(previewUri.toString(), extra: confirmAction);
+      await context.push(paymentUri.toString(), extra: confirmAction);
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1465,8 +1465,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (!mounted) return;
       final String resolvedIndustry = _industry.trim();
       final String verificationChecks = _verificationTypesCsv();
-      final Uri previewUri = Uri(
-        path: AppRouter.certificatePreviewPath,
+      final Uri paymentUri = Uri(
+        path: AppRouter.perUnitCostBreakdownPath,
         queryParameters: <String, String>{
           if (verificationChecks.isNotEmpty) 'checks': verificationChecks,
           if (resolvedIndustry.isNotEmpty) 'industry': resolvedIndustry,
@@ -1496,7 +1496,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       }
 
       // ignore: use_build_context_synchronously
-      await context.push(previewUri.toString(), extra: confirmAction);
+      await context.push(paymentUri.toString(), extra: confirmAction);
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

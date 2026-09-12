@@ -949,7 +949,9 @@ class _UserTile extends StatelessWidget {
     final (_StatusStyle style, String label) = _statusStyle(effectiveStatus);
     final String imageUrl = isProductRecord
         ? user.productImageUrl
-        : (user.photoUrl ?? '').trim();
+        : ((user.photoUrl ?? '').trim().isNotEmpty
+              ? (user.photoUrl ?? '').trim()
+              : user.firstImageDocumentUrl);
     final String? photoUrl = imageUrl.trim().isEmpty ? null : imageUrl.trim();
     final String title = isProductRecord
         ? (user.productName.trim().isEmpty
