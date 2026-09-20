@@ -1,61 +1,88 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/verification_models.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_badge.dart';
 import '../../../../core/widgets/tmz_card.dart';
+import '../../data/verification_repository.dart';
 
-class VerificationReportsPage extends StatefulWidget {
+class VerificationReportsPage extends ConsumerStatefulWidget {
   const VerificationReportsPage({super.key});
 
   @override
-  State<VerificationReportsPage> createState() =>
+  ConsumerState<VerificationReportsPage> createState() =>
       _VerificationReportsPageState();
 }
 
-class _VerificationReportsPageState extends State<VerificationReportsPage> {
-  final List<_ReportRow> _reports = <_ReportRow>[
-    const _ReportRow(
-      id: 'r_identity_1',
-      category: 'Identity Verification',
-      title: 'Identity Verification',
-      date: '05 Apr 2024',
-      status: 'Verified',
-    ),
-    const _ReportRow(
-      id: 'r_address_1',
-      category: 'Address Verification',
-      title: 'Address Verification',
-      date: '05 Apr 2024',
-      status: 'Verified',
-    ),
-    const _ReportRow(
-      id: 'r_police_1',
-      category: 'Police Clearance',
-      title: 'Police Clearance',
-      date: '04 Apr 2024',
-      status: 'Verified',
-    ),
-  ];
-
+class _VerificationReportsPageState
+    extends ConsumerState<VerificationReportsPage> {
+  AsyncValue<List<_ReportRow>> _reports = const AsyncLoading();
   int _tabIndex = 0;
 
-  List<_ReportRow> get _filtered {
+  @override
+  void initState() {
+    super.initState();
+    _loadReports();
+  }
+
+  Future<void> _loadReports() async {
+    setState(() => _reports = const AsyncLoading());
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final VerificationListResponse response = await repo.getAllVerifications(
+        limit: 100,
+      );
+      if (!mounted) return;
+      setState(() => _reports = AsyncData(_buildReportRows(response.users)));
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _reports = AsyncError(e, st));
+    }
+  }
+
+  List<_ReportRow> _buildReportRows(List<VerificationUser> users) {
+    final List<_ReportRow> rows = <_ReportRow>[];
+    for (final VerificationUser user in users) {
+      for (final VerificationCheckStatus check in user.verificationChecks) {
+        if (!check.hasOpenableReport) continue;
+        rows.add(
+          _ReportRow(
+            id: '${user.id}_${check.name}_${rows.length}',
+            category: check.name.trim().isEmpty ? 'Verification' : check.name,
+            title: user.fullName.trim().isEmpty ? check.name : user.fullName,
+            subject: check.name,
+            date: _formatDateLabel(user.updatedAt, user.createdAt),
+            status: _statusLabel(check.status),
+            source: check.label.trim().isEmpty ? 'manual' : check.label,
+            url: check.reportUrl,
+          ),
+        );
+      }
+    }
+    return rows;
+  }
+
+  List<_ReportRow> _filtered(List<_ReportRow> reports) {
     final String filter = switch (_tabIndex) {
-      1 => 'Address Verification',
-      2 => 'Identity Verification',
+      1 => 'manual',
+      2 => 'automatic',
       _ => 'All',
     };
-    if (filter == 'All') return _reports;
-    return _reports.where((r) => r.category == filter).toList();
+    if (filter == 'All') return reports;
+    return reports
+        .where((r) => r.source.trim().toLowerCase() == filter)
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<_ReportRow> visible = _filtered;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final double screenWidth = MediaQuery.sizeOf(context).width;
     const double refWidth = 402;
@@ -94,10 +121,15 @@ class _VerificationReportsPageState extends State<VerificationReportsPage> {
                           ),
                         ),
                       ),
+                      IconButton(
+                        tooltip: 'Refresh',
+                        onPressed: _loadReports,
+                        icon: const Icon(Icons.refresh_rounded),
+                        color: Colors.white,
+                      ),
                     ],
                   ),
                 ),
-                SizedBox(height: s(0)),
                 Expanded(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -125,7 +157,7 @@ class _VerificationReportsPageState extends State<VerificationReportsPage> {
                           ),
                           SizedBox(height: s(8)),
                           Text(
-                            'View and review verification reports for your organisation.',
+                            'View manual verification reports shared for your organisation.',
                             style: AppTypography.body2.copyWith(
                               color: AppColors.textSecondary,
                             ),
@@ -133,37 +165,78 @@ class _VerificationReportsPageState extends State<VerificationReportsPage> {
                           SizedBox(height: s(24)),
                           _filters(),
                           SizedBox(height: s(24)),
-                          if (visible.isEmpty)
-                            TMZCard(
+                          _reports.when(
+                            loading: () => const Center(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.x2,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    'No reports found.',
+                                padding: EdgeInsets.all(AppSpacing.x6),
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                            error: (Object err, _) => TMZCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    'Unable to load reports',
+                                    style: AppTypography.heading2,
+                                  ),
+                                  const SizedBox(height: AppSpacing.x2),
+                                  Text(
+                                    err.toString(),
                                     style: AppTypography.body2.copyWith(
                                       color: AppColors.textSecondary,
                                     ),
                                   ),
-                                ),
+                                  const SizedBox(height: AppSpacing.x3),
+                                  TextButton.icon(
+                                    onPressed: _loadReports,
+                                    icon: const Icon(Icons.refresh_rounded),
+                                    label: const Text('Retry'),
+                                  ),
+                                ],
                               ),
-                            )
-                          else
-                            for (
-                              int i = 0;
-                              i < visible.length;
-                              i++
-                            ) ...<Widget>[
-                              _ReportCard(
-                                report: visible[i],
-                                onTap: () => context.push(
-                                  '${AppRouter.appReportDetailPath}?id=${Uri.encodeQueryComponent(visible[i].id)}',
-                                ),
-                              ),
-                              if (i != visible.length - 1)
-                                SizedBox(height: s(11)),
-                            ],
+                            ),
+                            data: (List<_ReportRow> reports) {
+                              final List<_ReportRow> visible = _filtered(
+                                reports,
+                              );
+                              if (visible.isEmpty) {
+                                return TMZCard(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: AppSpacing.x2,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'No reports found.',
+                                        style: AppTypography.body2.copyWith(
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                              return Column(
+                                children: <Widget>[
+                                  for (
+                                    int i = 0;
+                                    i < visible.length;
+                                    i++
+                                  ) ...<Widget>[
+                                    _ReportCard(
+                                      report: visible[i],
+                                      onTap: () => context.push(
+                                        '${AppRouter.appReportDetailPath}?id=${Uri.encodeQueryComponent(visible[i].id)}&title=${Uri.encodeQueryComponent(visible[i].title)}&category=${Uri.encodeQueryComponent(visible[i].category)}&status=${Uri.encodeQueryComponent(visible[i].status)}&url=${Uri.encodeQueryComponent(visible[i].url)}',
+                                      ),
+                                    ),
+                                    if (i != visible.length - 1)
+                                      SizedBox(height: s(11)),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -178,11 +251,7 @@ class _VerificationReportsPageState extends State<VerificationReportsPage> {
   }
 
   Widget _filters() {
-    final List<String> tabs = <String>[
-      'All',
-      'Address Verification',
-      'Identity Verification',
-    ];
+    const List<String> tabs = <String>['All', 'Manual', 'Automatic'];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -203,6 +272,28 @@ class _VerificationReportsPageState extends State<VerificationReportsPage> {
         ),
       ),
     );
+  }
+
+  static String _formatDateLabel(String updatedAt, String createdAt) {
+    final String raw = updatedAt.trim().isNotEmpty
+        ? updatedAt.trim()
+        : createdAt.trim();
+    if (raw.isEmpty) return 'Report available';
+    final DateTime? parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    final DateTime local = parsed.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
+  }
+
+  static String _statusLabel(String raw) {
+    final String status = raw.trim().toLowerCase();
+    if (status.contains('reject')) return 'Rejected';
+    if (status.contains('fail')) return 'Failed';
+    if (status.contains('pend')) return 'Pending';
+    if (status.contains('approve') || status.contains('verified')) {
+      return 'Verified';
+    }
+    return status.isEmpty ? 'Pending' : raw;
   }
 }
 
@@ -249,7 +340,9 @@ class _ReportCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  report.category,
+                  report.subject.trim().isEmpty
+                      ? report.category
+                      : report.subject,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.caption.copyWith(
@@ -331,13 +424,19 @@ class _ReportRow {
     required this.id,
     required this.category,
     required this.title,
+    required this.subject,
     required this.date,
     required this.status,
+    required this.source,
+    required this.url,
   });
 
   final String id;
   final String category;
   final String title;
+  final String subject;
   final String date;
   final String status;
+  final String source;
+  final String url;
 }

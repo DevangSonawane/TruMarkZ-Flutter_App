@@ -945,7 +945,11 @@ class _UserTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String effectiveStatus = _effectiveStatus(user.verificationStatus);
+    final String effectiveStatus = _effectiveStatus(
+      user.overallStatusLabel.trim().isNotEmpty
+          ? user.overallStatusLabel
+          : user.verificationStatus,
+    );
     final (_StatusStyle style, String label) = _statusStyle(effectiveStatus);
     final String imageUrl = isProductRecord
         ? user.productImageUrl
@@ -1062,6 +1066,10 @@ class _UserTile extends StatelessWidget {
     switch (raw) {
       case 'verified':
         return (const _StatusStyle.verified(), 'Verified');
+      case 'partially_verified':
+        return (const _StatusStyle.partial(), 'Partially Verified');
+      case 'rejected':
+        return (const _StatusStyle.failed(), 'Rejected');
       case 'failed':
         return (const _StatusStyle.failed(), 'Failed');
       default:
@@ -1071,8 +1079,16 @@ class _UserTile extends StatelessWidget {
 
   String _effectiveStatus(String rawStatus) {
     final String status = rawStatus.trim().toLowerCase();
-    if (status.contains('failed') || status.contains('rejected')) {
+    if (status.contains('rejected')) {
+      return 'rejected';
+    }
+    if (status.contains('failed')) {
       return 'failed';
+    }
+    if (status.contains('partially_verified') ||
+        status.contains('partially verified') ||
+        status.contains('partial')) {
+      return 'partially_verified';
     }
     if (status.contains('verified') ||
         status.contains('approved') ||
@@ -1188,6 +1204,10 @@ class _StatusStyle {
   const _StatusStyle.verified()
     : bg = AppColors.successBg,
       fg = AppColors.success;
+
+  const _StatusStyle.partial()
+    : bg = AppColors.warningBg,
+      fg = AppColors.warning;
 
   const _StatusStyle.failed() : bg = AppColors.dangerBg, fg = AppColors.error;
 }

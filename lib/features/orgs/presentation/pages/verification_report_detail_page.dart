@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/animations/screen_entry_mixin.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -18,7 +19,14 @@ class VerificationReportDetailPage extends StatelessWidget
     final Map<String, String> qp = GoRouterState.of(
       context,
     ).uri.queryParameters;
-    final String id = (qp['id'] ?? 'r_identity_1').trim();
+    final String id = (qp['id'] ?? '').trim();
+    final String title = (qp['title'] ?? 'Verification Report').trim();
+    final String category = (qp['category'] ?? '').trim();
+    final String status = (qp['status'] ?? 'Verified').trim();
+    final String url = (qp['url'] ?? '').trim();
+    final Uri? uri = Uri.tryParse(url);
+    final bool canOpen =
+        uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
 
     return Scaffold(
       backgroundColor: AppColors.pageBg,
@@ -55,10 +63,27 @@ class VerificationReportDetailPage extends StatelessWidget
                             ),
                           ),
                         ),
-                        TMZBadge.pending(),
+                        _statusBadge(status),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.x2),
+                    Text(
+                      title.isEmpty ? 'Verification Report' : title,
+                      style: AppTypography.body1.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (category.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        category,
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.x3),
                     Text(
                       id.isEmpty ? 'Report' : 'Report ID: $id',
                       style: AppTypography.caption.copyWith(
@@ -67,7 +92,9 @@ class VerificationReportDetailPage extends StatelessWidget
                     ),
                     const SizedBox(height: AppSpacing.x3),
                     Text(
-                      'Report details are not available in the app yet. This screen will be wired once the report-detail API is available.',
+                      canOpen
+                          ? 'Open this report in your browser to review the uploaded verification file.'
+                          : 'This report is not available as an openable link in the app.',
                       style: AppTypography.body2.copyWith(
                         color: AppColors.textSecondary,
                         height: 1.35,
@@ -83,6 +110,17 @@ class VerificationReportDetailPage extends StatelessWidget
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   TMZButton(
+                    label: 'Open Report',
+                    icon: Icons.open_in_new_rounded,
+                    onPressed: canOpen
+                        ? () => launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                  TMZButton(
                     label: 'Back',
                     variant: TMZButtonVariant.secondary,
                     onPressed: () => context.pop(),
@@ -95,5 +133,16 @@ class VerificationReportDetailPage extends StatelessWidget
         ),
       ),
     );
+  }
+
+  Widget _statusBadge(String status) {
+    final String normalized = status.trim().toLowerCase();
+    if (normalized.contains('fail') || normalized.contains('reject')) {
+      return TMZBadge.failed(label: status);
+    }
+    if (normalized.contains('pend')) {
+      return TMZBadge.pending(label: status);
+    }
+    return TMZBadge.verified(label: status);
   }
 }

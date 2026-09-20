@@ -102,6 +102,26 @@ class _IndividualRecordDetailPageState
     }
   }
 
+  Future<void> _openReportUrl(String rawUrl) async {
+    final Uri? uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This report is not openable in the app.'),
+        ),
+      );
+      return;
+    }
+    final bool opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Unable to open report.')));
+  }
+
   void _showCertificateSheet(GenerateCertificateResponse res) {
     showModalBottomSheet<void>(
       context: context,
@@ -264,12 +284,12 @@ class _IndividualRecordDetailPageState
                       ),
                     ),
                     data: (VerificationUser user) {
-                      final String statusLabel = _statusLabel(
-                        user.verificationStatus,
-                      );
-                      final _StatusStyle style = _statusStyle(
-                        user.verificationStatus,
-                      );
+                      final String displayStatus =
+                          user.overallStatusLabel.trim().isNotEmpty
+                          ? user.overallStatusLabel
+                          : user.verificationStatus;
+                      final String statusLabel = _statusLabel(displayStatus);
+                      final _StatusStyle style = _statusStyle(displayStatus);
                       final String? photoUrl =
                           (user.photoUrl ?? '').trim().isEmpty
                           ? null
@@ -395,6 +415,13 @@ class _IndividualRecordDetailPageState
                               ],
                             ),
                           ),
+                          if (user.verificationChecks.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: AppSpacing.x4),
+                            _VerificationChecksCard(
+                              checks: user.verificationChecks,
+                              onOpenReport: _openReportUrl,
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.x4),
                           Text(
                             'SDC Card',
@@ -487,9 +514,14 @@ class _IndividualRecordDetailPageState
   }
 
   static String _statusLabel(String raw) {
-    switch (raw) {
+    final String status = _normalizeStatus(raw);
+    switch (status) {
       case 'verified':
         return 'Verified';
+      case 'partially_verified':
+        return 'Partially Verified';
+      case 'rejected':
+        return 'Rejected';
       case 'failed':
         return 'Failed';
       default:
@@ -498,17 +530,211 @@ class _IndividualRecordDetailPageState
   }
 
   static _StatusStyle _statusStyle(String raw) {
-    switch (raw) {
+    final String status = _normalizeStatus(raw);
+    switch (status) {
       case 'verified':
         return const _StatusStyle(
           bg: AppColors.successBg,
           fg: AppColors.success,
         );
+      case 'partially_verified':
+        return const _StatusStyle(
+          bg: AppColors.warningBg,
+          fg: AppColors.warning,
+        );
+      case 'rejected':
       case 'failed':
         return const _StatusStyle(bg: AppColors.dangerBg, fg: AppColors.error);
       default:
         return const _StatusStyle(bg: Color(0xFFFFFBEB), fg: Color(0xFFF59E0B));
     }
+  }
+
+  static String _normalizeStatus(String raw) {
+    final String status = raw.trim().toLowerCase().replaceAll('-', '_');
+    if (status.contains('partially_verified') ||
+        status.contains('partially verified') ||
+        status.contains('partial')) {
+      return 'partially_verified';
+    }
+    if (status.contains('rejected')) return 'rejected';
+    if (status.contains('failed')) return 'failed';
+    if (status.contains('verified') ||
+        status.contains('approved') ||
+        status.contains('complete')) {
+      return 'verified';
+    }
+    return 'pending';
+  }
+}
+
+class _VerificationChecksCard extends StatelessWidget {
+  const _VerificationChecksCard({
+    required this.checks,
+    required this.onOpenReport,
+  });
+
+  final List<VerificationCheckStatus> checks;
+  final ValueChanged<String> onOpenReport;
+
+  @override
+  Widget build(BuildContext context) {
+    return TMZCard(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Verification Checks',
+            style: AppTypography.heading2.copyWith(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          for (int i = 0; i < checks.length; i++) ...<Widget>[
+            _VerificationCheckTile(
+              check: checks[i],
+              onOpenReport: onOpenReport,
+            ),
+            if (i != checks.length - 1)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.x3),
+                child: Divider(height: 1, color: AppColors.divider),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _VerificationCheckTile extends StatelessWidget {
+  const _VerificationCheckTile({
+    required this.check,
+    required this.onOpenReport,
+  });
+
+  final VerificationCheckStatus check;
+  final ValueChanged<String> onOpenReport;
+
+  @override
+  Widget build(BuildContext context) {
+    final _StatusStyle style = _IndividualRecordDetailPageState._statusStyle(
+      check.status,
+    );
+    final String status = _IndividualRecordDetailPageState._statusLabel(
+      check.status,
+    );
+    final bool hasRawBlockedReport =
+        check.reportUrl.trim().isNotEmpty && !check.hasOpenableReport;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    check.name.trim().isEmpty ? 'Verification' : check.name,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      height: 20 / 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (check.label.trim().isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      check.label,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        height: 17 / 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.x2),
+            _MiniStatusBadge(label: status, style: style),
+          ],
+        ),
+        if (check.hasRejectionReason) ...<Widget>[
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            check.rejectionReason,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              height: 18 / 13,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+        if (check.hasOpenableReport) ...<Widget>[
+          const SizedBox(height: AppSpacing.x3),
+          TMZButton(
+            label: 'Open Report',
+            icon: Icons.open_in_new_rounded,
+            variant: TMZButtonVariant.secondary,
+            fullWidth: false,
+            onPressed: () => onOpenReport(check.reportUrl),
+          ),
+        ] else if (hasRawBlockedReport) ...<Widget>[
+          const SizedBox(height: AppSpacing.x2),
+          const Text(
+            'Report is stored privately and cannot be opened directly.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              height: 17 / 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textTertiary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MiniStatusBadge extends StatelessWidget {
+  const _MiniStatusBadge({required this.label, required this.style});
+
+  final String label;
+  final _StatusStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: style.bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: style.fg.withAlpha(40)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 10,
+          height: 14 / 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.7,
+        ).copyWith(color: style.fg),
+      ),
+    );
   }
 }
 

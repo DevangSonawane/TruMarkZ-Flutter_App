@@ -228,6 +228,7 @@ class VerificationUser {
     required this.state,
     required this.country,
     required this.verificationStatus,
+    required this.overallStatusLabel,
     required this.verificationReason,
     required this.verifiedAt,
     required this.photoUrl,
@@ -259,6 +260,7 @@ class VerificationUser {
   final String? country;
   final String
   verificationStatus; // 'pending_verification' | 'verified' | 'failed'
+  final String overallStatusLabel;
   final String? verificationReason;
   final String? verifiedAt;
   final String? photoUrl;
@@ -269,6 +271,21 @@ class VerificationUser {
   final List<VerificationDocument> documents;
   final Map<String, dynamic> customFields;
   final Map<String, dynamic> verificationTypeStatus;
+
+  List<VerificationCheckStatus> get verificationChecks {
+    final List<VerificationCheckStatus> checks = <VerificationCheckStatus>[];
+    for (final MapEntry<String, dynamic> entry
+        in verificationTypeStatus.entries) {
+      if (entry.value is! Map) continue;
+      checks.add(
+        VerificationCheckStatus.fromJson(
+          entry.key,
+          Map<String, dynamic>.from(entry.value as Map),
+        ),
+      );
+    }
+    return checks;
+  }
 
   String get productName {
     final String direct = _readFirstString(customFields, const <String>[
@@ -417,6 +434,7 @@ class VerificationUser {
       state: json['state']?.toString(),
       country: json['country']?.toString(),
       verificationStatus: readString(json['verification_status']),
+      overallStatusLabel: readString(json['overall_status_label']).trim(),
       verificationReason: json['verification_reason']?.toString(),
       verifiedAt: json['verified_at']?.toString(),
       photoUrl: json['photo_url']?.toString(),
@@ -449,6 +467,7 @@ class VerificationUser {
     'state': state,
     'country': country,
     'verification_status': verificationStatus,
+    'overall_status_label': overallStatusLabel,
     'verification_reason': verificationReason,
     'verified_at': verifiedAt,
     'photo_url': photoUrl,
@@ -460,6 +479,54 @@ class VerificationUser {
     'custom_fields': customFields,
     'verification_type_status': verificationTypeStatus,
   };
+}
+
+class VerificationCheckStatus {
+  const VerificationCheckStatus({
+    required this.name,
+    required this.status,
+    required this.label,
+    required this.rejectionReason,
+    required this.reportUrl,
+  });
+
+  final String name;
+  final String status;
+  final String label;
+  final String rejectionReason;
+  final String reportUrl;
+
+  bool get hasRejectionReason => rejectionReason.trim().isNotEmpty;
+
+  bool get hasOpenableReport {
+    final Uri? uri = Uri.tryParse(reportUrl.trim());
+    return uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+  }
+
+  factory VerificationCheckStatus.fromJson(
+    String name,
+    Map<String, dynamic> json,
+  ) {
+    String readFirst(List<String> keys) {
+      for (final String key in keys) {
+        final String value = (json[key] ?? '').toString().trim();
+        if (value.isNotEmpty) return value;
+      }
+      return '';
+    }
+
+    return VerificationCheckStatus(
+      name: name.trim(),
+      status: (json['status'] ?? '').toString().trim(),
+      label: (json['label'] ?? '').toString().trim(),
+      rejectionReason: readFirst(const <String>[
+        'rejection_reason',
+        'reason',
+        'detail',
+      ]),
+      reportUrl: (json['report_url'] ?? '').toString().trim(),
+    );
+  }
 }
 
 class VerificationListResponse {
