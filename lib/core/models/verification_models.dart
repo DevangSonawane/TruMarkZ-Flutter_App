@@ -565,6 +565,181 @@ class VerificationListResponse {
   }
 }
 
+class SubmittedVerificationReportsResponse {
+  const SubmittedVerificationReportsResponse({required this.reports});
+
+  final List<SubmittedVerificationReport> reports;
+
+  factory SubmittedVerificationReportsResponse.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final dynamic rawReports = json['reports'] ?? json['data'];
+    final List<SubmittedVerificationReport> reports = rawReports is List
+        ? rawReports
+              .whereType<Map>()
+              .map(
+                (Map e) => SubmittedVerificationReport.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
+        : const <SubmittedVerificationReport>[];
+    return SubmittedVerificationReportsResponse(reports: reports);
+  }
+
+  factory SubmittedVerificationReportsResponse.fromAny(dynamic value) {
+    if (value is List) {
+      return SubmittedVerificationReportsResponse.fromJson(<String, dynamic>{
+        'reports': value,
+      });
+    }
+    if (value is Map<String, dynamic>) {
+      return SubmittedVerificationReportsResponse.fromJson(value);
+    }
+    if (value is Map) {
+      return SubmittedVerificationReportsResponse.fromJson(
+        Map<String, dynamic>.from(value),
+      );
+    }
+    return const SubmittedVerificationReportsResponse(
+      reports: <SubmittedVerificationReport>[],
+    );
+  }
+}
+
+class SubmittedVerificationReport {
+  const SubmittedVerificationReport({
+    required this.requestId,
+    required this.verificationType,
+    required this.status,
+    required this.submittedAt,
+    required this.updatedAt,
+    required this.assignedUsers,
+  });
+
+  final String requestId;
+  final String verificationType;
+  final String status;
+  final String submittedAt;
+  final String updatedAt;
+  final List<SubmittedReportAssignedUser> assignedUsers;
+
+  factory SubmittedVerificationReport.fromJson(Map<String, dynamic> json) {
+    final dynamic assignedRaw = json['assigned_users'] ?? json['assignedUsers'];
+    final List<SubmittedReportAssignedUser> assignedUsers = assignedRaw is List
+        ? assignedRaw
+              .whereType<Map>()
+              .map(
+                (Map e) => SubmittedReportAssignedUser.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
+        : const <SubmittedReportAssignedUser>[];
+
+    return SubmittedVerificationReport(
+      requestId: _readFirstString(json, const <String>[
+        'request_id',
+        'requestId',
+        'id',
+      ]),
+      verificationType: _readFirstString(json, const <String>[
+        'verification_type',
+        'verificationType',
+        'type',
+        'label',
+      ]),
+      status: _readFirstString(json, const <String>[
+        'status',
+        'decision',
+        'verification_status',
+        'verificationStatus',
+      ]),
+      submittedAt: _readFirstString(json, const <String>[
+        'submitted_at',
+        'submittedAt',
+        'created_at',
+        'createdAt',
+      ]),
+      updatedAt: _readFirstString(json, const <String>[
+        'updated_at',
+        'updatedAt',
+        'submitted_at',
+        'submittedAt',
+      ]),
+      assignedUsers: assignedUsers,
+    );
+  }
+}
+
+class SubmittedReportAssignedUser {
+  const SubmittedReportAssignedUser({
+    required this.batchUserId,
+    required this.fullName,
+    required this.status,
+    required this.reason,
+    required this.rejectionReason,
+    required this.reportUrl,
+    required this.fileIndex,
+  });
+
+  final String batchUserId;
+  final String fullName;
+  final String status;
+  final String reason;
+  final String rejectionReason;
+  final String reportUrl;
+  final int fileIndex;
+
+  bool get hasOpenableReport {
+    final Uri? uri = Uri.tryParse(reportUrl.trim());
+    return uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+  }
+
+  String get displayReason => rejectionReason.trim().isNotEmpty
+      ? rejectionReason.trim()
+      : reason.trim();
+
+  factory SubmittedReportAssignedUser.fromJson(Map<String, dynamic> json) {
+    return SubmittedReportAssignedUser(
+      batchUserId: _readFirstString(json, const <String>[
+        'batch_user_id',
+        'batchUserId',
+        'user_id',
+        'userId',
+        'id',
+      ]),
+      fullName: _readFirstString(json, const <String>[
+        'full_name',
+        'fullName',
+        'product_name',
+        'productName',
+        'name',
+      ]),
+      status: _readFirstString(json, const <String>[
+        'status',
+        'verification_status',
+        'verificationStatus',
+      ]),
+      reason: _readFirstString(json, const <String>['reason', 'detail']),
+      rejectionReason: _readFirstString(json, const <String>[
+        'rejection_reason',
+        'rejectionReason',
+      ]),
+      reportUrl: _readFirstString(json, const <String>[
+        'report_url',
+        'reportUrl',
+        'url',
+      ]),
+      fileIndex:
+          int.tryParse(
+            (json['file_index'] ?? json['fileIndex'] ?? '').toString(),
+          ) ??
+          0,
+    );
+  }
+}
+
 class VerificationBatchSummary {
   const VerificationBatchSummary({
     required this.batchId,

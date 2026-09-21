@@ -39,11 +39,43 @@ class _VerificationReportsPageState
       final VerificationListResponse response = await repo.getAllVerifications(
         limit: 100,
       );
+      final List<_ReportRow> fallbackRows = _buildReportRows(response.users);
+      final List<_ReportRow> submittedRows = await _loadSubmittedReportRows(
+        repo,
+      );
       if (!mounted) return;
-      setState(() => _reports = AsyncData(_buildReportRows(response.users)));
+      setState(
+        () => _reports = AsyncData(
+          submittedRows.isNotEmpty ? submittedRows : fallbackRows,
+        ),
+      );
     } catch (e, st) {
       if (!mounted) return;
       setState(() => _reports = AsyncError(e, st));
+    }
+  }
+
+  Future<List<_ReportRow>> _loadSubmittedReportRows(
+    VerificationRepository repo,
+  ) async {
+    try {
+      final List<VerificationBatchSummary> batches = await repo.getBatches();
+      final List<List<_ReportRow>> rowsByBatch = await Future.wait(
+        batches
+            .where((VerificationBatchSummary batch) => batch.batchId.isNotEmpty)
+            .map((VerificationBatchSummary batch) async {
+              try {
+                final SubmittedVerificationReportsResponse response = await repo
+                    .getSubmittedReports(batch.batchId);
+                return _buildSubmittedReportRows(batch, response.reports);
+              } catch (_) {
+                return const <_ReportRow>[];
+              }
+            }),
+      );
+      return rowsByBatch.expand((List<_ReportRow> rows) => rows).toList();
+    } catch (_) {
+      return const <_ReportRow>[];
     }
   }
 
@@ -62,6 +94,41 @@ class _VerificationReportsPageState
             status: _statusLabel(check.status),
             source: check.label.trim().isEmpty ? 'manual' : check.label,
             url: check.reportUrl,
+          ),
+        );
+      }
+    }
+    return rows;
+  }
+
+  List<_ReportRow> _buildSubmittedReportRows(
+    VerificationBatchSummary batch,
+    List<SubmittedVerificationReport> reports,
+  ) {
+    final List<_ReportRow> rows = <_ReportRow>[];
+    for (final SubmittedVerificationReport report in reports) {
+      for (final SubmittedReportAssignedUser assigned in report.assignedUsers) {
+        if (!assigned.hasOpenableReport) continue;
+        final String category = report.verificationType.trim().isEmpty
+            ? 'Verification'
+            : report.verificationType.trim();
+        final String subject = batch.batchName.trim().isEmpty
+            ? category
+            : '${batch.batchName.trim()} • $category';
+        rows.add(
+          _ReportRow(
+            id: '${report.requestId}_${assigned.batchUserId}_${assigned.fileIndex}_${rows.length}',
+            category: category,
+            title: assigned.fullName.trim().isEmpty
+                ? category
+                : assigned.fullName.trim(),
+            subject: subject,
+            date: _formatDateLabel(report.updatedAt, report.submittedAt),
+            status: _statusLabel(
+              assigned.status.trim().isEmpty ? report.status : assigned.status,
+            ),
+            source: 'manual',
+            url: assigned.reportUrl,
           ),
         );
       }

@@ -385,6 +385,19 @@ class VerificationRepository {
     return VerificationBatchDetailResponse.fromJson(res);
   }
 
+  Future<SubmittedVerificationReportsResponse> getSubmittedReports(
+    String batchId, {
+    bool submittedOnly = true,
+  }) async {
+    final dynamic res = await _api.verificationGetAny(
+      '/verification/batches/${Uri.encodeComponent(batchId.trim())}/submitted-reports',
+      queryParameters: submittedOnly
+          ? const <String, String>{'submitted_only': 'true'}
+          : null,
+    );
+    return SubmittedVerificationReportsResponse.fromAny(res);
+  }
+
   Future<SingleProductUploadResponse> uploadSingleProduct({
     required String categoryId,
     required String productName,
