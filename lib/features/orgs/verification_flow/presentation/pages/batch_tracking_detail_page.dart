@@ -1,6 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
@@ -295,6 +301,190 @@ class _BatchTrackingDetailPageState
     return matches(detail.credential);
   }
 
+  static const MethodChannel _downloadsChannel = MethodChannel(
+    'trumarkz/downloads',
+  );
+  static const String _xlsxMime =
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  static String _rejectedListFileName(
+    RejectedListInfo info,
+    VerificationBinaryResponse res,
+  ) {
+    final String fromInfo = info.filename.trim();
+    if (fromInfo.isNotEmpty) return fromInfo;
+    final String fromHeader = res.filename.trim();
+    if (fromHeader.isNotEmpty && fromHeader != 'human_template.xlsx') {
+      return fromHeader;
+    }
+    return 'rejected_list.xlsx';
+  }
+
+  Future<void> _openRejectedListView(RejectedListInfo info) async {
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final VerificationBinaryResponse res = await repo.viewRejectedList(
+        _batchId,
+      );
+      if (!mounted) return;
+      final String fileName = _rejectedListFileName(info, res);
+      final Directory tempDir = await getTemporaryDirectory();
+      final File file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(res.bytes, flush: true);
+      if (!mounted) return;
+      await _showRejectedListActions(
+        filePath: file.path,
+        fileName: fileName,
+        fileBytes: res.bytes,
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _showRejectedListError(e);
+    } catch (e) {
+      debugPrint('[rejected-list] view failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open the rejected list right now.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _downloadRejectedList(RejectedListInfo info) async {
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final VerificationBinaryResponse res = await repo.downloadRejectedList(
+        _batchId,
+      );
+      if (!mounted) return;
+      final String fileName = _rejectedListFileName(info, res);
+      String savedUri = '';
+      try {
+        savedUri =
+            await _downloadsChannel.invokeMethod<String>(
+              'saveFileToDownloads',
+              <String, dynamic>{
+                'fileName': fileName,
+                'mimeType': _xlsxMime,
+                'bytes': res.bytes,
+              },
+            ) ??
+            '';
+      } on MissingPluginException catch (e) {
+        debugPrint('[rejected-list] downloads channel missing: $e');
+      }
+      if (!mounted) return;
+      if (savedUri.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Saved. Use Share now to store the rejected list.'),
+            action: SnackBarAction(
+              label: 'Share',
+              onPressed: () async {
+                await Share.shareXFiles(<XFile>[
+                  XFile.fromData(
+                    res.bytes,
+                    name: fileName,
+                    mimeType: _xlsxMime,
+                  ),
+                ]);
+              },
+            ),
+          ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rejected list saved to Downloads.')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _showRejectedListError(e);
+    } catch (e) {
+      debugPrint('[rejected-list] download failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to download the rejected list right now.'),
+        ),
+      );
+    }
+  }
+
+  void _showRejectedListError(ApiException e) {
+    final String message = switch (e.statusCode) {
+      404 => 'No rejected list is available for this batch.',
+      502 => 'The rejected list could not be retrieved. Please try again.',
+      _ => e.message,
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _showRejectedListActions({
+    required String filePath,
+    required String fileName,
+    required Uint8List fileBytes,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Rejected list'),
+          content: Text('$fileName is ready to open.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () async {
+                try {
+                  await launchUrl(
+                    Uri.parse(filePath),
+                    mode: LaunchMode.externalApplication,
+                  );
+                } catch (e) {
+                  debugPrint('[rejected-list] open failed: $e');
+                }
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+              child: const Text('Open file'),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await Share.shareXFiles(<XFile>[
+                    XFile.fromData(
+                      fileBytes,
+                      name: fileName,
+                      mimeType: _xlsxMime,
+                    ),
+                  ]);
+                } catch (e) {
+                  debugPrint('[rejected-list] share failed: $e');
+                }
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+              child: const Text('Share file'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   bool get _isWarrantyMode {
     final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
     if (detail != null) {
@@ -402,6 +592,8 @@ class _BatchTrackingDetailPageState
                         data: (WarrantyBatchStatusResponse res) {
                           final VerificationBatchDetailResponse?
                           warrantyDetail = _detailData.valueOrNull;
+                          final RejectedListInfo? rejectedList =
+                              warrantyDetail?.rejectedList;
                           final bool sharedWithOrg =
                               res.sharedWithOrg ||
                               warrantyDetail?.sharedWithOrg == true ||
@@ -428,6 +620,16 @@ class _BatchTrackingDetailPageState
                                   approved: res.approved,
                                   rejected: res.rejected,
                                 ),
+                                if (rejectedList != null) ...<Widget>[
+                                  const SizedBox(height: AppSpacing.x3),
+                                  _RejectedListCard(
+                                    info: rejectedList,
+                                    onView: () =>
+                                        _openRejectedListView(rejectedList),
+                                    onDownload: () =>
+                                        _downloadRejectedList(rejectedList),
+                                  ),
+                                ],
                                 const SizedBox(height: AppSpacing.x4),
                                 const _SectionHeader(
                                   title: 'PRODUCTS',
@@ -560,6 +762,18 @@ class _BatchTrackingDetailPageState
                                   pending: pendingCount,
                                   failed: failedCount,
                                 ),
+                                if (res.rejectedList != null) ...<Widget>[
+                                  const SizedBox(height: AppSpacing.x3),
+                                  _RejectedListCard(
+                                    info: res.rejectedList!,
+                                    onView: () => _openRejectedListView(
+                                      res.rejectedList!,
+                                    ),
+                                    onDownload: () => _downloadRejectedList(
+                                      res.rejectedList!,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: AppSpacing.x3),
                                 const _SectionHeader(
                                   title: 'RECORDS',
@@ -765,6 +979,176 @@ class _WarrantySummarySection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RejectedListCard extends StatelessWidget {
+  const _RejectedListCard({
+    required this.info,
+    required this.onView,
+    required this.onDownload,
+  });
+
+  final RejectedListInfo info;
+  final VoidCallback onView;
+  final VoidCallback onDownload;
+
+  static const List<String> _months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  String get _subtitle {
+    final int total = info.totalRejectedUsers;
+    String subtitle = total > 0
+        ? '$total rejected user${total == 1 ? '' : 's'}'
+        : '';
+    final String generated = (info.generatedAt ?? '').trim();
+    if (generated.isNotEmpty) {
+      final DateTime? parsed = DateTime.tryParse(generated);
+      if (parsed != null) {
+        final String date =
+            '${parsed.day.toString().padLeft(2, '0')} '
+            '${_months[(parsed.month - 1).clamp(0, _months.length - 1)]} '
+            '${parsed.year}';
+        subtitle = subtitle.isEmpty
+            ? 'Generated $date'
+            : '$subtitle • Generated $date';
+      }
+    }
+    return subtitle;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String subtitle = _subtitle;
+    return TMZCard(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              const Icon(
+                Icons.description_outlined,
+                color: AppColors.brandBlue,
+                size: 20,
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              const Expanded(
+                child: Text(
+                  'Rejected List',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    height: 20 / 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (subtitle.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                height: 16 / 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+          if (info.rejectedByType.isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.x3),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: <Widget>[
+                for (final RejectedListByTypeItem item in info.rejectedByType)
+                  if (item.verificationTypeName.trim().isNotEmpty)
+                    _RejectedTypeChip(
+                      label: item.verificationTypeName,
+                      count: item.rejectedCount,
+                    ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.x4),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onView,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    side: const BorderSide(color: AppColors.brandBlue),
+                    minimumSize: const Size.fromHeight(44),
+                  ),
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  label: const Text('View'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onDownload,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.brandBlue,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(44),
+                  ),
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Download'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RejectedTypeChip extends StatelessWidget {
+  const _RejectedTypeChip({required this.label, required this.count});
+
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEE2E2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$label • $count',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          height: 15 / 11,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFFB91C1C),
+        ),
+      ),
     );
   }
 }

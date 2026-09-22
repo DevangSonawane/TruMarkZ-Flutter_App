@@ -954,6 +954,82 @@ class VerificationBatchGroup {
   }
 }
 
+class RejectedListByTypeItem {
+  const RejectedListByTypeItem({
+    required this.verificationTypeName,
+    required this.rejectedCount,
+  });
+
+  final String verificationTypeName;
+  final int rejectedCount;
+
+  factory RejectedListByTypeItem.fromJson(Map<String, dynamic> json) {
+    return RejectedListByTypeItem(
+      verificationTypeName:
+          (json['verification_type_name'] ?? json['verificationTypeName'] ?? '')
+              .toString()
+              .trim(),
+      rejectedCount: _readIntValue(json, const <String>[
+        'rejected_count',
+        'rejectedCount',
+        'count',
+      ]),
+    );
+  }
+}
+
+class RejectedListInfo {
+  const RejectedListInfo({
+    required this.available,
+    required this.filename,
+    required this.generatedAt,
+    required this.totalRejectedUsers,
+    required this.rejectedByType,
+    required this.viewUrl,
+    required this.downloadUrl,
+  });
+
+  final bool available;
+  final String filename;
+  final String? generatedAt;
+  final int totalRejectedUsers;
+  final List<RejectedListByTypeItem> rejectedByType;
+  final String viewUrl;
+  final String downloadUrl;
+
+  factory RejectedListInfo.fromJson(Map<String, dynamic> json) {
+    final dynamic rejectedRaw = json['rejected_by_type'];
+    final List<RejectedListByTypeItem> rejectedByType = rejectedRaw is List
+        ? rejectedRaw
+              .whereType<Map>()
+              .map(
+                (Map e) =>
+                    RejectedListByTypeItem.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+        : const <RejectedListByTypeItem>[];
+    final bool available = json['available'] == true ||
+        json['available']?.toString().trim().toLowerCase() == 'true';
+
+    return RejectedListInfo(
+      available: available,
+      filename: (json['filename'] ?? '').toString().trim(),
+      generatedAt: (json['generated_at'] ?? json['generatedAt'])
+          ?.toString()
+          .trim(),
+      totalRejectedUsers: _readIntValue(json, const <String>[
+        'total_rejected_users',
+        'totalRejectedUsers',
+        'total',
+      ]),
+      rejectedByType: rejectedByType,
+      viewUrl: (json['view_url'] ?? json['viewUrl'] ?? '').toString().trim(),
+      downloadUrl:
+          (json['download_url'] ?? json['downloadUrl'] ?? '').toString().trim(),
+    );
+  }
+}
+
 class VerificationBatchDetailResponse {
   const VerificationBatchDetailResponse({
     required this.batchId,
@@ -972,6 +1048,7 @@ class VerificationBatchDetailResponse {
     required this.sharedAt,
     required this.sharedBy,
     required this.canGenerateSdc,
+    required this.rejectedList,
   });
 
   final String batchId;
@@ -990,6 +1067,7 @@ class VerificationBatchDetailResponse {
   final String? sharedAt;
   final String? sharedBy;
   final bool canGenerateSdc;
+  final RejectedListInfo? rejectedList;
 
   String get sdcOrgId {
     final dynamic sdc = verificationProgress['sdc'];
@@ -1107,6 +1185,10 @@ class VerificationBatchDetailResponse {
               .toList()
         : const <VerificationUser>[];
     final bool sharedWithOrg = _readSharedWithOrg(json);
+    final dynamic rejectedRaw = json['rejected_list'];
+    final RejectedListInfo? rejectedList = rejectedRaw is Map
+        ? RejectedListInfo.fromJson(Map<String, dynamic>.from(rejectedRaw))
+        : null;
 
     return VerificationBatchDetailResponse(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
@@ -1144,6 +1226,7 @@ class VerificationBatchDetailResponse {
           json['canGenerateSdc'] == true ||
           json['can_generate_sdc']?.toString().trim().toLowerCase() == 'true' ||
           json['canGenerateSdc']?.toString().trim().toLowerCase() == 'true',
+      rejectedList: rejectedList,
     );
   }
 }

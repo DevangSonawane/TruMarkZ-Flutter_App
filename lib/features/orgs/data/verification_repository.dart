@@ -385,6 +385,18 @@ class VerificationRepository {
     return VerificationBatchDetailResponse.fromJson(res);
   }
 
+  Future<VerificationBinaryResponse> viewRejectedList(String batchId) {
+    return _api.verificationGetBinary(
+      '/verification/batches/${Uri.encodeComponent(batchId.trim())}/rejected-list/view',
+    );
+  }
+
+  Future<VerificationBinaryResponse> downloadRejectedList(String batchId) {
+    return _api.verificationGetBinary(
+      '/verification/batches/${Uri.encodeComponent(batchId.trim())}/rejected-list/download',
+    );
+  }
+
   Future<SubmittedVerificationReportsResponse> getSubmittedReports(
     String batchId, {
     bool submittedOnly = true,
