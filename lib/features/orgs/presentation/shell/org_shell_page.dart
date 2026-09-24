@@ -11,11 +11,7 @@ class OrgShellPage extends StatelessWidget {
 
   int _indexForLocation(String location) {
     final String path = Uri.parse(location).path;
-    if (path.startsWith(AppRouter.appBatchesPath)) return 1; // View All
-    if (path.startsWith(AppRouter.qrScannerPath)) return 2; // Scan
-    if (path.startsWith(AppRouter.appRegistryPath)) {
-      return 4; // Registry
-    }
+    if (path.startsWith(AppRouter.appBatchesPath)) return 2; // All Batches
     return 0; // Dashboard
   }
 
@@ -25,16 +21,10 @@ class OrgShellPage extends StatelessWidget {
         context.go(AppRouter.dashboardPath);
         return;
       case 1:
-        context.go(AppRouter.appBatchesPath); // View All
-        return;
-      case 2:
-        context.go(AppRouter.qrScannerPath); // Scan
-        return;
-      case 3:
         context.push(AppRouter.batchTypeSelectionPath); // New Batch
         return;
-      case 4:
-        context.go(AppRouter.appRegistryPath); // Registry
+      case 2:
+        context.go(AppRouter.appBatchesPath); // All Batches
         return;
     }
   }
@@ -78,29 +68,17 @@ class OrgShellPage extends StatelessWidget {
               onTap: () => _onTap(context, 0),
             ),
             OrgBottomNavBarItem(
+              label: 'New Batch',
+              svgAssetPath: 'assets/icons/figma/nav_new_batch.svg',
+              letterSpacing: 0,
+              onTap: () => _onTap(context, 1),
+            ),
+            OrgBottomNavBarItem(
               label: 'All Batches',
               svgAssetPath: 'assets/icons/figma/nav_batches.svg',
               fontWeight: FontWeight.w700,
               letterSpacing: 0.0078,
-              onTap: () => _onTap(context, 1),
-            ),
-            OrgBottomNavBarItem(
-              label: 'Scan',
-              svgAssetPath: 'assets/icons/figma/nav_scan.svg',
-              showLabel: false,
               onTap: () => _onTap(context, 2),
-            ),
-            OrgBottomNavBarItem(
-              label: 'New Batch',
-              svgAssetPath: 'assets/icons/figma/nav_new_batch.svg',
-              letterSpacing: 0,
-              onTap: () => _onTap(context, 3),
-            ),
-            OrgBottomNavBarItem(
-              label: 'Registry',
-              svgAssetPath: 'assets/icons/figma/registry.svg',
-              letterSpacing: 0.0391,
-              onTap: () => _onTap(context, 4),
             ),
           ],
         ),

@@ -1,7 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
-import '../theme/app_colors.dart';
 
 class OrgBottomNavBarItem {
   const OrgBottomNavBarItem({
@@ -10,7 +10,6 @@ class OrgBottomNavBarItem {
     required this.onTap,
     this.fontWeight,
     this.letterSpacing,
-    this.showLabel = true,
   });
 
   final String label;
@@ -18,7 +17,6 @@ class OrgBottomNavBarItem {
   final VoidCallback onTap;
   final FontWeight? fontWeight;
   final double? letterSpacing;
-  final bool showLabel;
 }
 
 class OrgBottomNavBar extends StatelessWidget {
@@ -26,79 +24,103 @@ class OrgBottomNavBar extends StatelessWidget {
     super.key,
     required this.items,
     required this.currentIndex,
-  }) : assert(items.length == 5, 'Expected exactly 5 nav items');
+  }) : assert(items.length == 3, 'Expected exactly 3 nav items');
 
   final List<OrgBottomNavBarItem> items;
   final int currentIndex;
 
   static const Color _inactive = Color(0xFF9CA3AF);
-  static const double _barHeight = 71.016;
+  static const Color _navy = Color(0xFF1B3387);
 
   @override
   Widget build(BuildContext context) {
-    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(40, 0, 40, 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(190),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: Colors.white.withAlpha(180),
+                  width: 1.2,
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withAlpha(20),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: SizedBox(
+                height: 58,
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    final double itemWidth =
+                        constraints.maxWidth / items.length;
+                    const double indicatorSize = 44;
+                    final double left =
+                        (itemWidth * currentIndex) +
+                        ((itemWidth - indicatorSize) / 2);
 
-    return Container(
-      height: _barHeight + safeBottom,
-      padding: EdgeInsets.only(bottom: safeBottom),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFF3F4F6), width: 1.07),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      // Figma bar width is 402px. Use FittedBox so layout never overflows
-      // on smaller devices, while keeping pixel-perfect positions inside.
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.bottomCenter,
-        child: SizedBox(
-          width: 402,
-          height: _barHeight,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              Positioned(
-                left: 12.2712,
-                top: 12.864,
-                width: 68.608,
-                height: 45.288,
-                child: _NavItemView(item: items[0], active: currentIndex == 0),
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: <Widget>[
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 360),
+                          curve: Curves.easeOutCubic,
+                          left: left,
+                          top: (68 - indicatorSize) / 2,
+                          width: indicatorSize,
+                          height: indicatorSize,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: _navy,
+                              shape: BoxShape.circle,
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: _navy.withAlpha(70),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: _NavIcon(
+                                item: items[0],
+                                selected: currentIndex == 0,
+                              ),
+                            ),
+                            Expanded(
+                              child: _PlusButton(
+                                onTap: items[1].onTap,
+                                selected: currentIndex == 1,
+                              ),
+                            ),
+                            Expanded(
+                              child: _NavIcon(
+                                item: items[2],
+                                selected: currentIndex == 2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-              Positioned(
-                left: 90.9561,
-                top: 12.864,
-                width: 71.0925,
-                height: 45.288,
-                child: _NavItemView(item: items[1], active: currentIndex == 1),
-              ),
-              Positioned(
-                left: 172.1252,
-                top: -1.88,
-                width: 60.032,
-                height: 60.032,
-                child: _NavItemView(item: items[2], active: currentIndex == 2),
-              ),
-              Positioned(
-                left: 242.2341,
-                top: 12.864,
-                width: 68.7456,
-                height: 45.288,
-                child: _NavItemView(item: items[3], active: currentIndex == 3),
-              ),
-              Positioned(
-                left: 321.0565,
-                top: 12.864,
-                width: 68.608,
-                height: 45.288,
-                child: _NavItemView(item: items[4], active: currentIndex == 4),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -106,93 +128,60 @@ class OrgBottomNavBar extends StatelessWidget {
   }
 }
 
-class _NavItemView extends StatelessWidget {
-  const _NavItemView({required this.item, required this.active});
+class _NavIcon extends StatelessWidget {
+  const _NavIcon({required this.item, required this.selected});
 
   final OrgBottomNavBarItem item;
-  final bool active;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = active ? AppColors.brandBlue : OrgBottomNavBar._inactive;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: item.onTap,
-        borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.black.withAlpha(8),
-        highlightColor: Colors.black.withAlpha(4),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: item.onTap,
+      child: Center(
         child: SizedBox(
-          width: double.infinity,
-          height: double.infinity,
-          child: item.showLabel
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[
-                    SvgPicture.asset(
-                      item.svgAssetPath,
-                      width: 24,
-                      height: 24,
-                      colorFilter: ColorFilter.mode(fg, BlendMode.srcIn),
-                    ),
-                    const SizedBox(height: 4.29),
-                    Text(
-                      item.label,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 8,
-                        height: 16.08 / 8,
-                        fontWeight: item.fontWeight ?? FontWeight.w600,
-                        letterSpacing: item.letterSpacing,
-                        color: fg,
-                      ),
-                    ),
-                  ],
-                )
-              : Container(
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.brandBlue : AppColors.brandBlue,
-                    borderRadius: BorderRadius.circular(9999),
-                    border: Border.all(
-                      color: active
-                          ? const Color(0xFFBFD2FF)
-                          : const Color(0xFFF7F9FC),
-                      width: 4.288,
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: active
-                            ? AppColors.brandBlue.withValues(alpha: 0.42)
-                            : AppColors.brandBlue.withValues(alpha: 0.30),
-                        offset: const Offset(0, 4.288),
-                        blurRadius: 6.432,
-                        spreadRadius: -4.288,
-                      ),
-                      BoxShadow(
-                        color: active
-                            ? AppColors.brandBlue.withValues(alpha: 0.42)
-                            : AppColors.brandBlue.withValues(alpha: 0.30),
-                        offset: const Offset(0, 10.72),
-                        blurRadius: 16.08,
-                        spreadRadius: -3.216,
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: SvgPicture.asset(
-                    item.svgAssetPath,
-                    width: 24,
-                    height: 24,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                ),
+          width: 44,
+          height: 44,
+          child: Center(
+            child: SvgPicture.asset(
+              item.svgAssetPath,
+              width: 20,
+              height: 20,
+              colorFilter: ColorFilter.mode(
+                selected ? Colors.white : OrgBottomNavBar._inactive,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlusButton extends StatelessWidget {
+  const _PlusButton({required this.onTap, required this.selected});
+
+  final VoidCallback onTap;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: onTap,
+      child: Center(
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Icon(
+              Icons.add_rounded,
+              size: 26,
+              color: selected ? Colors.white : OrgBottomNavBar._inactive,
+            ),
+          ),
         ),
       ),
     );
