@@ -527,16 +527,17 @@ class ApiClient {
             },
         onError: (DioException err, ErrorInterceptorHandler handler) async {
           final int? statusCode = err.response?.statusCode;
+          final bool skipAuth = err.requestOptions.extra['skipAuth'] == true;
           if (kDebugMode) {
             debugPrint(
               '[ApiClient] error ${err.requestOptions.method} ${err.requestOptions.uri} '
               'status=$statusCode type=${err.type} message=${err.message} error=${err.error} data=${err.response?.data}',
             );
           }
-          if (statusCode == 401) {
+          if (statusCode == 401 && !skipAuth) {
             await _tokenStorage.clearAll();
             scheduleMicrotask(
-              () => AppRouter.router.go(AppRouter.roleSelectionPath),
+              () => AppRouter.router.go(AppRouter.onboardingPath),
             );
             handler.next(err);
             return;

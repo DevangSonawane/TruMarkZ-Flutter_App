@@ -9,7 +9,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_button.dart';
-import '../../../../core/widgets/tmz_input.dart';
 import '../../data/auth_repository.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
@@ -22,7 +21,6 @@ class RegisterPage extends ConsumerStatefulWidget {
 class _RegisterPageState extends ConsumerState<RegisterPage> {
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _addressController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
 
@@ -30,7 +28,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   void dispose() {
     _fullNameController.dispose();
     _emailController.dispose();
-    _addressController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -38,7 +35,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   Future<void> _onRegister() async {
     final String fullName = _fullNameController.text.trim();
     final String email = _emailController.text.trim();
-    final String address = _addressController.text.trim();
     final String password = _passwordController.text;
 
     final List<String> missing = <String>[
@@ -48,27 +44,29 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     ];
     if (missing.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please enter: ${missing.join(', ')}.'),
-        ),
+        SnackBar(content: Text('Please enter: ${missing.join(', ')}.')),
       );
       return;
     }
     if (password.trim().length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password must be at least 8 characters.')),
+        const SnackBar(
+          content: Text('Password must be at least 8 characters.'),
+        ),
       );
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      await ref.read(authRepositoryProvider).registerIndividual(
+      await ref
+          .read(authRepositoryProvider)
+          .registerIndividual(
             RegisterIndividualRequest(
               fullName: fullName,
               email: email,
               mobile: null,
-              address: address.isEmpty ? null : address,
+              address: null,
               password: password,
             ),
           );
@@ -90,13 +88,15 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         );
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong. Please try again.')),
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -105,154 +105,265 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
+      backgroundColor: Colors.white,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.x6,
-            AppSpacing.x8,
-            AppSpacing.x6,
-            AppSpacing.x6 + systemBottomInset,
-          ),
-          children: <Widget>[
-            Center(
-              child: Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.cardSurface,
-                  shape: BoxShape.circle,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withAlpha(10),
-                      blurRadius: 16,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                    alignment: Alignment.center,
-                    child: Image.asset(
-                      'assets/icons/headers_app_icon.png',
-                      height: 30,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-            const SizedBox(height: AppSpacing.x4),
-            Text(
-              'TruMarkZ',
-              textAlign: TextAlign.center,
-              style: AppTypography.display2.copyWith(
-                fontSize: 34,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x2),
-            Text(
-              'CREATE YOUR ACCOUNT',
-              textAlign: TextAlign.center,
-              style: AppTypography.label.copyWith(
-                color: AppColors.textSecondary,
-                letterSpacing: 1.8,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x6),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.cardSurface,
-                borderRadius: BorderRadius.circular(26),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withAlpha(10),
-                    blurRadius: 28,
-                    offset: const Offset(0, 18),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(AppSpacing.x6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text('Create Account', style: AppTypography.heading1),
-                  const SizedBox(height: AppSpacing.x1),
-                  Text(
-                    'Join the secure TruMarkZ network today.',
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-                  TMZInput(
-                    label: 'Full Name',
-                    hint: 'John Doe',
-                    prefixIcon: Icons.person_outline_rounded,
-                    controller: _fullNameController,
-                    enabled: !_isLoading,
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  TMZInput(
-                    label: 'Email',
-                    hint: 'name@company.com',
-                    keyboardType: TextInputType.emailAddress,
-                    prefixIcon: Icons.mail_outline_rounded,
-                    controller: _emailController,
-                    enabled: !_isLoading,
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  TMZInput(
-                    label: 'Address (optional)',
-                    hint: 'Your full address',
-                    prefixIcon: Icons.location_on_outlined,
-                    controller: _addressController,
-                    enabled: !_isLoading,
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  TMZInput(
-                    label: 'Password',
-                    hint: '••••••••',
-                    prefixIcon: Icons.lock_outline_rounded,
-                    obscureText: true,
-                    controller: _passwordController,
-                    enabled: !_isLoading,
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-                  TMZButton(
-                    onPressed: _isLoading ? null : _onRegister,
-                    label: 'Register',
-                    isLoading: _isLoading,
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Text(
-                        'Already have an account? ',
-                        style: AppTypography.body2.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: systemBottomInset),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.x8,
+                        AppSpacing.x2,
+                        AppSpacing.x8,
+                        AppSpacing.x5,
                       ),
-                      InkWell(
-                        onTap: () => context.go(
-                          '${AppRouter.loginPath}?type=individual&force=true',
-                        ),
-                        child: Text(
-                          'Sign In',
-                          style: AppTypography.body2.copyWith(
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w700,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Center(
+                            child: Image.asset(
+                              'assets/icons/headers_app_icon.png',
+                              height: 64,
+                              fit: BoxFit.contain,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: AppSpacing.x5),
+                          Text(
+                            'Create Account',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.heading1.copyWith(
+                              fontSize: 24,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.x2),
+                          Text(
+                            'Register to start your verification',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.body2.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.x8),
+                          _RegisterTextField(
+                            label: 'Full Name',
+                            prefixIcon: Icons.person_outline_rounded,
+                            controller: _fullNameController,
+                            enabled: !_isLoading,
+                          ),
+                          const SizedBox(height: AppSpacing.x5),
+                          _RegisterTextField(
+                            label: 'Email',
+                            keyboardType: TextInputType.emailAddress,
+                            prefixIcon: Icons.mail_outline_rounded,
+                            controller: _emailController,
+                            enabled: !_isLoading,
+                          ),
+                          const SizedBox(height: AppSpacing.x5),
+                          _RegisterTextField(
+                            label: 'Password',
+                            prefixIcon: Icons.lock_outline_rounded,
+                            obscureText: true,
+                            controller: _passwordController,
+                            enabled: !_isLoading,
+                          ),
+                          const SizedBox(height: AppSpacing.x6),
+                          TMZButton(
+                            onPressed: _isLoading ? null : _onRegister,
+                            label: 'Register',
+                            isLoading: _isLoading,
+                            borderRadius: 999,
+                            backgroundColor: const Color(0xFF1B3387),
+                            showShadow: false,
+                          ),
+                          const SizedBox(height: AppSpacing.x5),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              Text(
+                                'Already have an account? ',
+                                style: AppTypography.body2.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () => context.go(
+                                  '${AppRouter.loginPath}?type=individual&force=true',
+                                ),
+                                child: Text(
+                                  'Sign In',
+                                  style: AppTypography.body2.copyWith(
+                                    color: const Color(0xFF1B3387),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _RegisterTextField extends StatefulWidget {
+  const _RegisterTextField({
+    required this.label,
+    required this.controller,
+    this.keyboardType,
+    this.prefixIcon,
+    this.obscureText = false,
+    this.enabled = true,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+  final IconData? prefixIcon;
+  final bool obscureText;
+  final bool enabled;
+
+  @override
+  State<_RegisterTextField> createState() => _RegisterTextFieldState();
+}
+
+class _RegisterTextFieldState extends State<_RegisterTextField> {
+  late final FocusNode _focusNode;
+  bool _focused = false;
+  bool _obscure = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode()..addListener(_handleFocusChange);
+    _obscure = widget.obscureText;
+  }
+
+  @override
+  void didUpdateWidget(_RegisterTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.obscureText != widget.obscureText) {
+      _obscure = widget.obscureText;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocusChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (_focused == _focusNode.hasFocus) return;
+    setState(() => _focused = _focusNode.hasFocus);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color borderColor = _focused
+        ? AppColors.brandBlue.withAlpha(178)
+        : AppColors.border.withAlpha(145);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor, width: 1),
+        boxShadow: const <BoxShadow>[],
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 38),
+        child: Row(
+          children: <Widget>[
+            if (widget.prefixIcon != null) ...<Widget>[
+              const SizedBox(width: 14),
+              Icon(
+                widget.prefixIcon,
+                size: 15,
+                color: _focused ? AppColors.brandBlue : AppColors.textTertiary,
+              ),
+            ],
+            Expanded(
+              child: TextField(
+                focusNode: _focusNode,
+                enabled: widget.enabled,
+                controller: widget.controller,
+                keyboardType: widget.keyboardType,
+                obscureText: _obscure,
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  labelText: widget.label,
+                  labelStyle: AppTypography.caption.copyWith(
+                    color: _focused
+                        ? AppColors.brandBlue
+                        : AppColors.textTertiary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  floatingLabelStyle: AppTypography.caption.copyWith(
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  filled: false,
+                  fillColor: Colors.transparent,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.fromLTRB(
+                    widget.prefixIcon == null ? 16 : 10,
+                    7,
+                    6,
+                    7,
+                  ),
+                ),
               ),
             ),
+            if (widget.obscureText) ...<Widget>[
+              IconButton(
+                onPressed: widget.enabled
+                    ? () => setState(() => _obscure = !_obscure)
+                    : null,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  _obscure
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 16,
+                ),
+                color: AppColors.textTertiary,
+                splashRadius: 16,
+              ),
+              const SizedBox(width: 10),
+            ],
           ],
         ),
       ),

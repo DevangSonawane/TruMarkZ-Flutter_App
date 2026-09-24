@@ -160,7 +160,7 @@ class _IndividualProfilePageState extends ConsumerState<IndividualProfilePage> {
                           SizedBox(height: s(24)),
                           _LogoutCard(
                             onLogout: () => context.go(
-                              AppRouter.roleSelectionPath,
+                              AppRouter.onboardingPath,
                             ),
                           ),
                         ],

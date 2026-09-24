@@ -14,6 +14,7 @@ import '../../../../core/services/token_storage.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../application/auth_notifier.dart';
 import '../../application/pending_auth.dart';
+import '../widgets/signup_options_sheet.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -430,12 +431,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                       ),
                                     ),
                                     InkWell(
-                                      onTap: () => context.go(
-                                        isOrg
-                                            ? AppRouter
-                                                  .organisationRegistrationPath
-                                            : '${AppRouter.registerPath}?force=true',
-                                      ),
+                                      onTap: () =>
+                                          showSignupOptionsSheet(context),
                                       child: Text(
                                         'Register',
                                         style: AppTypography.body2.copyWith(
@@ -527,7 +524,7 @@ class _LoginTextFieldState extends State<_LoginTextField> {
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: AppColors.offWhite,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: borderColor, width: 1),
         boxShadow: const <BoxShadow>[],

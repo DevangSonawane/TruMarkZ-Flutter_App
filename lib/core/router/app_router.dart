@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
-import '../../features/auth/presentation/pages/role_selection_page.dart';
 import '../../features/auth/presentation/pages/forgot_password_page.dart';
 import '../../features/auth/presentation/pages/reset_password_page.dart';
 import '../../features/auth/presentation/pages/auth_callback_page.dart';
@@ -57,6 +56,7 @@ import '../../features/orgs/verification_flow/presentation/pages/map_credential_
 import '../../features/orgs/verification_flow/presentation/pages/organisation_registration_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/otp_verification_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/pending_approval_page.dart';
+import '../../features/orgs/onboarding/presentation/pages/org_interest_selection_page.dart';
 import '../../features/orgs/onboarding/presentation/pages/org_onboarding_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_batch_created_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/product_batch_setup_page.dart';
@@ -83,7 +83,6 @@ import '../theme/app_typography.dart';
 class AppRouter {
   static const String splashPath = '/';
   static const String onboardingPath = '/onboarding';
-  static const String roleSelectionPath = '/role-selection';
   static const String loginPath = '/login';
   static const String registerPath = '/register';
   static const String forgotPasswordPath = '/forgot-password';
@@ -118,6 +117,7 @@ class AppRouter {
   static const String otpVerificationPath = '/otp-verification';
   static const String pendingApprovalPath = '/pending-approval';
   static const String orgOnboardingPath = '/org-onboarding';
+  static const String orgInterestSelectionPath = '/org-interests';
 
   // Organisation bulk verification flow
   static const String batchTypeSelectionPath = '/batch-type-selection';
@@ -316,10 +316,10 @@ class AppRouter {
           state.matchedLocation.startsWith(authErrorPath) ||
           state.matchedLocation == splashPath ||
           state.matchedLocation.startsWith(onboardingPath) ||
-          state.matchedLocation.startsWith(roleSelectionPath) ||
           state.matchedLocation.startsWith(organisationRegistrationPath) ||
           state.matchedLocation.startsWith(otpVerificationPath) ||
           state.matchedLocation.startsWith(pendingApprovalPath) ||
+          state.matchedLocation.startsWith(orgInterestSelectionPath) ||
           state.matchedLocation.startsWith(publicVerificationResultPath) ||
           state.matchedLocation.startsWith(userDocumentUploadPath);
 
@@ -359,12 +359,6 @@ class AppRouter {
         name: 'onboarding',
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const OnboardingPage()),
-      ),
-      GoRoute(
-        path: roleSelectionPath,
-        name: 'role_selection',
-        pageBuilder: (BuildContext context, GoRouterState state) =>
-            _slideFadePage(state: state, child: const RoleSelectionPage()),
       ),
       GoRoute(
         path: loginPath,
@@ -725,6 +719,15 @@ class AppRouter {
         name: 'org_onboarding',
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const OrgOnboardingPage()),
+      ),
+      GoRoute(
+        path: orgInterestSelectionPath,
+        name: 'org_interests',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const OrgInterestSelectionPage(),
+            ),
       ),
 
       // Organisation bulk verification flow

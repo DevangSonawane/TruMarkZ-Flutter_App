@@ -59,6 +59,48 @@ final verificationTypesProvider = FutureProvider.family
       );
     });
 
+final industryTypesProvider =
+    FutureProvider.autoDispose<List<VerificationIndustryType>>((ref) async {
+      return ref.read(verificationRepositoryProvider).getIndustryTypes();
+    });
+
+final industryTypeNamesForCategoryProvider = FutureProvider.family
+    .autoDispose<List<String>, String>((ref, category) async {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      final String normalizedCategory = category.trim().toLowerCase();
+      final List<VerificationTypeDefinition> verificationTypes = await repo
+          .getVerificationTypes(category: normalizedCategory);
+      final List<VerificationIndustryType> catalogue = await repo
+          .getIndustryTypes();
+      final Map<String, String> namesByKey = <String, String>{};
+      void addName(String rawName) {
+        final String name = rawName.trim();
+        if (name.isEmpty) return;
+        namesByKey.putIfAbsent(name.toLowerCase(), () => name);
+      }
+
+      if (normalizedCategory == 'product') {
+        for (final VerificationIndustryType item in catalogue) {
+          addName(item.name);
+        }
+      }
+      for (final VerificationTypeDefinition type in verificationTypes) {
+        for (final String rawIndustry in type.industryTypes) {
+          addName(rawIndustry);
+        }
+      }
+      if (namesByKey.isNotEmpty) {
+        return namesByKey.values.toList();
+      }
+
+      return catalogue
+          .map((VerificationIndustryType item) => item.name.trim())
+          .where((String value) => value.isNotEmpty)
+          .toList();
+    });
+
 class ProductBulkUploadDocumentInput {
   const ProductBulkUploadDocumentInput({
     required this.productName,

@@ -444,6 +444,6 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   Future<void> logout() async {
     await _repo.logout();
     state = const AsyncData(AuthState(status: AuthStatus.unauthenticated));
-    AppRouter.router.go(AppRouter.roleSelectionPath);
+    AppRouter.router.go(AppRouter.onboardingPath);
   }
 }

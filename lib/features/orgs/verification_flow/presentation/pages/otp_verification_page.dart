@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -94,6 +93,16 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
     final int m = seconds ~/ 60;
     final int s = seconds % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  String _backLocation({required String type, required String after}) {
+    final String encodedType = Uri.encodeComponent(type);
+    if (after == 'register') {
+      return type == 'organization'
+          ? AppRouter.organisationRegistrationPath
+          : '${AppRouter.registerPath}?force=true';
+    }
+    return '${AppRouter.loginPath}?type=$encodedType&force=true';
   }
 
   Future<void> _resend(String email) async {
@@ -214,333 +223,243 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
         : identifier;
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Stack(
-          children: <Widget>[
-            const Positioned.fill(child: _OtpBackground()),
-            Positioned.fill(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x5,
-                  AppSpacing.x10,
-                  AppSpacing.x5,
-                  96,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 448),
-                        child: Container(
-                          padding: const EdgeInsets.all(40),
-                          decoration: BoxDecoration(
-                            color: AppColors.cardSurface,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: <BoxShadow>[
-                              BoxShadow(
-                                color: AppColors.brandBlue.withAlpha(20),
-                                blurRadius: 12,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: <Widget>[
-                              Container(
-                                width: 72,
-                                height: 72,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.blueTint,
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.mark_email_unread_outlined,
-                                  size: 32,
-                                  color: AppColors.brandBlue,
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.x6),
-                              Text(
-                                'Verify your Email',
-                                style: AppTypography.display2.copyWith(
-                                  color: AppColors.textPrimary,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: AppSpacing.x2),
-                              Text(
-                                'We sent a 6-digit OTP to $displayIdentifier',
-                                style: AppTypography.body2.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 32),
-                              Animate(
-                                target: _shake.toDouble(),
-                                effects: <Effect>[
-                                  ShakeEffect(
-                                    hz: 4,
-                                    offset: const Offset(4, 0),
-                                    duration: 400.ms,
-                                  ),
-                                ],
-                                child: _OtpInputRow(
-                                  controllers: _controllers,
-                                  nodes: _nodes,
-                                  hasError: _hasError,
-                                  onChanged: (int i, String v) {
-                                    if (_hasError) {
-                                      setState(() => _hasError = false);
-                                    }
-                                    _handleDigitChanged(i, v);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.x6),
-                              SizedBox(
-                                width: double.infinity,
-                                child: Column(
-                                  children: <Widget>[
-                                    if (_secondsLeft > 0)
-                                      Center(
-                                        child: AnimatedSwitcher(
-                                          duration: const Duration(
-                                            milliseconds: 220,
-                                          ),
-                                          transitionBuilder:
-                                              (
-                                                Widget child,
-                                                Animation<double> anim,
-                                              ) {
-                                                return FadeTransition(
-                                                  opacity: anim,
-                                                  child: SlideTransition(
-                                                    position: Tween<Offset>(
-                                                      begin: const Offset(
-                                                        0,
-                                                        0.2,
-                                                      ),
-                                                      end: Offset.zero,
-                                                    ).animate(anim),
-                                                    child: child,
-                                                  ),
-                                                );
-                                              },
-                                          child: Text(
-                                            'Resend in ${_formatCountdown(_secondsLeft)}',
-                                            key: ValueKey<int>(_secondsLeft),
-                                            textAlign: TextAlign.center,
-                                            style: AppTypography.body2.copyWith(
-                                              color: AppColors.textTertiary,
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                    else
-                                      Text(
-                                        'Didn’t get a code?',
-                                        style: AppTypography.body2.copyWith(
-                                          color: AppColors.textTertiary,
-                                        ),
-                                      ),
-                                    if (_secondsLeft == 0)
-                                      TextButton(
-                                        onPressed: _isResending
-                                            ? null
-                                            : () => _resend(identifier),
-                                        child: Text(
-                                          'Resend code',
-                                          style: AppTypography.body2.copyWith(
-                                            color: AppColors.brandBlue,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    const SizedBox(height: AppSpacing.x4),
-                                    TMZButton(
-                                      label: 'Verify',
-                                      onPressed: _isVerifying
-                                          ? null
-                                          : () async {
-                                              final ScaffoldMessengerState
-                                              messenger = ScaffoldMessenger.of(
-                                                context,
-                                              );
-                                              final String encodedType =
-                                                  Uri.encodeComponent(type);
-                                              final bool ok = await _onVerify(
-                                                identifier,
-                                              );
-                                              if (!mounted) return;
-                                              if (!ok) return;
-
-                                              if (after != 'login') {
-                                                messenger.showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Email verified! Please log in.',
-                                                    ),
-                                                  ),
-                                                );
-                                                AppRouter.router.go(
-                                                  '${AppRouter.loginPath}?type=$encodedType&verified=true&force=true',
-                                                );
-                                                return;
-                                              }
-                                              final PendingLogin? pending = ref
-                                                  .read(pendingLoginProvider);
-                                              if (pending == null) {
-                                                AppRouter.router.go(
-                                                  '${AppRouter.loginPath}?type=$encodedType&force=true',
-                                                );
-                                                return;
-                                              }
-
-                                              try {
-                                                if (pending.loginType ==
-                                                    'organization') {
-                                                  await ref
-                                                      .read(
-                                                        authNotifierProvider
-                                                            .notifier,
-                                                      )
-                                                      .loginOrg(
-                                                        pending.emailOrMobile,
-                                                        pending.password,
-                                                      );
-                                                } else {
-                                                  await ref
-                                                      .read(
-                                                        authNotifierProvider
-                                                            .notifier,
-                                                      )
-                                                      .loginIndividual(
-                                                        pending.emailOrMobile,
-                                                        pending.password,
-                                                      );
-                                                }
-                                                ref
-                                                        .read(
-                                                          pendingLoginProvider
-                                                              .notifier,
-                                                        )
-                                                        .state =
-                                                    null;
-                                              } on ApiException catch (e) {
-                                                ref
-                                                        .read(
-                                                          pendingLoginProvider
-                                                              .notifier,
-                                                        )
-                                                        .state =
-                                                    null;
-                                                messenger.showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(e.message),
-                                                  ),
-                                                );
-                                                AppRouter.router.go(
-                                                  '${AppRouter.loginPath}?type=$encodedType&force=true',
-                                                );
-                                              } catch (_) {
-                                                ref
-                                                        .read(
-                                                          pendingLoginProvider
-                                                              .notifier,
-                                                        )
-                                                        .state =
-                                                    null;
-                                                messenger.showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Something went wrong. Please try again.',
-                                                    ),
-                                                  ),
-                                                );
-                                                AppRouter.router.go(
-                                                  '${AppRouter.loginPath}?type=$encodedType&force=true',
-                                                );
-                                              }
-                                            },
-                                      isLoading: _isVerifying,
-                                    ),
-                                    const SizedBox(height: AppSpacing.x4),
-                                    TextButton.icon(
-                                      onPressed: () {
-                                        final String encodedType =
-                                            Uri.encodeComponent(type);
-                                        context.go(
-                                          '${AppRouter.loginPath}?type=$encodedType&force=true',
-                                        );
-                                      },
-                                      icon: const Icon(
-                                        Icons.arrow_back_rounded,
-                                        size: 18,
-                                        color: AppColors.textTertiary,
-                                      ),
-                                      label: Text(
-                                        'Back to login',
-                                        style: AppTypography.body2.copyWith(
-                                          color: AppColors.textTertiary,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.x6,
+                      AppSpacing.x5,
+                      AppSpacing.x6,
+                      AppSpacing.x5,
                     ),
-                    const SizedBox(height: AppSpacing.x6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.x4,
-                        vertical: AppSpacing.x2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.blueTint,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Row(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 340),
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          Image.asset(
-                            'assets/icons/headers_app_icon.png',
-                            height: 22,
-                            fit: BoxFit.contain,
+                          Center(
+                            child: Image.asset(
+                              'assets/icons/headers_app_icon.png',
+                              height: 64,
+                              fit: BoxFit.contain,
+                            ),
                           ),
-                          const SizedBox(width: AppSpacing.x2),
+                          const SizedBox(height: AppSpacing.x8),
                           Text(
-                            'TruMarkZ Verified',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.brandBlue,
-                              fontWeight: FontWeight.w800,
+                            'OTP Verification',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.heading1.copyWith(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.x2),
+                          Text(
+                            'We sent a 6-digit code to $displayIdentifier',
+                            style: AppTypography.body2.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: AppSpacing.x8),
+                          Animate(
+                            target: _shake.toDouble(),
+                            effects: <Effect>[
+                              ShakeEffect(
+                                hz: 4,
+                                offset: const Offset(4, 0),
+                                duration: 400.ms,
+                              ),
+                            ],
+                            child: _OtpInputRow(
+                              controllers: _controllers,
+                              nodes: _nodes,
+                              hasError: _hasError,
+                              onChanged: (int i, String v) {
+                                if (_hasError) {
+                                  setState(() => _hasError = false);
+                                }
+                                _handleDigitChanged(i, v);
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.x3),
+                          if (_secondsLeft > 0)
+                            Center(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                child: Text(
+                                  'Resend in ${_formatCountdown(_secondsLeft)}',
+                                  key: ValueKey<int>(_secondsLeft),
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.body2.copyWith(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Text(
+                                  'Didn’t get a code?',
+                                  style: AppTypography.body2.copyWith(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _isResending
+                                      ? null
+                                      : () => _resend(identifier),
+                                  child: Text(
+                                    'Resend code',
+                                    style: AppTypography.body2.copyWith(
+                                      color: const Color(0xFF1B3387),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: AppSpacing.x6),
+                          TMZButton(
+                            label: 'Verify',
+                            isLoading: _isVerifying,
+                            borderRadius: 999,
+                            backgroundColor: const Color(0xFF1B3387),
+                            showShadow: false,
+                            onPressed: _isVerifying
+                                ? null
+                                : () async {
+                                    final ScaffoldMessengerState messenger =
+                                        ScaffoldMessenger.of(context);
+                                    final String encodedType =
+                                        Uri.encodeComponent(type);
+                                    final bool ok = await _onVerify(identifier);
+                                    if (!mounted) return;
+                                    if (!ok) return;
+
+                                    if (after != 'login') {
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Email verified! Please log in.',
+                                          ),
+                                        ),
+                                      );
+                                      AppRouter.router.go(
+                                        '${AppRouter.loginPath}?type=$encodedType&verified=true&force=true',
+                                      );
+                                      return;
+                                    }
+                                    final PendingLogin? pending = ref.read(
+                                      pendingLoginProvider,
+                                    );
+                                    if (pending == null) {
+                                      AppRouter.router.go(
+                                        '${AppRouter.loginPath}?type=$encodedType&force=true',
+                                      );
+                                      return;
+                                    }
+
+                                    try {
+                                      if (pending.loginType == 'organization') {
+                                        await ref
+                                            .read(authNotifierProvider.notifier)
+                                            .loginOrg(
+                                              pending.emailOrMobile,
+                                              pending.password,
+                                            );
+                                      } else {
+                                        await ref
+                                            .read(authNotifierProvider.notifier)
+                                            .loginIndividual(
+                                              pending.emailOrMobile,
+                                              pending.password,
+                                            );
+                                      }
+                                      ref
+                                              .read(
+                                                pendingLoginProvider.notifier,
+                                              )
+                                              .state =
+                                          null;
+                                    } on ApiException catch (e) {
+                                      ref
+                                              .read(
+                                                pendingLoginProvider.notifier,
+                                              )
+                                              .state =
+                                          null;
+                                      messenger.showSnackBar(
+                                        SnackBar(content: Text(e.message)),
+                                      );
+                                      AppRouter.router.go(
+                                        '${AppRouter.loginPath}?type=$encodedType&force=true',
+                                      );
+                                    } catch (_) {
+                                      ref
+                                              .read(
+                                                pendingLoginProvider.notifier,
+                                              )
+                                              .state =
+                                          null;
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Something went wrong. Please try again.',
+                                          ),
+                                        ),
+                                      );
+                                      AppRouter.router.go(
+                                        '${AppRouter.loginPath}?type=$encodedType&force=true',
+                                      );
+                                    }
+                                  },
+                          ),
+                          const SizedBox(height: AppSpacing.x5),
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: () {
+                                context.go(
+                                  _backLocation(type: type, after: after),
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.arrow_back_rounded,
+                                size: 18,
+                                color: AppColors.textTertiary,
+                              ),
+                              label: Text(
+                                after == 'register'
+                                    ? 'Back to register'
+                                    : 'Back to login',
+                                style: AppTypography.body2.copyWith(
+                                  color: AppColors.textTertiary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.x3),
-                    Text(
-                      'Secured by TruMarkZ Identity Protocol',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                        letterSpacing: 0.6,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -571,174 +490,129 @@ class _OtpInputRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        const double maxBox = 56;
-        const double absoluteMinBox = 28;
-        const double maxSpacing = 8;
-        const double minSpacing = 4;
-
-        final double availableWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width;
-
-        // Compute a size/spacing that ALWAYS fits on a single line (no overflow).
-        final int count = _OtpTokens.otpLength;
-        final int gaps = count - 1;
-
-        double boxSize;
-        double spacing;
-
-        if (gaps <= 0) {
-          boxSize = availableWidth.clamp(absoluteMinBox, maxBox);
-          spacing = 0;
-        } else {
-          // Start with the largest spacing; shrink spacing/boxes as needed.
-          spacing = maxSpacing;
-          boxSize = (availableWidth - spacing * gaps) / count;
-
-          if (boxSize > maxBox) {
-            boxSize = maxBox;
-            spacing = ((availableWidth - boxSize * count) / gaps).clamp(
-              minSpacing,
-              maxSpacing,
-            );
-          } else if (boxSize < absoluteMinBox) {
-            // Try shrinking spacing down to zero before shrinking boxes further.
-            spacing = ((availableWidth - absoluteMinBox * count) / gaps).clamp(
-              0,
-              maxSpacing,
-            );
-            boxSize = (availableWidth - spacing * gaps) / count;
-
-            // If it's still too small, allow smaller boxes with zero spacing.
-            if (boxSize < absoluteMinBox) {
-              spacing = 0;
-              boxSize = availableWidth / count;
-            }
-          } else {
-            boxSize = boxSize.clamp(absoluteMinBox, maxBox);
-            spacing = spacing.clamp(minSpacing, maxSpacing);
-          }
-        }
-
-        final Widget row = Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List<Widget>.generate(_OtpTokens.otpLength, (int i) {
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (i != 0) SizedBox(width: spacing),
-                SizedBox(
-                  width: boxSize,
-                  height: boxSize,
-                  child: AnimatedBuilder(
-                    animation: Listenable.merge(<Listenable>[
-                      controllers[i],
-                      nodes[i],
-                    ]),
-                    builder: (BuildContext context, Widget? child) {
-                      final bool focused = nodes[i].hasFocus;
-                      final bool filled = controllers[i].text.trim().isNotEmpty;
-
-                      final Color borderColor = hasError
-                          ? AppColors.error
-                          : filled
-                          ? AppColors.brandBlue
-                          : AppColors.divider;
-                      final Color fillColor = filled
-                          ? AppColors.blueTint
-                          : AppColors.cardSurface;
-
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        curve: Curves.easeOut,
-                        decoration: BoxDecoration(
-                          color: fillColor,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: borderColor,
-                            width: focused ? 2 : 1,
-                          ),
-                          // Keep a single visible border (no outer focus ring).
-                          boxShadow: null,
-                        ),
-                        child: Center(child: child),
-                      );
-                    },
-                    child: TextField(
-                      controller: controllers[i],
-                      focusNode: nodes[i],
-                      autofocus: i == 0,
-                      textAlign: TextAlign.center,
-                      keyboardType: TextInputType.number,
-                      cursorColor: AppColors.brandBlue,
-                      cursorWidth: 2,
-                      inputFormatters: <TextInputFormatter>[
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(1),
-                      ],
-                      style: AppTypography.heading2.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                      decoration: const InputDecoration(
-                        counterText: '',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      onChanged: (String value) => onChanged(i, value),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List<Widget>.generate(_OtpTokens.otpLength, (int i) {
+        return Padding(
+          padding: EdgeInsets.only(left: i == 0 ? 0 : 6),
+          child: _OtpBox(
+            controller: controllers[i],
+            node: nodes[i],
+            hasError: hasError,
+            autofocus: i == 0,
+            onChanged: (String value) => onChanged(i, value),
+          ),
         );
-
-        return Center(child: row);
-      },
+      }),
     );
   }
 }
 
-class _OtpBackground extends StatelessWidget {
-  const _OtpBackground();
+class _OtpBox extends StatefulWidget {
+  const _OtpBox({
+    required this.controller,
+    required this.node,
+    required this.hasError,
+    required this.autofocus,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final FocusNode node;
+  final bool hasError;
+  final bool autofocus;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_OtpBox> createState() => _OtpBoxState();
+}
+
+class _OtpBoxState extends State<_OtpBox> {
+  @override
+  void initState() {
+    super.initState();
+    widget.node.addListener(_refresh);
+    widget.controller.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    widget.node.removeListener(_refresh);
+    widget.controller.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        Positioned(
-          top: -140,
-          left: -140,
-          child: Container(
-            width: 320,
-            height: 320,
-            decoration: BoxDecoration(
-              color: AppColors.brandBlue.withAlpha(18),
-              shape: BoxShape.circle,
+    final bool focused = widget.node.hasFocus;
+    final bool filled = widget.controller.text.trim().isNotEmpty;
+    final Color borderColor = widget.hasError
+        ? AppColors.error
+        : focused
+        ? const Color(0xFF1B3387)
+        : filled
+        ? const Color(0xFF94A3B8)
+        : AppColors.divider;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      width: 44,
+      height: 52,
+      decoration: BoxDecoration(
+        color: focused ? Colors.white : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: focused ? 1.6 : 1),
+        boxShadow: <BoxShadow>[
+          if (focused)
+            BoxShadow(
+              color: const Color(0xFF1B3387).withAlpha(18),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: TextField(
+          controller: widget.controller,
+          focusNode: widget.node,
+          autofocus: widget.autofocus,
+          expands: true,
+          minLines: null,
+          maxLines: null,
+          textAlign: TextAlign.center,
+          textAlignVertical: TextAlignVertical.center,
+          keyboardType: TextInputType.number,
+          cursorColor: const Color(0xFF1B3387),
+          cursorWidth: 1.4,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(1),
+          ],
+          style: AppTypography.heading1.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+            height: 1,
+            color: AppColors.textPrimary,
           ),
-        ),
-        Positioned(
-          bottom: -160,
-          right: -160,
-          child: Container(
-            width: 340,
-            height: 340,
-            decoration: BoxDecoration(
-              color: AppColors.deepNavy.withAlpha(18),
-              shape: BoxShape.circle,
-            ),
+          decoration: const InputDecoration(
+            counterText: '',
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            isCollapsed: true,
+            contentPadding: EdgeInsets.zero,
           ),
+          onChanged: widget.onChanged,
         ),
-        Positioned.fill(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 120, sigmaY: 120),
-            child: const SizedBox.shrink(),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

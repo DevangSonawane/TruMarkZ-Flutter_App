@@ -92,6 +92,7 @@ class AuthRepository {
         password: password,
         rememberMe: rememberMe,
       ).toJson(),
+      skipAuth: true,
     );
     final LoginResponse parsed = LoginResponse.fromJson(res);
     if (parsed.accessToken.trim().isEmpty || parsed.userId.trim().isEmpty) {

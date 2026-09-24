@@ -297,7 +297,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                                       .read(authNotifierProvider.notifier)
                                       .logout();
                                   if (context.mounted) {
-                                    context.go(AppRouter.roleSelectionPath);
+                                    context.go(AppRouter.onboardingPath);
                                   }
                                 },
                               ),
