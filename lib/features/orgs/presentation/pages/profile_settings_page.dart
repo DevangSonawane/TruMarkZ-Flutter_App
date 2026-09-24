@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -14,6 +16,80 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 
+/// New brand navy for the org account page.
+const Color _profileNavy = Color(0xFF1B3387);
+
+void _showAccountStatusPopup(
+  BuildContext context, {
+  required bool emailVerified,
+  required bool onboardingCompleted,
+}) {
+  Widget statusRow(String label, bool done) {
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: done ? const Color(0xFF16A34A) : Colors.white.withAlpha(40),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            done ? Icons.check_rounded : Icons.hourglass_empty_rounded,
+            size: 15,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+
+  showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black.withAlpha(60),
+    builder: (BuildContext dialogContext) {
+      return Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              width: 260,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2F3336).withAlpha(200),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withAlpha(60), width: 1),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  statusRow('Email', emailVerified),
+                  const SizedBox(height: 14),
+                  statusRow('Onboarding', onboardingCompleted),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
 
@@ -24,17 +100,41 @@ class ProfileSettingsPage extends ConsumerStatefulWidget {
 
 class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   static const double _referenceWidth = 402;
-  static const Color _panelBg = Color(0xFFF7F9FC);
-  static const double _orgBottomNavBarHeight = 71.016;
+  static const Color _panelBg = Color(0xFFFFFFFF);
   static const List<String> _serviceTypeOptions = <String>['human', 'product'];
   bool _isVerifyingGst = false;
 
-  Future<void> _showOrgProfileDialog(UserProfile? profile) async {
-    await Navigator.of(context).push<void>(
+  void _openSection(_ProfileSection section, UserProfile? profile) {
+    Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            _OrgEditPage(profile: profile, mode: _OrgEditMode.profile),
+        builder: (_) => _ProfileSectionPage(
+          section: section,
+          profile: profile,
+          onEditServiceType: () => _showServiceTypeDialog(profile),
+          onVerifyGst: () => _verifyGst(profile),
+          isVerifyingGst: _isVerifyingGst,
+          onEditSpaceIds: () => _showServiceIdsDialog(profile),
+        ),
       ),
+    );
+  }
+
+  Future<void> _showOrgProfileDialog(UserProfile? profile) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withAlpha(120),
+      builder: (BuildContext sheetContext) {
+        final double height = MediaQuery.sizeOf(sheetContext).height * 0.88;
+        return SizedBox(
+          height: height,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: _OrgEditPage(profile: profile, mode: _OrgEditMode.profile),
+          ),
+        );
+      },
     );
   }
 
@@ -139,7 +239,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                     alignment: Alignment.center,
                     child: const Icon(
                       Icons.info_outline_rounded,
-                      color: AppColors.brandBlue,
+                      color: _profileNavy,
                       size: 26,
                     ),
                   ),
@@ -189,12 +289,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         : (profile?.organizationName?.trim().isNotEmpty == true
               ? profile!.organizationName!.trim()
               : 'User');
-    final String email = profile?.email ?? '';
-    final String phoneNumber = profile?.phoneNumber ?? '';
     final bool isVerified = profile?.isVerified == true;
 
     return Scaffold(
-      backgroundColor: AppColors.brandBlue,
+      backgroundColor: Colors.white,
       body: SafeArea(
         bottom: false,
         child: LayoutBuilder(
@@ -209,10 +307,28 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
               scale: scale,
               child: Column(
                 children: <Widget>[
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(s(16), s(12), s(16), s(12)),
+                  Container(
+                    color: Colors.white,
+                    padding: EdgeInsets.fromLTRB(s(8), s(6), s(16), s(6)),
                     child: Row(
                       children: <Widget>[
+                        IconButton(
+                          onPressed: () {
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            } else {
+                              context.go(AppRouter.dashboardPath);
+                            }
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: Icon(
+                            Icons.chevron_left_rounded,
+                            size: s(26),
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        SizedBox(width: s(8)),
                         Text(
                           'Account',
                           style: TextStyle(
@@ -220,23 +336,13 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             fontSize: s(21),
                             fontWeight: FontWeight.w600,
                             height: 19.5 / 21,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const Spacer(),
-                        SvgPicture.asset(
-                          'assets/icons/figma/all_batches_bell.svg',
-                          width: s(24),
-                          height: s(24),
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
+                            color: const Color(0xFF0F172A),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(height: s(16)),
+                  SizedBox(height: s(8)),
                   Expanded(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -246,7 +352,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         ),
                       ),
                       child: RefreshIndicator(
-                        color: AppColors.brandBlue,
+                        color: _profileNavy,
                         onRefresh: _refreshProfile,
                         child: SingleChildScrollView(
                           physics: const BouncingScrollPhysics(
@@ -254,9 +360,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                           ),
                           padding: EdgeInsets.fromLTRB(
                             s(16),
-                            s(37),
+                            s(8),
                             s(16),
-                            s(24) + bottomInset + _orgBottomNavBarHeight,
+                            s(24) + bottomInset,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -264,32 +370,36 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                               _OrgProfileHeader(
                                 onEdit: () => _showOrgProfileDialog(profile),
                                 displayName: displayName,
-                                email: email,
-                                phoneNumber: phoneNumber,
                                 isVerified: isVerified,
+                                emailVerified: profile?.emailVerified == true,
+                                onboardingCompleted:
+                                    profile?.onboardingCompleted == true,
                               ),
                               SizedBox(height: s(24)),
-                              _GeneralInfoCard(profile: profile),
-                              SizedBox(height: s(24)),
-                              _OrganisationDetailsCard(
-                                profile: profile,
-                                onEditServiceType: () =>
-                                    _showServiceTypeDialog(profile),
-                                onVerifyGst: () => _verifyGst(profile),
-                                isVerifyingGst: _isVerifyingGst,
+                              _AccountActionCards(
+                                onBatches: () =>
+                                    context.go(AppRouter.appBatchesPath),
+                                onWallet: () =>
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Wallet coming soon'),
+                                      ),
+                                    ),
+                                onHelp: () =>
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Help & support coming soon',
+                                        ),
+                                      ),
+                                    ),
                               ),
                               SizedBox(height: s(24)),
-                              _SpaceIdsCard(
-                                profile: profile,
-                                onEditSpaceIds: () =>
-                                    _showServiceIdsDialog(profile),
+                              _ManageAccountSection(
+                                selected: null,
+                                onSelected: (section) =>
+                                    _openSection(section, profile),
                               ),
-                              SizedBox(height: s(24)),
-                              _AddressAndRecordsCard(profile: profile),
-                              SizedBox(height: s(24)),
-                              _AccountStatusCard(profile: profile),
-                              SizedBox(height: s(24)),
-                              const _TeamAccessCard(),
                               SizedBox(height: s(24)),
                               _LogoutCard(
                                 onLogout: () async {
@@ -301,7 +411,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                                   }
                                 },
                               ),
-                              SizedBox(height: s(24)),
+                              SizedBox(height: s(36)),
                             ],
                           ),
                         ),
@@ -319,6 +429,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 }
 
 enum _OrgEditMode { profile, serviceIds, serviceType }
+
+enum _ProfileSection { general, organisation, dhiway, address, record }
 
 class _OrgEditPage extends ConsumerStatefulWidget {
   const _OrgEditPage({required this.profile, required this.mode});
@@ -627,7 +739,7 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
             color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? AppColors.brandBlue : const Color(0xFFE2E8F0),
+              color: isSelected ? _profileNavy : const Color(0xFFE2E8F0),
               width: 1,
             ),
           ),
@@ -637,9 +749,7 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
                 isSelected
                     ? Icons.radio_button_checked_rounded
                     : Icons.radio_button_unchecked_rounded,
-                color: isSelected
-                    ? AppColors.brandBlue
-                    : const Color(0xFF94A3B8),
+                color: isSelected ? _profileNavy : const Color(0xFF94A3B8),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -893,7 +1003,7 @@ class _DhiwayDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color borderColor = detail.isDefault
-        ? AppColors.brandBlue
+        ? _profileNavy
         : const Color(0xFFE2E8F0);
     return Container(
       padding: const EdgeInsets.all(14),
@@ -934,12 +1044,12 @@ class _DhiwayDetailCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: AppColors.brandBlue),
+                        border: Border.all(color: _profileNavy),
                       ),
                       child: Text(
                         'Default',
                         style: AppTypography.body2.copyWith(
-                          color: AppColors.brandBlue,
+                          color: _profileNavy,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -948,7 +1058,7 @@ class _DhiwayDetailCard extends StatelessWidget {
                     TextButton.icon(
                       onPressed: enabled ? onSelectDefault : null,
                       style: TextButton.styleFrom(
-                        foregroundColor: AppColors.brandBlue,
+                        foregroundColor: _profileNavy,
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -966,7 +1076,7 @@ class _DhiwayDetailCard extends StatelessWidget {
                   IconButton(
                     onPressed: enabled ? onAdd : null,
                     icon: const Icon(Icons.add_circle_outline_rounded),
-                    color: AppColors.brandBlue,
+                    color: _profileNavy,
                     tooltip: 'Add another pair',
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(),
@@ -1056,16 +1166,16 @@ class _OrgProfileHeader extends StatelessWidget {
   const _OrgProfileHeader({
     required this.onEdit,
     required this.displayName,
-    required this.email,
-    required this.phoneNumber,
     required this.isVerified,
+    required this.emailVerified,
+    required this.onboardingCompleted,
   });
 
   final VoidCallback onEdit;
   final String displayName;
-  final String email;
-  final String phoneNumber;
   final bool isVerified;
+  final bool emailVerified;
+  final bool onboardingCompleted;
 
   @override
   Widget build(BuildContext context) {
@@ -1074,93 +1184,49 @@ class _OrgProfileHeader extends StatelessWidget {
 
     return Column(
       children: <Widget>[
-        _FigmaOrgAvatar(isVerified: isVerified, scale: scale),
-        SizedBox(height: s(14)),
-        Text(
-          displayName,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(24),
-            fontWeight: FontWeight.w700,
-            height: 32 / 24,
-            color: Color(0xFF0F172A),
-          ),
+        _FigmaOrgAvatar(
+          isVerified: isVerified,
+          emailVerified: emailVerified,
+          onboardingCompleted: onboardingCompleted,
+          scale: scale,
         ),
-        if (email.trim().isNotEmpty) ...<Widget>[
-          SizedBox(height: s(6)),
-          Text(
-            email,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(14),
-              fontWeight: FontWeight.w400,
-              letterSpacing: 0.02734375,
-              height: 20 / 14,
-              color: Color(0xFF64748B),
-            ),
-          ),
-        ],
-        if (phoneNumber.trim().isNotEmpty) ...<Widget>[
-          SizedBox(height: s(2)),
-          Text(
-            phoneNumber,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(13),
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.0234375,
-              height: 18 / 13,
-              color: Color(0xFF334155),
-            ),
-          ),
-        ],
-        SizedBox(height: s(10)),
-        _VerificationPill(isVerified: isVerified),
-        SizedBox(height: s(24)),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onEdit,
-            borderRadius: BorderRadius.circular(16),
-            child: Ink(
-              height: s(60),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.brandBlue,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    SvgPicture.asset(
-                      'assets/icons/figma/account_edit_profile_icon.svg',
-                      width: s(24),
-                      height: s(24),
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    SizedBox(width: s(12)),
-                    Text(
-                      'Edit Profile',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(18),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.03515625,
-                        height: 28 / 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+        SizedBox(height: s(16)),
+        GestureDetector(
+          onTap: onEdit,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Opacity(
+                opacity: 0,
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: s(24),
+                  color: AppColors.textTertiary,
                 ),
               ),
-            ),
+              Flexible(
+                child: Text(
+                  displayName,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(20),
+                    fontWeight: FontWeight.w700,
+                    height: 28 / 20,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              SizedBox(width: s(2)),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: s(24),
+                color: AppColors.textTertiary,
+              ),
+            ],
           ),
         ),
       ],
@@ -1168,43 +1234,298 @@ class _OrgProfileHeader extends StatelessWidget {
   }
 }
 
-class _VerificationPill extends StatelessWidget {
-  const _VerificationPill({required this.isVerified});
+class _AccountActionCards extends StatelessWidget {
+  const _AccountActionCards({
+    required this.onBatches,
+    required this.onWallet,
+    required this.onHelp,
+  });
 
-  final bool isVerified;
+  final VoidCallback onBatches;
+  final VoidCallback onWallet;
+  final VoidCallback onHelp;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.3,
+      children: <Widget>[
+        _AccountActionCard(
+          icon: Icons.layers_outlined,
+          title: 'My Batch',
+          subtitle: 'View all batches',
+          onTap: onBatches,
+        ),
+        _AccountActionCard(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'My Wallet',
+          subtitle: '₹0',
+          onTap: onWallet,
+        ),
+        _AccountActionCard(
+          icon: Icons.help_outline_rounded,
+          title: 'Help & Support',
+          subtitle: 'Get Quick Help',
+          onTap: onHelp,
+        ),
+      ],
+    );
+  }
+}
+
+class _AccountActionCard extends StatelessWidget {
+  const _AccountActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final double scale = _FigmaScaleScope.of(context);
     double s(double v) => v * scale;
 
-    final Color bg = isVerified
-        ? const Color(0xFFECFDF5)
-        : const Color(0xFFEFF6FF);
-    final Color border = isVerified
-        ? const Color(0x3316A34A)
-        : const Color(0xFF2563EB);
-    final Color fg = isVerified
-        ? const Color(0xFF16A34A)
-        : const Color(0xFF2563EB);
-    final String text = isVerified ? 'Verified' : 'Pending';
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(4)),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: border, width: 1),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(s(24)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(s(24)),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(s(24)),
+              border: Border.all(color: AppColors.divider, width: 1.5),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x0D000000),
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(s(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: s(40),
+                    height: s(40),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8EDF7),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(icon, size: s(22), color: _profileNavy),
+                  ),
+                  const Spacer(),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(16),
+                      fontWeight: FontWeight.w700,
+                      height: 22 / 16,
+                      color: const Color(0xFF202124),
+                    ),
+                  ),
+                  SizedBox(height: s(4)),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(13),
+                            fontWeight: FontWeight.w500,
+                            height: 18 / 13,
+                            color: const Color(0xFF8A8A8A),
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: s(20),
+                        color: const Color(0xFFB3B3B3),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: s(12),
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.05859375,
-          height: 16 / 12,
-          color: fg,
+    );
+  }
+}
+
+class _ManageAccountSection extends StatelessWidget {
+  const _ManageAccountSection({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _ProfileSection? selected;
+  final ValueChanged<_ProfileSection> onSelected;
+
+  static const List<_ProfileSectionData> _sections = <_ProfileSectionData>[
+    _ProfileSectionData(
+      section: _ProfileSection.general,
+      title: 'General',
+      icon: Icons.badge_outlined,
+    ),
+    _ProfileSectionData(
+      section: _ProfileSection.organisation,
+      title: 'Organisation',
+      icon: Icons.business_outlined,
+    ),
+    _ProfileSectionData(
+      section: _ProfileSection.dhiway,
+      title: 'Dhiway',
+      icon: Icons.hub_outlined,
+    ),
+    _ProfileSectionData(
+      section: _ProfileSection.address,
+      title: 'Address',
+      icon: Icons.location_on_outlined,
+    ),
+    _ProfileSectionData(
+      section: _ProfileSection.record,
+      title: 'Record',
+      icon: Icons.history_outlined,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Manage Account',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(16),
+            fontWeight: FontWeight.w500,
+            height: 22 / 16,
+            color: const Color(0xFF8A8A8A),
+          ),
+        ),
+        SizedBox(height: s(14)),
+        _FigmaCard(
+          child: Column(
+            children: <Widget>[
+              for (int index = 0; index < _sections.length; index++) ...[
+                _ManageAccountRow(
+                  data: _sections[index],
+                  selected: selected == _sections[index].section,
+                  onTap: () => onSelected(_sections[index].section),
+                ),
+                if (index != _sections.length - 1)
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileSectionData {
+  const _ProfileSectionData({
+    required this.section,
+    required this.title,
+    required this.icon,
+  });
+
+  final _ProfileSection section;
+  final String title;
+  final IconData icon;
+}
+
+class _ManageAccountRow extends StatelessWidget {
+  const _ManageAccountRow({
+    required this.data,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ProfileSectionData data;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    return Material(
+      color: selected ? const Color(0xFFEFF3FF) : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(s(16), s(15), s(14), s(15)),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: s(34),
+                height: s(34),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  data.icon,
+                  size: s(19),
+                  color: selected ? _profileNavy : const Color(0xFF9CA3AF),
+                ),
+              ),
+              SizedBox(width: s(14)),
+              Expanded(
+                child: Text(
+                  data.title,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(15),
+                    fontWeight: FontWeight.w700,
+                    height: 20 / 15,
+                    color: const Color(0xFF202124),
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: s(24),
+                color: const Color(0xFFB3B3B3),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1212,16 +1533,22 @@ class _VerificationPill extends StatelessWidget {
 }
 
 class _FigmaOrgAvatar extends StatelessWidget {
-  const _FigmaOrgAvatar({required this.isVerified, required this.scale});
+  const _FigmaOrgAvatar({
+    required this.isVerified,
+    required this.emailVerified,
+    required this.onboardingCompleted,
+    required this.scale,
+  });
 
   final bool isVerified;
+  final bool emailVerified;
+  final bool onboardingCompleted;
   final double scale;
 
   @override
   Widget build(BuildContext context) {
     double s(double v) => v * scale;
-    final double size = s(129);
-    final double borderWidth = s(4.03125);
+    final double size = s(72);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -1229,43 +1556,49 @@ class _FigmaOrgAvatar extends StatelessWidget {
         Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(
-            color: const Color(0xFFEFF3FF),
+          decoration: const BoxDecoration(
+            color: Color(0xFFEFF3FF),
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.brandBlue, width: borderWidth),
           ),
           alignment: Alignment.center,
           child: SvgPicture.asset(
             'assets/icons/figma/org_avatar_user_outline.svg',
-            width: s(62),
-            height: s(62),
+            width: s(34),
+            height: s(34),
           ),
         ),
         Positioned(
           right: 0,
           bottom: 0,
-          child: Container(
-            width: s(40),
-            height: s(40),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x40000000),
-                  blurRadius: 2,
-                  offset: Offset(0, 1),
-                ),
-              ],
+          child: GestureDetector(
+            onTap: () => _showAccountStatusPopup(
+              context,
+              emailVerified: emailVerified,
+              onboardingCompleted: onboardingCompleted,
             ),
-            alignment: Alignment.center,
-            child: SvgPicture.asset(
-              'assets/icons/figma/account_verified_rounded.svg',
-              width: s(23.33),
-              height: s(22.37),
-              colorFilter: isVerified
-                  ? null
-                  : const ColorFilter.mode(Color(0xFF2563EB), BlendMode.srcIn),
+            child: Container(
+              width: s(24),
+              height: s(24),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x40000000),
+                    blurRadius: 2,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: SvgPicture.asset(
+                'assets/icons/figma/account_verified_rounded.svg',
+                width: s(15),
+                height: s(14),
+                colorFilter: isVerified
+                    ? null
+                    : const ColorFilter.mode(_profileNavy, BlendMode.srcIn),
+              ),
             ),
           ),
         ),
@@ -1300,14 +1633,6 @@ class _LogoutCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0x00FFFFFF),
                     borderRadius: BorderRadius.circular(s(16)),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x332563EB),
-                        blurRadius: s(15),
-                        spreadRadius: s(-3),
-                        offset: Offset(0, s(10)),
-                      ),
-                    ],
                   ),
                 ),
               ),
@@ -1362,6 +1687,83 @@ class _LogoutCard extends StatelessWidget {
   }
 }
 
+class _ProfileSectionPage extends StatelessWidget {
+  const _ProfileSectionPage({
+    required this.section,
+    required this.profile,
+    required this.onEditServiceType,
+    required this.onVerifyGst,
+    required this.isVerifyingGst,
+    required this.onEditSpaceIds,
+  });
+
+  final _ProfileSection section;
+  final UserProfile? profile;
+  final VoidCallback onEditServiceType;
+  final VoidCallback onVerifyGst;
+  final bool isVerifyingGst;
+  final VoidCallback onEditSpaceIds;
+
+  String get _title {
+    return switch (section) {
+      _ProfileSection.general => 'General',
+      _ProfileSection.organisation => 'Organisation',
+      _ProfileSection.dhiway => 'Dhiway',
+      _ProfileSection.address => 'Address',
+      _ProfileSection.record => 'Record',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final Widget content = switch (section) {
+      _ProfileSection.general => _GeneralInfoCard(profile: profile),
+      _ProfileSection.organisation => _OrganisationDetailsCard(
+        profile: profile,
+        onEditServiceType: onEditServiceType,
+        onVerifyGst: onVerifyGst,
+        isVerifyingGst: isVerifyingGst,
+      ),
+      _ProfileSection.dhiway => _SpaceIdsCard(
+        profile: profile,
+        onEditSpaceIds: onEditSpaceIds,
+      ),
+      _ProfileSection.address => _AddressCard(profile: profile),
+      _ProfileSection.record => _RecordCard(profile: profile),
+    };
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(
+            Icons.chevron_left_rounded,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        title: Text(
+          _title,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+      ),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 24 + bottomInset),
+        children: <Widget>[content],
+      ),
+    );
+  }
+}
+
 class _GeneralInfoCard extends StatelessWidget {
   const _GeneralInfoCard({required this.profile});
 
@@ -1369,9 +1771,6 @@ class _GeneralInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double scale = _FigmaScaleScope.of(context);
-    double s(double v) => v * scale;
-
     final String orgName = profile?.organizationName?.trim().isNotEmpty == true
         ? profile!.organizationName!.trim()
         : (profile?.fullName?.trim().isNotEmpty == true
@@ -1388,56 +1787,12 @@ class _GeneralInfoCard extends StatelessWidget {
         : (profile?.loginType.trim().isNotEmpty == true
               ? profile!.loginType.trim()
               : '—');
-    final bool isActive = profile?.isActive == true;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Text(
-              'GENERAL INFORMATION',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(12),
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.1833819,
-                height: 17.7507286 / 12,
-                color: Color(0xFF323232),
-              ),
-            ),
-            const Spacer(),
-            if (isActive)
-              Container(
-                padding: EdgeInsets.fromLTRB(s(10), s(4), s(10), s(4)),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(s(4)),
-                ),
-                child: Text(
-                  'Status: Active',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(10),
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.1171875,
-                    height: 15 / 10,
-                    color: Color(0xFF16A34A),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        SizedBox(height: s(12)),
-        _FigmaInfoCard(
-          rows: <_InfoRow>[
-            _InfoRow(label: 'Official Name', value: orgName),
-            _InfoRow(label: 'Official Email', value: email),
-            _InfoRow(label: 'Phone Number', value: phoneNumber),
-            _InfoRow(label: 'Account Type', value: accountType),
-            _InfoRow(label: 'Profile ID', value: profile?.id ?? '—'),
-          ],
-        ),
+    return _FigmaInfoCard(
+      rows: <_InfoRow>[
+        _InfoRow(label: 'Official Name', value: orgName),
+        _InfoRow(label: 'Official Email', value: email),
+        _InfoRow(label: 'Phone Number', value: phoneNumber),
+        _InfoRow(label: 'Account Type', value: accountType),
       ],
     );
   }
@@ -1532,8 +1887,8 @@ class _OrganisationDetailsCard extends StatelessWidget {
                             ? onVerifyGst
                             : null,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.brandBlue,
-                          side: const BorderSide(color: AppColors.brandBlue),
+                          foregroundColor: _profileNavy,
+                          side: const BorderSide(color: _profileNavy),
                           visualDensity: VisualDensity.compact,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           minimumSize: Size(s(84), s(34)),
@@ -1570,7 +1925,7 @@ class _OrganisationDetailsCard extends StatelessWidget {
                 ),
                 label: Text(hasServiceType ? 'Edit' : 'Set'),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.brandBlue,
+                  foregroundColor: _profileNavy,
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   minimumSize: Size.zero,
@@ -1592,8 +1947,8 @@ class _OrganisationDetailsCard extends StatelessWidget {
   }
 }
 
-class _AddressAndRecordsCard extends StatelessWidget {
-  const _AddressAndRecordsCard({required this.profile});
+class _AddressCard extends StatelessWidget {
+  const _AddressCard({required this.profile});
 
   final UserProfile? profile;
 
@@ -1611,15 +1966,11 @@ class _AddressAndRecordsCard extends StatelessWidget {
     final String addressLine3 = profile?.addressLine3?.trim().isNotEmpty == true
         ? profile!.addressLine3!.trim()
         : '—';
-    final String createdAt = profile?.createdAt == null
-        ? '—'
-        : _formatDateTime(profile!.createdAt!);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Text(
-          'ADDRESS & RECORDS',
+          'ADDRESS',
           style: TextStyle(
             fontFamily: 'Inter',
             fontSize: s(12),
@@ -1635,7 +1986,57 @@ class _AddressAndRecordsCard extends StatelessWidget {
             _InfoRow(label: 'Address Line 1', value: addressLine1),
             _InfoRow(label: 'Address Line 2', value: addressLine2),
             _InfoRow(label: 'Address Line 3', value: addressLine3),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordCard extends StatelessWidget {
+  const _RecordCard({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale = _FigmaScaleScope.of(context);
+    double s(double v) => v * scale;
+
+    final String createdAt = profile?.createdAt == null
+        ? '—'
+        : _formatDateTime(profile!.createdAt!);
+    final String profileId = profile?.id.trim().isNotEmpty == true
+        ? profile!.id.trim()
+        : '—';
+    final String emailVerified = profile?.emailVerified == true ? 'Yes' : 'No';
+    final String onboardingCompleted = profile?.onboardingCompleted == true
+        ? 'Yes'
+        : 'No';
+    final String active = profile?.isActive == true ? 'Active' : 'Inactive';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'RECORD',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(12),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.1833819,
+            height: 17.7507286 / 12,
+            color: Color(0xFF323232),
+          ),
+        ),
+        SizedBox(height: s(12)),
+        _FigmaInfoCard(
+          rows: <_InfoRow>[
+            _InfoRow(label: 'Profile ID', value: profileId),
             _InfoRow(label: 'Created At', value: createdAt),
+            _InfoRow(label: 'Email Verified', value: emailVerified),
+            _InfoRow(label: 'Onboarding Completed', value: onboardingCompleted),
+            _InfoRow(label: 'Status', value: active),
           ],
         ),
       ],
@@ -1688,7 +2089,7 @@ class _SpaceIdsCard extends StatelessWidget {
                 ),
                 label: Text(hasDetails ? 'Edit' : 'Add'),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.brandBlue,
+                  foregroundColor: _profileNavy,
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   minimumSize: Size.zero,
@@ -1804,7 +2205,7 @@ class _DhiwayPairBox extends StatelessWidget {
                     fontSize: s(11),
                     fontWeight: FontWeight.w700,
                     height: 16 / 11,
-                    color: const Color(0xFF2563EB),
+                    color: _profileNavy,
                   ),
                 ),
               ),
@@ -1858,67 +2259,6 @@ class _DhiwayFieldRow extends StatelessWidget {
               color: const Color(0xFF0F172A),
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AccountStatusCard extends StatelessWidget {
-  const _AccountStatusCard({required this.profile});
-
-  final UserProfile? profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final double scale = _FigmaScaleScope.of(context);
-    double s(double v) => v * scale;
-    final String accountType = profile?.userType.trim().isNotEmpty == true
-        ? profile!.userType.trim().toLowerCase()
-        : profile?.loginType.trim().toLowerCase() ?? '';
-    final bool isOrgAccount =
-        accountType.isEmpty || accountType == 'organization';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(
-          'ACCOUNT STATUS',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: s(12),
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.1833819,
-            height: 17.7507286 / 12,
-            color: Color(0xFF323232),
-          ),
-        ),
-        SizedBox(height: s(12)),
-        _FigmaInfoCard(
-          rows: <_InfoRow>[
-            _InfoRow(
-              label: 'Active',
-              value: profile?.isActive == true ? 'Yes' : 'No',
-            ),
-            _InfoRow(
-              label: 'Email Verified',
-              value: profile?.emailVerified == true ? 'Yes' : 'No',
-            ),
-            _InfoRow(
-              label: 'Onboarding Completed',
-              value: profile?.onboardingCompleted == true ? 'Yes' : 'No',
-            ),
-            if (!isOrgAccount)
-              _InfoRow(
-                label: 'Skill Tree Initiated',
-                value: profile?.skillTreeInitiated == true ? 'Yes' : 'No',
-              ),
-            if (!isOrgAccount)
-              _InfoRow(
-                label: 'Mobile Verified',
-                value: profile?.mobileVerified == true ? 'Yes' : 'No',
-              ),
-          ],
         ),
       ],
     );
@@ -2031,150 +2371,6 @@ class _InfoRowTile extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _MemberLine extends StatelessWidget {
-  const _MemberLine({required this.name, required this.role});
-
-  final String name;
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    final double scale = _FigmaScaleScope.of(context);
-    double s(double v) => v * scale;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(s(16), s(14), s(16), s(14)),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: s(36),
-            height: s(36),
-            decoration: const BoxDecoration(
-              color: Color(0xFFEFF6FF),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.person_rounded,
-              color: AppColors.brandBlue,
-              size: s(20),
-            ),
-          ),
-          SizedBox(width: s(12)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(14),
-                    fontWeight: FontWeight.w600,
-                    height: 20 / 14,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                SizedBox(height: s(2)),
-                Text(
-                  role,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(12),
-                    fontWeight: FontWeight.w500,
-                    height: 16 / 12,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.more_horiz_rounded,
-            size: s(24),
-            color: const Color(0xFF94A3B8),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TeamAccessCard extends StatelessWidget {
-  const _TeamAccessCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final double scale = _FigmaScaleScope.of(context);
-    double s(double v) => v * scale;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Text(
-              'TEAM MEMBERS',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(12),
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.1833819,
-                height: 17.7507286 / 12,
-                color: Color(0xFF323232),
-              ),
-            ),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () {},
-              icon: Icon(Icons.add_rounded, size: s(16)),
-              label: Text('Invite'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandBlue,
-                visualDensity: VisualDensity.compact,
-                textStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(12),
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.05859375,
-                  height: 16 / 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: s(12)),
-        _FigmaCard(
-          child: Column(
-            children: <Widget>[
-              const _MemberLine(
-                name: 'Alex Rivera',
-                role: 'Owner • Full Access',
-              ),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
-              const _MemberLine(name: 'Sarah Chen', role: 'Admin • Operations'),
-              SizedBox(height: s(10)),
-              Center(
-                child: Text(
-                  'View all 12 members',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: s(12),
-                    fontWeight: FontWeight.w600,
-                    height: 16 / 12,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-              SizedBox(height: s(10)),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

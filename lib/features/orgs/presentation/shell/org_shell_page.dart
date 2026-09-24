@@ -48,7 +48,9 @@ class OrgShellPage extends StatelessWidget {
 
     // Hide the organisation shell nav/FAB on full-screen pages.
     // Example: Create Credentials (wallet) should have its own header/back button.
-    final bool showShellChrome = !path.startsWith(AppRouter.walletPath);
+    final bool showShellChrome =
+        !path.startsWith(AppRouter.walletPath) &&
+        !path.startsWith(AppRouter.settingsPath);
 
     if (!showShellChrome) {
       return Scaffold(body: child);
