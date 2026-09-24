@@ -14,6 +14,9 @@ class TMZButton extends StatefulWidget {
     this.variant = TMZButtonVariant.primary,
     this.icon,
     this.fullWidth = true,
+    this.borderRadius = 16,
+    this.backgroundColor,
+    this.showShadow = true,
   });
 
   final String label;
@@ -22,6 +25,9 @@ class TMZButton extends StatefulWidget {
   final TMZButtonVariant variant;
   final IconData? icon;
   final bool fullWidth;
+  final double borderRadius;
+  final Color? backgroundColor;
+  final bool showShadow;
 
   @override
   State<TMZButton> createState() => _TMZButtonState();
@@ -66,25 +72,29 @@ class _TMZButtonState extends State<TMZButton> {
       _ => null,
     };
 
-    final List<BoxShadow> shadows = switch (widget.variant) {
-      TMZButtonVariant.primary => <BoxShadow>[
-        BoxShadow(
-          color: AppColors.brandBlue.withAlpha(0x59),
-          blurRadius: 16,
-          offset: const Offset(0, 4),
-        ),
-      ],
-      TMZButtonVariant.dangerFilled => <BoxShadow>[
-        BoxShadow(
-          color: AppColors.danger.withAlpha(38),
-          blurRadius: 16,
-          offset: const Offset(0, 6),
-        ),
-      ],
-      _ => const <BoxShadow>[],
-    };
+    final List<BoxShadow> shadows = widget.showShadow
+        ? switch (widget.variant) {
+            TMZButtonVariant.primary => <BoxShadow>[
+              BoxShadow(
+                color: AppColors.brandBlue.withAlpha(0x59),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            TMZButtonVariant.dangerFilled => <BoxShadow>[
+              BoxShadow(
+                color: AppColors.danger.withAlpha(38),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+            _ => const <BoxShadow>[],
+          }
+        : const <BoxShadow>[];
 
-    final bool showGradient = widget.variant == TMZButtonVariant.primary;
+    final bool showGradient =
+        widget.variant == TMZButtonVariant.primary &&
+        widget.backgroundColor == null;
 
     Widget content;
     if (widget.isLoading) {
@@ -118,7 +128,7 @@ class _TMZButtonState extends State<TMZButton> {
       );
     }
 
-    final BorderRadius radius = BorderRadius.circular(16);
+    final BorderRadius radius = BorderRadius.circular(widget.borderRadius);
     final Widget base = AnimatedOpacity(
       duration: const Duration(milliseconds: 150),
       opacity: isDisabled ? 0.45 : 1.0,
@@ -126,7 +136,9 @@ class _TMZButtonState extends State<TMZButton> {
         height: 54,
         width: widget.fullWidth ? double.infinity : null,
         decoration: BoxDecoration(
-          color: showGradient ? null : solidBackground,
+          color: showGradient
+              ? null
+              : (widget.backgroundColor ?? solidBackground),
           gradient: showGradient
               ? const LinearGradient(
                   colors: <Color>[AppColors.brandBlue, AppColors.deepNavy],
