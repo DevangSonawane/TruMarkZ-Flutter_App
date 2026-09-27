@@ -316,6 +316,7 @@ class OrganizationProfileUpdateRequest {
     this.addressLine2,
     this.addressLine3,
     this.serviceType,
+    this.industryType,
     this.humanSpaceId,
     this.productSpaceId,
     this.warrantySpaceId,
@@ -335,6 +336,7 @@ class OrganizationProfileUpdateRequest {
   final String? addressLine2;
   final String? addressLine3;
   final String? serviceType;
+  final String? industryType;
   final String? humanSpaceId;
   final String? productSpaceId;
   final String? warrantySpaceId;
@@ -368,6 +370,7 @@ class OrganizationProfileUpdateRequest {
     putClearable('address_line2', addressLine2);
     putClearable('address_line3', addressLine3);
     putIfNonEmpty('service_type', serviceType);
+    putIfNonEmpty('industry_type', industryType);
     putIfNonEmpty('human_space_id', humanSpaceId);
     putIfNonEmpty('product_space_id', productSpaceId);
     putIfNonEmpty('warranty_space_id', warrantySpaceId);

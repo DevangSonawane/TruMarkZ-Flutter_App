@@ -12,6 +12,7 @@ import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
+import '../../data/verification_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -105,16 +106,18 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   bool _isVerifyingGst = false;
 
   void _openSection(_ProfileSection section, UserProfile? profile) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => _ProfileSectionPage(
-          section: section,
-          profile: profile,
-          onEditServiceType: () => _showServiceTypeDialog(profile),
-          onVerifyGst: () => _verifyGst(profile),
-          isVerifyingGst: _isVerifyingGst,
-          onEditSpaceIds: () => _showServiceIdsDialog(profile),
-        ),
+    // Every section lives as a shell sub-route so the bottom nav stays
+    // visible (and Dashboard works from each of them).
+    context.push(
+      AppRouter.settingsSectionLocation(section.name),
+      extra: OrgSettingsSectionArgs(
+        sectionName: section.name,
+        profile: profile,
+        onEditServiceType: () => _showServiceTypeDialog(profile),
+        onEditIndustryType: () => _showVerificationPrefsDialog(profile),
+        onVerifyGst: () => _verifyGst(profile),
+        isVerifyingGst: _isVerifyingGst,
+        onEditSpaceIds: () => _showServiceIdsDialog(profile),
       ),
     );
   }
@@ -154,6 +157,28 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
             _OrgEditPage(profile: profile, mode: _OrgEditMode.serviceType),
       ),
     );
+  }
+
+  /// Service type + industry type editor.
+  /// Service type -> PATCH /auth/me, industry type -> POST /auth/onboarding.
+  Future<void> _showVerificationPrefsDialog(UserProfile? profile) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withAlpha(120),
+      builder: (BuildContext sheetContext) {
+        final double height = MediaQuery.sizeOf(sheetContext).height * 0.88;
+        return SizedBox(
+          height: height,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: _VerificationPrefsSheet(profile: profile),
+          ),
+        );
+      },
+    );
+    await _refreshProfile();
   }
 
   Future<void> _refreshProfile() async {
@@ -433,6 +458,65 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 enum _OrgEditMode { profile, serviceIds, serviceType }
 
 enum _ProfileSection { general, organisation, dhiway, address, record }
+
+/// Callbacks carried via go_router `extra` so the organisation section can
+/// live as a real shell route (/app/settings/organisation) with the bottom
+/// nav visible, instead of a Navigator push that covers it.
+class OrgSettingsSectionArgs {
+  const OrgSettingsSectionArgs({
+    required this.sectionName,
+    required this.profile,
+    required this.onEditServiceType,
+    required this.onEditIndustryType,
+    required this.onVerifyGst,
+    required this.isVerifyingGst,
+    required this.onEditSpaceIds,
+  });
+
+  final String sectionName;
+  final UserProfile? profile;
+  final VoidCallback onEditServiceType;
+  final VoidCallback onEditIndustryType;
+  final VoidCallback onVerifyGst;
+  final bool isVerifyingGst;
+  final VoidCallback onEditSpaceIds;
+}
+
+_ProfileSection? _parseSettingsSection(String? name) {
+  switch (name?.trim().toLowerCase()) {
+    case 'general':
+      return _ProfileSection.general;
+    case 'organisation':
+      return _ProfileSection.organisation;
+    case 'dhiway':
+      return _ProfileSection.dhiway;
+    case 'address':
+      return _ProfileSection.address;
+    case 'record':
+      return _ProfileSection.record;
+    default:
+      return null;
+  }
+}
+
+/// Builds a settings section for the settings sub-route.
+/// Falls back to the settings home when args are missing (e.g. deep link).
+Widget buildOrgSettingsSection(Object? extra, {String? sectionName}) {
+  final _ProfileSection? section = extra is OrgSettingsSectionArgs
+      ? _parseSettingsSection(extra.sectionName)
+      : _parseSettingsSection(sectionName);
+  if (section == null) return const ProfileSettingsPage();
+  if (extra is! OrgSettingsSectionArgs) return const ProfileSettingsPage();
+  return _ProfileSectionPage(
+    section: section,
+    profile: extra.profile,
+    onEditServiceType: extra.onEditServiceType,
+    onEditIndustryType: extra.onEditIndustryType,
+    onVerifyGst: extra.onVerifyGst,
+    isVerifyingGst: extra.isVerifyingGst,
+    onEditSpaceIds: extra.onEditSpaceIds,
+  );
+}
 
 class _OrgEditPage extends ConsumerStatefulWidget {
   const _OrgEditPage({required this.profile, required this.mode});
@@ -914,6 +998,197 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
               padding: const EdgeInsets.all(16),
               child: _buildBody(context),
             ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TMZButton(
+                label: 'Save',
+                onPressed: _isSaving ? null : _save,
+                isLoading: _isSaving,
+                fullWidth: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom-sheet editor for verification preferences.
+///
+/// Service type  -> PATCH /auth/me (updateOrganizationProfile)
+/// Industry type -> POST /auth/onboarding (completeOrgOnboarding)
+class _VerificationPrefsSheet extends ConsumerStatefulWidget {
+  const _VerificationPrefsSheet({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  ConsumerState<_VerificationPrefsSheet> createState() =>
+      _VerificationPrefsSheetState();
+}
+
+class _VerificationPrefsSheetState
+    extends ConsumerState<_VerificationPrefsSheet> {
+  static const List<String> _serviceOptions = <String>['human', 'product'];
+
+  late String _serviceType;
+  Set<String> _selectedIndustries = <String>{};
+  bool _isSaving = false;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    final String current = (widget.profile?.serviceType ?? '')
+        .trim()
+        .toLowerCase();
+    _serviceType = current == 'product' ? 'product' : 'human';
+    _selectedIndustries =
+        (widget.profile?.industryTypes ?? const <String>[])
+            .map((String value) => value.trim())
+            .where((String value) => value.isNotEmpty)
+            .toSet();
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+    if (_selectedIndustries.isEmpty) {
+      setState(() {
+        _errorText = 'Please pick at least one industry type.';
+      });
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+      _errorText = null;
+    });
+    final NavigatorState navigator = Navigator.of(context);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      // Both fields go through PATCH /auth/me — the onboarding endpoint is
+      // one-time only and rejects updates after completion.
+      await ref
+          .read(authNotifierProvider.notifier)
+          .updateOrganizationProfile(
+            serviceType: _serviceType,
+            industryType: _selectedIndustries.join(', '),
+          );
+      if (!mounted) return;
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Verification preferences updated.'),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorText = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorText = 'Could not save. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final AsyncValue<List<String>> industriesAsync = ref.watch(
+      industryTypeNamesForCategoryProvider(_serviceType),
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text('Verification Preferences')),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),
+          children: <Widget>[
+            Text(
+              'Service type',
+              style: AppTypography.body1.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ..._serviceOptions.map(
+              (String option) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ChoiceChip(
+                  label: Text(
+                    option == 'human' ? 'Human' : 'Product',
+                  ),
+                  selected: _serviceType == option,
+                  onSelected: _isSaving
+                      ? null
+                      : (bool selected) {
+                          if (!selected) return;
+                          setState(() {
+                            _serviceType = option;
+                            _selectedIndustries = <String>{};
+                          });
+                        },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Industry type',
+              style: AppTypography.body1.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            industriesAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (Object error, StackTrace stackTrace) => Text(
+                'Could not load industries. Please try again.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              data: (List<String> options) => Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  for (final String option in options)
+                    ChoiceChip(
+                      label: Text(option),
+                      selected: _selectedIndustries.contains(option),
+                      onSelected: _isSaving
+                          ? null
+                          : (bool selected) {
+                              setState(() {
+                                _selectedIndustries = <String>{option};
+                              });
+                            },
+                    ),
+                ],
+              ),
+            ),
+            if (_errorText != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                _errorText!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -1694,6 +1969,7 @@ class _ProfileSectionPage extends StatelessWidget {
     required this.section,
     required this.profile,
     required this.onEditServiceType,
+    required this.onEditIndustryType,
     required this.onVerifyGst,
     required this.isVerifyingGst,
     required this.onEditSpaceIds,
@@ -1702,6 +1978,7 @@ class _ProfileSectionPage extends StatelessWidget {
   final _ProfileSection section;
   final UserProfile? profile;
   final VoidCallback onEditServiceType;
+  final VoidCallback onEditIndustryType;
   final VoidCallback onVerifyGst;
   final bool isVerifyingGst;
   final VoidCallback onEditSpaceIds;
@@ -1724,6 +2001,7 @@ class _ProfileSectionPage extends StatelessWidget {
       _ProfileSection.organisation => _OrganisationDetailsCard(
         profile: profile,
         onEditServiceType: onEditServiceType,
+        onEditIndustryType: onEditIndustryType,
         onVerifyGst: onVerifyGst,
         isVerifyingGst: isVerifyingGst,
       ),
@@ -1804,12 +2082,14 @@ class _OrganisationDetailsCard extends StatelessWidget {
   const _OrganisationDetailsCard({
     required this.profile,
     required this.onEditServiceType,
+    required this.onEditIndustryType,
     required this.onVerifyGst,
     required this.isVerifyingGst,
   });
 
   final UserProfile? profile;
   final VoidCallback onEditServiceType;
+  final VoidCallback onEditIndustryType;
   final VoidCallback onVerifyGst;
   final bool isVerifyingGst;
 
@@ -1829,6 +2109,11 @@ class _OrganisationDetailsCard extends StatelessWidget {
         : '—';
     final String serviceType = profile?.serviceType?.trim().toLowerCase() ?? '';
     final bool hasServiceType = serviceType.isNotEmpty;
+    final List<String> industries = (profile?.industryTypes ?? const <String>[])
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toList();
+    final bool hasIndustries = industries.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1926,6 +2211,32 @@ class _OrganisationDetailsCard extends StatelessWidget {
                   size: s(16),
                 ),
                 label: Text(hasServiceType ? 'Edit' : 'Set'),
+                style: TextButton.styleFrom(
+                  foregroundColor: _profileNavy,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: Size.zero,
+                  padding: EdgeInsets.zero,
+                  textStyle: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.05859375,
+                    height: 16 / 12,
+                  ),
+                ),
+              ),
+            ),
+            _InfoRow(
+              label: 'Industry Type',
+              value: hasIndustries ? industries.join(', ') : '—',
+              trailing: TextButton.icon(
+                onPressed: onEditIndustryType,
+                icon: Icon(
+                  hasIndustries ? Icons.edit_outlined : Icons.add_rounded,
+                  size: s(16),
+                ),
+                label: Text(hasIndustries ? 'Edit' : 'Set'),
                 style: TextButton.styleFrom(
                   foregroundColor: _profileNavy,
                   visualDensity: VisualDensity.compact,

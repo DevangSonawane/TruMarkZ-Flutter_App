@@ -211,6 +211,26 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: AppSpacing.x4),
+                          OutlinedButton.icon(
+                            onPressed: () => context.push(
+                              AppRouter.orgInterestSelectionPath,
+                            ),
+                            icon: const Icon(
+                              Icons.science_outlined,
+                              size: 16,
+                            ),
+                            label: const Text('TEST: Service type setup'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF1B3387),
+                              side: const BorderSide(
+                                color: Color(0xFF1B3387),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),

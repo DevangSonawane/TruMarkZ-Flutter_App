@@ -31,22 +31,42 @@ class OrgShellPage extends ConsumerWidget {
       case 1:
         // Batch type comes from settings (organisation profile) — skip the
         // type chooser when the org already has a service type saved.
-        final String serviceType =
-            (ref
-                    .read(authNotifierProvider)
-                    .value
-                    ?.userProfile
-                    ?.serviceType ??
-                '')
-                .toString()
-                .trim()
-                .toLowerCase();
-        if (serviceType == 'human') {
+        // Without GST verification fall through to the chooser, which owns
+        // the GST gate (same rule as its Continue button).
+        final profile = ref
+            .read(authNotifierProvider)
+            .value
+            ?.userProfile;
+        final String serviceType = (profile?.serviceType ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final bool gstVerified = profile?.gstVerified == true;
+        if (gstVerified && serviceType == 'human') {
           context.push(AppRouter.verificationChecksPath);
           return;
         }
-        if (serviceType == 'product') {
-          context.push(AppRouter.productSectorSelectorPath);
+        if (gstVerified && serviceType == 'product') {
+          // Sector comes from the saved profile industry — no sector
+          // screen. Verification checks falls back to the profile
+          // industry on its own; passing it explicitly is deterministic.
+          final List<String> savedIndustries =
+              (profile?.industryTypes ?? const <String>[])
+                  .map((String value) => value.trim())
+                  .where((String value) => value.isNotEmpty)
+                  .toList();
+          final String industry = savedIndustries.isNotEmpty
+              ? savedIndustries.first
+              : (profile?.industry ?? '').trim();
+          final Uri uri = Uri(
+            path: AppRouter.verificationChecksPath,
+            queryParameters: <String, String>{
+              'flow': 'product',
+              'mode': 'verification',
+              if (industry.isNotEmpty) 'industry': industry,
+            },
+          );
+          context.push(uri.toString(), extra: industry.isEmpty ? null : industry);
           return;
         }
         context.push(AppRouter.batchTypeSelectionPath); // Create

@@ -99,6 +99,10 @@ class AppRouter {
   static const String appCredentialDetailPath = '/app/batches/credential';
   static const String appRegistryPath = '/app/registry';
   static const String settingsPath = '/app/settings';
+  static const String settingsSectionPath = '/app/settings/section';
+
+  static String settingsSectionLocation(String sectionName) =>
+      '$settingsSectionPath/$sectionName';
   static const String appReportsPath = '/app/reports';
   static const String appReportDetailPath = '/app/reports/detail';
   static const String appSdcPath = '/app/sdc';
@@ -481,6 +485,18 @@ class AppRouter {
                 _slideFadePage(
                   state: state,
                   child: const ProfileSettingsPage(),
+                ),
+          ),
+          GoRoute(
+            path: '$settingsSectionPath/:section',
+            name: 'settings_section',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: buildOrgSettingsSection(
+                    state.extra,
+                    sectionName: state.pathParameters['section'],
+                  ),
                 ),
           ),
           GoRoute(

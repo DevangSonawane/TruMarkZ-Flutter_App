@@ -94,51 +94,174 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     context.go(AppRouter.batchTypeSelectionPath);
   }
 
-  void _onTapSector(VerificationIndustryType sector, String serviceType) {
-    final String name = sector.name.trim();
-    if (name.isEmpty) return;
-    if (serviceType == 'product') {
-      final String warranty = sector.warrantySupport.trim().isNotEmpty
-          ? sector.warrantySupport.trim()
-          : 'optional';
-      final bool supportsWarranty =
-          warranty.isNotEmpty && warranty.toLowerCase() != 'disabled';
-      final Uri uri = Uri(
-        path: AppRouter.productServiceTypeSelectorPath,
-        queryParameters: <String, String>{
-          'flow': 'product',
-          'sector': name,
-          'sector_title': name,
-          'industry': name,
-          'category_id': name,
-          'warranty_support': warranty,
-          'supports_warranty': supportsWarranty ? 'true' : 'false',
-        },
-      );
-      context.go(uri.toString());
-      return;
-    }
-    if (serviceType == 'human') {
-      final Uri uri = Uri(
-        path: AppRouter.verificationChecksPath,
-        queryParameters: <String, String>{'industry': name},
-      );
-      context.go(uri.toString());
-      return;
-    }
-    context.go(AppRouter.batchTypeSelectionPath);
-  }
-
-  void _onTapViewAllSectors(String serviceType) {
-    if (serviceType == 'product') {
-      context.go(AppRouter.productSectorSelectorPath);
-      return;
-    }
-    if (serviceType == 'human') {
-      context.go(AppRouter.verificationChecksPath);
-      return;
-    }
-    context.go(AppRouter.batchTypeSelectionPath);
+  void _showAllSectorsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext sheetContext) {
+        final double sheetHeight = MediaQuery.sizeOf(sheetContext).height;
+        final double bottomInset = MediaQuery.paddingOf(sheetContext).bottom;
+        final Widget body;
+        if (_sectorsLoading) {
+          body = const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        } else if (_sectorsError != null || _sectors.isEmpty) {
+          body = Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text(
+                  'Sectors are unavailable right now.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: AppColors.textSecondary,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: () {
+                      Navigator.of(sheetContext).pop();
+                      _loadSectors();
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.brandBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else {
+          body = Padding(
+            padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottomInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (int i = 0; i < _sectors.length; i++) ...<Widget>[
+                  if (i != 0)
+                    const Divider(
+                      height: 1,
+                      color: AppColors.divider,
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 9,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: AppColors.brandBlue,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _sectors[i].name.trim(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: AppColors.textPrimary,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
+        return Container(
+          constraints: BoxConstraints(maxHeight: sheetHeight * 0.82),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0E0E0),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Verification Sectors',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: const Text(
+                    'These are the industries we offer',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: AppColors.textSecondary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              body,
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -238,7 +361,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                           ),
                           child: _SectionHeader(
                             title: 'Verification Sectors',
-                            onViewAll: () => _onTapViewAllSectors(serviceType),
+                            onViewAll: _showAllSectorsSheet,
                           ),
                         ),
                         _SectorGridBody(
@@ -248,10 +371,8 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                           hasQuery: query.isNotEmpty,
                           scale: scale,
                           horizontalInset: horizontalInset,
-                          onTapSector: (VerificationIndustryType sector) =>
-                              _onTapSector(sector, serviceType),
-                          onRetry: _loadSectors,
-                        ),
+          onRetry: _loadSectors,
+        ),
                         SizedBox(height: 28 * scale),
                         Center(
                           child: Image.asset(
@@ -270,16 +391,20 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                           child: Center(
                             child: Column(
                               children: <Widget>[
-                                Text(
-                                  'Trust, sealed\non blockchain.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontFamily: 'Inter',
-                                    fontSize: 22 * scale,
-                                    height: 1.15,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.5,
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'Trust, sealed on blockchain.',
+                                    maxLines: 1,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontFamily: 'Inter',
+                                      fontSize: 22 * scale,
+                                      height: 1.15,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
+                                    ),
                                   ),
                                 ),
                                 SizedBox(height: 8 * scale),
@@ -294,15 +419,34 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                SizedBox(height: 18 * scale),
-                                Image.asset(
-                                  'assets/images/Gemini_Generated_Image_254eva254eva254e_transparent.png',
-                                  width: 300 * scale,
-                                  fit: BoxFit.contain,
-                                  semanticLabel: 'Verification badge preview',
-                                ),
                               ],
                             ),
+                          ),
+                        ),
+                        SizedBox(height: 20 * scale),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalInset,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              _TrustItem(
+                                scale: scale,
+                                icon: LucideIcons.badgeCheck,
+                                label: 'Top rated\nexperts',
+                              ),
+                              _TrustItem(
+                                scale: scale,
+                                icon: LucideIcons.flaskConical,
+                                label: 'Professionally\ntested',
+                              ),
+                              _TrustItem(
+                                scale: scale,
+                                icon: LucideIcons.userShield,
+                                label: 'Background\nverified',
+                              ),
+                            ],
                           ),
                         ),
                         SizedBox(height: 120 + bottomInset),
@@ -319,6 +463,43 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
   }
 }
 
+class _TrustItem extends StatelessWidget {
+  const _TrustItem({
+    required this.scale,
+    required this.icon,
+    required this.label,
+  });
+
+  final double scale;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, color: AppColors.brandBlue, size: 36 * scale),
+          SizedBox(height: 8 * scale),
+          Text(
+            label,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.black,
+              fontFamily: 'Inter',
+              fontSize: 11 * scale,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SectorGridBody extends StatelessWidget {
   const _SectorGridBody({
     required this.loading,
@@ -327,7 +508,6 @@ class _SectorGridBody extends StatelessWidget {
     required this.hasQuery,
     required this.scale,
     required this.horizontalInset,
-    required this.onTapSector,
     required this.onRetry,
   });
 
@@ -337,7 +517,6 @@ class _SectorGridBody extends StatelessWidget {
   final bool hasQuery;
   final double scale;
   final double horizontalInset;
-  final ValueChanged<VerificationIndustryType> onTapSector;
   final VoidCallback onRetry;
 
   @override
@@ -444,11 +623,7 @@ class _SectorGridBody extends StatelessWidget {
         ),
         itemBuilder: (BuildContext context, int index) {
           final VerificationIndustryType sector = tiles[index];
-          return _SectorGridTile(
-            sector: sector,
-            scale: scale,
-            onTap: () => onTapSector(sector),
-          );
+          return _SectorGridTile(sector: sector, scale: scale);
         },
       ),
     );
@@ -893,69 +1068,59 @@ String _imageAssetForSector(String title) {
 }
 
 class _SectorGridTile extends StatelessWidget {
-  const _SectorGridTile({
-    required this.sector,
-    required this.scale,
-    required this.onTap,
-  });
+  const _SectorGridTile({required this.sector, required this.scale});
 
   final VerificationIndustryType sector;
   final double scale;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final _SectorStyle style = _sectorStyle(sector.name);
-    final String imageAsset = _imageAssetForSector(sector.name);
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(15),
-      child: Column(
-        children: <Widget>[
-          AspectRatio(
-            aspectRatio: 1,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: style.tint,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: AppColors.divider),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12 * scale,
-                    offset: Offset(0, 6 * scale),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: Image.asset(
-                  imageAsset,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
+    return Column(
+      children: <Widget>[
+        AspectRatio(
+          aspectRatio: 1,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: style.tint,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: AppColors.divider),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12 * scale,
+                  offset: Offset(0, 6 * scale),
                 ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.asset(
+                _imageAssetForSector(sector.name),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
               ),
             ),
           ),
-          SizedBox(height: 8 * scale),
-          Text(
-            _shortSectorLabel(sector.name),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontFamily: 'Inter',
-              fontSize: 13 * scale,
-              fontWeight: FontWeight.w400,
-              letterSpacing: -0.1,
-              height: 1.15,
-            ),
+        ),
+        SizedBox(height: 8 * scale),
+        Text(
+          _shortSectorLabel(sector.name),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontFamily: 'Inter',
+            fontSize: 13 * scale,
+            fontWeight: FontWeight.w400,
+            letterSpacing: -0.1,
+            height: 1.15,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

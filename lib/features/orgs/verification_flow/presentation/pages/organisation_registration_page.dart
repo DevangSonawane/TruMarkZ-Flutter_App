@@ -350,6 +350,13 @@ class _OrganisationRegistrationPageState
                 },
                 child: const Text('Onboarding (test)'),
               ),
+              const SizedBox(height: AppSpacing.x3),
+              OutlinedButton(
+                onPressed: () {
+                  context.go(AppRouter.orgInterestSelectionPath);
+                },
+                child: const Text('Interests (test)'),
+              ),
             ],
           ),
         ),

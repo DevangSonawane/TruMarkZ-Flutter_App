@@ -69,17 +69,28 @@ class _OrgInterestSelectionPageState
     if (_isSaving) return;
     setState(() => _isSaving = true);
     try {
-      final String industryType = _selectedIndustries.join(', ');
-      await ref
-          .read(authRepositoryProvider)
-          .completeOrgOnboarding(
-            OrgOnboardingRequest(
-              industryType: industryType.trim().isEmpty ? null : industryType,
-            ),
-          );
+      // Service type first: PATCH /auth/me always works, so the choice
+      // sticks even when the one-time onboarding call below is rejected
+      // with "already completed".
       await ref
           .read(authNotifierProvider.notifier)
           .updateServiceType(_serviceType.toLowerCase());
+      final String industryType = _selectedIndustries.join(', ').trim();
+      if (industryType.isNotEmpty) {
+        try {
+          await ref
+              .read(authRepositoryProvider)
+              .completeOrgOnboarding(
+                OrgOnboardingRequest(industryType: industryType),
+              );
+        } on ApiException catch (e) {
+          if (!e.message.toLowerCase().contains('already completed')) rethrow;
+          // Onboarding locked: industry goes through PATCH /auth/me instead.
+          await ref
+              .read(authNotifierProvider.notifier)
+              .updateOrganizationProfile(industryType: industryType);
+        }
+      }
       if (!mounted) return;
       context.go(AppRouter.dashboardPath);
     } on ApiException catch (e) {
