@@ -90,20 +90,20 @@ class OrgBottomNavBar extends StatelessWidget {
                         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: Colors.white.withAlpha(215),
+                            color: Colors.white.withAlpha(238),
                             borderRadius: BorderRadius.circular(31),
                             border: Border.all(
-                              color: Colors.white.withAlpha(220),
+                              color: _navy.withAlpha(28),
                               width: 1.2,
                             ),
                             boxShadow: <BoxShadow>[
                               BoxShadow(
-                                color: Colors.black.withAlpha(24),
+                                color: Colors.black.withAlpha(42),
                                 blurRadius: 28,
                                 offset: const Offset(0, 10),
                               ),
                               BoxShadow(
-                                color: _navy.withAlpha(12),
+                                color: _navy.withAlpha(28),
                                 blurRadius: 16,
                                 offset: const Offset(0, 2),
                               ),
