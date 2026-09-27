@@ -7,22 +7,21 @@ import '../router/app_router.dart';
 
 /// Unified top bar for the organisation flow.
 ///
-/// Standard (inner-page style):
-/// `[back] Title ............ [bell] [avatar]` on [AppColors.brandBlue].
+/// Standard (inner-page style): `[back] Title` on [AppColors.brandBlue].
+/// Bell + avatar live only on the home dashboard — inner pages stay
+/// chrome-free.
 ///
 /// - [title] is the page title (Inter 20, w600, white).
 /// - Back goes to [fallbackPath] when there is nothing to pop.
-/// - Bell goes to notifications (`?flow=org`), avatar goes to settings.
 /// - Set [showBack] false for root tabs if needed (defaults true so every
 ///   page looks identical).
-/// - Set [showActions] false for full-screen pages (e.g. QR scanner) that
-///   need their own right-side controls.
+/// - Set [showActions] true only to also show bell + avatar (home style).
 class OrgTopBar extends StatelessWidget {
   const OrgTopBar({
     super.key,
     required this.title,
     this.showBack = true,
-    this.showActions = true,
+    this.showActions = false,
     this.onBack,
     this.onBellTap,
     this.onAvatarTap,

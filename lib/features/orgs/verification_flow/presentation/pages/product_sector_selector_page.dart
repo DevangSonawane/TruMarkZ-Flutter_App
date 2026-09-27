@@ -8,7 +8,6 @@ import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
-import '../../../../../core/theme/app_typography.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import 'flow_step_progress.dart';
@@ -219,15 +218,15 @@ class _ProductSectorSelectorPageState
                                                 shrinkWrap: true,
                                                 physics:
                                                     const NeverScrollableScrollPhysics(),
-                                                gridDelegate:
-                                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                                      crossAxisCount: columns,
-                                                      mainAxisSpacing:
-                                                          AppSpacing.x3,
-                                                      crossAxisSpacing:
-                                                          AppSpacing.x3,
-                                                      childAspectRatio: 1,
-                                                    ),
+                                                 gridDelegate:
+                                                     SliverGridDelegateWithFixedCrossAxisCount(
+                                                       crossAxisCount: columns,
+                                                       mainAxisSpacing:
+                                                           AppSpacing.x3,
+                                                       crossAxisSpacing:
+                                                           AppSpacing.x3,
+                                                       childAspectRatio: 0.78,
+                                                     ),
                                                 itemBuilder:
                                                     (
                                                       BuildContext context,
@@ -240,8 +239,6 @@ class _ProductSectorSelectorPageState
                                                           sector.id;
                                                       return _SectorCard(
                                                         title: sector.title,
-                                                        description:
-                                                            sector.description,
                                                         imageAsset: sector.imageAsset,
                                                         selected: selected,
                                                         onTap: () {
@@ -352,122 +349,120 @@ String _descriptionForWarrantySupport(String warrantySupport) {
 }
 
 
+/// Home-style sector tile: photo box on top, label underneath.
+/// No overlays on the image — selection shows as a blue ring + check.
 class _SectorCard extends StatelessWidget {
   const _SectorCard({
     required this.title,
-    required this.description,
     required this.imageAsset,
     required this.selected,
     required this.onTap,
   });
 
   final String title;
-  final String description;
   final String imageAsset;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final BorderSide borderSide = selected
-        ? const BorderSide(color: AppColors.brandBlue, width: 2)
-        : BorderSide(color: Colors.transparent.withAlpha(0));
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.fromBorderSide(borderSide),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.brandBlue.withAlpha(18),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(AppSpacing.x4),
-          child: Stack(
-            children: <Widget>[
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.brandBlue.withAlpha(24)
-                          : const Color(0xFFEFF3FF),
-                      shape: BoxShape.circle,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Image.asset(
-                      imageAsset,
-                      width: 56,
-                      height: 56,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    title,
-                    style: AppTypography.body2.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13.5,
-                      height: 1.1,
-                      color: selected
-                          ? AppColors.brandBlue
-                          : AppColors.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.2,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Column(
+        children: <Widget>[
+          AspectRatio(
+            aspectRatio: 1,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: selected
+                      ? AppColors.brandBlue
+                      : AppColors.divider,
+                  width: selected ? 2.5 : 1,
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: selected
+                        ? AppColors.brandBlue.withAlpha(70)
+                        : Colors.black.withValues(alpha: 0.06),
+                    blurRadius: selected ? 20 : 12,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
-              if (selected)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[AppColors.brandBlue, Color(0xFF004AC6)],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    Image.asset(
+                      imageAsset,
+                      fit: BoxFit.cover,
+                      errorBuilder:
+                          (
+                            BuildContext context,
+                            Object error,
+                            StackTrace? stackTrace,
+                          ) => const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: <Color>[
+                                  AppColors.brandBlue,
+                                  AppColors.deepNavy,
+                                ],
+                              ),
+                            ),
+                          ),
+                    ),
+                    if (selected)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: AppColors.brandBlue,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            size: 15,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: selected
+                  ? AppColors.brandBlue
+                  : AppColors.textPrimary,
+              fontSize: 14,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              letterSpacing: -0.1,
+              height: 1.15,
+            ),
+          ),
+        ],
       ),
     );
   }

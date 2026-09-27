@@ -631,11 +631,6 @@ class _LocationBar extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Icon(
-                      LucideIcons.chevronDown,
-                      color: Colors.white.withValues(alpha: 0.78),
-                      size: 22 * scale,
-                    ),
                   ],
                 ),
               ],
