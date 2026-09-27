@@ -9,6 +9,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_badge.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_card.dart';
+import '../../../../core/widgets/org_top_bar.dart';
 
 class VerificationReportDetailPage extends StatelessWidget
     with ScreenEntryMixin {
@@ -28,25 +29,33 @@ class VerificationReportDetailPage extends StatelessWidget
     final bool canOpen =
         uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
 
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            Image.asset('assets/icons/headers_app_icon.png', height: 22),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('Report'),
-          ],
-        ),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.x6,
-            AppSpacing.x6,
-            AppSpacing.x6,
-            AppSpacing.x8,
-          ),
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Report'),
+            ),
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.x6,
+                    32,
+                    AppSpacing.x6,
+                    AppSpacing.x8 + safeBottom,
+                  ),
           children: <Widget>[
             entry(
               TMZCard(
@@ -128,6 +137,10 @@ class VerificationReportDetailPage extends StatelessWidget
                 ],
               ),
               delayMs: 80,
+            ),
+          ],
+                ),
+              ),
             ),
           ],
         ),

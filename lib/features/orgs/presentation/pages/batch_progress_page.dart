@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import '../../../../core/models/verification_models.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/org_top_bar.dart';
 import '../../data/verification_repository.dart';
 
 class BatchProgressPage extends ConsumerStatefulWidget {
@@ -91,21 +92,8 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
                           s(16),
                           s(12),
                         ),
-                        child: _Header(
-                          scale: scale,
+                        child: const OrgTopBar(
                           title: 'View All Certificates',
-                          onBack: () {
-                            if (context.canPop()) {
-                              context.pop();
-                              return;
-                            }
-                            context.go(AppRouter.dashboardPath);
-                          },
-                          onAlertsTap: () => context.push(
-                            '${AppRouter.notificationsPath}?flow=org',
-                          ),
-                          onProfileTap: () =>
-                              context.push(AppRouter.settingsPath),
                         ),
                       ),
                       SizedBox(height: s(21)),
@@ -211,92 +199,6 @@ class _BatchProgressPageState extends ConsumerState<BatchProgressPage> {
       ],
     ];
     return pairs[index % pairs.length];
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.scale,
-    required this.title,
-    required this.onBack,
-    this.onAlertsTap,
-    this.onProfileTap,
-  });
-
-  final double scale;
-  final String title;
-  final VoidCallback onBack;
-  final VoidCallback? onAlertsTap;
-  final VoidCallback? onProfileTap;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return Row(
-      children: <Widget>[
-        InkWell(
-          onTap: onBack,
-          borderRadius: BorderRadius.circular(s(12)),
-          child: SizedBox(
-            width: s(24),
-            height: s(24),
-            child: SvgPicture.asset(
-              'assets/icons/figma/certificates_back.svg',
-              width: s(24),
-              height: s(24),
-              colorFilter: const ColorFilter.mode(
-                Colors.white,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: s(12)),
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(20),
-              fontWeight: FontWeight.w600,
-              height: 19.5 / 20,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        SizedBox(width: s(12)),
-        GestureDetector(
-          onTap: onAlertsTap,
-          behavior: HitTestBehavior.opaque,
-          child: SvgPicture.asset(
-            'assets/icons/figma/all_batches_bell.svg',
-            width: s(24),
-            height: s(24),
-            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-          ),
-        ),
-        SizedBox(width: s(12)),
-        GestureDetector(
-          onTap: onProfileTap,
-          child: Container(
-            width: s(32),
-            height: s(32),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Image.asset(
-              'assets/icons/dashbaord/profile.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 

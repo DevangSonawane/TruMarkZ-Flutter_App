@@ -5,9 +5,36 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 
-class CredentialPreviewApprovalPage extends StatelessWidget {
+class CredentialPreviewApprovalPage extends StatefulWidget {
   const CredentialPreviewApprovalPage({super.key});
+
+  @override
+  State<CredentialPreviewApprovalPage> createState() =>
+      _CredentialPreviewApprovalPageState();
+}
+
+class _CredentialPreviewApprovalPageState
+    extends State<CredentialPreviewApprovalPage> {
+  bool _isApproving = false;
+
+  void _approve(BuildContext context, Map<String, String> qp) {
+    if (_isApproving) return;
+    setState(() => _isApproving = true);
+
+    final String qs = qp.entries
+        .map(
+          (MapEntry<String, String> e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+        )
+        .join('&');
+    context.replace(
+      qs.isEmpty
+          ? AppRouter.credentialsApprovedPath
+          : '${AppRouter.credentialsApprovedPath}?$qs',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,31 +52,39 @@ class CredentialPreviewApprovalPage extends StatelessWidget {
     };
 
     return Scaffold(
-      backgroundColor: AppColors.offWhite,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Preview'),
+            ),
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                    120,
+                  ),
+                  children: <Widget>[
+                    _CredentialIdCard(templateLabel: templateLabel),
+                    const SizedBox(height: AppSpacing.x4),
+                    const _WaitForApprovalCard(),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        title: const Text('Preview'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.x4,
-          AppSpacing.x4,
-          AppSpacing.x4,
-          120,
-        ),
-        children: <Widget>[
-          _CredentialIdCard(templateLabel: templateLabel),
-          const SizedBox(height: AppSpacing.x4),
-          const _WaitForApprovalCard(),
-        ],
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -64,20 +99,9 @@ class CredentialPreviewApprovalPage extends StatelessWidget {
             height: 54,
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () {
-                final Map<String, String> next = Map<String, String>.from(qp);
-                final String qs = next.entries
-                    .map(
-                      (MapEntry<String, String> e) =>
-                          '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
-                    )
-                    .join('&');
-                context.push(
-                  qs.isEmpty
-                      ? AppRouter.credentialsApprovedPath
-                      : '${AppRouter.credentialsApprovedPath}?$qs',
-                );
-              },
+              onPressed: _isApproving
+                  ? null
+                  : () => _approve(context, Map<String, String>.from(qp)),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.brandBlue,
                 foregroundColor: Colors.white,

@@ -5,6 +5,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/org_top_bar.dart';
 
 class OrgCredentialsPage extends StatelessWidget {
   const OrgCredentialsPage({super.key});
@@ -51,79 +52,65 @@ class OrgCredentialsPage extends StatelessWidget {
       ),
     ];
 
+    const double refWidth = 402;
+    final double screenWidth = MediaQuery.sizeOf(context).width;
+    final double contentWidth =
+        screenWidth < refWidth ? screenWidth : refWidth;
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+
     return Scaffold(
-      backgroundColor: AppColors.offWhite,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-              return;
-            }
-            context.go(AppRouter.dashboardPath);
-          },
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        titleSpacing: 8,
-        title: Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                'Create Credentials',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.heading2.copyWith(
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: Center(
+          child: SizedBox(
+            width: contentWidth,
+            child: Column(
+              children: <Widget>[
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: OrgTopBar(title: 'Create Credentials'),
                 ),
-              ),
+                const SizedBox(height: 21),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF7F9FC),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(20),
+                      ),
+                    ),
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.x4,
+                        32,
+                        AppSpacing.x4,
+                        120 + safeBottom,
+                      ),
+                      children: <Widget>[
+                        for (final _CredentialCardModel model in cards) ...<Widget>[
+                          _CredentialListCard(
+                            model: model,
+                            onTap: () {
+                              final String status = switch (model.status) {
+                                _CredentialStatus.valid => 'verified',
+                                _ => 'pending',
+                              };
+                              context.push(
+                                '${AppRouter.credentialDetailPath}?name=${Uri.encodeComponent(model.title)}&status=$status',
+                              );
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.x3),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Search',
-            onPressed: () {},
-            icon: const Icon(Icons.search_rounded),
           ),
-          IconButton(
-            tooltip: 'Filter',
-            onPressed: () {},
-            icon: const Icon(Icons.tune_rounded),
-          ),
-          const SizedBox(width: AppSpacing.x2),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.x4,
-          AppSpacing.x3,
-          AppSpacing.x4,
-          140,
         ),
-        children: <Widget>[
-          for (final _CredentialCardModel model in cards) ...<Widget>[
-            _CredentialListCard(
-              model: model,
-              onTap: () {
-                final String status = switch (model.status) {
-                  _CredentialStatus.valid => 'verified',
-                  _ => 'pending',
-                };
-                context.push(
-                  '${AppRouter.credentialDetailPath}?name=${Uri.encodeComponent(model.title)}&status=$status',
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.x3),
-          ],
-        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: SafeArea(

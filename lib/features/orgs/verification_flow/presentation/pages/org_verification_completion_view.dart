@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 
 String _displayId(String id) {
   final String v = id.trim();
@@ -70,10 +69,6 @@ class _OrgVerificationCompletionViewState
     super.dispose();
   }
 
-  void _goDashboard() {
-    context.go(AppRouter.dashboardPath);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,34 +91,7 @@ class _OrgVerificationCompletionViewState
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(10), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: _goDashboard,
-                            radius: s(22),
-                            child: const Icon(
-                              Icons.arrow_back_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Expanded(
-                            child: Text(
-                              widget.headerTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: s(21),
-                                fontWeight: FontWeight.w600,
-                                height: 19.5 / 21,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: OrgTopBar(title: widget.headerTitle),
                     ),
                     SizedBox(height: s(18)),
                     Expanded(
@@ -194,20 +162,14 @@ class _OrgVerificationCompletionViewState
 }
 
 class OrgCompletionMetric {
-  const OrgCompletionMetric({
-    required this.label,
-    required this.value,
-  });
+  const OrgCompletionMetric({required this.label, required this.value});
 
   final String label;
   final String value;
 }
 
 class _PendingHero extends StatelessWidget {
-  const _PendingHero({
-    required this.scale,
-    required this.pulse,
-  });
+  const _PendingHero({required this.scale, required this.pulse});
 
   final double scale;
   final AnimationController pulse;
@@ -221,10 +183,7 @@ class _PendingHero extends StatelessWidget {
         animation: pulse,
         builder: (BuildContext context, Widget? child) {
           final double t = Curves.easeInOut.transform(pulse.value);
-          return Transform.scale(
-            scale: 1.0 + (t * 0.025),
-            child: child,
-          );
+          return Transform.scale(scale: 1.0 + (t * 0.025), child: child);
         },
         child: Container(
           width: s(120),
@@ -417,10 +376,7 @@ class _StatusSummaryCard extends StatelessWidget {
             children: <Widget>[
               for (int i = 0; i < metrics.length; i++) ...<Widget>[
                 Expanded(
-                  child: _MetricTile(
-                    metric: metrics[i],
-                    scale: scale,
-                  ),
+                  child: _MetricTile(metric: metrics[i], scale: scale),
                 ),
                 if (i != metrics.length - 1) SizedBox(width: s(10)),
               ],
@@ -433,10 +389,7 @@ class _StatusSummaryCard extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.metric,
-    required this.scale,
-  });
+  const _MetricTile({required this.metric, required this.scale});
 
   final OrgCompletionMetric metric;
   final double scale;

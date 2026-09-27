@@ -1,51 +1,71 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/widgets/org_bottom_nav_bar.dart';
+import '../../../auth/application/auth_notifier.dart';
 
-class OrgShellPage extends StatelessWidget {
+class OrgShellPage extends ConsumerWidget {
   const OrgShellPage({super.key, required this.child});
 
   final Widget child;
 
   int _indexForLocation(String location) {
     final String path = Uri.parse(location).path;
-    if (path.startsWith(AppRouter.appBatchesPath)) return 2; // All Batches
-    return 0; // Dashboard
+    // Profile area: settings + wallet (credentials).
+    if (path.startsWith(AppRouter.settingsPath) ||
+        path.startsWith(AppRouter.walletPath)) {
+      return 2;
+    }
+    // Everything else (dashboard, batches, registry, reports, sdc)
+    // highlights Dashboard. Create (index 1) is an action, never sticky.
+    return 0;
   }
 
-  void _onTap(BuildContext context, int index) {
+  void _onTap(BuildContext context, WidgetRef ref, int index) {
     switch (index) {
       case 0:
         context.go(AppRouter.dashboardPath);
         return;
       case 1:
-        context.push(AppRouter.batchTypeSelectionPath); // New Batch
+        // Batch type comes from settings (organisation profile) — skip the
+        // type chooser when the org already has a service type saved.
+        final String serviceType =
+            (ref
+                    .read(authNotifierProvider)
+                    .value
+                    ?.userProfile
+                    ?.serviceType ??
+                '')
+                .toString()
+                .trim()
+                .toLowerCase();
+        if (serviceType == 'human') {
+          context.push(AppRouter.verificationChecksPath);
+          return;
+        }
+        if (serviceType == 'product') {
+          context.push(AppRouter.productSectorSelectorPath);
+          return;
+        }
+        context.push(AppRouter.batchTypeSelectionPath); // Create
         return;
       case 2:
-        context.go(AppRouter.appBatchesPath); // All Batches
+        context.go(AppRouter.settingsPath); // Profile
         return;
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final GoRouter router = GoRouter.of(context);
     final String location = GoRouterState.of(context).uri.toString();
     final String path = Uri.parse(location).path;
     final int currentIndex = _indexForLocation(location);
 
-    // Hide the organisation shell nav/FAB on full-screen pages.
-    // Example: Create Credentials (wallet) should have its own header/back button.
-    final bool showShellChrome =
-        !path.startsWith(AppRouter.walletPath) &&
-        !path.startsWith(AppRouter.settingsPath);
-
-    if (!showShellChrome) {
-      return Scaffold(body: child);
-    }
-
+    // Always keep the bottom nav visible — including Profile (settings)
+    // and Wallet — so users can switch tabs from anywhere.
     final bool allowSystemBack =
         router.canPop() || path == AppRouter.dashboardPath;
 
@@ -56,29 +76,32 @@ class OrgShellPage extends StatelessWidget {
         context.go(AppRouter.dashboardPath);
       },
       child: Scaffold(
+        // Full-bleed body so the glass pill truly floats over content
+        // with no bar strip behind it. Shell pages already carry
+        // bottom clearance (>= 71px nav + insets) for the pill.
         extendBody: true,
         body: child,
         bottomNavigationBar: OrgBottomNavBar(
           currentIndex: currentIndex,
           items: <OrgBottomNavBarItem>[
             OrgBottomNavBarItem(
-              label: 'Home',
+              label: 'Dashboard',
+              icon: Icons.grid_view_rounded,
+              selectedIcon: Icons.grid_view_rounded,
               svgAssetPath: 'assets/icons/figma/nav_home.svg',
-              letterSpacing: 0.0156,
-              onTap: () => _onTap(context, 0),
+              onTap: () => _onTap(context, ref, 0),
             ),
             OrgBottomNavBarItem(
-              label: 'New Batch',
-              svgAssetPath: 'assets/icons/figma/nav_new_batch.svg',
-              letterSpacing: 0,
-              onTap: () => _onTap(context, 1),
+              label: 'Create',
+              isCenterAction: true,
+              onTap: () => _onTap(context, ref, 1),
             ),
             OrgBottomNavBarItem(
-              label: 'All Batches',
-              svgAssetPath: 'assets/icons/figma/nav_batches.svg',
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.0078,
-              onTap: () => _onTap(context, 2),
+              label: 'Profile',
+              icon: Icons.person_outline_rounded,
+              selectedIcon: Icons.person_rounded,
+              svgAssetPath: 'assets/icons/figma/nav_account.svg',
+              onTap: () => _onTap(context, ref, 2),
             ),
           ],
         ),

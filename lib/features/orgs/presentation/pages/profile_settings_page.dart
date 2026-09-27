@@ -362,7 +362,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             s(16),
                             s(8),
                             s(16),
-                            s(24) + bottomInset,
+                            // Clearance above the floating bottom pill so
+                            // the last card is never hidden behind it.
+                            s(24) + bottomInset + 120,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,

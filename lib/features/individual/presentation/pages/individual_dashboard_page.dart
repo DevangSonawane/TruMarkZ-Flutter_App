@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -235,30 +236,41 @@ class _HomeHeader extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 12),
-        IconButton(
-          onPressed: onAlertsTap,
-          icon: SvgPicture.asset(
-            'assets/icons/figma/header_bell.svg',
-            width: 24,
-            height: 24,
-            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: onAlertsTap,
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.all(8),
+            child: Stack(
+              alignment: Alignment.center,
+              children: <Widget>[
+                Icon(LucideIcons.bell, color: Colors.white, size: 23),
+                Positioned(
+                  right: 1,
+                  top: 2,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0xFFFBBF24),
+                      shape: BoxShape.circle,
+                    ),
+                    child: SizedBox(width: 7, height: 7),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+        const SizedBox(width: 2),
         GestureDetector(
           onTap: onProfileTap,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(9999),
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-              ),
-              child: ClipOval(
-                child: Image.asset(avatarAssetPath, fit: BoxFit.cover),
-              ),
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.all(8),
+            child: Icon(
+              LucideIcons.userRound,
+              color: Colors.white,
+              size: 23,
             ),
           ),
         ),

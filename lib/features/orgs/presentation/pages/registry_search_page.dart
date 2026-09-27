@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/org_top_bar.dart';
 
 class RegistrySearchPage extends StatefulWidget {
   const RegistrySearchPage({super.key});
@@ -133,16 +132,8 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
               children: <Widget>[
                 Padding(
                   padding: EdgeInsets.fromLTRB(s(16), s(12), s(16), s(12)),
-                  child: _RegistryHeader(
-                    scale: scale,
+                  child: const OrgTopBar(
                     title: 'Organisation Registry Hub',
-                    onBack: () {
-                      if (context.canPop()) {
-                        context.pop();
-                        return;
-                      }
-                      context.go(AppRouter.dashboardPath);
-                    },
                   ),
                 ),
                 SizedBox(height: s(21)),
@@ -219,60 +210,6 @@ class _RegistrySearchPageState extends State<RegistrySearchPage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _RegistryHeader extends StatelessWidget {
-  const _RegistryHeader({
-    required this.scale,
-    required this.title,
-    required this.onBack,
-  });
-
-  final double scale;
-  final String title;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double value) => value * scale;
-
-    return Row(
-      children: <Widget>[
-        InkWell(
-          onTap: onBack,
-          borderRadius: BorderRadius.circular(s(12)),
-          child: SizedBox(
-            width: s(24),
-            height: s(24),
-            child: SvgPicture.asset(
-              'assets/icons/figma/certificates_back.svg',
-              width: s(24),
-              height: s(24),
-              colorFilter: const ColorFilter.mode(
-                Colors.white,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: s(12)),
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(20),
-              fontWeight: FontWeight.w600,
-              height: 19.5 / 20,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

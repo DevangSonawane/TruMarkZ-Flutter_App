@@ -27,6 +27,31 @@ class AuthRepository {
   final ApiClient _api;
   final TokenStorage _tokenStorage;
 
+  Map<String, dynamic> _authPayload(Map<String, dynamic> res) {
+    if ((res['access_token'] ?? '').toString().trim().isNotEmpty) {
+      return res;
+    }
+    final dynamic data = res['data'];
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return res;
+  }
+
+  Future<void> _persistAuthResponse(LoginResponse parsed) async {
+    if (parsed.accessToken.trim().isEmpty || parsed.userId.trim().isEmpty) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Unexpected response. Please try again.',
+      );
+    }
+    await _tokenStorage.saveToken(parsed.accessToken);
+    await _tokenStorage.saveUserId(parsed.userId);
+    if (parsed.loginType.trim().isNotEmpty) {
+      await _tokenStorage.saveLoginType(parsed.loginType);
+    }
+  }
+
   Future<LoginResponse> loginIndividual({
     required String emailOrMobile,
     required String password,
@@ -65,16 +90,11 @@ class AuthRepository {
       data: <String, dynamic>{'token': idToken},
       skipAuth: true,
     );
-    final LoginResponse parsed = LoginResponse.fromJson(res);
-    if (parsed.accessToken.trim().isEmpty || parsed.userId.trim().isEmpty) {
-      throw const ApiException(
-        statusCode: null,
-        message: 'Unexpected response. Please try again.',
-      );
-    }
-
-    await _tokenStorage.saveToken(parsed.accessToken);
-    await _tokenStorage.saveUserId(parsed.userId);
+    final LoginResponse parsed = LoginResponse.fromJson(
+      _authPayload(res),
+      fallbackLoginType: normalized,
+    );
+    await _persistAuthResponse(parsed);
     return parsed;
   }
 
@@ -94,46 +114,44 @@ class AuthRepository {
       ).toJson(),
       skipAuth: true,
     );
-    final LoginResponse parsed = LoginResponse.fromJson(res);
-    if (parsed.accessToken.trim().isEmpty || parsed.userId.trim().isEmpty) {
-      throw const ApiException(
-        statusCode: null,
-        message: 'Unexpected response. Please try again.',
-      );
-    }
-    await _tokenStorage.saveToken(parsed.accessToken);
-    await _tokenStorage.saveUserId(parsed.userId);
+    final LoginResponse parsed = LoginResponse.fromJson(
+      _authPayload(res),
+      fallbackLoginType: loginType,
+    );
+    await _persistAuthResponse(parsed);
     return parsed;
   }
 
-  Future<void> registerIndividual(RegisterIndividualRequest request) async {
+  Future<LoginResponse> registerIndividual(
+    RegisterIndividualRequest request,
+  ) async {
     final Map<String, dynamic> res = await _api.post(
-      '/auth/register/individual',
+      '/auth/signup/individual',
       data: request.toJson(),
+      skipAuth: true,
     );
-    // Some backend deployments may respond without a `data.user_id` payload
-    // (e.g. only a success `message`). If the request succeeded (2xx), treat it
-    // as success and let the OTP step continue.
-    final dynamic data = res['data'];
-    if (data is Map) {
-      final String userId = (data['user_id'] ?? '').toString();
-      if (userId.trim().isNotEmpty) return;
-    }
+    final LoginResponse parsed = LoginResponse.fromJson(
+      _authPayload(res),
+      fallbackLoginType: 'individual',
+    );
+    await _persistAuthResponse(parsed);
+    return parsed;
   }
 
-  Future<void> signupOrganization(SignupOrganizationRequest request) async {
+  Future<LoginResponse> signupOrganization(
+    SignupOrganizationRequest request,
+  ) async {
     final Map<String, dynamic> res = await _api.post(
       '/auth/signup/organization',
       data: request.toJson(),
+      skipAuth: true,
     );
-    // API returns user_id at top-level per docs; accept either shape.
-    final String directUserId = (res['user_id'] ?? '').toString();
-    if (directUserId.trim().isNotEmpty) return;
-    final dynamic data = res['data'];
-    final String nestedUserId = data is Map
-        ? (data['user_id'] ?? '').toString()
-        : '';
-    if (nestedUserId.trim().isNotEmpty) return;
+    final LoginResponse parsed = LoginResponse.fromJson(
+      _authPayload(res),
+      fallbackLoginType: 'organization',
+    );
+    await _persistAuthResponse(parsed);
+    return parsed;
   }
 
   Future<void> verifyOtp({
@@ -155,7 +173,7 @@ class AuthRepository {
 
   Future<void> completeOrgOnboarding(OrgOnboardingRequest request) async {
     final Map<String, dynamic> payload = request.toJson();
-    await _api.post('/auth/onboarding', data: payload.isEmpty ? null : payload);
+    await _api.post('/auth/onboarding', data: payload);
   }
 
   Future<String?> getOrganizationIndustryType({required String orgId}) async {

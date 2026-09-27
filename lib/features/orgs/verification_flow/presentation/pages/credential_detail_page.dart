@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_badge.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
@@ -31,91 +32,116 @@ class CredentialDetailPage extends StatelessWidget {
     final bool verified = statusRaw.toLowerCase() == 'verified';
 
     return Scaffold(
-      appBar: AppBar(title: Text(credentialId)),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.x4),
-        children: <Widget>[
-          TMZCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: credentialId),
+            ),
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.all(AppSpacing.x4),
                   children: <Widget>[
-                    Text('Workforce ID', style: AppTypography.heading1),
-                    const Spacer(),
-                    TMZBadge(
-                      label: verified ? 'Verified' : 'Pending',
-                      backgroundColor: verified
-                          ? AppColors.success
-                          : const Color(0xFFF59E0B),
-                      foregroundColor: Colors.white,
+                    TMZCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Text(
+                                'Workforce ID',
+                                style: AppTypography.heading1,
+                              ),
+                              const Spacer(),
+                              TMZBadge(
+                                label: verified ? 'Verified' : 'Pending',
+                                backgroundColor: verified
+                                    ? AppColors.success
+                                    : const Color(0xFFF59E0B),
+                                foregroundColor: Colors.white,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.x2),
+                          Text(
+                            'Owner: $name\nCredential ID: $credentialId\nIssued: 29/04/2026',
+                            style: AppTypography.body2.copyWith(
+                              color: scheme.onSurface.withAlpha(170),
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    TMZCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text('Fields', style: AppTypography.heading2),
+                          const SizedBox(height: AppSpacing.x2),
+                          _kv('Full Name', name),
+                          _kv('DOB', '1997-06-12'),
+                          _kv('ID Number', 'ID-298172'),
+                          _kv('Role', 'Driver'),
+                          _kv('Phone', '+91 98XXXXXX21'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    TMZCard(
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('QR generator coming soon.'),
+                          ),
+                        );
+                      },
+                      child: const ListTile(
+                        leading: Icon(Icons.qr_code_rounded),
+                        title: Text('Share'),
+                        subtitle: Text('Generate QR for public verification'),
+                        trailing: Icon(Icons.chevron_right_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    TMZCard(
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('On-chain proof viewer coming soon.'),
+                          ),
+                        );
+                      },
+                      child: const ListTile(
+                        leading: Icon(Icons.link_rounded),
+                        title: Text('On-chain Proof'),
+                        subtitle: Text('Tx: 0x9f3a...c812'),
+                        trailing: Icon(Icons.open_in_new_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x6),
+                    TMZButton(
+                      label: 'Back',
+                      variant: TMZButtonVariant.secondary,
+                      icon: Icons.arrow_back_rounded,
+                      onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.x2),
-                Text(
-                  'Owner: $name\nCredential ID: $credentialId\nIssued: 29/04/2026',
-                  style: AppTypography.body2.copyWith(
-                    color: scheme.onSurface.withAlpha(170),
-                    height: 1.35,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          TMZCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Fields', style: AppTypography.heading2),
-                const SizedBox(height: AppSpacing.x2),
-                _kv('Full Name', name),
-                _kv('DOB', '1997-06-12'),
-                _kv('ID Number', 'ID-298172'),
-                _kv('Role', 'Driver'),
-                _kv('Phone', '+91 98XXXXXX21'),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          TMZCard(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('QR generator coming soon.')),
-              );
-            },
-            child: const ListTile(
-              leading: Icon(Icons.qr_code_rounded),
-              title: Text('Share'),
-              subtitle: Text('Generate QR for public verification'),
-              trailing: Icon(Icons.chevron_right_rounded),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x3),
-          TMZCard(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('On-chain proof viewer coming soon.'),
-                ),
-              );
-            },
-            child: const ListTile(
-              leading: Icon(Icons.link_rounded),
-              title: Text('On-chain Proof'),
-              subtitle: Text('Tx: 0x9f3a...c812'),
-              trailing: Icon(Icons.open_in_new_rounded),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x6),
-          TMZButton(
-            label: 'Back',
-            variant: TMZButtonVariant.secondary,
-            icon: Icons.arrow_back_rounded,
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

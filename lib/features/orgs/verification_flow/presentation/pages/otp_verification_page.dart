@@ -351,16 +351,40 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
                                     if (!ok) return;
 
                                     if (after != 'login') {
-                                      messenger.showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Email verified! Please log in.',
+                                      try {
+                                        await ref
+                                            .read(authNotifierProvider.notifier)
+                                            .refreshCurrentUser();
+                                        if (!mounted) return;
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Email verified!'),
                                           ),
-                                        ),
-                                      );
-                                      AppRouter.router.go(
-                                        '${AppRouter.loginPath}?type=$encodedType&verified=true&force=true',
-                                      );
+                                        );
+                                        AppRouter.router.go(
+                                          type == 'individual'
+                                              ? AppRouter.individualIdentityPath
+                                              : AppRouter.orgOnboardingPath,
+                                        );
+                                      } on ApiException catch (e) {
+                                        messenger.showSnackBar(
+                                          SnackBar(content: Text(e.message)),
+                                        );
+                                        AppRouter.router.go(
+                                          '${AppRouter.loginPath}?type=$encodedType&verified=true&force=true',
+                                        );
+                                      } catch (_) {
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Email verified. Please continue from login.',
+                                            ),
+                                          ),
+                                        );
+                                        AppRouter.router.go(
+                                          '${AppRouter.loginPath}?type=$encodedType&verified=true&force=true',
+                                        );
+                                      }
                                       return;
                                     }
                                     final PendingLogin? pending = ref.read(

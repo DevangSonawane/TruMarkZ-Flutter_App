@@ -32,9 +32,13 @@ class LoginResponse {
   final String loginType;
   final bool requiresOnboarding;
 
-  factory LoginResponse.fromJson(Map<String, dynamic> json) {
-    final String inferredType = (json['login_type'] ?? json['user_type'] ?? '')
-        .toString();
+  factory LoginResponse.fromJson(
+    Map<String, dynamic> json, {
+    String fallbackLoginType = '',
+  }) {
+    final String inferredType =
+        (json['login_type'] ?? json['user_type'] ?? fallbackLoginType)
+            .toString();
     return LoginResponse(
       accessToken: (json['access_token'] ?? '').toString(),
       tokenType: (json['token_type'] ?? '').toString(),
@@ -100,9 +104,11 @@ class RegisterIndividualRequest {
     final Map<String, dynamic> json = <String, dynamic>{
       'full_name': fullName,
       'email': email,
-      'mobile': mobile,
       'password': password,
     };
+    if (mobile != null && mobile!.trim().isNotEmpty) {
+      json['phone_number'] = mobile!.trim();
+    }
     if (address != null && address!.trim().isNotEmpty) {
       json['address'] = address;
     }
@@ -112,11 +118,11 @@ class RegisterIndividualRequest {
 
 class SignupOrganizationRequest {
   const SignupOrganizationRequest({
-    required this.orgName,
+    this.orgName,
     required this.email,
-    required this.phoneNumber,
+    this.phoneNumber,
     required this.password,
-    required this.serviceType,
+    this.serviceType,
     this.humanSpaceId,
     this.productSpaceId,
     this.warrantySpaceId,
@@ -126,11 +132,11 @@ class SignupOrganizationRequest {
     this.dhiwaySpaceId,
   });
 
-  final String orgName;
+  final String? orgName;
   final String email;
-  final String phoneNumber;
+  final String? phoneNumber;
   final String password;
-  final String serviceType;
+  final String? serviceType;
   final String? humanSpaceId;
   final String? productSpaceId;
   final String? warrantySpaceId;
@@ -141,12 +147,20 @@ class SignupOrganizationRequest {
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = <String, dynamic>{
-      'org_name': orgName,
       'email': email,
-      'phone_number': phoneNumber,
       'password': password,
-      'service_type': serviceType,
     };
+
+    void putIfNonEmpty(String key, String? value) {
+      final String normalized = value?.trim() ?? '';
+      if (normalized.isNotEmpty) {
+        json[key] = normalized;
+      }
+    }
+
+    putIfNonEmpty('org_name', orgName);
+    putIfNonEmpty('phone_number', phoneNumber);
+    putIfNonEmpty('service_type', serviceType);
 
     final String humanSpace = humanSpaceId?.trim() ?? '';
     final String productSpace = productSpaceId?.trim() ?? '';
@@ -156,13 +170,13 @@ class SignupOrganizationRequest {
     final String warrantySchema = warrantySchemaId?.trim() ?? '';
     final String dhiwaySpace = dhiwaySpaceId?.trim() ?? '';
 
-    if (humanSpace.isNotEmpty) json['human_space_id'] = humanSpace;
-    if (productSpace.isNotEmpty) json['product_space_id'] = productSpace;
-    if (warrantySpace.isNotEmpty) json['warranty_space_id'] = warrantySpace;
-    if (humanSchema.isNotEmpty) json['human_schema_id'] = humanSchema;
-    if (productSchema.isNotEmpty) json['product_schema_id'] = productSchema;
-    if (warrantySchema.isNotEmpty) json['warranty_schema_id'] = warrantySchema;
-    if (dhiwaySpace.isNotEmpty) json['dhiway_space_id'] = dhiwaySpace;
+    putIfNonEmpty('human_space_id', humanSpace);
+    putIfNonEmpty('product_space_id', productSpace);
+    putIfNonEmpty('warranty_space_id', warrantySpace);
+    putIfNonEmpty('human_schema_id', humanSchema);
+    putIfNonEmpty('product_schema_id', productSchema);
+    putIfNonEmpty('warranty_schema_id', warrantySchema);
+    putIfNonEmpty('dhiway_space_id', dhiwaySpace);
 
     return json;
   }
@@ -225,15 +239,17 @@ class OrgOnboardingRequest {
       }
     }
 
-    json['gstin'] = normalize(gstin);
-    json['business_reg_number'] = normalize(businessRegNumber);
-    json['address_line1'] = normalize(addressLine1);
-    json['address_line2'] = normalize(addressLine2);
-    json['address_line3'] = normalize(addressLine3);
-    json['industry_type'] = normalize(industryType);
+    putIfNonEmpty('gstin', normalize(gstin));
+    putIfNonEmpty('business_reg_number', normalize(businessRegNumber));
+    putIfNonEmpty('address_line1', normalize(addressLine1));
+    putIfNonEmpty('address_line2', normalize(addressLine2));
+    putIfNonEmpty('address_line3', normalize(addressLine3));
+    putIfNonEmpty('industry_type', normalize(industryType));
     putIfNonEmpty('space_id', spaceId);
     putIfNonEmpty('schema_id', schemaId);
-    json['use_cases'] = useCases ?? <String, dynamic>{};
+    if (useCases != null && useCases!.isNotEmpty) {
+      json['use_cases'] = useCases;
+    }
 
     if (dhiwaysDetails != null) {
       final List<Map<String, dynamic>> details = dhiwaysDetails!

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/network/api_client.dart';
 import '../../../data/verification_repository.dart';
@@ -83,7 +84,9 @@ class _UserDocumentUploadPageState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong. Please try again.')),
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
@@ -128,7 +131,9 @@ class _UserDocumentUploadPageState
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong. Please try again.')),
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
       );
     }
   }
@@ -176,131 +181,148 @@ class _UserDocumentUploadPageState
     final bool hasToken = _token.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        automaticallyImplyLeading: false,
-        title: const Text('Upload Your Documents'),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.x4),
+        bottom: false,
+        child: Column(
           children: <Widget>[
-            _InfoCard(
-              title: 'Hello!',
-              subtitle:
-                  'Your organisation has requested document verification. Please upload the following.',
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Upload Your Documents'),
             ),
-            const SizedBox(height: AppSpacing.x4),
-            Text('Your Photo', style: AppTypography.heading2),
-            const SizedBox(height: AppSpacing.x2),
-            _UploadZone(
-              onTap: hasToken ? _pickAndUploadPhoto : null,
-              child: _photoBytes == null
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Icon(
-                          Icons.camera_alt_rounded,
-                          size: 32,
-                          color: AppColors.brandBlue.withAlpha(220),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          _uploadingPhoto
-                              ? 'Uploading…'
-                              : (hasToken ? 'Tap to upload' : 'Invalid link'),
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Stack(
-                      alignment: Alignment.center,
-                      children: <Widget>[
-                        CircleAvatar(
-                          radius: 44,
-                          backgroundImage: MemoryImage(_photoBytes!),
-                        ),
-                        if (_photoUploaded)
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: AppColors.success,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.check_rounded,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-            ),
-            const SizedBox(height: AppSpacing.x5),
-            Text('Documents', style: AppTypography.heading2),
-            const SizedBox(height: AppSpacing.x2),
-            _DocTile(
-              title: 'Aadhar Card',
-              icon: Icons.credit_card_rounded,
-              uploaded: _uploadedDocs['aadhar'] == true,
-              version: _docVersions['aadhar'],
-              onTap: hasToken ? () => _pickAndUploadDoc('aadhar') : null,
-            ),
-            const SizedBox(height: AppSpacing.x2),
-            _DocTile(
-              title: 'PAN Card',
-              icon: Icons.badge_rounded,
-              uploaded: _uploadedDocs['pan'] == true,
-              version: _docVersions['pan'],
-              onTap: hasToken ? () => _pickAndUploadDoc('pan') : null,
-            ),
-            const SizedBox(height: AppSpacing.x2),
-            _DocTile(
-              title: 'Degree/Certificate',
-              icon: Icons.school_rounded,
-              uploaded: _uploadedDocs['degree_certificate'] == true,
-              version: _docVersions['degree_certificate'],
-              onTap: hasToken
-                  ? () => _pickAndUploadDoc('degree_certificate')
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.x2),
-            _DocTile(
-              title: 'Driving License',
-              icon: Icons.directions_car_rounded,
-              uploaded: _uploadedDocs['driving_license'] == true,
-              version: _docVersions['driving_license'],
-              onTap: hasToken
-                  ? () => _pickAndUploadDoc('driving_license')
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.x6),
-            SizedBox(
-              height: 54,
-              child: ElevatedButton(
-                onPressed: _showDoneSheet,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                child: const Text('Done'),
+                child: ListView(
+                  padding: const EdgeInsets.all(AppSpacing.x4),
+                  children: <Widget>[
+                    _InfoCard(
+                      title: 'Hello!',
+                      subtitle:
+                          'Your organisation has requested document verification. Please upload the following.',
+                    ),
+                    const SizedBox(height: AppSpacing.x4),
+                    Text('Your Photo', style: AppTypography.heading2),
+                    const SizedBox(height: AppSpacing.x2),
+                    _UploadZone(
+                      onTap: hasToken ? _pickAndUploadPhoto : null,
+                      child: _photoBytes == null
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(
+                                  Icons.camera_alt_rounded,
+                                  size: 32,
+                                  color: AppColors.brandBlue.withAlpha(220),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _uploadingPhoto
+                                      ? 'Uploading…'
+                                      : (hasToken
+                                            ? 'Tap to upload'
+                                            : 'Invalid link'),
+                                  style: AppTypography.body2.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Stack(
+                              alignment: Alignment.center,
+                              children: <Widget>[
+                                CircleAvatar(
+                                  radius: 44,
+                                  backgroundImage: MemoryImage(_photoBytes!),
+                                ),
+                                if (_photoUploaded)
+                                  Positioned(
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      width: 24,
+                                      height: 24,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.success,
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.check_rounded,
+                                        size: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                    ),
+                    const SizedBox(height: AppSpacing.x5),
+                    Text('Documents', style: AppTypography.heading2),
+                    const SizedBox(height: AppSpacing.x2),
+                    _DocTile(
+                      title: 'Aadhar Card',
+                      icon: Icons.credit_card_rounded,
+                      uploaded: _uploadedDocs['aadhar'] == true,
+                      version: _docVersions['aadhar'],
+                      onTap: hasToken
+                          ? () => _pickAndUploadDoc('aadhar')
+                          : null,
+                    ),
+                    const SizedBox(height: AppSpacing.x2),
+                    _DocTile(
+                      title: 'PAN Card',
+                      icon: Icons.badge_rounded,
+                      uploaded: _uploadedDocs['pan'] == true,
+                      version: _docVersions['pan'],
+                      onTap: hasToken ? () => _pickAndUploadDoc('pan') : null,
+                    ),
+                    const SizedBox(height: AppSpacing.x2),
+                    _DocTile(
+                      title: 'Degree/Certificate',
+                      icon: Icons.school_rounded,
+                      uploaded: _uploadedDocs['degree_certificate'] == true,
+                      version: _docVersions['degree_certificate'],
+                      onTap: hasToken
+                          ? () => _pickAndUploadDoc('degree_certificate')
+                          : null,
+                    ),
+                    const SizedBox(height: AppSpacing.x2),
+                    _DocTile(
+                      title: 'Driving License',
+                      icon: Icons.directions_car_rounded,
+                      uploaded: _uploadedDocs['driving_license'] == true,
+                      version: _docVersions['driving_license'],
+                      onTap: hasToken
+                          ? () => _pickAndUploadDoc('driving_license')
+                          : null,
+                    ),
+                    const SizedBox(height: AppSpacing.x6),
+                    SizedBox(
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: _showDoneSheet,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.brandBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text('Done'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

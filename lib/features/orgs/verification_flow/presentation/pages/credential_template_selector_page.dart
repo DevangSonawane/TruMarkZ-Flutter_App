@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 
 class CredentialTemplateSelectorPage extends StatefulWidget {
   const CredentialTemplateSelectorPage({super.key});
@@ -77,7 +78,7 @@ class _CredentialTemplateSelectorPageState
               '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
         )
         .join('&');
-    context.push(
+    context.replace(
       qs.isEmpty
           ? AppRouter.mapCredentialFieldsPath
           : '${AppRouter.mapCredentialFieldsPath}?$qs',
@@ -91,159 +92,168 @@ class _CredentialTemplateSelectorPageState
     );
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white.withAlpha(230),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 8,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: Text(
-          'Pick a Template',
-          style: AppTypography.heading1.copyWith(
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        actions: const <Widget>[SizedBox(width: AppSpacing.x2)],
-      ),
-      body: Stack(
-        children: <Widget>[
-          ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.x4,
-              AppSpacing.x4,
-              AppSpacing.x4,
-              190,
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Pick a Template'),
             ),
-            children: <Widget>[
-              Text(
-                'Select the template that matches your use case.',
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.x4),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _templates.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: AppSpacing.x3,
-                  crossAxisSpacing: AppSpacing.x3,
-                  childAspectRatio: 1.15,
-                ),
-                itemBuilder: (BuildContext context, int index) {
-                  final _CredentialTemplate template = _templates[index];
-                  final bool isSelected = template.id == _selectedId;
-                  return _TemplateGridCard(
-                    template: template,
-                    selected: isSelected,
-                    onTap: () => setState(() => _selectedId = template.id),
-                  );
-                },
-              ),
-              const SizedBox(height: AppSpacing.x5),
-              _FeaturedPreviewCard(template: selected),
-            ],
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Builder(
-              builder: (BuildContext context) {
-                final double bottomInset = MediaQuery.viewPaddingOf(
-                  context,
-                ).bottom;
-
-                return Container(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.x4,
-                    AppSpacing.x3,
-                    AppSpacing.x4,
-                    AppSpacing.x3 + bottomInset,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      SizedBox(
-                        height: 54,
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () {},
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color: AppColors.brandBlue.withAlpha(26),
-                              width: 2,
-                            ),
-                            foregroundColor: AppColors.brandBlue,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.visibility_rounded,
-                            color: AppColors.brandBlue,
-                          ),
-                          label: Text(
-                            'Preview Template',
-                            style: AppTypography.button.copyWith(
-                              color: AppColors.brandBlue,
-                              fontWeight: FontWeight.w700,
-                            ),
+                child: Stack(
+                  children: <Widget>[
+                    ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.x4,
+                        AppSpacing.x4,
+                        AppSpacing.x4,
+                        190,
+                      ),
+                      children: <Widget>[
+                        Text(
+                          'Select the template that matches your use case.',
+                          style: AppTypography.body2.copyWith(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.x3),
-                      SizedBox(
-                        height: 54,
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () => _continue(context),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.brandBlue,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        const SizedBox(height: AppSpacing.x4),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _templates.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                mainAxisSpacing: AppSpacing.x3,
+                                crossAxisSpacing: AppSpacing.x3,
+                                childAspectRatio: 1.15,
+                              ),
+                          itemBuilder: (BuildContext context, int index) {
+                            final _CredentialTemplate template =
+                                _templates[index];
+                            final bool isSelected = template.id == _selectedId;
+                            return _TemplateGridCard(
+                              template: template,
+                              selected: isSelected,
+                              onTap: () =>
+                                  setState(() => _selectedId = template.id),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: AppSpacing.x5),
+                        _FeaturedPreviewCard(template: selected),
+                      ],
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Builder(
+                        builder: (BuildContext context) {
+                          final double bottomInset = MediaQuery.viewPaddingOf(
+                            context,
+                          ).bottom;
+
+                          return Container(
+                            padding: EdgeInsets.fromLTRB(
+                              AppSpacing.x4,
+                              AppSpacing.x3,
+                              AppSpacing.x4,
+                              AppSpacing.x3 + bottomInset,
                             ),
-                            elevation: 0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              Flexible(
-                                child: Text(
-                                  'Continue with ${selected.tag}: ${selected.title}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.button.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                SizedBox(
+                                  height: 54,
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {},
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                        color: AppColors.brandBlue.withAlpha(
+                                          26,
+                                        ),
+                                        width: 2,
+                                      ),
+                                      foregroundColor: AppColors.brandBlue,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.visibility_rounded,
+                                      color: AppColors.brandBlue,
+                                    ),
+                                    label: Text(
+                                      'Preview Template',
+                                      style: AppTypography.button.copyWith(
+                                        color: AppColors.brandBlue,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Icon(Icons.arrow_forward_rounded),
-                            ],
-                          ),
-                        ),
+                                const SizedBox(height: AppSpacing.x3),
+                                SizedBox(
+                                  height: 54,
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    onPressed: () => _continue(context),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.brandBlue,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: <Widget>[
+                                        Flexible(
+                                          child: Text(
+                                            'Continue with ${selected.tag}: ${selected.title}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.button
+                                                .copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        const Icon(Icons.arrow_forward_rounded),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -442,9 +452,7 @@ class _FeaturedPreviewCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: AppColors.brandBlue.withAlpha(40),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Colors.white.withAlpha(26),
-                        ),
+                        border: Border.all(color: Colors.white.withAlpha(26)),
                       ),
                       child: Text(
                         'Live Preview',

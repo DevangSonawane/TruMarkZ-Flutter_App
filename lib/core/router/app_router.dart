@@ -967,41 +967,10 @@ class AppRouter {
     ],
   );
 
-  static CustomTransitionPage<void> _slideFadePage({
+  static Page<void> _slideFadePage({
     required GoRouterState state,
     required Widget child,
   }) {
-    return CustomTransitionPage<void>(
-      key: state.pageKey,
-      child: child,
-      transitionDuration: const Duration(milliseconds: 260),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
-      transitionsBuilder:
-          (
-            BuildContext context,
-            Animation<double> animation,
-            Animation<double> secondaryAnimation,
-            Widget child,
-          ) {
-            final Animation<Offset> slideAnim =
-                Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                );
-            final Animation<double> fadeAnim =
-                Tween<double>(begin: 0.0, end: 1.0).animate(
-                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                );
-            return FadeTransition(
-              opacity: fadeAnim,
-              child: SlideTransition(position: slideAnim, child: child),
-            );
-          },
-    );
+    return NoTransitionPage<void>(child: child);
   }
 }

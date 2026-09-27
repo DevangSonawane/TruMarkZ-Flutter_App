@@ -72,7 +72,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           );
       if (!mounted) return;
       context.go(
-        '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(email)}&type=individual',
+        '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(email)}&type=individual&after=register',
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -84,7 +84,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           (msg.contains('verify') && msg.contains('otp'));
       if (likelyOtpPending) {
         context.go(
-          '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(email)}&type=individual',
+          '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(email)}&type=individual&after=register',
         );
         return;
       }

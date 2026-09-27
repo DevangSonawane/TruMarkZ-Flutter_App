@@ -7,6 +7,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../data/verification_repository.dart';
@@ -173,15 +174,18 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
           fallback: _industry,
         );
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
+      backgroundColor: AppColors.brandBlue,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.brandBlue,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        title: const Text('Single Human Verification'),
+        automaticallyImplyLeading: false,
+        title: const OrgTopBar(title: 'Single Upload'),
       ),
-      body: SafeArea(
-        child: Form(
+      body: Container(
+        color: AppColors.pageBg,
+        child: SafeArea(
+          child: Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.x4),
@@ -362,6 +366,7 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
                 onPressed: _submitting ? null : _submit,
               ),
             ],
+          ),
           ),
         ),
       ),

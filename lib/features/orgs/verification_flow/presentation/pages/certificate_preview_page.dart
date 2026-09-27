@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 
 class CertificatePreviewPage extends StatefulWidget {
   const CertificatePreviewPage({super.key});
@@ -96,34 +97,7 @@ class _CertificatePreviewPageState extends State<CertificatePreviewPage> {
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(10), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => context.pop(false),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Text(
-                            'Certificate Preview',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(20),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 20,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const OrgTopBar(title: 'Certificate Preview'),
                     ),
                     SizedBox(height: s(21)),
                     Expanded(

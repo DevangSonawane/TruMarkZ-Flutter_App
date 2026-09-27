@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../../../core/widgets/tmz_select.dart';
@@ -160,7 +161,7 @@ class _MapCredentialFieldsPageState extends State<MapCredentialFieldsPage> {
               '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
         )
         .join('&');
-    context.push(
+    context.replace(
       qs.isEmpty
           ? AppRouter.credentialPreviewApprovalPath
           : '${AppRouter.credentialPreviewApprovalPath}?$qs',
@@ -172,94 +173,119 @@ class _MapCredentialFieldsPageState extends State<MapCredentialFieldsPage> {
     final ColorScheme scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            Image.asset('assets/icons/headers_app_icon.png', height: 22),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('Map Credential Fields'),
-          ],
-        ),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.x4),
-                children: <Widget>[
-                  Text('Map fields', style: AppTypography.display2),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Map your uploaded columns to credential fields, choose 5–6 fields for the credential face, and approve the preview.',
-                    style: AppTypography.body2.copyWith(
-                      color: scheme.onSurface.withAlpha(160),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final bool wide = constraints.maxWidth >= 980;
-                          final Widget mapping = _MappingList(
-                            columns: _columns,
-                            fields: _fields,
-                            mapping: _mapping,
-                            faceFieldIds: _faceFieldIds,
-                            onMappingChanged: (String fieldId, String? column) {
-                              setState(() => _mapping[fieldId] = column);
-                            },
-                            onFaceChanged: _toggleFaceField,
-                          );
-                          final Widget preview = _PreviewCard(
-                            templateId: _templateId,
-                            fields: _fields,
-                            mapping: _mapping,
-                            faceFieldIds: _faceFieldIds,
-                            columns: _columns,
-                            requiredMapped: _requiredMapped,
-                            faceCountValid: _faceCountValid,
-                            approved: _previewApproved,
-                            onApprovedChanged: (bool value) =>
-                                setState(() => _previewApproved = value),
-                          );
-
-                          if (!wide) {
-                            return Column(
-                              children: <Widget>[
-                                mapping,
-                                const SizedBox(height: AppSpacing.x4),
-                                preview,
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Expanded(flex: 3, child: mapping),
-                              const SizedBox(width: AppSpacing.x4),
-                              Expanded(flex: 2, child: preview),
-                            ],
-                          );
-                        },
-                  ),
-                ],
-              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Map Credential Fields'),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                child: TMZButton(
-                  label: 'Generate Credentials',
-                  icon: Icons.rocket_launch_rounded,
-                  onPressed: _canGenerate ? () => _generate(context) : null,
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    children: <Widget>[
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.all(AppSpacing.x4),
+                          children: <Widget>[
+                            Text('Map fields', style: AppTypography.display2),
+                            const SizedBox(height: AppSpacing.x2),
+                            Text(
+                              'Map your uploaded columns to credential fields, choose 5–6 fields for the credential face, and approve the preview.',
+                              style: AppTypography.body2.copyWith(
+                                color: scheme.onSurface.withAlpha(160),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.x4),
+                            LayoutBuilder(
+                              builder:
+                                  (
+                                    BuildContext context,
+                                    BoxConstraints constraints,
+                                  ) {
+                                    final bool wide =
+                                        constraints.maxWidth >= 980;
+                                    final Widget mapping = _MappingList(
+                                      columns: _columns,
+                                      fields: _fields,
+                                      mapping: _mapping,
+                                      faceFieldIds: _faceFieldIds,
+                                      onMappingChanged:
+                                          (String fieldId, String? column) {
+                                            setState(
+                                              () => _mapping[fieldId] = column,
+                                            );
+                                          },
+                                      onFaceChanged: _toggleFaceField,
+                                    );
+                                    final Widget preview = _PreviewCard(
+                                      templateId: _templateId,
+                                      fields: _fields,
+                                      mapping: _mapping,
+                                      faceFieldIds: _faceFieldIds,
+                                      columns: _columns,
+                                      requiredMapped: _requiredMapped,
+                                      faceCountValid: _faceCountValid,
+                                      approved: _previewApproved,
+                                      onApprovedChanged: (bool value) =>
+                                          setState(
+                                            () => _previewApproved = value,
+                                          ),
+                                    );
+
+                                    if (!wide) {
+                                      return Column(
+                                        children: <Widget>[
+                                          mapping,
+                                          const SizedBox(height: AppSpacing.x4),
+                                          preview,
+                                        ],
+                                      );
+                                    }
+
+                                    return Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Expanded(flex: 3, child: mapping),
+                                        const SizedBox(width: AppSpacing.x4),
+                                        Expanded(flex: 2, child: preview),
+                                      ],
+                                    );
+                                  },
+                            ),
+                          ],
+                        ),
+                      ),
+                      SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.x4,
+                            AppSpacing.x2,
+                            AppSpacing.x4,
+                            AppSpacing.x4,
+                          ),
+                          child: TMZButton(
+                            label: 'Generate Credentials',
+                            icon: Icons.rocket_launch_rounded,
+                            onPressed: _canGenerate
+                                ? () => _generate(context)
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 
 enum ProductServiceType { verification, warranty }
 
@@ -49,15 +50,6 @@ class _ProductServiceTypeSelectorPageState
       _supportsWarranty = supports.toLowerCase() == 'true';
     } else {
       _supportsWarranty = _warrantySupport.toLowerCase() != 'disabled';
-    }
-  }
-
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.dashboardPath);
     }
   }
 
@@ -112,50 +104,7 @@ class _ProductServiceTypeSelectorPageState
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => _goBack(context),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Expanded(
-                            child: Text(
-                              'Product Service',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: s(21),
-                                fontWeight: FontWeight.w600,
-                                height: 19.5 / 21,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(8)),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: constraints.maxWidth * 0.42,
-                            ),
-                            child: _OrgTypePill(
-                              scale: scale,
-                              label: _sector.trim().isEmpty
-                                  ? 'Product'
-                                  : _sector.trim(),
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const OrgTopBar(title: 'Product Service'),
                     ),
                     SizedBox(height: s(21)),
                     Expanded(
@@ -457,72 +406,6 @@ class _ServiceCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _OrgTypePill extends StatelessWidget {
-  const _OrgTypePill({required this.scale, required this.label});
-
-  final double scale;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return Container(
-      height: s(29),
-      padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(s(10)),
-        border: Border.all(color: const Color(0xFFE0EFFE)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SvgPicture.asset(
-            'assets/icons/figma/bulk_industry_building.svg',
-            width: s(12),
-            height: s(10),
-            colorFilter: const ColorFilter.mode(
-              AppColors.brandBlue,
-              BlendMode.srcIn,
-            ),
-          ),
-          SizedBox(width: s(8)),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(11),
-                fontWeight: FontWeight.w600,
-                letterSpacing: s(0.0644531),
-                height: 16.5 / 11,
-                color: AppColors.brandBlue,
-              ),
-            ),
-          ),
-          SizedBox(width: s(8)),
-          Container(width: s(1), height: s(12), color: const Color(0xFFE2E8F0)),
-          SizedBox(width: s(8)),
-          Text(
-            'EDIT',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: s(10),
-              fontWeight: FontWeight.w600,
-              letterSpacing: s(0.25),
-              height: 15 / 10,
-              color: AppColors.brandBlue,
-            ),
-          ),
-        ],
       ),
     );
   }

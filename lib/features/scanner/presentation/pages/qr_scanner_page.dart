@@ -8,6 +8,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/org_top_bar.dart';
 
 class QRScannerPage extends StatefulWidget {
   const QRScannerPage({super.key, this.onScanned});
@@ -122,7 +123,20 @@ class _QRScannerPageState extends State<QRScannerPage> {
               padding: const EdgeInsets.all(AppSpacing.x4),
               child: Row(
                 children: <Widget>[
-                  const Spacer(),
+                  Expanded(
+                    child: OrgTopBar(
+                      title: 'Scan QR',
+                      showActions: false,
+                      onBack: () {
+                        if (context.canPop()) {
+                          context.pop();
+                          return;
+                        }
+                        context.go(AppRouter.dashboardPath);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.x2),
                   _OverlayIconButton(
                     icon: _frontCamera
                         ? Icons.camera_front_rounded

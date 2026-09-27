@@ -92,6 +92,33 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
     }
   }
 
+  Future<void> _skipGst() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .completeOrgOnboarding(const OrgOnboardingRequest());
+      await ref.read(authNotifierProvider.notifier).refreshCurrentUser();
+      if (!mounted) return;
+      context.go(AppRouter.orgInterestSelectionPath);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final double systemBottomInset = MediaQuery.of(context).viewPadding.bottom;
@@ -191,11 +218,7 @@ class _OrgOnboardingPageState extends ConsumerState<OrgOnboardingPage> {
                                     backgroundColor: Colors.white,
                                     foregroundColor: AppColors.textPrimary,
                                   ),
-                                  onPressed: _isSubmitting
-                                      ? null
-                                      : () => context.go(
-                                          AppRouter.orgInterestSelectionPath,
-                                        ),
+                                  onPressed: _isSubmitting ? null : _skipGst,
                                   child: Text(_gstVerified ? 'Next' : 'Skip'),
                                 ),
                               ),

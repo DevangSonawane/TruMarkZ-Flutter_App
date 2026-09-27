@@ -80,7 +80,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       return const AuthState(status: AuthStatus.unauthenticated);
     }
     try {
-      return _loadCurrentUserState();
+      return await _loadCurrentUserState();
     } on ApiException catch (_) {
       await _tokenStorage.clearAll();
       return const AuthState(status: AuthStatus.unauthenticated);

@@ -3,13 +3,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_input.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 
@@ -80,15 +80,6 @@ class _ProductBatchSetupPageState extends ConsumerState<ProductBatchSetupPage> {
     _descriptionController.dispose();
     _unitsController.dispose();
     super.dispose();
-  }
-
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.dashboardPath);
-    }
   }
 
   void _showGstRequiredSnack(BuildContext context) {
@@ -164,34 +155,7 @@ class _ProductBatchSetupPageState extends ConsumerState<ProductBatchSetupPage> {
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => _goBack(context),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Text(
-                            'Product Details',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const OrgTopBar(title: 'Product Details'),
                     ),
                     SizedBox(height: s(18)),
                     Expanded(

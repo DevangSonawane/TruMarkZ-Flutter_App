@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +16,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
 
@@ -422,9 +425,9 @@ class _BatchTrackingDetailPageState
       502 => 'The rejected list could not be retrieved. Please try again.',
       _ => e.message,
     };
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showRejectedListActions({
@@ -493,15 +496,6 @@ class _BatchTrackingDetailPageState
     return _mode == 'warranty';
   }
 
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.appBatchesPath);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
@@ -519,46 +513,14 @@ class _BatchTrackingDetailPageState
         child: Column(
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x4,
-                AppSpacing.x3,
-                AppSpacing.x4,
-                AppSpacing.x3,
-              ),
-              child: Row(
-                children: <Widget>[
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () => _goBack(context),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.heading1.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Refresh batch',
-                    onPressed: _load,
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: Colors.white,
-                  ),
-                ],
-              ),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: title, showActions: false),
             ),
             Expanded(
               child: DecoratedBox(
                 decoration: const BoxDecoration(
-                  color: Color(0xFFF7F9FC),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
                 ),
                 child: _isWarrantyMode
                     ? _warrantyData.when(
@@ -611,14 +573,10 @@ class _BatchTrackingDetailPageState
                                     navBarHeight,
                               ),
                               children: <Widget>[
-                                if (!sharedWithOrg) ...<Widget>[
-                                  const _SharingGateBanner(),
-                                  const SizedBox(height: AppSpacing.x3),
-                                ],
-                                _WarrantySummarySection(
-                                  pending: res.pending,
-                                  approved: res.approved,
-                                  rejected: res.rejected,
+                                _WarrantyChrome(
+                                  res: res,
+                                  title: title,
+                                  sharedWithOrg: sharedWithOrg,
                                 ),
                                 if (rejectedList != null) ...<Widget>[
                                   const SizedBox(height: AppSpacing.x3),
@@ -753,14 +711,13 @@ class _BatchTrackingDetailPageState
                                     navBarHeight,
                               ),
                               children: <Widget>[
-                                if (!sharedWithOrg) ...<Widget>[
-                                  const _SharingGateBanner(),
-                                  const SizedBox(height: AppSpacing.x3),
-                                ],
-                                _SummarySection(
+                                _VerificationChrome(
+                                  title: title,
                                   verified: effectiveVerifiedCount,
                                   pending: pendingCount,
                                   failed: failedCount,
+                                  total: res.totalUsers,
+                                  sharedWithOrg: sharedWithOrg,
                                 ),
                                 if (res.rejectedList != null) ...<Widget>[
                                   const SizedBox(height: AppSpacing.x3),
@@ -879,51 +836,82 @@ class _BatchTrackingDetailPageState
   }
 }
 
-class _SummarySection extends StatelessWidget {
-  const _SummarySection({
-    required this.verified,
-    required this.pending,
-    required this.failed,
+enum _DetailStatus { processing, complete, alert }
+
+class _DetailStatusStyle {
+  const _DetailStatusStyle({
+    required this.color,
+    required this.tint,
+    required this.glyph,
   });
 
-  final int verified;
-  final int pending;
-  final int failed;
+  final Color color;
+  final Color tint;
+  final IconData glyph;
+
+  static _DetailStatusStyle of(_DetailStatus status) {
+    switch (status) {
+      case _DetailStatus.processing:
+        return const _DetailStatusStyle(
+          color: AppColors.brandBlue,
+          tint: Color(0xFFDBEAFE),
+          glyph: LucideIcons.loader,
+        );
+      case _DetailStatus.complete:
+        return const _DetailStatusStyle(
+          color: AppColors.success,
+          tint: AppColors.successBg,
+          glyph: LucideIcons.badgeCheck,
+        );
+      case _DetailStatus.alert:
+        return const _DetailStatusStyle(
+          color: AppColors.danger,
+          tint: AppColors.dangerBg,
+          glyph: LucideIcons.triangleAlert,
+        );
+    }
+  }
+}
+
+/// Scalloped seal medallion + title, mirroring the MrBob detail header.
+class _SealHeader extends StatelessWidget {
+  const _SealHeader({required this.status, required this.title});
+
+  final _DetailStatus status;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final _DetailStatusStyle style = _DetailStatusStyle.of(status);
+    return Column(
       children: <Widget>[
-        Expanded(
-          child: _FigmaStatCard(
-            label: 'Verified',
-            value: verified.toString(),
-            labelColor: const Color(0xFF10B981),
-            labelLetterSpacing: 0.08848852291703224,
-            valueColor: const Color(0xFF0B0F19),
-            compact: true,
+        SizedBox(
+          width: 104,
+          height: 104,
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _SealDiscPainter(color: style.tint),
+                ),
+              ),
+              Icon(style.glyph, color: style.color, size: 40),
+            ],
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _FigmaStatCard(
-            label: 'Pending',
-            value: pending.toString(),
-            labelColor: const Color(0xFFF59E0B),
-            labelLetterSpacing: 0.15169461071491241,
-            valueColor: const Color(0xFF0B0F19),
-            compact: true,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _FigmaStatCard(
-            label: 'Failed',
-            value: failed.toString(),
-            labelColor: const Color(0xFFEF4444),
-            labelLetterSpacing: 0.12641217559576035,
-            valueColor: const Color(0xFF0B0F19),
-            compact: true,
+        const SizedBox(height: 16),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
           ),
         ),
       ],
@@ -931,51 +919,494 @@ class _SummarySection extends StatelessWidget {
   }
 }
 
-class _WarrantySummarySection extends StatelessWidget {
-  const _WarrantySummarySection({
-    required this.pending,
-    required this.approved,
-    required this.rejected,
-  });
+class _SealDiscPainter extends CustomPainter {
+  const _SealDiscPainter({required this.color});
 
-  final int pending;
-  final int approved;
-  final int rejected;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Offset center = Offset(size.width / 2, size.height / 2);
+    final double base = size.width / 2;
+    const int bumps = 22;
+    final Path path = Path();
+    for (int i = 0; i <= bumps * 12; i++) {
+      final double angle = i / (bumps * 12) * 2 * math.pi;
+      final double radius = base * 0.90 + base * 0.10 * math.sin(angle * bumps);
+      final Offset point = Offset(
+        center.dx + radius * math.cos(angle),
+        center.dy + radius * math.sin(angle),
+      );
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _DetailCard extends StatelessWidget {
+  const _DetailCard({required this.child});
+
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: AppColors.divider),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _NoteCard extends StatelessWidget {
+  const _NoteCard({required this.status, required this.text});
+
+  final _DetailStatus status;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final _DetailStatusStyle style = _DetailStatusStyle.of(status);
+    return _DetailCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: style.tint,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(style.glyph, color: style.color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: AppColors.textPrimary,
+                fontSize: 13.5,
+                height: 1.38,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressStat {
+  const _ProgressStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
+class _ProgressCard extends StatelessWidget {
+  const _ProgressCard({
+    required this.stats,
+    required this.fraction,
+    required this.barColor,
+  });
+
+  final List<_ProgressStat> stats;
+  final double fraction;
+  final Color barColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DetailCard(
+      child: Column(
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              for (int i = 0; i < stats.length; i++)
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        stats[i].value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: AppColors.textPrimary,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        stats[i].label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: fraction.clamp(0, 1),
+              minHeight: 6,
+              backgroundColor: AppColors.divider.withValues(alpha: 0.5),
+              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRowData {
+  const _SummaryRowData({
+    required this.label,
+    required this.value,
+    this.isTotal = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isTotal;
+}
+
+void _showSummarySheet(
+  BuildContext context, {
+  required String title,
+  required List<_SummaryRowData> rows,
+}) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      final double inset = MediaQuery.paddingOf(context).bottom;
+      return Container(
+        padding: EdgeInsets.fromLTRB(20, 14, 20, 18 + inset),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0E0E0),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 14),
+            for (int i = 0; i < rows.length; i++) ...<Widget>[
+              if (i != 0 && rows[i].isTotal)
+                const Divider(height: 28, color: AppColors.divider),
+              if (i != 0 && !rows[i].isTotal) const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      rows[i].label,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: rows[i].isTotal
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                        fontSize: rows[i].isTotal ? 15 : 13.5,
+                        fontWeight: rows[i].isTotal
+                            ? FontWeight.w800
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    rows[i].value,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: AppColors.textPrimary,
+                      fontSize: rows[i].isTotal ? 16 : 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, color: AppColors.brandBlue, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: AppColors.textTertiary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            LucideIcons.chevronRight,
+            color: AppColors.textTertiary,
+            size: 20,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// MrBob-style chrome for the warranty branch: seal + note + info +
+/// progress + actions.
+class _WarrantyChrome extends StatelessWidget {
+  const _WarrantyChrome({
+    required this.res,
+    required this.title,
+    required this.sharedWithOrg,
+  });
+
+  final WarrantyBatchStatusResponse res;
+  final String title;
+  final bool sharedWithOrg;
+
+  @override
+  Widget build(BuildContext context) {
+    final int total = res.pending + res.approved + res.rejected;
+    final _DetailStatus status = res.rejected > 0
+        ? _DetailStatus.alert
+        : (res.pending > 0 ? _DetailStatus.processing : _DetailStatus.complete);
+    final _DetailStatusStyle style = _DetailStatusStyle.of(status);
+    final String note = switch (status) {
+      _DetailStatus.alert =>
+        '${res.rejected} of $total products need attention in this batch.',
+      _DetailStatus.processing =>
+        'This batch is under review. ${res.approved} of $total products approved so far.',
+      _DetailStatus.complete => total == 0
+          ? 'This batch has no products yet.'
+          : 'All $total products in this batch are approved.',
+    };
+
+    return Column(
       children: <Widget>[
-        Expanded(
-          child: _FigmaStatCard(
-            label: 'Pending',
-            value: pending.toString(),
-            labelColor: const Color(0xFFF59E0B),
-            labelLetterSpacing: 0.15169461071491241,
-            valueColor: const Color(0xFF0B0F19),
-            compact: true,
+        const SizedBox(height: 12),
+        _SealHeader(status: status, title: title),
+        const SizedBox(height: AppSpacing.x4),
+        _ProgressCard(
+          stats: <_ProgressStat>[
+            _ProgressStat(label: 'Approved', value: '${res.approved}'),
+            _ProgressStat(label: 'Pending', value: '${res.pending}'),
+            _ProgressStat(label: 'Rejected', value: '${res.rejected}'),
+          ],
+          fraction: total == 0 ? 0 : res.approved / total,
+          barColor: style.color,
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        _NoteCard(status: status, text: note),
+        if (!sharedWithOrg) ...<Widget>[
+          const SizedBox(height: AppSpacing.x3),
+          const _SharingGateBanner(),
+        ],
+        const SizedBox(height: AppSpacing.x3),
+        _DetailCard(
+          child: _ActionRow(
+            icon: LucideIcons.receiptText,
+            title: 'View summary',
+            subtitle: 'See the full batch breakdown',
+            onTap: () => _showSummarySheet(
+              context,
+              title: 'Batch summary',
+              rows: <_SummaryRowData>[
+                _SummaryRowData(
+                  label: 'Approved',
+                  value: '${res.approved}',
+                ),
+                _SummaryRowData(label: 'Pending', value: '${res.pending}'),
+                _SummaryRowData(
+                  label: 'Rejected',
+                  value: '${res.rejected}',
+                ),
+                _SummaryRowData(
+                  label: 'Total products',
+                  value: '$total',
+                  isTotal: true,
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _FigmaStatCard(
-            label: 'Approved',
-            value: approved.toString(),
-            labelColor: const Color(0xFF10B981),
-            labelLetterSpacing: 0.08848852291703224,
-            valueColor: const Color(0xFF0B0F19),
-            compact: true,
-          ),
+      ],
+    );
+  }
+}
+
+/// MrBob-style chrome for the verification branch.
+class _VerificationChrome extends StatelessWidget {
+  const _VerificationChrome({
+    required this.title,
+    required this.verified,
+    required this.pending,
+    required this.failed,
+    required this.total,
+    required this.sharedWithOrg,
+  });
+
+  final String title;
+  final int verified;
+  final int pending;
+  final int failed;
+  final int total;
+  final bool sharedWithOrg;
+
+  @override
+  Widget build(BuildContext context) {
+    final _DetailStatus status = failed > 0
+        ? _DetailStatus.alert
+        : (pending > 0 ? _DetailStatus.processing : _DetailStatus.complete);
+    final _DetailStatusStyle style = _DetailStatusStyle.of(status);
+    final String note = switch (status) {
+      _DetailStatus.alert =>
+        '$failed of $total records need attention in this batch.',
+      _DetailStatus.processing =>
+        'This batch is under review. $verified of $total records verified so far.',
+      _DetailStatus.complete => total == 0
+          ? 'This batch has no records yet.'
+          : 'All $total records in this batch are verified.',
+    };
+
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: 12),
+        _SealHeader(status: status, title: title),
+        const SizedBox(height: AppSpacing.x4),
+        _ProgressCard(
+          stats: <_ProgressStat>[
+            _ProgressStat(label: 'Verified', value: '$verified'),
+            _ProgressStat(label: 'Pending', value: '$pending'),
+            _ProgressStat(label: 'Failed', value: '$failed'),
+          ],
+          fraction: total == 0 ? 0 : verified / total,
+          barColor: style.color,
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _FigmaStatCard(
-            label: 'Rejected',
-            value: rejected.toString(),
-            labelColor: const Color(0xFFEF4444),
-            labelLetterSpacing: 0.12641217559576035,
-            valueColor: const Color(0xFF0B0F19),
-            compact: true,
+        const SizedBox(height: AppSpacing.x3),
+        _NoteCard(status: status, text: note),
+        if (!sharedWithOrg) ...<Widget>[
+          const SizedBox(height: AppSpacing.x3),
+          const _SharingGateBanner(),
+        ],
+        const SizedBox(height: AppSpacing.x3),
+        _DetailCard(
+          child: _ActionRow(
+            icon: LucideIcons.receiptText,
+            title: 'View summary',
+            subtitle: 'See the full batch breakdown',
+            onTap: () => _showSummarySheet(
+              context,
+              title: 'Batch summary',
+              rows: <_SummaryRowData>[
+                _SummaryRowData(label: 'Verified', value: '$verified'),
+                _SummaryRowData(label: 'Pending', value: '$pending'),
+                _SummaryRowData(label: 'Failed', value: '$failed'),
+                _SummaryRowData(
+                  label: 'Total records',
+                  value: '$total',
+                  isTotal: true,
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -1219,93 +1650,6 @@ class _SharingGateBanner extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF7C2D12),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FigmaStatCard extends StatelessWidget {
-  const _FigmaStatCard({
-    required this.label,
-    required this.value,
-    required this.labelColor,
-    required this.labelLetterSpacing,
-    required this.valueColor,
-    this.compact = false,
-  });
-
-  final String label;
-  final String value;
-  final Color labelColor;
-  final double labelLetterSpacing;
-  final Color valueColor;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(minHeight: compact ? 84 : 91.83381652832031),
-      padding: EdgeInsets.all(compact ? 12.0 : 17.259475708007812),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(compact ? 12 : 12.94460678100586),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: compact ? 1 : 1.0787172317504883,
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.024),
-            offset: Offset(0, compact ? 1 : 1.0787172317504883),
-            blurRadius: compact ? 2 : 2.1574344635009766,
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            offset: Offset(0, compact ? 1 : 1.0787172317504883),
-            blurRadius: compact ? 3 : 3.236151695251465,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textHeightBehavior: const TextHeightBehavior(
-              applyHeightToFirstAscent: false,
-              applyHeightToLastDescent: false,
-            ),
-            style: TextStyle(
-              fontFamily: 'SF Pro Rounded',
-              fontSize: compact ? 11.8 : 12.94460678100586,
-              height: compact
-                  ? 16.2 / 11.8
-                  : 17.259475708007812 / 12.94460678100586,
-              fontWeight: FontWeight.w500,
-              letterSpacing: labelLetterSpacing,
-              color: labelColor,
-            ),
-          ),
-          SizedBox(height: compact ? 4 : 4.314868927001953),
-          Text(
-            value,
-            textHeightBehavior: const TextHeightBehavior(
-              applyHeightToFirstAscent: false,
-              applyHeightToLastDescent: false,
-            ),
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: compact ? 20 : 25.88921356201172,
-              height: compact
-                  ? 28 / 20
-                  : 34.518951416015625 / 25.88921356201172,
-              fontWeight: FontWeight.w600,
-              color: valueColor,
             ),
           ),
         ],

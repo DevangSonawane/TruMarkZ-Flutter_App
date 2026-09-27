@@ -9,6 +9,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/tmz_badge.dart';
 import '../../../../core/widgets/tmz_card.dart';
+import '../../../../core/widgets/org_top_bar.dart';
 import '../../data/verification_repository.dart';
 
 class VerificationReportsPage extends ConsumerStatefulWidget {
@@ -168,34 +169,7 @@ class _VerificationReportsPageState
               children: <Widget>[
                 Padding(
                   padding: EdgeInsets.fromLTRB(s(16), s(12), s(16), s(12)),
-                  child: Row(
-                    children: <Widget>[
-                      IconButton(
-                        tooltip: 'Back',
-                        onPressed: () => context.go(AppRouter.dashboardPath),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Reports',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.heading1.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Refresh',
-                        onPressed: _loadReports,
-                        icon: const Icon(Icons.refresh_rounded),
-                        color: Colors.white,
-                      ),
-                    ],
-                  ),
+                  child: const OrgTopBar(title: 'Reports'),
                 ),
                 Expanded(
                   child: DecoratedBox(
@@ -216,11 +190,23 @@ class _VerificationReportsPageState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(
-                            'Verification Reports',
-                            style: AppTypography.display2.copyWith(
-                              color: AppColors.textPrimary,
-                            ),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  'Verification Reports',
+                                  style: AppTypography.display2.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Refresh',
+                                onPressed: _loadReports,
+                                icon: const Icon(Icons.refresh_rounded),
+                                color: AppColors.brandBlue,
+                              ),
+                            ],
                           ),
                           SizedBox(height: s(8)),
                           Text(

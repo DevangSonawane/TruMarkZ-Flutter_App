@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 
@@ -32,104 +33,118 @@ class CredentialsGeneratedPage extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            Image.asset('assets/icons/headers_app_icon.png', height: 22),
-            const SizedBox(width: AppSpacing.x2),
-            const Text('Success'),
-          ],
-        ),
-      ),
+      backgroundColor: AppColors.brandBlue,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: <Widget>[
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.x4),
-                children: <Widget>[
-                  const SizedBox(height: AppSpacing.x4),
-                  Center(
-                    child: Container(
-                      width: 92,
-                      height: 92,
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withAlpha(18),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.check_circle_rounded,
-                        size: 56,
-                        color: AppColors.success,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Text(
-                    'Credentials generated',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.display2,
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  Text(
-                    'Batch created successfully. You can now track progress.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.body2.copyWith(
-                      color: scheme.onSurface.withAlpha(160),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-                  TMZCard(
-                    child: ListTile(
-                      leading: const Icon(Icons.analytics_outlined),
-                      title: const Text('Batch Report'),
-                      subtitle: Text(
-                        '$batchName\nCreated $createdCount credentials',
-                      ),
-                      isThreeLine: true,
-                    ),
-                  ),
-                ],
-              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Success'),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x4,
-                  AppSpacing.x2,
-                  AppSpacing.x4,
-                  AppSpacing.x4,
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    TMZButton(
-                      label: 'View Batch Report',
-                      icon: Icons.chevron_right_rounded,
-                      onPressed: () {
-                        final String qs = qp.entries
-                            .map(
-                              (MapEntry<String, String> e) =>
-                                  '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
-                            )
-                            .join('&');
-                        context.push(
-                          qs.isEmpty
-                              ? AppRouter.appBatchTrackingDetailPath
-                              : '${AppRouter.appBatchTrackingDetailPath}?$qs',
-                        );
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.x2),
-                    TMZButton(
-                      label: 'Back to Batches',
-                      variant: TMZButtonVariant.secondary,
-                      icon: Icons.bar_chart_rounded,
-                      onPressed: () => context.go(AppRouter.appBatchesPath),
-                    ),
-                  ],
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    children: <Widget>[
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.all(AppSpacing.x4),
+                          children: <Widget>[
+                            const SizedBox(height: AppSpacing.x4),
+                            Center(
+                              child: Container(
+                                width: 92,
+                                height: 92,
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withAlpha(18),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 56,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.x4),
+                            Text(
+                              'Credentials generated',
+                              textAlign: TextAlign.center,
+                              style: AppTypography.display2,
+                            ),
+                            const SizedBox(height: AppSpacing.x2),
+                            Text(
+                              'Batch created successfully. You can now track progress.',
+                              textAlign: TextAlign.center,
+                              style: AppTypography.body2.copyWith(
+                                color: scheme.onSurface.withAlpha(160),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.x6),
+                            TMZCard(
+                              child: ListTile(
+                                leading: const Icon(Icons.analytics_outlined),
+                                title: const Text('Batch Report'),
+                                subtitle: Text(
+                                  '$batchName\nCreated $createdCount credentials',
+                                ),
+                                isThreeLine: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.x4,
+                            AppSpacing.x2,
+                            AppSpacing.x4,
+                            AppSpacing.x4,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              TMZButton(
+                                label: 'View Batch Report',
+                                icon: Icons.chevron_right_rounded,
+                                onPressed: () {
+                                  final String qs = qp.entries
+                                      .map(
+                                        (MapEntry<String, String> e) =>
+                                            '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+                                      )
+                                      .join('&');
+                                  context.push(
+                                    qs.isEmpty
+                                        ? AppRouter.appBatchTrackingDetailPath
+                                        : '${AppRouter.appBatchTrackingDetailPath}?$qs',
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: AppSpacing.x2),
+                              TMZButton(
+                                label: 'Back to Batches',
+                                variant: TMZButtonVariant.secondary,
+                                icon: Icons.bar_chart_rounded,
+                                onPressed: () =>
+                                    context.go(AppRouter.appBatchesPath),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

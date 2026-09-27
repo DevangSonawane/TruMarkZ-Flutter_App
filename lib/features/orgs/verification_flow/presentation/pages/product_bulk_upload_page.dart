@@ -24,7 +24,7 @@ import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
-import 'org_flow_display_label_utils.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import 'flow_step_progress.dart';
 
 class ProductBulkUploadPage extends ConsumerStatefulWidget {
@@ -67,15 +67,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   void initState() {
     super.initState();
     _batchNameController = TextEditingController(text: _batchName);
-  }
-
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.dashboardPath);
-    }
   }
 
   bool _hasVerifiedGst() {
@@ -854,11 +845,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         authAsync.valueOrNull?.userProfile?.gstVerified == true;
     final double referenceWidth = 402;
     final String resolvedIndustry = _effectiveIndustry();
-    final String displayIndustry =
-        OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
-          profile: authAsync.valueOrNull?.userProfile,
-          fallback: _prettyIndustry(resolvedIndustry),
-        );
     final String verificationFilter = resolvedIndustry.isNotEmpty
         ? 'product::$resolvedIndustry'
         : 'product';
@@ -900,45 +886,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => _goBack(context),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Text(
-                            'Bulk Upload',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const Spacer(),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: contentWidth * 0.42,
-                            ),
-                            child: _IndustryPill(
-                              scale: scale,
-                              label: displayIndustry,
-                              onTap: () {},
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const OrgTopBar(title: 'Bulk Upload'),
                     ),
                     SizedBox(height: s(18)),
                     Expanded(
@@ -1817,85 +1765,6 @@ class _ProductTemplateDialogState
           ],
         );
       },
-    );
-  }
-}
-
-class _IndustryPill extends StatelessWidget {
-  const _IndustryPill({
-    required this.scale,
-    required this.label,
-    required this.onTap,
-  });
-
-  final double scale;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(s(10)),
-      child: Container(
-        height: s(29),
-        padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0F7FF),
-          borderRadius: BorderRadius.circular(s(10)),
-          border: Border.all(color: const Color(0xFFE0EFFE)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/figma/bulk_industry_building.svg',
-              width: s(12),
-              height: s(10),
-              colorFilter: const ColorFilter.mode(
-                AppColors.brandBlue,
-                BlendMode.srcIn,
-              ),
-            ),
-            SizedBox(width: s(8)),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(11),
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: s(0.0644531),
-                  height: 16.5 / 11,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            ),
-            SizedBox(width: s(8)),
-            Container(
-              width: s(1),
-              height: s(12),
-              color: const Color(0xFFE2E8F0),
-            ),
-            SizedBox(width: s(8)),
-            Text(
-              'EDIT',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(10),
-                fontWeight: FontWeight.w600,
-                letterSpacing: s(0.25),
-                height: 15 / 10,
-                color: AppColors.brandBlue,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

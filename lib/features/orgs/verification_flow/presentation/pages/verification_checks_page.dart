@@ -8,11 +8,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/models/verification_models.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../auth/application/auth_notifier.dart';
-import '../../../../auth/application/auth_state.dart';
-import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
-import 'org_flow_display_label_utils.dart';
 import 'product_verification_checks_catalog.dart';
 
 class VerificationChecksPage extends ConsumerStatefulWidget {
@@ -38,12 +36,6 @@ class _VerificationChecksPageState
   bool _supportsWarranty = true;
 
   final Set<String> _selected = <String>{};
-
-  Future<void> _goBack(BuildContext context) async {
-    final bool didPop = await Navigator.of(context).maybePop();
-    if (didPop || !context.mounted) return;
-    context.go(AppRouter.dashboardPath);
-  }
 
   static const List<_CheckItem> _warrantyItems = <_CheckItem>[
     _CheckItem(
@@ -293,33 +285,7 @@ class _VerificationChecksPageState
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
-    final String? orgId = authAsync.valueOrNull?.userProfile?.id;
-    final AsyncValue<String?> industryAsync = orgId == null
-        ? const AsyncData<String?>(null)
-        : ref.watch(organizationIndustryTypeProvider(orgId));
-    final String apiIndustry = industryAsync.valueOrNull?.trim() ?? '';
-    final String profileIndustry =
-        authAsync.valueOrNull?.userProfile?.industry?.trim() ?? '';
-    final String resolvedIndustryRaw = _industry.trim().isNotEmpty
-        ? _industry.trim()
-        : apiIndustry.isNotEmpty
-        ? apiIndustry
-        : _normalizeIndustry(profileIndustry);
-    final String resolvedIndustryLabel = _industryLabelForDisplay(
-      resolvedIndustryRaw,
-    );
     final bool isProductFlow = _flow == 'product';
-    final String fallbackIndustryLabel = isProductFlow
-        ? 'Product'
-        : 'Real Estate';
-    final String displayLabel =
-        OrgFlowDisplayLabelUtils.resolveOrganizationLabel(
-          profile: authAsync.valueOrNull?.userProfile,
-          fallback: resolvedIndustryLabel.isNotEmpty
-              ? resolvedIndustryLabel
-              : fallbackIndustryLabel,
-        );
     final AsyncValue<List<VerificationTypeDefinition>> verificationTypesAsync =
         _mode == 'warranty'
         ? const AsyncData<List<VerificationTypeDefinition>>(
@@ -366,51 +332,8 @@ class _VerificationChecksPageState
                     children: <Widget>[
                       Padding(
                         padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                        child: Row(
-                          children: <Widget>[
-                            InkResponse(
-                              onTap: () => _goBack(layoutContext),
-                              radius: s(22),
-                              child: SvgPicture.asset(
-                                'assets/icons/figma/new_batch_back.svg',
-                                width: s(24),
-                                height: s(24),
-                                colorFilter: const ColorFilter.mode(
-                                  Colors.white,
-                                  BlendMode.srcIn,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: s(12)),
-                            Text(
-                              'Checks',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: s(21),
-                                fontWeight: FontWeight.w600,
-                                height: 19.5 / 21,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const Spacer(),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: contentWidth * 0.42,
-                              ),
-                              child: _IndustryPill(
-                                scale: scale,
-                                label: displayLabel,
-                                onTap: () async {
-                                  final String? picked = await _pickIndustry(
-                                    scale: scale,
-                                    current: resolvedIndustryRaw,
-                                  );
-                                  if (!mounted || picked == null) return;
-                                  setState(() => _industry = picked);
-                                },
-                              ),
-                            ),
-                          ],
+                        child: const OrgTopBar(
+                          title: 'Verification Checks',
                         ),
                       ),
                       SizedBox(height: s(21)),
@@ -644,184 +567,6 @@ class _VerificationChecksPageState
     );
   }
 
-  Future<String?> _pickIndustry({
-    required double scale,
-    required String current,
-  }) async {
-    double s(double v) => v * scale;
-    String selected = current.trim().isEmpty ? 'All' : current.trim();
-    final String normalizedSelected = selected.toLowerCase();
-    if (normalizedSelected == 'both') {
-      selected = 'All';
-    }
-
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder:
-              (
-                BuildContext context,
-                void Function(void Function()) setDialogState,
-              ) {
-                final List<String> options = _industryOptions;
-
-                void select(String label) {
-                  setDialogState(() {
-                    selected = label;
-                  });
-                }
-
-                return Dialog(
-                  insetPadding: EdgeInsets.fromLTRB(s(18), s(18), s(18), s(18)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(s(16)),
-                    side: BorderSide(
-                      color: const Color(0xFFE5E7EB),
-                      width: s(1),
-                    ),
-                  ),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: s(520)),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(s(16), s(16), s(16), s(16)),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Text(
-                                'Select Category',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: s(16),
-                                  fontWeight: FontWeight.w700,
-                                  height: 24 / 16,
-                                  color: const Color(0xFF111827),
-                                ),
-                              ),
-                              const Spacer(),
-                              InkResponse(
-                                onTap: () => Navigator.of(context).pop(),
-                                radius: s(18),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: s(20),
-                                  color: const Color(0xFF9CA3AF),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: s(10)),
-                          Text(
-                            'Choose one category, then tap Update.',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(12),
-                              fontWeight: FontWeight.w500,
-                              height: 18 / 12,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                          SizedBox(height: s(10)),
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: options.length,
-                              separatorBuilder:
-                                  (BuildContext context, int index) => Divider(
-                                    height: s(1),
-                                    color: const Color(0xFFF1F5F9),
-                                  ),
-                              itemBuilder: (BuildContext context, int index) {
-                                final String label = options[index];
-                                final bool isSelected = label == selected;
-                                return InkWell(
-                                  onTap: () => select(label),
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: s(12),
-                                      horizontal: s(2),
-                                    ),
-                                    child: Row(
-                                      children: <Widget>[
-                                        Container(
-                                          width: s(18),
-                                          height: s(18),
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: isSelected
-                                                ? AppColors.brandBlue
-                                                : const Color(0xFFE5E7EB),
-                                          ),
-                                          child: isSelected
-                                              ? Icon(
-                                                  Icons.check_rounded,
-                                                  size: s(12),
-                                                  color: Colors.white,
-                                                )
-                                              : null,
-                                        ),
-                                        SizedBox(width: s(12)),
-                                        Expanded(
-                                          child: Text(
-                                            label,
-                                            style: TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: s(14),
-                                              fontWeight: FontWeight.w600,
-                                              height: 20 / 14,
-                                              color: isSelected
-                                                  ? AppColors.brandBlue
-                                                  : const Color(0xFF334155),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          SizedBox(height: s(12)),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.brandBlue,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: EdgeInsets.symmetric(vertical: s(14)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(s(12)),
-                                ),
-                              ),
-                              onPressed: () {
-                                Navigator.of(context).pop(selected);
-                              },
-                              child: Text(
-                                'Update',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: s(14),
-                                  fontWeight: FontWeight.w700,
-                                  height: 20 / 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-        );
-      },
-    );
-  }
-
   String _normalizeIndustry(String raw) {
     final String v = raw.trim();
     if (v.isEmpty) return '';
@@ -859,135 +604,6 @@ class _VerificationChecksPageState
     }
 
     return v;
-  }
-
-  String _industryLabelForDisplay(String raw) {
-    final String v = raw.trim();
-    if (v.isEmpty) return '';
-    final String lower = v.toLowerCase();
-    if (lower == 'all' || lower == 'both') return 'All';
-
-    final List<String> parts = _industryParts(v);
-    if (parts.isEmpty) return _formatIndustryPart(v);
-    if (parts.length >= _industryOptions.length - 1) return 'All';
-    if (parts.length == 1) return _formatIndustryPart(parts.first);
-    return '${_formatIndustryPart(parts.first)} +${parts.length - 1}';
-  }
-
-  static List<String> _industryParts(String raw) {
-    final String v = raw.trim();
-    if (v.isEmpty) return <String>[];
-    if (v.startsWith('[') && v.endsWith(']')) {
-      return v
-          .substring(1, v.length - 1)
-          .split(',')
-          .map((String s) => s.replaceAll('"', '').trim())
-          .where((String s) => s.isNotEmpty)
-          .toList();
-    }
-    if (v.contains(',')) {
-      return v
-          .split(',')
-          .map((String s) => s.trim())
-          .where((String s) => s.isNotEmpty)
-          .toList();
-    }
-    return <String>[v];
-  }
-
-  static String _formatIndustryPart(String s) {
-    final String cleaned = s.replaceAll(RegExp(r'[_-]+'), ' ').trim();
-    if (cleaned.isEmpty) return '';
-    final List<String> tokens = cleaned
-        .split(' ')
-        .where((String token) => token.trim().isNotEmpty)
-        .toList();
-    return tokens
-        .map(
-          (String token) => token.isEmpty
-              ? token
-              : '${token[0].toUpperCase()}${token.substring(1).toLowerCase()}',
-        )
-        .join(' ');
-  }
-}
-
-class _IndustryPill extends StatelessWidget {
-  const _IndustryPill({
-    required this.scale,
-    required this.label,
-    required this.onTap,
-  });
-
-  final double scale;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    double s(double v) => v * scale;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(s(10)),
-      child: Container(
-        height: s(29),
-        padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(6)),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0F7FF),
-          borderRadius: BorderRadius.circular(s(10)),
-          border: Border.all(color: const Color(0xFFE0EFFE)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            SvgPicture.asset(
-              'assets/icons/figma/checks_industry_building.svg',
-              width: s(12),
-              height: s(10),
-              colorFilter: const ColorFilter.mode(
-                AppColors.brandBlue,
-                BlendMode.srcIn,
-              ),
-            ),
-            SizedBox(width: s(8)),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: s(11),
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: s(0.0644531),
-                  height: 16.5 / 11,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            ),
-            SizedBox(width: s(8)),
-            Container(
-              width: s(1),
-              height: s(12),
-              color: const Color(0xFFE2E8F0),
-            ),
-            SizedBox(width: s(8)),
-            Text(
-              'EDIT',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: s(10),
-                fontWeight: FontWeight.w600,
-                letterSpacing: s(0.25),
-                height: 15 / 10,
-                color: AppColors.brandBlue,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

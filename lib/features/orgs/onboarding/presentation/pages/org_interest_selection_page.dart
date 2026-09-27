@@ -70,13 +70,13 @@ class _OrgInterestSelectionPageState
     setState(() => _isSaving = true);
     try {
       final String industryType = _selectedIndustries.join(', ');
-      if (industryType.trim().isNotEmpty) {
-        await ref
-            .read(authRepositoryProvider)
-            .completeOrgOnboarding(
-              OrgOnboardingRequest(industryType: industryType),
-            );
-      }
+      await ref
+          .read(authRepositoryProvider)
+          .completeOrgOnboarding(
+            OrgOnboardingRequest(
+              industryType: industryType.trim().isEmpty ? null : industryType,
+            ),
+          );
       await ref
           .read(authNotifierProvider.notifier)
           .updateServiceType(_serviceType.toLowerCase());

@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/router/app_router.dart';
@@ -11,6 +10,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../data/verification_repository.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import 'flow_step_progress.dart';
 
 class _ProductSectorCardData {
@@ -20,6 +20,7 @@ class _ProductSectorCardData {
     required this.description,
     required this.categoryId,
     required this.warrantySupport,
+    required this.imageAsset,
   });
 
   final String id;
@@ -27,6 +28,7 @@ class _ProductSectorCardData {
   final String description;
   final String categoryId;
   final String warrantySupport;
+  final String imageAsset;
 }
 
 class ProductSectorSelectorPage extends ConsumerStatefulWidget {
@@ -56,8 +58,8 @@ class _ProductSectorSelectorPageState
       final VerificationRepository repo = ref.read(
         verificationRepositoryProvider,
       );
-      final List<VerificationIndustryType> industryTypes =
-          await repo.getIndustryTypes();
+      final List<VerificationIndustryType> industryTypes = await repo
+          .getIndustryTypes();
       if (!mounted) return;
       setState(() {
         _industryTypes = industryTypes;
@@ -70,15 +72,6 @@ class _ProductSectorSelectorPageState
         _loading = false;
         _error = e.toString();
       });
-    }
-  }
-
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.dashboardPath);
     }
   }
 
@@ -131,34 +124,7 @@ class _ProductSectorSelectorPageState
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => _goBack(context),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Text(
-                            'Product Verification',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const OrgTopBar(title: 'Product Verification'),
                     ),
                     SizedBox(height: s(18)),
                     Expanded(
@@ -276,9 +242,7 @@ class _ProductSectorSelectorPageState
                                                         title: sector.title,
                                                         description:
                                                             sector.description,
-                                                        icon: _iconForCategory(
-                                                          sector.title,
-                                                        ),
+                                                        imageAsset: sector.imageAsset,
                                                         selected: selected,
                                                         onTap: () {
                                                           setState(() {
@@ -320,6 +284,42 @@ class _ProductSectorSelectorPageState
   }
 }
 
+const Map<String, String> _sectorImageAssets = {
+  'Consumer Goods': 'assets/images/sectors/consumer.jpg',
+  'Beauty & Cosmetics': 'assets/images/sectors/beauty.jpg',
+  'Electronics & Appliances': 'assets/images/sectors/electronics.jpg',
+  'EV & Automotive': 'assets/images/sectors/ev.jpg',
+  'Insurance Policies': 'assets/images/sectors/insurance.jpg',
+  'Healthcare Products': 'assets/images/sectors/healthcare.jpg',
+  'Industrial Equipment': 'assets/images/sectors/industrial.jpg',
+  'Agriculture Products': 'assets/images/sectors/agriculture.jpg',
+  'Luxury Products': 'assets/images/sectors/luxury.jpg',
+  'Others': 'assets/images/sectors/others.jpg',
+};
+
+String _imageAssetForSector(String title) {
+  final String key = title.trim();
+  if (_sectorImageAssets.containsKey(key)) {
+    return _sectorImageAssets[key]!;
+  }
+  final String lower = key.toLowerCase();
+  if (lower.contains('electronic') || lower.contains('appliance')) {
+    return 'assets/images/sectors/electronics.jpg';
+  }
+  if (lower.contains('beauty') || lower.contains('cosmetic')) {
+    return 'assets/images/sectors/beauty.jpg';
+  }
+  if (lower.contains('agriculture')) return 'assets/images/sectors/agriculture.jpg';
+  if (lower.contains('health')) return 'assets/images/sectors/healthcare.jpg';
+  if (lower.contains('industrial')) return 'assets/images/sectors/industrial.jpg';
+  if (lower.contains('insurance')) return 'assets/images/sectors/insurance.jpg';
+  if (lower.contains('luxury')) return 'assets/images/sectors/luxury.jpg';
+  if (lower.contains('ev') || lower.contains('automotive')) {
+    return 'assets/images/sectors/ev.jpg';
+  }
+  return 'assets/images/sectors/others.jpg';
+}
+
 _ProductSectorCardData _sectorFromIndustryType(
   VerificationIndustryType industryType,
 ) {
@@ -335,6 +335,7 @@ _ProductSectorCardData _sectorFromIndustryType(
     description: _descriptionForWarrantySupport(warrantySupport),
     categoryId: title,
     warrantySupport: warrantySupport,
+    imageAsset: _imageAssetForSector(title),
   );
 }
 
@@ -350,37 +351,19 @@ String _descriptionForWarrantySupport(String warrantySupport) {
   }
 }
 
-IconData _iconForCategory(String title) {
-  final String key = title.toLowerCase();
-  if (key.contains('electronics') || key.contains('appliance')) {
-      return Icons.electrical_services_rounded;
-  }
-  if (key.contains('beauty') || key.contains('cosmetics')) {
-      return Icons.spa_rounded;
-  }
-  if (key.contains('agriculture')) return Icons.agriculture_rounded;
-  if (key.contains('health')) return Icons.local_hospital_rounded;
-  if (key.contains('industrial')) return Icons.precision_manufacturing_rounded;
-  if (key.contains('insurance')) return Icons.shield_rounded;
-  if (key.contains('luxury')) return Icons.workspace_premium_rounded;
-  if (key.contains('ev') || key.contains('automotive')) {
-    return Icons.directions_car_rounded;
-  }
-  return Icons.inventory_rounded;
-}
 
 class _SectorCard extends StatelessWidget {
   const _SectorCard({
     required this.title,
     required this.description,
-    required this.icon,
+    required this.imageAsset,
     required this.selected,
     required this.onTap,
   });
 
   final String title;
   final String description;
-  final IconData icon;
+  final String imageAsset;
   final bool selected;
   final VoidCallback onTap;
 
@@ -416,15 +399,21 @@ class _SectorCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 56,
+                    height: 56,
                     decoration: BoxDecoration(
                       color: selected
                           ? AppColors.brandBlue.withAlpha(24)
                           : const Color(0xFFEFF3FF),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, color: AppColors.brandBlue, size: 26),
+                    clipBehavior: Clip.antiAlias,
+                    child: Image.asset(
+                      imageAsset,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.x2),
                   Text(

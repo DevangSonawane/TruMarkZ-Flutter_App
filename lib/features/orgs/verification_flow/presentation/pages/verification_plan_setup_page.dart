@@ -7,6 +7,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../data/verification_repository.dart';
@@ -207,7 +208,6 @@ class _VerificationPlanSetupPageState
         _checksFromApi(
           humanTypesAsync.valueOrNull ?? const <VerificationTypeDefinition>[],
         );
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final bool movingForward = _stepIndex >= _lastStepIndex;
 
     final Widget content = switch (_stepIndex) {
@@ -257,101 +257,89 @@ class _VerificationPlanSetupPageState
     };
 
     return Scaffold(
-      backgroundColor: AppColors.pageBg,
+      backgroundColor: AppColors.brandBlue,
       appBar: AppBar(
-        backgroundColor: AppColors.pageBg,
+        backgroundColor: AppColors.brandBlue,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        centerTitle: true,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => _goBack(context),
-          icon: const Icon(
-            Icons.arrow_back_rounded,
-            color: AppColors.brandBlue,
-          ),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Image.asset('assets/icons/headers_app_icon.png', height: 20),
-            const SizedBox(width: AppSpacing.x2),
-            Text(
-              _stepTitle,
-              style: AppTypography.heading1.copyWith(
-                color: scheme.onSurface,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
+        automaticallyImplyLeading: false,
+        title: OrgTopBar(
+          title: _stepTitle,
+          onBack: () => _goBack(context),
         ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x4,
-                AppSpacing.x2,
-                AppSpacing.x4,
-                AppSpacing.x2,
-              ),
-              child: _CreateBatchStepper(
-                stepIndex: _stepIndex,
-                gradient: _primaryGradient,
-                totalSteps: _totalSteps,
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
+      body: Container(
+        color: AppColors.pageBg,
+        child: SafeArea(
+          child: Column(
+            children: <Widget>[
+              Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.x4,
-                  0,
+                  AppSpacing.x2,
                   AppSpacing.x4,
-                  120,
+                  AppSpacing.x2,
                 ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 260),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (Widget child, Animation<double> anim) {
-                    final Animation<Offset> offset =
-                        Tween<Offset>(
-                          begin: Offset(movingForward ? 0.08 : -0.08, 0),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(parent: anim, curve: Curves.easeOut),
-                        );
-                    return FadeTransition(
-                      opacity: anim,
-                      child: SlideTransition(position: offset, child: child),
-                    );
-                  },
-                  child: KeyedSubtree(
-                    key: ValueKey<int>(_stepIndex),
-                    child: content,
+                child: _CreateBatchStepper(
+                  stepIndex: _stepIndex,
+                  gradient: _primaryGradient,
+                  totalSteps: _totalSteps,
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.x4,
+                    0,
+                    AppSpacing.x4,
+                    120,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (Widget child, Animation<double> anim) {
+                      final Animation<Offset> offset =
+                          Tween<Offset>(
+                            begin: Offset(movingForward ? 0.08 : -0.08, 0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(parent: anim, curve: Curves.easeOut),
+                          );
+                      return FadeTransition(
+                        opacity: anim,
+                        child: SlideTransition(position: offset, child: child),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey<int>(_stepIndex),
+                      child: content,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.x4,
-            AppSpacing.x2,
-            AppSpacing.x4,
-            AppSpacing.x4,
-          ),
-          child: _GradientCtaButton(
-            label: ctaLabel,
-            icon: ctaIcon,
-            gradient: _primaryGradient,
-            enabled: canContinue,
-            onPressed: () => _goNext(context),
+      bottomNavigationBar: Container(
+        color: AppColors.pageBg,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x4,
+              AppSpacing.x2,
+              AppSpacing.x4,
+              AppSpacing.x4,
+            ),
+            child: _GradientCtaButton(
+              label: ctaLabel,
+              icon: ctaIcon,
+              gradient: _primaryGradient,
+              enabled: canContinue,
+              onPressed: () => _goNext(context),
+            ),
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 
 class BatchJobRunningPage extends StatefulWidget {
   const BatchJobRunningPage({super.key});
@@ -78,76 +79,61 @@ class _BatchJobRunningPageState extends State<BatchJobRunningPage> {
     final int pct = (_progress * 100).round().clamp(0, 100);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8FF),
-      appBar: AppBar(
-        backgroundColor: Colors.white.withAlpha(230),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shadowColor: const Color(0xFF2563EB).withAlpha(16),
-        leadingWidth: 140,
-        leading: InkWell(
-          onTap: () => context.pop(),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const SizedBox(width: 16),
-              const Icon(Icons.arrow_back_rounded, color: AppColors.brandBlue),
-              const SizedBox(width: 8),
-              Text(
-                'Batch Progress',
-                style: AppTypography.heading2.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w800,
+      backgroundColor: AppColors.brandBlue,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Batch Progress'),
+            ),
+            const SizedBox(height: 21),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                    110,
+                  ),
+                  children: <Widget>[
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: Column(
+                          children: <Widget>[
+                            _SuccessCard(
+                              progress: _progress,
+                              percentLabel: '$pct%',
+                            ),
+                            const SizedBox(height: AppSpacing.x5),
+                            _SecondaryInfoCard(),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x5),
+                    Center(
+                      child: Text(
+                        'Metadata: Request ID #$requestId',
+                        style: AppTypography.caption.copyWith(
+                          color: const Color(0xFF737686),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () => context.push(
-              '${AppRouter.notificationsPath}?flow=org',
-            ),
-            icon: const Icon(
-              Icons.notifications_rounded,
-              color: AppColors.brandBlue,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.x2),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.x4,
-          AppSpacing.x4,
-          AppSpacing.x4,
-          110,
-        ),
-        children: <Widget>[
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                children: <Widget>[
-                  _SuccessCard(progress: _progress, percentLabel: '$pct%'),
-                  const SizedBox(height: AppSpacing.x5),
-                  _SecondaryInfoCard(),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x5),
-          Center(
-            child: Text(
-              'Metadata: Request ID #$requestId',
-              style: AppTypography.caption.copyWith(
-                color: const Color(0xFF737686),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
       ),
       bottomNavigationBar: _BottomNavBar(
         currentIndex: 1,

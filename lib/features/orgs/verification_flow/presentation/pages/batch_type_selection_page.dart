@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 
@@ -23,21 +24,13 @@ class BatchTypeSelectionPage extends ConsumerStatefulWidget {
 class _BatchTypeSelectionPageState
     extends ConsumerState<BatchTypeSelectionPage> {
   _BatchType? _selected = _BatchType.human;
+  bool _didAutoSkip = false;
 
   static const double _referenceWidth = 402;
   static const Color _panelBg = Color(0xFFF7F9FC);
   static const Color _cardBorder = Color(0xFFDBEAFE);
   static const Color _chipBorder = Color(0xFFF3F4F6);
   static const Color _chipBg = Color(0xFFF9FAFB);
-
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.dashboardPath);
-    }
-  }
 
   void _showGstRequiredSnack(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -90,6 +83,20 @@ class _BatchTypeSelectionPageState
         ? _BatchType.product
         : _selected;
 
+    // Type already saved in settings: skip the chooser entirely and jump
+    // straight into the flow (same destination as tapping Continue).
+    if (isLocked && gstVerified && !_didAutoSkip) {
+      _didAutoSkip = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.pushReplacement(
+          lockedToHuman
+              ? AppRouter.verificationChecksPath
+              : AppRouter.productSectorSelectorPath,
+        );
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
@@ -117,34 +124,7 @@ class _BatchTypeSelectionPageState
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => _goBack(context),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Text(
-                            'New Batch',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const OrgTopBar(title: 'New Batch'),
                     ),
                     SizedBox(height: s(24)),
                     Expanded(

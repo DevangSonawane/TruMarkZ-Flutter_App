@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/models/auth_models.dart';
@@ -102,13 +103,28 @@ class _IndividualProfilePageState extends ConsumerState<IndividualProfilePage> {
                         ),
                       ),
                       const Spacer(),
-                      SvgPicture.asset(
-                        'assets/icons/figma/all_batches_bell.svg',
-                        width: s(24),
-                        height: s(24),
-                        colorFilter: const ColorFilter.mode(
-                          Colors.white,
-                          BlendMode.srcIn,
+                      const Padding(
+                        padding: EdgeInsets.all(7),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: <Widget>[
+                            Icon(
+                              LucideIcons.bell,
+                              color: Colors.white,
+                              size: 23,
+                            ),
+                            Positioned(
+                              right: 1,
+                              top: 2,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFFBBF24),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: SizedBox(width: 7, height: 7),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

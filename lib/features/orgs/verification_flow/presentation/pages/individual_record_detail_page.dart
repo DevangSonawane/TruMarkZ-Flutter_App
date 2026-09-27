@@ -6,10 +6,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
-import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
@@ -63,15 +63,6 @@ class _IndividualRecordDetailPageState
     } catch (e, st) {
       if (!mounted) return;
       setState(() => _data = AsyncError(e, st));
-    }
-  }
-
-  void _goBack(BuildContext context) {
-    final GoRouter router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go(AppRouter.appBatchesPath);
     }
   }
 
@@ -203,49 +194,15 @@ class _IndividualRecordDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    final String title = 'Individual Record Detail';
-
     return Scaffold(
       backgroundColor: AppColors.brandBlue,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x4,
-                AppSpacing.x3,
-                AppSpacing.x4,
-                AppSpacing.x3,
-              ),
-              child: Row(
-                children: <Widget>[
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () => _goBack(context),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.heading1.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Refresh',
-                    onPressed: _load,
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: Colors.white,
-                  ),
-                ],
-              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: OrgTopBar(title: 'Individual Record Detail'),
             ),
             Expanded(
               child: DecoratedBox(

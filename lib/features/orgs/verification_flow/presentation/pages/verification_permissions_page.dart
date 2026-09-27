@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 
@@ -97,34 +98,7 @@ class _VerificationPermissionsPageState
                   children: <Widget>[
                     Padding(
                       padding: EdgeInsets.fromLTRB(s(16), s(8), s(16), 0),
-                      child: Row(
-                        children: <Widget>[
-                          InkResponse(
-                            onTap: () => context.pop(),
-                            radius: s(22),
-                            child: SvgPicture.asset(
-                              'assets/icons/figma/new_batch_back.svg',
-                              width: s(24),
-                              height: s(24),
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: s(12)),
-                          Text(
-                            'Permissions',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: s(21),
-                              fontWeight: FontWeight.w600,
-                              height: 19.5 / 21,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: const OrgTopBar(title: 'Permissions'),
                     ),
                     SizedBox(height: s(21)),
                     Expanded(

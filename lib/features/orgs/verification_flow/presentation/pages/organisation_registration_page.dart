@@ -66,15 +66,9 @@ class _OrganisationRegistrationPageState
 
     setState(() => _isSendingOtp = true);
     try {
-      final String orgName = officialEmail.split('@').first.trim().isEmpty
-          ? officialEmail
-          : officialEmail.split('@').first.trim();
       final SignupOrganizationRequest request = SignupOrganizationRequest(
-        orgName: orgName,
         email: officialEmail,
-        phoneNumber: '',
         password: password,
-        serviceType: 'human',
       );
 
       await ref.read(authRepositoryProvider).signupOrganization(request);
