@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Brand core
-  static const Color brandBlue = Color(0xFF2563EB);
+  static const Color brandBlue = Color(0xFF1B3387);
   static const Color deepNavy = Color(0xFF1E40AF);
   static const Color darkNavy = Color(0xFF0B0F19);
 

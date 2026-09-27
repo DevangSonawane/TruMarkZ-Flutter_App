@@ -56,9 +56,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
       if (!mounted) return;
       setState(() {
         _sectors = types
-            .where(
-              (VerificationIndustryType t) => t.name.trim().isNotEmpty,
-            )
+            .where((VerificationIndustryType t) => t.name.trim().isNotEmpty)
             .toList();
         _sectorsLoading = false;
         _sectorsError = null;
@@ -229,11 +227,9 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       horizontalInset: horizontalInset,
                       orgName: displayName,
                       orgCaption: headerLine2,
-                      onAlertsTap: () => context.go(
-                        '${AppRouter.notificationsPath}?flow=org',
-                      ),
-                      onProfileTap: () =>
-                          context.go(AppRouter.settingsPath),
+                      onAlertsTap: () =>
+                          context.go('${AppRouter.notificationsPath}?flow=org'),
+                      onProfileTap: () => context.go(AppRouter.settingsPath),
                     ),
                   ),
                   SliverPersistentHeader(
@@ -249,7 +245,6 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                     child: _PromoBanner(
                       scale: scale,
                       horizontalInset: horizontalInset,
-                      summary: summary,
                       onNewBatch: () => _onTapNewBatch(serviceType),
                     ),
                   ),
@@ -268,8 +263,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                           ),
                           child: _SectionHeader(
                             title: 'Verification Sectors',
-                            onViewAll: () =>
-                                _onTapViewAllSectors(serviceType),
+                            onViewAll: () => _onTapViewAllSectors(serviceType),
                           ),
                         ),
                         _SectorGridBody(
@@ -536,10 +530,7 @@ class _LocationBarDelegate extends SliverPersistentHeaderDelegate {
   ) {
     return Container(
       color: AppColors.brandBlue,
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalInset,
-        vertical: 10,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: horizontalInset, vertical: 10),
       child: _LocationBar(
         scale: scale,
         orgName: orgName,
@@ -814,13 +805,11 @@ class _PromoBanner extends StatelessWidget {
   const _PromoBanner({
     required this.scale,
     required this.horizontalInset,
-    required this.summary,
     required this.onNewBatch,
   });
 
   final double scale;
   final double horizontalInset;
-  final _DashboardSummary summary;
   final VoidCallback onNewBatch;
 
   @override
@@ -837,217 +826,25 @@ class _PromoBanner extends StatelessWidget {
           horizontalInset,
           18 * scale,
         ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(14 * scale, 4 * scale, 14 * scale, 0),
-          child: Stack(
-            children: <Widget>[
-              const Positioned.fill(child: _DotTexture()),
-              SizedBox(
+        child: GestureDetector(
+          onTap: onNewBatch,
+          behavior: HitTestBehavior.opaque,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18 * scale),
+            child: Transform.scale(
+              scale: 1.04,
+              child: Image.asset(
+                'assets/Gemini_Generated_Image_za0202za0202za02.png',
+                width: double.infinity,
                 height: 158 * scale,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 4 * scale),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'VERIFY CREDENTIALS,\nONE TAP AWAY!',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontFamily: 'Inter',
-                                fontSize: 18.5 * scale,
-                                height: 1.06,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            SizedBox(height: 8 * scale),
-                            Text(
-                              'Bulk issue, track & share\ntamper-proof certificates',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.72),
-                                fontFamily: 'Inter',
-                                fontSize: 10.5 * scale,
-                                height: 1.35,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: -0.05,
-                              ),
-                            ),
-                            const Spacer(),
-                            SizedBox(
-                              height: 38 * scale,
-                              child: FilledButton(
-                                onPressed: onNewBatch,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: AppColors.brandBlue,
-                                  elevation: 0,
-                                  shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      11 * scale,
-                                    ),
-                                  ),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 20 * scale,
-                                  ),
-                                ),
-                                child: Text(
-                                  'New Batch',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 13 * scale,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 10 * scale),
-                    _HeroCard(scale: scale, summary: summary),
-                  ],
-                ),
+                fit: BoxFit.cover,
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
-}
-
-/// White hero card with verified stats, mirroring the MrBob illustration
-/// card (icon tile + rating chip + caption).
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.scale, required this.summary});
-
-  final double scale;
-  final _DashboardSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 148 * scale,
-      height: 150 * scale,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(9 * scale),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Container(
-              width: 46 * scale,
-              height: 46 * scale,
-              decoration: BoxDecoration(
-                color: AppColors.brandBlue,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Icon(
-                LucideIcons.shieldCheck,
-                color: Colors.white,
-                size: 26 * scale,
-              ),
-            ),
-            const Spacer(),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: 8 * scale,
-                vertical: 5 * scale,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.successBg,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(
-                    LucideIcons.check,
-                    color: AppColors.success,
-                    size: 13 * scale,
-                  ),
-                  SizedBox(width: 3 * scale),
-                  Flexible(
-                    child: Text(
-                      '${_formatCompact(summary.verified)} Verified',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.success,
-                        fontFamily: 'Inter',
-                        fontSize: 9.5 * scale,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 4 * scale),
-            Text(
-              '${_formatCompact(summary.pending)} pending review',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontFamily: 'Inter',
-                fontSize: 10.5 * scale,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DotTexture extends StatelessWidget {
-  const _DotTexture();
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(painter: _DotTexturePainter());
-  }
-}
-
-class _DotTexturePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.07);
-    const double gap = 18.0;
-    const double r = 1.4;
-    for (double y = gap / 2; y < size.height; y += gap) {
-      for (double x = gap / 2; x < size.width; x += gap) {
-        canvas.drawCircle(Offset(x, y), r, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -1123,9 +920,13 @@ String _imageAssetForSector(String title) {
   if (lower.contains('beauty') || lower.contains('cosmetic')) {
     return 'assets/images/sectors/beauty.jpg';
   }
-  if (lower.contains('agriculture')) return 'assets/images/sectors/agriculture.jpg';
+  if (lower.contains('agriculture')) {
+    return 'assets/images/sectors/agriculture.jpg';
+  }
   if (lower.contains('health')) return 'assets/images/sectors/healthcare.jpg';
-  if (lower.contains('industrial')) return 'assets/images/sectors/industrial.jpg';
+  if (lower.contains('industrial')) {
+    return 'assets/images/sectors/industrial.jpg';
+  }
   if (lower.contains('insurance')) return 'assets/images/sectors/insurance.jpg';
   if (lower.contains('luxury')) return 'assets/images/sectors/luxury.jpg';
   if (lower.contains('ev') || lower.contains('automotive')) {
@@ -1385,7 +1186,9 @@ class _RecentBatchesBody extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                hasQuery ? 'No batches match your search' : 'No recent batches yet',
+                hasQuery
+                    ? 'No batches match your search'
+                    : 'No recent batches yet',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.x1),
@@ -1605,10 +1408,10 @@ class _RecentBatchCard extends StatelessWidget {
                                 child: LinearProgressIndicator(
                                   value: batch.progressFraction.clamp(0, 1),
                                   minHeight: 6,
-                                  backgroundColor:
-                                      AppColors.divider.withValues(alpha: 0.5),
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(fg),
+                                  backgroundColor: AppColors.divider.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                  valueColor: AlwaysStoppedAnimation<Color>(fg),
                                 ),
                               ),
                             ),
@@ -1637,9 +1440,7 @@ class _RecentBatchCard extends StatelessWidget {
                                 horizontal: 7 * scale,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  10 * scale,
-                                ),
+                                borderRadius: BorderRadius.circular(10 * scale),
                               ),
                             ),
                             child: Text(
