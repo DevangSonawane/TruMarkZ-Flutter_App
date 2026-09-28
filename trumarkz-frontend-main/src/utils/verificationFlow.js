@@ -19,7 +19,7 @@ const HUMAN_TEMPLATE_EXTRA_HEADERS = {
   skills: ['primary_skill', 'skill_level', 'certification_name'],
   criminal_record: ['court_record_reference', 'city_of_residence'],
   address: ['address_line1', 'city', 'pincode'],
-  driving_license: ['driving_licence_number', 'dl_expiry_date'],
+  driving_license: ['dl_number', 'dl_expiry_date'],
   experience: ['employer_name', 'employment_duration', 'designation'],
   drug_test: ['lab_name', 'sample_id'],
   police_verification: ['police_station', 'address_line1', 'city'],
@@ -32,7 +32,7 @@ export const getVerificationApiTypes = (selectedVerifications = []) =>
     .filter(Boolean);
 
 export const getHumanTemplateHeaders = (selectedVerifications = []) => {
-  const headers = ['full_name', 'email', 'phone_number', 'dob'];
+  const headers = ['full_name', 'email', 'phone_number', 'dob', 'nationality'];
 
   selectedVerifications.forEach((item) => {
     (HUMAN_TEMPLATE_EXTRA_HEADERS[item] || []).forEach((header) => {

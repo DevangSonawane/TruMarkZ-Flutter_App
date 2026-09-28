@@ -47,15 +47,18 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     'pan_number',
     'dob',
     'gender',
+    'dl_number',
+    'nationality',
   ];
   static const String _humanDocumentFieldsCsv =
-      'full_name,name,email,phone_number,dob,license_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
+      'full_name,name,email,phone_number,dob,license_number,dl_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
   static const List<String> _drivingLicenseTemplateHeaders = <String>[
     'full_name',
     'phone_number',
     'email',
     'dob',
-    'license_number',
+    'dl_number',
+    'nationality',
   ];
 
   String? _lastRouteSignature;
@@ -464,6 +467,30 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           ]) ??
           -1,
       'pan_number': pick(<String>['pan_number', 'pan']) ?? -1,
+      // Excel-facing DL column is `dl_number`. Keep accepting the legacy
+      // `license_number` (and common aliases) so older files still parse.
+      // Both keys resolve to the same column; backend still receives
+      // `license_number` (dl_number → license_number mapping preserved).
+      'license_number':
+          pick(<String>[
+            'dl_number',
+            'license_number',
+            'dl_no',
+            'driving_license_number',
+            'driver_license_number',
+            'driving_licence_number',
+          ]) ??
+          -1,
+      'dl_number':
+          pick(<String>[
+            'dl_number',
+            'license_number',
+            'dl_no',
+            'driving_license_number',
+            'driver_license_number',
+            'driving_licence_number',
+          ]) ??
+          -1,
       'address_line1':
           pick(<String>['address_line1', 'address1', 'address']) ?? -1,
       'address_line2': pick(<String>['address_line2', 'address2']) ?? -1,
@@ -517,7 +544,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (email.isEmpty || phone.isEmpty) return null;
 
     final String? dob = _normalizeDob(valueAt('dob'));
-    final String licenseNumber = _normalizeAlphaNum(valueAt('license_number'));
+    // Excel-facing DL column is `dl_number`; backend still expects
+    // `license_number` (dl_number → license_number mapping preserved).
+    final String dlRaw = valueAt('dl_number').trim().isNotEmpty
+        ? valueAt('dl_number')
+        : valueAt('license_number');
+    final String licenseNumber = _normalizeAlphaNum(dlRaw);
     final String aadhar = _normalizeDigits(valueAt('aadhar_number'));
     final String pan = _normalizeAlphaNum(valueAt('pan_number'));
 
@@ -3684,6 +3716,7 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
   ) {
     bool hasValue(String key) => (user[key] ?? '').toString().trim().isNotEmpty;
     if (hasValue('license_number') ||
+        hasValue('dl_number') ||
         hasValue('dl_no') ||
         hasValue('doi') ||
         hasValue('valid_till') ||
