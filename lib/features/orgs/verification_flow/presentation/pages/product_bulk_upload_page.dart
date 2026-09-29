@@ -173,8 +173,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
             );
       final _WarrantyDocumentDraft? draft = _warrantyDocumentDrafts[rowKey];
       if (draft == null) continue;
+      // Uploaded documents only — never Excel-typed URLs. The backend
+      // resolves these files into the Dhiway warrenty_report /
+      // product_details / product_image record fields.
       final PickedFile? warrantyReport = draft.warrantyReport;
       final PickedFile? productDetails = draft.productDetails;
+      final PickedFile? productImage = draft.productImage;
       if (warrantyReport != null) {
         docs.add(
           WarrantyBulkUploadDocumentInput(
@@ -192,6 +196,16 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
             label: 'Product Details',
             fileBytes: productDetails.bytes,
             fileName: productDetails.name,
+          ),
+        );
+      }
+      if (productImage != null) {
+        docs.add(
+          WarrantyBulkUploadDocumentInput(
+            serialNo: row.serialNo,
+            label: 'Product Image',
+            fileBytes: productImage.bytes,
+            fileName: productImage.name,
           ),
         );
       }
@@ -249,10 +263,20 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         .map((dynamic v) => (v?.toString() ?? '').trim())
         .toList();
     final bool requiresSku = _mode != 'warranty';
+    // Warranty Excel is organization-facing: product_name + model_no plus
+    // warranty attributes. Backend-managed fields (warrenty_report,
+    // product_details URLs, serial_no, created_time) and Dhiway config
+    // (org_id/space_id/schema_id/template_id) are never Excel columns.
+    // Accept legacy 'customer_name'/'name' aliases so older files still parse.
     final int nameIndex = header.indexWhere(
       (String value) => requiresSku
           ? _matchesAnyHeader(value, const <String>{'productname'})
-          : _matchesAnyHeader(value, const <String>{'customername', 'name'}),
+          : _matchesAnyHeader(value, const <String>{
+              'productname',
+              'product',
+              'customername',
+              'name',
+            }),
     );
     final int skuIndex = header.indexWhere(
       (String value) => requiresSku
@@ -266,7 +290,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     if (nameIndex < 0) {
       return const _ParsedProductRowsResult(
         rows: <_ParsedProductRow>[],
-        error: 'Missing required column: customer_name',
+        error: 'Missing required column: product_name',
       );
     }
     if (requiresSku && skuIndex < 0) {
@@ -332,10 +356,16 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         .map((Data? cell) => _cellText(cell?.value))
         .toList();
     final bool requiresSku = _mode != 'warranty';
+    // Same org-facing warranty column contract as the CSV parser above.
     final int nameIndex = header.indexWhere(
       (String value) => requiresSku
           ? _matchesAnyHeader(value, const <String>{'productname'})
-          : _matchesAnyHeader(value, const <String>{'customername', 'name'}),
+          : _matchesAnyHeader(value, const <String>{
+              'productname',
+              'product',
+              'customername',
+              'name',
+            }),
     );
     final int skuIndex = header.indexWhere(
       (String value) => requiresSku
@@ -349,7 +379,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     if (nameIndex < 0) {
       return const _ParsedProductRowsResult(
         rows: <_ParsedProductRow>[],
-        error: 'Missing required column: customer_name',
+        error: 'Missing required column: product_name',
       );
     }
     if (requiresSku && skuIndex < 0) {
@@ -478,13 +508,26 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   List<String> _defaultTemplateHeaders() {
     if (_mode == 'warranty') {
+      // Organization-facing Warranty Excel columns only.
+      // Do NOT ask the organization to enter backend-managed values:
+      //   warrenty_report / product_details (uploaded-document URLs resolved
+      //     by the backend), serial_no / created_time (backend-generated).
+      // Do NOT add Dhiway/integration config columns here
+      // (org_id, space_id, schema_id, template_id).
+      // The backend remains the source of truth for the template bytes
+      // (GET /verification/products/warranty-template) and must serve
+      // these same columns; this list only drives the org-facing UI copy.
       return <String>[
-        'customer_name',
+        'product_name',
         'model_no',
-        'warrenty_report',
-        'product_details',
         'purchase_date',
         'expiration_date',
+        'brand',
+        'manufactured_by',
+        'manufactured_date',
+        'warrenty_period',
+        'coverage',
+        'product_image',
       ];
     }
     return <String>[
@@ -562,7 +605,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
             parsed.error ??
             (parsed.rows.isEmpty
                 ? (_mode == 'warranty'
-                      ? 'Could not find any valid customer_name and model_no rows in the selected file.'
+                      ? 'Could not find any valid product_name and model_no rows in the selected file.'
                       : 'Could not find any valid product_name and sku_no rows in the selected file.')
                 : null);
       });
@@ -859,7 +902,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         };
     final bool isWarranty = _mode == 'warranty';
     final String uploadHint = isWarranty
-        ? 'Use the warranty template fields from the sheet.\nUpload your Excel and optionally attach documents per row before confirming the batch.'
+        ? 'Fill product_name, model_no, purchase_date, expiration_date, brand, manufactured_by, manufactured_date, warrenty_period, coverage and product_image.\nDo not enter warrenty_report / product_details URLs, serial_no or created_time — upload Warranty Report, Product Details and Product Image per row below and the backend resolves them.'
         : 'Download the product template, fill product_name and sku_no, and optionally place images in the product_image or blow_up_image cells.';
     final int currentStep = isWarranty ? 3 : 4;
     final int totalSteps = isWarranty ? 5 : 6;
@@ -1454,7 +1497,7 @@ class _ProductTemplateDialogState
           children: <Widget>[
             Text(
               widget.isWarranty
-                  ? 'Use the fixed warranty template, then fill it out and upload it back.'
+                  ? 'Fixed 10-column warranty template: product_name, model_no, purchase_date, expiration_date, brand, manufactured_by, manufactured_date, warrenty_period, coverage, product_image. Do not add warrenty_report / product_details URLs, serial_no, created_time, or org/space/schema config.'
                   : 'Use the canonical product fields. Images must be placed inside the product_image and blow_up_image cells in Excel.',
               style: TextStyle(
                 fontFamily: 'Inter',
@@ -2145,7 +2188,7 @@ class _ParseStatusCard extends StatelessWidget {
               ? 'You can attach documents and create the batch.'
               : 'Embedded product images will be processed by the backend.'
         : isWarranty
-        ? 'Expected columns: customer_name and model_no.'
+        ? 'Expected columns: product_name and model_no (plus purchase_date, expiration_date, brand, manufactured_by, manufactured_date, warrenty_period, coverage, product_image). URLs and serials are handled by the backend.'
         : 'Expected columns: product_name and sku_no. Images are optional.';
 
     return Container(
@@ -2304,6 +2347,7 @@ class _WarrantyDocumentDraft {
     required this.modelNo,
     this.warrantyReport,
     this.productDetails,
+    this.productImage,
   });
 
   final String rowKey;
@@ -2311,12 +2355,15 @@ class _WarrantyDocumentDraft {
   final String modelNo;
   final PickedFile? warrantyReport;
   final PickedFile? productDetails;
+  final PickedFile? productImage;
 
   _WarrantyDocumentDraft copyWith({
     PickedFile? warrantyReport,
     PickedFile? productDetails,
+    PickedFile? productImage,
     bool clearWarrantyReport = false,
     bool clearProductDetails = false,
+    bool clearProductImage = false,
   }) {
     return _WarrantyDocumentDraft(
       rowKey: rowKey,
@@ -2328,6 +2375,9 @@ class _WarrantyDocumentDraft {
       productDetails: clearProductDetails
           ? null
           : (productDetails ?? this.productDetails),
+      productImage: clearProductImage
+          ? null
+          : (productImage ?? this.productImage),
     );
   }
 }
@@ -2375,7 +2425,7 @@ class _WarrantyDocumentUploadsSection extends StatelessWidget {
                   Text(
                     rows.isEmpty
                         ? 'Upload a warranty Excel file first.'
-                        : 'Each row is keyed by its reserved warranty serial. Attach Warranty Report and Product Details files per row.',
+                        : 'Each row is keyed by its reserved warranty serial. Attach Warranty Report, Product Details and Product Image files per row. The backend maps them to warrenty_report, product_details and product_image.',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(11),
@@ -2479,7 +2529,8 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
         );
     if (incoming.rowKey != _draft.rowKey ||
         incoming.warrantyReport != _draft.warrantyReport ||
-        incoming.productDetails != _draft.productDetails) {
+        incoming.productDetails != _draft.productDetails ||
+        incoming.productImage != _draft.productImage) {
       _draft = incoming;
     }
   }
@@ -2506,6 +2557,16 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
     _emitDraft();
   }
 
+  Future<void> _pickProductImage() async {
+    // Use the app's existing image-upload mechanism (not a typed Excel URL).
+    final PickedFile? picked = await FilePickerUtil.pickImage();
+    if (!mounted || picked == null) return;
+    setState(() {
+      _draft = _draft.copyWith(productImage: picked);
+    });
+    _emitDraft();
+  }
+
   void _clearWarrantyReport() {
     setState(() {
       _draft = _draft.copyWith(clearWarrantyReport: true);
@@ -2516,6 +2577,13 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
   void _clearProductDetails() {
     setState(() {
       _draft = _draft.copyWith(clearProductDetails: true);
+    });
+    _emitDraft();
+  }
+
+  void _clearProductImage() {
+    setState(() {
+      _draft = _draft.copyWith(clearProductImage: true);
     });
     _emitDraft();
   }
@@ -2606,6 +2674,14 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
             file: draft.productDetails,
             onAttach: _pickProductDetails,
             onClear: _clearProductDetails,
+          ),
+          SizedBox(height: s(10)),
+          _DocumentSlot(
+            scale: widget.scale,
+            label: 'Product Image',
+            file: draft.productImage,
+            onAttach: _pickProductImage,
+            onClear: _clearProductImage,
           ),
         ],
       ),
