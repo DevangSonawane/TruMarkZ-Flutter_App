@@ -1964,7 +1964,7 @@ class _LogoutCard extends StatelessWidget {
   }
 }
 
-class _ProfileSectionPage extends StatelessWidget {
+class _ProfileSectionPage extends ConsumerWidget {
   const _ProfileSectionPage({
     required this.section,
     required this.profile,
@@ -1994,23 +1994,25 @@ class _ProfileSectionPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final UserProfile? currentProfile =
+        ref.watch(authNotifierProvider).value?.userProfile ?? profile;
     final Widget content = switch (section) {
-      _ProfileSection.general => _GeneralInfoCard(profile: profile),
+      _ProfileSection.general => _GeneralInfoCard(profile: currentProfile),
       _ProfileSection.organisation => _OrganisationDetailsCard(
-        profile: profile,
+        profile: currentProfile,
         onEditServiceType: onEditServiceType,
         onEditIndustryType: onEditIndustryType,
         onVerifyGst: onVerifyGst,
         isVerifyingGst: isVerifyingGst,
       ),
       _ProfileSection.dhiway => _SpaceIdsCard(
-        profile: profile,
+        profile: currentProfile,
         onEditSpaceIds: onEditSpaceIds,
       ),
-      _ProfileSection.address => _AddressCard(profile: profile),
-      _ProfileSection.record => _RecordCard(profile: profile),
+      _ProfileSection.address => _AddressCard(profile: currentProfile),
+      _ProfileSection.record => _RecordCard(profile: currentProfile),
     };
 
     return Scaffold(
@@ -2036,9 +2038,25 @@ class _ProfileSectionPage extends StatelessWidget {
           ),
         ),
       ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, 24 + bottomInset),
-        children: <Widget>[content],
+      body: RefreshIndicator(
+        color: _profileNavy,
+        onRefresh: () async {
+          try {
+            await ref.read(authNotifierProvider.notifier).refreshCurrentUser();
+          } on ApiException catch (e) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(e.message)));
+          }
+        },
+        child: ListView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 24 + bottomInset),
+          children: <Widget>[content],
+        ),
       ),
     );
   }

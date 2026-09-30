@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/widgets/org_bottom_nav_bar.dart';
 import '../../../auth/application/auth_notifier.dart';
+import '../../verification_flow/presentation/pages/product_batch_navigation.dart';
 
 class OrgShellPage extends ConsumerWidget {
   const OrgShellPage({super.key, required this.child});
@@ -23,7 +24,7 @@ class OrgShellPage extends ConsumerWidget {
     return 0;
   }
 
-  void _onTap(BuildContext context, WidgetRef ref, int index) {
+  Future<void> _onTap(BuildContext context, WidgetRef ref, int index) async {
     switch (index) {
       case 0:
         context.go(AppRouter.dashboardPath);
@@ -33,10 +34,7 @@ class OrgShellPage extends ConsumerWidget {
         // type chooser when the org already has a service type saved.
         // Without GST verification fall through to the chooser, which owns
         // the GST gate (same rule as its Continue button).
-        final profile = ref
-            .read(authNotifierProvider)
-            .value
-            ?.userProfile;
+        final profile = ref.read(authNotifierProvider).value?.userProfile;
         final String serviceType = (profile?.serviceType ?? '')
             .toString()
             .trim()
@@ -47,26 +45,11 @@ class OrgShellPage extends ConsumerWidget {
           return;
         }
         if (gstVerified && serviceType == 'product') {
-          // Sector comes from the saved profile industry — no sector
-          // screen. Verification checks falls back to the profile
-          // industry on its own; passing it explicitly is deterministic.
-          final List<String> savedIndustries =
-              (profile?.industryTypes ?? const <String>[])
-                  .map((String value) => value.trim())
-                  .where((String value) => value.isNotEmpty)
-                  .toList();
-          final String industry = savedIndustries.isNotEmpty
-              ? savedIndustries.first
-              : (profile?.industry ?? '').trim();
-          final Uri uri = Uri(
-            path: AppRouter.verificationChecksPath,
-            queryParameters: <String, String>{
-              'flow': 'product',
-              'mode': 'verification',
-              if (industry.isNotEmpty) 'industry': industry,
-            },
+          await openProductBatchFlowForSavedIndustry(
+            context: context,
+            ref: ref,
+            profile: profile,
           );
-          context.push(uri.toString(), extra: industry.isEmpty ? null : industry);
           return;
         }
         context.push(AppRouter.batchTypeSelectionPath); // Create

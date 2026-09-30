@@ -10,6 +10,7 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
+import 'product_batch_navigation.dart';
 
 enum _BatchType { human, product }
 
@@ -87,12 +88,17 @@ class _BatchTypeSelectionPageState
     // straight into the flow (same destination as tapping Continue).
     if (isLocked && gstVerified && !_didAutoSkip) {
       _didAutoSkip = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        context.pushReplacement(
-          lockedToHuman
-              ? AppRouter.verificationChecksPath
-              : AppRouter.productSectorSelectorPath,
+        if (lockedToHuman) {
+          context.pushReplacement(AppRouter.verificationChecksPath);
+          return;
+        }
+        await openProductBatchFlowForSavedIndustry(
+          context: context,
+          ref: ref,
+          profile: authAsync.valueOrNull?.userProfile,
+          replace: true,
         );
       });
     }

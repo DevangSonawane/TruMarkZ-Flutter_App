@@ -173,12 +173,10 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
             );
       final _WarrantyDocumentDraft? draft = _warrantyDocumentDrafts[rowKey];
       if (draft == null) continue;
-      // Uploaded documents only — never Excel-typed URLs. The backend
-      // resolves these files into the Dhiway warrenty_report /
-      // product_details / product_image record fields.
+      // Uploaded documents only — never Excel-typed URLs. Product image
+      // stays in the warranty Excel's product_image column.
       final PickedFile? warrantyReport = draft.warrantyReport;
       final PickedFile? productDetails = draft.productDetails;
-      final PickedFile? productImage = draft.productImage;
       if (warrantyReport != null) {
         docs.add(
           WarrantyBulkUploadDocumentInput(
@@ -196,16 +194,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
             label: 'Product Details',
             fileBytes: productDetails.bytes,
             fileName: productDetails.name,
-          ),
-        );
-      }
-      if (productImage != null) {
-        docs.add(
-          WarrantyBulkUploadDocumentInput(
-            serialNo: row.serialNo,
-            label: 'Product Image',
-            fileBytes: productImage.bytes,
-            fileName: productImage.name,
           ),
         );
       }
@@ -902,7 +890,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         };
     final bool isWarranty = _mode == 'warranty';
     final String uploadHint = isWarranty
-        ? 'Fill product_name, model_no, purchase_date, expiration_date, brand, manufactured_by, manufactured_date, warrenty_period, coverage and product_image.\nDo not enter warrenty_report / product_details URLs, serial_no or created_time — upload Warranty Report, Product Details and Product Image per row below and the backend resolves them.'
+        ? 'Fill product_name, model_no, purchase_date, expiration_date, brand, manufactured_by, manufactured_date, warrenty_period, coverage and product_image.\nDo not enter warrenty_report / product_details URLs, serial_no or created_time — upload Warranty Report and Product Details per row below. Product Image is read from the Excel product_image column.'
         : 'Download the product template, fill product_name and sku_no, and optionally place images in the product_image or blow_up_image cells.';
     final int currentStep = isWarranty ? 3 : 4;
     final int totalSteps = isWarranty ? 5 : 6;
@@ -2347,7 +2335,6 @@ class _WarrantyDocumentDraft {
     required this.modelNo,
     this.warrantyReport,
     this.productDetails,
-    this.productImage,
   });
 
   final String rowKey;
@@ -2355,15 +2342,12 @@ class _WarrantyDocumentDraft {
   final String modelNo;
   final PickedFile? warrantyReport;
   final PickedFile? productDetails;
-  final PickedFile? productImage;
 
   _WarrantyDocumentDraft copyWith({
     PickedFile? warrantyReport,
     PickedFile? productDetails,
-    PickedFile? productImage,
     bool clearWarrantyReport = false,
     bool clearProductDetails = false,
-    bool clearProductImage = false,
   }) {
     return _WarrantyDocumentDraft(
       rowKey: rowKey,
@@ -2375,9 +2359,6 @@ class _WarrantyDocumentDraft {
       productDetails: clearProductDetails
           ? null
           : (productDetails ?? this.productDetails),
-      productImage: clearProductImage
-          ? null
-          : (productImage ?? this.productImage),
     );
   }
 }
@@ -2425,7 +2406,7 @@ class _WarrantyDocumentUploadsSection extends StatelessWidget {
                   Text(
                     rows.isEmpty
                         ? 'Upload a warranty Excel file first.'
-                        : 'Each row is keyed by its reserved warranty serial. Attach Warranty Report, Product Details and Product Image files per row. The backend maps them to warrenty_report, product_details and product_image.',
+                        : 'Each row is keyed by its reserved warranty serial. Attach Warranty Report and Product Details files per row. Product Image is read from the Excel product_image column.',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(11),
@@ -2529,8 +2510,7 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
         );
     if (incoming.rowKey != _draft.rowKey ||
         incoming.warrantyReport != _draft.warrantyReport ||
-        incoming.productDetails != _draft.productDetails ||
-        incoming.productImage != _draft.productImage) {
+        incoming.productDetails != _draft.productDetails) {
       _draft = incoming;
     }
   }
@@ -2557,16 +2537,6 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
     _emitDraft();
   }
 
-  Future<void> _pickProductImage() async {
-    // Use the app's existing image-upload mechanism (not a typed Excel URL).
-    final PickedFile? picked = await FilePickerUtil.pickImage();
-    if (!mounted || picked == null) return;
-    setState(() {
-      _draft = _draft.copyWith(productImage: picked);
-    });
-    _emitDraft();
-  }
-
   void _clearWarrantyReport() {
     setState(() {
       _draft = _draft.copyWith(clearWarrantyReport: true);
@@ -2577,13 +2547,6 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
   void _clearProductDetails() {
     setState(() {
       _draft = _draft.copyWith(clearProductDetails: true);
-    });
-    _emitDraft();
-  }
-
-  void _clearProductImage() {
-    setState(() {
-      _draft = _draft.copyWith(clearProductImage: true);
     });
     _emitDraft();
   }
@@ -2674,14 +2637,6 @@ class _WarrantyDocumentCardState extends State<_WarrantyDocumentCard> {
             file: draft.productDetails,
             onAttach: _pickProductDetails,
             onClear: _clearProductDetails,
-          ),
-          SizedBox(height: s(10)),
-          _DocumentSlot(
-            scale: widget.scale,
-            label: 'Product Image',
-            file: draft.productImage,
-            onAttach: _pickProductImage,
-            onClear: _clearProductImage,
           ),
         ],
       ),
