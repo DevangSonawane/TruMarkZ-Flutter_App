@@ -2661,10 +2661,19 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          titleTextStyle: AppTypography.heading2.copyWith(
+            color: AppColors.textPrimary,
+          ),
+          contentTextStyle: AppTypography.body2.copyWith(
+            color: AppColors.textSecondary,
+          ),
           title: const Text('Template ready'),
           content: const Text('Your Excel template has been generated.'),
           actions: <Widget>[
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.brandBlue),
               onPressed: () async {
                 try {
                   await launchUrl(
@@ -2679,6 +2688,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
               child: const Text('Open file'),
             ),
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.brandBlue),
               onPressed: () async {
                 try {
                   await Share.shareXFiles(<XFile>[
@@ -2692,6 +2702,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
               child: const Text('Share file'),
             ),
             TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+              ),
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
