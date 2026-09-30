@@ -217,25 +217,9 @@ class _VerificationChecksPageState
     return item.id.trim();
   }
 
-  void _ensureDefaultSelection(List<_CheckItem> items) {
-    if (items.isEmpty) return;
-    final bool hasValidSelection = _selected.any(
-      (String id) => items.any((_CheckItem item) => item.id == id),
-    );
-    if (hasValidSelection) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_selected.any(
-        (String id) => items.any((_CheckItem item) => item.id == id),
-      )) {
-        return;
-      }
-      setState(() {
-        _selected
-          ..clear()
-          ..add(items.first.id);
-      });
-    });
+  int _selectionNumberFor(String id) {
+    final int index = _selected.toList().indexOf(id);
+    return index < 0 ? 0 : index + 1;
   }
 
   static String _subtitleForVerificationType(VerificationTypeDefinition item) {
@@ -301,7 +285,6 @@ class _VerificationChecksPageState
     final Map<String, String> checkNamesById = <String, String>{
       for (final _CheckItem item in apiItems) item.id: _checkDisplayName(item),
     };
-    _ensureDefaultSelection(apiItems);
     final String stepText = isProductFlow ? 'STEP 3 OF 6' : 'STEP 1 OF 6';
     final String progressText = isProductFlow ? '50%' : '17%';
     final double progressFactor = isProductFlow ? 0.5 : 0.1667;
@@ -465,6 +448,10 @@ class _VerificationChecksPageState
                                                         scale: scale,
                                                         item: item,
                                                         selected: selected,
+                                                        selectionNumber:
+                                                            _selectionNumberFor(
+                                                              item.id,
+                                                            ),
                                                         onTap: () {
                                                           setState(() {
                                                             if (selected) {
@@ -612,12 +599,14 @@ class _CheckTile extends StatelessWidget {
     required this.scale,
     required this.item,
     required this.selected,
+    required this.selectionNumber,
     required this.onTap,
   });
 
   final double scale;
   final _CheckItem item;
   final bool selected;
+  final int selectionNumber;
   final VoidCallback onTap;
 
   @override
@@ -727,7 +716,11 @@ class _CheckTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
-                  _SelectIndicator(scale: scale, selected: selected),
+                  _SelectIndicator(
+                    scale: scale,
+                    selected: selected,
+                    selectionNumber: selectionNumber,
+                  ),
                   SizedBox(height: s(12)),
                   Text(
                     item.costInr > 0 ? '₹${item.costInr}' : 'Custom',
@@ -786,10 +779,15 @@ class _ModePill extends StatelessWidget {
 }
 
 class _SelectIndicator extends StatelessWidget {
-  const _SelectIndicator({required this.scale, required this.selected});
+  const _SelectIndicator({
+    required this.scale,
+    required this.selected,
+    this.selectionNumber = 0,
+  });
 
   final double scale;
   final bool selected;
+  final int selectionNumber;
 
   @override
   Widget build(BuildContext context) {
@@ -804,10 +802,15 @@ class _SelectIndicator extends StatelessWidget {
           borderRadius: BorderRadius.circular(s(9999)),
         ),
         alignment: Alignment.center,
-        child: SvgPicture.asset(
-          'assets/icons/figma/checks_checkmark.svg',
-          width: s(9),
-          height: s(7),
+        child: Text(
+          selectionNumber > 0 ? '$selectionNumber' : '',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: s(11),
+            fontWeight: FontWeight.w700,
+            height: 13 / 11,
+            color: Colors.white,
+          ),
         ),
       );
     }
