@@ -1115,86 +1115,89 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
               );
             }
 
+            Widget navChevron({
+              required IconData icon,
+              required String tooltip,
+              required VoidCallback? onTap,
+            }) {
+              return InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(999),
+                child: SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: Icon(
+                    icon,
+                    size: 15,
+                    color: onTap == null
+                        ? AppColors.textTertiary.withAlpha(120)
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              );
+            }
+
             Widget headerActions() {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  if (_parsedUsers.length > 1) ...<Widget>[
-                    IconButton(
-                      onPressed: sheetBusy()
-                          ? null
-                          : (selectedIndex > 0 ? goToPreviousUser : null),
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        size: 15,
+                  if (_parsedUsers.length > 1)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.offWhite,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: AppColors.divider),
                       ),
-                      color: AppColors.textSecondary,
-                      tooltip: 'Previous user',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 30,
-                        height: 30,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.offWhite,
-                        fixedSize: const Size(30, 30),
-                        minimumSize: const Size(30, 30),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      onPressed: sheetBusy()
-                          ? null
-                          : (selectedIndex < _parsedUsers.length - 1
-                                ? goToNextUser
-                                : null),
-                      icon: const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 15,
-                      ),
-                      color: AppColors.textSecondary,
-                      tooltip: 'Next user',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 30,
-                        height: 30,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.offWhite,
-                        fixedSize: const Size(30, 30),
-                        minimumSize: const Size(30, 30),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          navChevron(
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            tooltip: 'Previous user',
+                            onTap: sheetBusy() || selectedIndex <= 0
+                                ? null
+                                : goToPreviousUser,
+                          ),
+                          Container(
+                            width: 1,
+                            height: 16,
+                            color: AppColors.divider,
+                          ),
+                          navChevron(
+                            icon: Icons.arrow_forward_ios_rounded,
+                            tooltip: 'Next user',
+                            onTap:
+                                sheetBusy() ||
+                                    selectedIndex >= _parsedUsers.length - 1
+                                ? null
+                                : goToNextUser,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                  ],
-                  IconButton(
-                    onPressed: sheetBusy()
+                  if (_parsedUsers.length > 1) const SizedBox(width: 8),
+                  InkWell(
+                    onTap: sheetBusy()
                         ? null
                         : () => Navigator.of(dialogContext).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                    iconSize: 18,
-                    tooltip: 'Close',
-                    color: AppColors.textSecondary,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 30,
-                      height: 30,
-                    ),
-                    style: IconButton.styleFrom(
-                      fixedSize: const Size(30, 30),
-                      minimumSize: const Size(30, 30),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardSurface,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: sheetBusy()
+                            ? AppColors.textTertiary.withAlpha(120)
+                            : AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -1215,12 +1218,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        LayoutBuilder(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      LayoutBuilder(
                           builder:
                               (
                                 BuildContext context,
@@ -1293,19 +1295,27 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.offWhite,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.divider),
-                          ),
-                          child: Row(
-                            children: <Widget>[
-                              Container(
-                                width: 40,
-                                height: 40,
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.offWhite,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: AppColors.divider,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: <Widget>[
+                                      Container(
+                                        width: 40,
+                                        height: 40,
                                 decoration: BoxDecoration(
                                   color: AppColors.blueTint,
                                   borderRadius: BorderRadius.circular(12),
@@ -1376,23 +1386,16 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        TMZButton(
-                          label: isAddingDocs ? 'Reading…' : 'Add documents',
-                          icon: Icons.attach_file_rounded,
-                          variant: TMZButtonVariant.secondary,
-                          isLoading: isAddingDocs,
-                          onPressed: sheetBusy() ? null : addDocuments,
-                          showShadow: false,
-                        ),
-                        const SizedBox(height: 4),
-                        Center(
-                          child: Text(
-                            'Multi-select supported',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                        ),
+                      TMZButton(
+                        label: isAddingDocs
+                            ? 'Reading…'
+                            : 'Add documents',
+                        icon: Icons.attach_file_rounded,
+                        variant: TMZButtonVariant.secondary,
+                        isLoading: isAddingDocs,
+                        onPressed: sheetBusy() ? null : addDocuments,
+                        showShadow: false,
+                      ),
                         if (isProcessing) ...<Widget>[
                           const SizedBox(height: 10),
                           Container(
@@ -1503,14 +1506,18 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                             onRemove: sheetBusy()
                                                 ? () {}
                                                 : () => removeDocument(index),
-                                          );
-                                        },
-                                  ),
-                          ),
+                                  );
+                                },
+                              ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 18),
-                        SizedBox(
-                          width: double.infinity,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
                           child: Row(
                             children: <Widget>[
                               Expanded(
@@ -1540,7 +1547,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                     ),
                   ),
                 ),
-              ),
             );
           },
         );
@@ -4220,7 +4226,7 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                     child: Text(
                       'Review OCR data',
                       style: AppTypography.heading1.copyWith(
-                        color: AppColors.brandBlue,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
