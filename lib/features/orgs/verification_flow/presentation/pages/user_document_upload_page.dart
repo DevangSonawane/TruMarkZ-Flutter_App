@@ -1,5 +1,5 @@
-import 'dart:ui';
 import 'dart:typed_data';
+import 'dart:ui' show PathMetric, PathMetrics;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +38,7 @@ class _UserDocumentUploadPageState
   };
 
   final Map<String, int> _docVersions = <String, int>{};
+  final Map<String, PickedFile> _docPreviews = <String, PickedFile>{};
 
   @override
   void didChangeDependencies() {
@@ -104,7 +105,10 @@ class _UserDocumentUploadPageState
     final PickedFile? picked = await FilePickerUtil.pickDocument();
     if (picked == null) return;
 
-    setState(() => _uploadedDocs[label] = false);
+    setState(() {
+      _uploadedDocs[label] = false;
+      _docPreviews[label] = picked;
+    });
     try {
       final repo = ref.read(verificationRepositoryProvider);
       final res = await repo.uploadDocument(
@@ -274,6 +278,7 @@ class _UserDocumentUploadPageState
                       icon: Icons.credit_card_rounded,
                       uploaded: _uploadedDocs['aadhar'] == true,
                       version: _docVersions['aadhar'],
+                      file: _docPreviews['aadhar'],
                       onTap: hasToken
                           ? () => _pickAndUploadDoc('aadhar')
                           : null,
@@ -284,6 +289,7 @@ class _UserDocumentUploadPageState
                       icon: Icons.badge_rounded,
                       uploaded: _uploadedDocs['pan'] == true,
                       version: _docVersions['pan'],
+                      file: _docPreviews['pan'],
                       onTap: hasToken ? () => _pickAndUploadDoc('pan') : null,
                     ),
                     const SizedBox(height: AppSpacing.x2),
@@ -292,6 +298,7 @@ class _UserDocumentUploadPageState
                       icon: Icons.school_rounded,
                       uploaded: _uploadedDocs['degree_certificate'] == true,
                       version: _docVersions['degree_certificate'],
+                      file: _docPreviews['degree_certificate'],
                       onTap: hasToken
                           ? () => _pickAndUploadDoc('degree_certificate')
                           : null,
@@ -302,6 +309,7 @@ class _UserDocumentUploadPageState
                       icon: Icons.directions_car_rounded,
                       uploaded: _uploadedDocs['driving_license'] == true,
                       version: _docVersions['driving_license'],
+                      file: _docPreviews['driving_license'],
                       onTap: hasToken
                           ? () => _pickAndUploadDoc('driving_license')
                           : null,
@@ -411,6 +419,7 @@ class _DocTile extends StatelessWidget {
     required this.icon,
     required this.uploaded,
     required this.version,
+    required this.file,
     required this.onTap,
   });
 
@@ -418,10 +427,12 @@ class _DocTile extends StatelessWidget {
   final IconData icon;
   final bool uploaded;
   final int? version;
+  final PickedFile? file;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final PickedFile? selectedFile = file;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
@@ -430,52 +441,180 @@ class _DocTile extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.x4),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: uploaded
-                      ? AppColors.successBg
-                      : AppColors.brandBlue.withAlpha(14),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  uploaded ? Icons.check_circle_rounded : icon,
-                  color: uploaded ? AppColors.success : AppColors.brandBlue,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.x3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      style: AppTypography.body1.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: uploaded
+                          ? AppColors.successBg
+                          : AppColors.brandBlue.withAlpha(14),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      uploaded
-                          ? 'Uploaded${version == null ? '' : ' • v${version.toString()}'}'
-                          : 'Tap to upload',
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    child: Icon(
+                      uploaded ? Icons.check_circle_rounded : icon,
+                      color: uploaded ? AppColors.success : AppColors.brandBlue,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: AppSpacing.x3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          title,
+                          style: AppTypography.body1.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          uploaded
+                              ? 'Uploaded${version == null ? '' : ' • v${version.toString()}'}'
+                              : selectedFile == null
+                              ? 'Tap to upload'
+                              : 'Uploading selected file',
+                          style: AppTypography.body2.copyWith(
+                            color: uploaded
+                                ? AppColors.success
+                                : AppColors.textSecondary,
+                            fontWeight: uploaded
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textTertiary,
+                  ),
+                ],
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textTertiary,
-              ),
+              if (selectedFile != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.x3),
+                _DocumentPreview(file: selectedFile, uploaded: uploaded),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DocumentPreview extends StatelessWidget {
+  const _DocumentPreview({required this.file, required this.uploaded});
+
+  final PickedFile file;
+  final bool uploaded;
+
+  bool get _isImage {
+    final String ext = file.extension.toLowerCase();
+    return ext.contains('jpg') ||
+        ext.contains('jpeg') ||
+        ext.contains('png') ||
+        ext.contains('webp') ||
+        ext.contains('gif');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.offWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: uploaded
+              ? AppColors.success.withAlpha(90)
+              : AppColors.border.withAlpha(150),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              width: double.infinity,
+              color: AppColors.brandBlue.withAlpha(10),
+              alignment: Alignment.center,
+              child: _isImage
+                  ? Image.memory(
+                      file.bytes,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.contain,
+                      cacheWidth: 900,
+                      filterQuality: FilterQuality.medium,
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          Icons.description_rounded,
+                          size: 44,
+                          color: AppColors.brandBlue.withAlpha(220),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          file.extension.toUpperCase(),
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    file.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: uploaded
+                        ? AppColors.successBg
+                        : AppColors.brandBlue.withAlpha(14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    uploaded ? 'Saved' : 'Selected',
+                    style: AppTypography.caption.copyWith(
+                      color: uploaded ? AppColors.success : AppColors.brandBlue,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

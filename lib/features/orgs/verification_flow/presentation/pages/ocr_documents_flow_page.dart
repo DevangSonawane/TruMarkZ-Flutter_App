@@ -1645,73 +1645,25 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
                 ),
                 if (userDocs.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 8),
-                  SizedBox(
-                    height: 72,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: userDocs.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 8),
-                      itemBuilder: (BuildContext c2, int di) {
-                        final _OcrDocDraft d = userDocs[di];
-                        return Stack(
-                          children: <Widget>[
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: AppColors.blueTint,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.divider),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: _isDocImage(d.file.name)
-                                  ? Image.memory(
-                                      d.file.bytes,
-                                      fit: BoxFit.cover,
-                                      cacheWidth: 144,
-                                      cacheHeight: 144,
-                                      filterQuality: FilterQuality.low,
-                                    )
-                                  : const Icon(
-                                      Icons.description_rounded,
-                                      color: AppColors.textTertiary,
-                                    ),
-                            ),
-                            Positioned(
-                              right: 2,
-                              top: 2,
-                              child: InkWell(
-                                onTap: busy
-                                    ? null
-                                    : () => setState(() {
-                                        final List<_OcrDocDraft>? docs =
-                                            _documentsByUser[i];
-                                        docs?.removeAt(di);
-                                        if (docs != null && docs.isEmpty) {
-                                          _documentsByUser.remove(i);
-                                        }
-                                      }),
-                                borderRadius: BorderRadius.circular(999),
-                                child: Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFEF4444),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: const Icon(
-                                    Icons.close_rounded,
-                                    size: 11,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                  Column(
+                    children: <Widget>[
+                      for (int di = 0; di < userDocs.length; di++) ...<Widget>[
+                        _ocrDocumentPreviewCard(
+                          draft: userDocs[di],
+                          busy: busy,
+                          onRemove: () => setState(() {
+                            final List<_OcrDocDraft>? docs =
+                                _documentsByUser[i];
+                            docs?.removeAt(di);
+                            if (docs != null && docs.isEmpty) {
+                              _documentsByUser.remove(i);
+                            }
+                          }),
+                        ),
+                        if (di < userDocs.length - 1)
+                          const SizedBox(height: 10),
+                      ],
+                    ],
                   ),
                 ],
               ],
@@ -1765,6 +1717,152 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _ocrDocumentPreviewCard({
+    required _OcrDocDraft draft,
+    required bool busy,
+    required VoidCallback onRemove,
+  }) {
+    final bool image = _isDocImage(draft.file.name);
+    final String ext = draft.file.extension.trim().isNotEmpty
+        ? draft.file.extension.trim().toUpperCase()
+        : 'FILE';
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Stack(
+            children: <Widget>[
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: Container(
+                  width: double.infinity,
+                  color: AppColors.blueTint.withAlpha(120),
+                  alignment: Alignment.center,
+                  child: image
+                      ? Image.memory(
+                          draft.file.bytes,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.contain,
+                          cacheWidth: 900,
+                          filterQuality: FilterQuality.medium,
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.description_rounded,
+                              size: 44,
+                              color: AppColors.textTertiary,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              ext,
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.brandBlue,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              Positioned(
+                right: 10,
+                top: 10,
+                child: InkWell(
+                  onTap: busy ? null : onRemove,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.blueTint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    image ? Icons.image_rounded : Icons.description_rounded,
+                    size: 17,
+                    color: AppColors.brandBlue,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    draft.file.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.brandBlue.withAlpha(14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    ext,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
