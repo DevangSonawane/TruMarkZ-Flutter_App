@@ -45,6 +45,7 @@ import '../../features/orgs/verification_flow/presentation/pages/batch_tracking_
 import '../../features/orgs/verification_flow/presentation/pages/batch_created_success_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/batch_type_selection_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/bulk_upload_page.dart';
+import '../../features/orgs/verification_flow/presentation/pages/ocr_documents_flow_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/certificate_preview_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_detail_page.dart';
 import '../../features/orgs/verification_flow/presentation/pages/credential_template_selector_page.dart';
@@ -141,6 +142,7 @@ class AppRouter {
   static const String credentialsApprovedPath = '/credentials-approved';
   static const String batchJobRunningPath = '/batch-job-running';
   static const String bulkUploadPath = '/bulk-upload';
+  static const String ocrDocumentsFlowPath = '/ocr-documents-flow';
   static const String batchCreatedSuccessPath = '/batch-created-success';
   static const String productSectorSelectorPath = '/product-sector-selector';
   static const String productServiceTypeSelectorPath =
@@ -908,6 +910,15 @@ class AppRouter {
         name: 'bulk_upload',
         pageBuilder: (BuildContext context, GoRouterState state) =>
             _slideFadePage(state: state, child: const BulkUploadPage()),
+      ),
+      GoRoute(
+        path: ocrDocumentsFlowPath,
+        name: 'ocr_documents_flow',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _slideFadePage(
+              state: state,
+              child: const OcrDocumentsFlowPage(),
+            ),
       ),
       GoRoute(
         path: batchCreatedSuccessPath,

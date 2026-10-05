@@ -862,6 +862,34 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return payload;
   }
 
+  /// Opens the dedicated OCR documents page (documents → review → photos),
+  /// forwarding the current flow context. Replaces the legacy attach sheet
+  /// for new uploads; legacy dialog code below stays for reference.
+  void _openOcrDocumentsFlow() {
+    if (_batchNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a batch name first.')),
+      );
+      return;
+    }
+    final List<String> sortedChecks = _checks.toList()..sort();
+    final List<String> sortedCheckIds = _checkIds.toList()..sort();
+    final Uri uri = Uri(
+      path: AppRouter.ocrDocumentsFlowPath,
+      queryParameters: <String, String>{
+        'batch': _batchNameController.text.trim(),
+        if (_industry.trim().isNotEmpty) 'industry': _industry.trim(),
+        if (_credentialVisibility.trim().isNotEmpty)
+          'access': _credentialVisibility.trim(),
+        if (sortedChecks.isNotEmpty) 'checks': sortedChecks.join(','),
+        if (sortedCheckIds.isNotEmpty) 'check_ids': sortedCheckIds.join(','),
+        if (_columnsController.text.trim().isNotEmpty)
+          'columns': _columnsController.text.trim(),
+      },
+    );
+    context.push(uri.toString());
+  }
+
   Future<void> _openAttachDocumentsDialog() async {
     if (_batchNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2598,10 +2626,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                     RepaintBoundary(
                                       child: _DropZone(
                                         scale: scale,
-                                        onTap: _openAttachDocumentsDialog,
+                                        onTap: _openOcrDocumentsFlow,
                                         title: 'Add documents for users',
                                         subtitle:
-                                            'Multi-select supported — 1 image = 1 user. Photos come after review.',
+                                            'Guided pages: documents → review → photos. 1 image = 1 user.',
                                         iconAsset:
                                             'assets/icons/figma/bulk_upload_icon_file_attach.svg',
                                       ),
