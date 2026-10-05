@@ -1908,6 +1908,120 @@ class UploadPhotoResponse {
   }
 }
 
+class OcrPhotoUploadResponse {
+  const OcrPhotoUploadResponse({
+    required this.message,
+    required this.photoUrl,
+    required this.batchUserId,
+    required this.documentId,
+    required this.version,
+  });
+
+  final String message;
+  final String photoUrl;
+  final String batchUserId;
+  final String documentId;
+  final int version;
+
+  factory OcrPhotoUploadResponse.fromJson(Map<String, dynamic> json) {
+    return OcrPhotoUploadResponse(
+      message: (json['message'] ?? '').toString(),
+      photoUrl: (json['photo_url'] ?? '').toString(),
+      batchUserId: (json['batch_user_id'] ?? '').toString(),
+      documentId: (json['document_id'] ?? '').toString(),
+      version: int.tryParse((json['version'] ?? '').toString()) ?? 0,
+    );
+  }
+}
+
+class OcrPhotoUploadResult {
+  const OcrPhotoUploadResult({
+    required this.batchUserId,
+    required this.photoUrl,
+    required this.documentId,
+    required this.version,
+  });
+
+  final String batchUserId;
+  final String photoUrl;
+  final String documentId;
+  final int version;
+
+  factory OcrPhotoUploadResult.fromJson(Map<String, dynamic> json) {
+    return OcrPhotoUploadResult(
+      batchUserId: (json['batch_user_id'] ?? '').toString(),
+      photoUrl: (json['photo_url'] ?? '').toString(),
+      documentId: (json['document_id'] ?? '').toString(),
+      version: int.tryParse((json['version'] ?? '').toString()) ?? 0,
+    );
+  }
+}
+
+class OcrPhotoUploadError {
+  const OcrPhotoUploadError({required this.batchUserId, required this.error});
+
+  final String batchUserId;
+  final String error;
+
+  factory OcrPhotoUploadError.fromJson(Map<String, dynamic> json) {
+    return OcrPhotoUploadError(
+      batchUserId: (json['batch_user_id'] ?? '').toString(),
+      error: (json['error'] ?? '').toString(),
+    );
+  }
+}
+
+class BulkOcrPhotoUploadResponse {
+  const BulkOcrPhotoUploadResponse({
+    required this.message,
+    required this.totalRequested,
+    required this.totalSucceeded,
+    required this.totalFailed,
+    required this.successfulUsers,
+    required this.failedUsers,
+  });
+
+  final String message;
+  final int totalRequested;
+  final int totalSucceeded;
+  final int totalFailed;
+  final List<OcrPhotoUploadResult> successfulUsers;
+  final List<OcrPhotoUploadError> failedUsers;
+
+  factory BulkOcrPhotoUploadResponse.fromJson(Map<String, dynamic> json) {
+    final dynamic successRaw = json['successful_users'];
+    final dynamic failedRaw = json['failed_users'];
+    return BulkOcrPhotoUploadResponse(
+      message: (json['message'] ?? '').toString(),
+      totalRequested:
+          int.tryParse((json['total_requested'] ?? '').toString()) ?? 0,
+      totalSucceeded:
+          int.tryParse((json['total_succeeded'] ?? '').toString()) ?? 0,
+      totalFailed: int.tryParse((json['total_failed'] ?? '').toString()) ?? 0,
+      successfulUsers: successRaw is List
+          ? successRaw
+                .whereType<Map>()
+                .map(
+                  (Map e) => OcrPhotoUploadResult.fromJson(
+                    Map<String, dynamic>.from(e),
+                  ),
+                )
+                .toList()
+          : const <OcrPhotoUploadResult>[],
+      failedUsers: failedRaw is List
+          ? failedRaw
+                .whereType<Map>()
+                .map(
+                  (Map e) => OcrPhotoUploadError.fromJson(
+                    Map<String, dynamic>.from(e),
+                  ),
+                )
+                .toList()
+          : const <OcrPhotoUploadError>[],
+    );
+  }
+}
+
 class UploadDocumentResponse {
   const UploadDocumentResponse({
     required this.message,

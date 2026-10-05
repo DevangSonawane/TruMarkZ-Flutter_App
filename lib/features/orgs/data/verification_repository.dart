@@ -1166,4 +1166,64 @@ class VerificationRepository {
     );
     return UploadDocumentResponse.fromJson(res);
   }
+
+  /// Stage 2 of the OCR Human workflow (trumarkz_ocr.md §3.2):
+  /// single photo for one BatchUser created by bulk-upload/documents.
+  Future<OcrPhotoUploadResponse> uploadOcrPhoto({
+    required String batchUserId,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final String safeName = fileName.trim().isEmpty ? 'photo.jpg' : fileName;
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'batch_user_id': batchUserId.trim(),
+      'photo': MultipartFile.fromBytes(
+        fileBytes,
+        filename: safeName,
+        contentType: _mediaTypeForFileName(safeName),
+      ),
+    });
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/upload/ocr-photo',
+      formData,
+    );
+    return OcrPhotoUploadResponse.fromJson(res);
+  }
+
+  /// Stage 2 bulk (trumarkz_ocr.md §3.3): positional
+  /// `batch_user_ids[i] ↔ photos[i]`. Both lists must be same length —
+  /// callers must preserve `successful_users[]` order and exclude skips.
+  Future<BulkOcrPhotoUploadResponse> bulkUploadOcrPhotos({
+    required List<String> batchUserIds,
+    required List<BulkUploadDocumentInput> photos,
+  }) async {
+    assert(
+      batchUserIds.length == photos.length,
+      'batch_user_ids and photos must contain the same number of items',
+    );
+    final FormData formData = FormData.fromMap(<String, dynamic>{});
+    for (final String id in batchUserIds) {
+      formData.fields.add(MapEntry('batch_user_ids', id.trim()));
+    }
+    for (final BulkUploadDocumentInput photo in photos) {
+      final String safeName = photo.fileName.trim().isEmpty
+          ? 'photo.jpg'
+          : photo.fileName.trim();
+      formData.files.add(
+        MapEntry(
+          'photos',
+          MultipartFile.fromBytes(
+            photo.fileBytes,
+            filename: safeName,
+            contentType: _mediaTypeForFileName(safeName),
+          ),
+        ),
+      );
+    }
+    final Map<String, dynamic> res = await _api.verificationPostMultipart(
+      '/verification/bulk-upload/ocr-photos',
+      formData,
+    );
+    return BulkOcrPhotoUploadResponse.fromJson(res);
+  }
 }

@@ -25,6 +25,8 @@ import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
 import '../../../../../core/services/batch_name_store.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
+import '../../../../../core/widgets/tmz_badge.dart';
+import '../../../../../core/widgets/tmz_button.dart';
 import 'human_verification_checks_catalog.dart';
 import 'product_verification_checks_catalog.dart';
 
@@ -870,15 +872,19 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     setState(_ensureDocumentUsers);
     int selectedIndex = _selectedUserIndex.clamp(0, _parsedUsers.length - 1);
     bool isProcessing = false;
+    bool isAddingDocs = false;
+    String busyStatus = '';
+    bool sheetBusy() => isProcessing || isAddingDocs;
 
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (BuildContext context, void Function(void Function()) setDialogState) {
             Future<void> addDocuments() async {
-              if (isProcessing) return;
-              setDialogState(() => isProcessing = true);
+              if (sheetBusy()) return;
+              setDialogState(() => isAddingDocs = true);
               final List<PickedFile> picked =
                   await FilePickerUtil.pickDocuments();
               try {
@@ -906,16 +912,123 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                 }
               } finally {
                 if (mounted) {
-                  setDialogState(() => isProcessing = false);
+                  setDialogState(() => isAddingDocs = false);
                 }
               }
             }
 
+            // Smooth in-sheet flow: the sheet stays open with inline progress
+            // while uploading, then review and photo sheets stack on top of
+            // it — the background page is never exposed mid-flow. Review/photo
+            // sheets share the same Dialog styling so it reads as one wizard
+            // (steps 1→2→3). Same workers as _submitDocumentBatch, same order,
+            // same requests; only the presentation is unified.
             Future<void> reviewAndContinue() async {
-              Navigator.of(dialogContext).pop();
-              await Future<void>.delayed(Duration.zero);
-              if (!mounted) return;
-              await _confirmAndCreateBatch();
+              if (sheetBusy()) return;
+              if (_documentUploadFiles().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please attach at least one document image.'),
+                  ),
+                );
+                return;
+              }
+              setDialogState(() {
+                isProcessing = true;
+                busyStatus =
+                    'Uploading ${(_documentUploadFiles().length)} document(s)…';
+              });
+              try {
+                final ({
+                  BulkUploadResponse res,
+                  Map<int, String> userIdsByIndex,
+                })
+                uploaded = await _uploadOcrDocumentsAndMerge();
+                final BulkUploadResponse uploadedRes = uploaded.res;
+                final Map<int, String> uploadedIds = uploaded.userIdsByIndex;
+                if (!mounted || !dialogContext.mounted) return;
+                setDialogState(() {
+                  busyStatus = 'Reading OCR results…';
+                });
+                setState(() {});
+                // Stacked on top of this sheet — this sheet stays underneath
+                // so dismissing review returns here instead of flashing the
+                // background page.
+                final List<Map<String, dynamic>>? reviewedUsers =
+                    await showDialog<List<Map<String, dynamic>>>(
+                      context: dialogContext,
+                      barrierDismissible: false,
+                      builder: (BuildContext context) {
+                        return _HumanReviewDialog(
+                          users: _parsedUsers,
+                          documentsByUser: _attachedDocumentsByUser,
+                          skipped: uploadedRes.skippedUsers,
+                          errors: uploadedRes.errors,
+                          stepEyebrow: 'STEP 2 OF 3 • REVIEW',
+                        );
+                      },
+                    );
+                if (reviewedUsers == null || reviewedUsers.isEmpty) {
+                  setDialogState(() {
+                    isProcessing = false;
+                    busyStatus = '';
+                  });
+                  return;
+                }
+                if (!mounted || !dialogContext.mounted) return;
+                setDialogState(() {
+                  busyStatus = 'Saving review…';
+                });
+                await _persistReviewedOcrUsers(reviewedUsers, uploadedIds);
+                if (!mounted || !dialogContext.mounted) return;
+                if (uploadedRes.successfulUsers.isNotEmpty) {
+                  final Map<String, int> localIndexByUserId = <String, int>{
+                    for (final MapEntry<int, String> e in uploadedIds.entries)
+                      e.value: e.key,
+                  };
+                  setDialogState(() {
+                    busyStatus = 'Documents saved — add photos.';
+                  });
+                  await showDialog<void>(
+                    context: dialogContext,
+                    barrierDismissible: false,
+                    builder: (BuildContext context) {
+                      return _OcrPhotoStageDialog(
+                        users: uploadedRes.successfulUsers,
+                        skippedCount: uploadedRes.totalSkipped,
+                        skipped: uploadedRes.skippedUsers,
+                        docErrors: uploadedRes.errors,
+                        displayNameFor: (BulkUploadSuccessUser u) =>
+                            _ocrPhotoDisplayName(
+                              u,
+                              localIndexByUserId,
+                              reviewedUsers,
+                            ),
+                      );
+                    },
+                  );
+                }
+                if (!mounted || !dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop();
+                await Future<void>.delayed(Duration.zero);
+                if (!mounted) return;
+                await _storeBatchAndGoToCosting(uploadedRes);
+              } catch (e) {
+                if (e is DioException) {
+                  debugPrint(
+                    '[BulkUploadPage] Smooth OCR flow DioException: type=${e.type} '
+                    'status=${e.response?.statusCode} data=${e.response?.data} message=${e.message}',
+                  );
+                }
+                if (!mounted || !dialogContext.mounted) return;
+                ScaffoldMessenger.of(
+                  dialogContext,
+                ).showSnackBar(SnackBar(content: Text(_ocrFriendlyError(e))));
+                setDialogState(() {
+                  isProcessing = false;
+                  busyStatus = '';
+                });
+              }
             }
 
             void addUser() {
@@ -991,223 +1104,440 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
             final List<_HumanDocumentDraft> currentDocs =
                 _documentDraftsForUser(selectedIndex);
+            Widget stepLabel() {
+              return Text(
+                'STEP 1 OF 3 • DOCUMENTS',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+              );
+            }
+
+            Widget headerActions() {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (_parsedUsers.length > 1) ...<Widget>[
+                    IconButton(
+                      onPressed: sheetBusy()
+                          ? null
+                          : (selectedIndex > 0 ? goToPreviousUser : null),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 15,
+                      ),
+                      color: AppColors.textSecondary,
+                      tooltip: 'Previous user',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 30,
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.offWhite,
+                        fixedSize: const Size(30, 30),
+                        minimumSize: const Size(30, 30),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      onPressed: sheetBusy()
+                          ? null
+                          : (selectedIndex < _parsedUsers.length - 1
+                                ? goToNextUser
+                                : null),
+                      icon: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 15,
+                      ),
+                      color: AppColors.textSecondary,
+                      tooltip: 'Next user',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 30,
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.offWhite,
+                        fixedSize: const Size(30, 30),
+                        minimumSize: const Size(30, 30),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  IconButton(
+                    onPressed: sheetBusy()
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    iconSize: 18,
+                    tooltip: 'Close',
+                    color: AppColors.textSecondary,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 30,
+                      height: 30,
+                    ),
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size(30, 30),
+                      minimumSize: const Size(30, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              );
+            }
 
             return Dialog(
               insetPadding: const EdgeInsets.all(16),
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.white,
+              backgroundColor: AppColors.cardSurface,
+              surfaceTintColor: AppColors.cardSurface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
+                constraints: const BoxConstraints(
+                  maxWidth: 560,
+                  maxHeight: 720,
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(22),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              'Documents',
-                              style: AppTypography.heading1.copyWith(
-                                color: AppColors.brandBlue,
-                              ),
-                            ),
-                          ),
-                          if (_parsedUsers.length > 1) ...<Widget>[
-                            IconButton(
-                              onPressed: selectedIndex > 0
-                                  ? goToPreviousUser
-                                  : null,
-                              icon: const Icon(
-                                Icons.arrow_back_ios_new_rounded,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: selectedIndex < _parsedUsers.length - 1
-                                  ? goToNextUser
-                                  : null,
-                              icon: const Icon(Icons.arrow_forward_ios_rounded),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _parsedUsers.length > 1
-                            ? 'Use the arrows to move between users, then attach document(s) for each person.'
-                            : 'Attach document(s) for this user.',
-                        style: AppTypography.body2.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.35,
+                  padding: const EdgeInsets.all(20),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        LayoutBuilder(
+                          builder:
+                              (
+                                BuildContext context,
+                                BoxConstraints constraints,
+                              ) {
+                                if (constraints.maxWidth < 320) {
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      stepLabel(),
+                                      const SizedBox(height: 6),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: headerActions(),
+                                      ),
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  children: <Widget>[
+                                    Expanded(child: stepLabel()),
+                                    const SizedBox(width: 8),
+                                    headerActions(),
+                                  ],
+                                );
+                              },
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: <Widget>[
-                          if (_parsedUsers.length > 1)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: InkWell(
-                                onTap: removeCurrentUser,
-                                borderRadius: BorderRadius.circular(999),
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFEF4444),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: const Text(
-                                    '−',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      height: 1,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: const SizedBox(
+                            height: 4,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: <Widget>[
+                                DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.divider,
                                   ),
                                 ),
-                              ),
-                            ),
-                          Expanded(
-                            child: Text(
-                              _displayUserLabel(
-                                _parsedUsers[selectedIndex],
-                                selectedIndex,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.heading2.copyWith(
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          if (_parsedUsers.length > 1)
-                            Text(
-                              '${selectedIndex + 1}/${_parsedUsers.length}',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: SizedBox(
-                          width: 220,
-                          child: TextButton.icon(
-                            onPressed: isProcessing ? null : addDocuments,
-                            icon: isProcessing
-                                ? SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                                FractionallySizedBox(
+                                  alignment: Alignment.centerLeft,
+                                  widthFactor: 1 / 3,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
                                       color: AppColors.brandBlue,
                                     ),
-                                  )
-                                : const Icon(Icons.attach_file_rounded),
-                            label: Text(
-                              isProcessing ? 'Uploading...' : 'Add Document',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Preview',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
+                        const SizedBox(height: 12),
+                        Text(
+                          'Add documents',
+                          style: AppTypography.heading1.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 188,
-                        child: currentDocs.isEmpty
-                            ? DecoratedBox(
+                        const SizedBox(height: 6),
+                        Text(
+                          _parsedUsers.length > 1
+                              ? 'Move between users with the arrows, then attach each person’s ID. Multi-select is fine — everything goes in one request (1 image = 1 user). Photos come after review.'
+                              : 'Attach this user’s ID. Multi-select is fine — everything goes in one request. Photos come after review.',
+                          style: AppTypography.body2.copyWith(
+                            color: AppColors.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.offWhite,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Container(
+                                width: 40,
+                                height: 40,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
+                                  color: AppColors.blueTint,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '${selectedIndex + 1}',
+                                  style: AppTypography.heading2.copyWith(
+                                    color: AppColors.brandBlue,
+                                    fontSize: 16,
                                   ),
                                 ),
-                                child: Center(
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      _displayUserLabel(
+                                        _parsedUsers[selectedIndex],
+                                        selectedIndex,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.body2.copyWith(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    Text(
+                                      _parsedUsers.length > 1
+                                          ? 'User ${selectedIndex + 1} of ${_parsedUsers.length}'
+                                          : 'Single user batch',
+                                      style: AppTypography.caption.copyWith(
+                                        color: AppColors.textTertiary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (_parsedUsers.length > 1) ...<Widget>[
+                                TMZBadge.manual(
+                                  label:
+                                      '${selectedIndex + 1}/${_parsedUsers.length}',
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton(
+                                  onPressed: sheetBusy()
+                                      ? null
+                                      : removeCurrentUser,
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 18,
+                                  ),
+                                  color: AppColors.textSecondary,
+                                  tooltip: 'Remove user',
+                                  visualDensity: VisualDensity.compact,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: AppColors.cardSurface,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TMZButton(
+                          label: isAddingDocs ? 'Reading…' : 'Add documents',
+                          icon: Icons.attach_file_rounded,
+                          variant: TMZButtonVariant.secondary,
+                          isLoading: isAddingDocs,
+                          onPressed: sheetBusy() ? null : addDocuments,
+                          showShadow: false,
+                        ),
+                        const SizedBox(height: 4),
+                        Center(
+                          child: Text(
+                            'Multi-select supported',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        ),
+                        if (isProcessing) ...<Widget>[
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.blueTint,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                const Icon(
+                                  Icons.sync_rounded,
+                                  size: 14,
+                                  color: AppColors.brandBlue,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
                                   child: Text(
-                                    'Add a document to see the preview here.',
+                                    busyStatus.isNotEmpty
+                                        ? busyStatus
+                                        : 'Working…',
                                     textAlign: TextAlign.center,
-                                    style: AppTypography.body2.copyWith(
-                                      color: AppColors.textSecondary,
+                                    style: AppTypography.caption.copyWith(
+                                      color: AppColors.brandBlue,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ),
-                              )
-                            : GridView.builder(
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 3,
-                                      crossAxisSpacing: 10,
-                                      mainAxisSpacing: 10,
-                                      childAspectRatio: 1,
-                                    ),
-                                itemCount: currentDocs.length,
-                                itemBuilder: (BuildContext context, int index) {
-                                  final _HumanDocumentDraft draft =
-                                      currentDocs[index];
-                                  return _DocumentPreviewTile(
-                                    fileName: draft.file.name,
-                                    fileBytes: draft.file.bytes,
-                                    onRemove: () => removeDocument(index),
-                                  );
-                                },
-                              ),
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: Row(
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
                           children: <Widget>[
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: addUser,
-                                icon: const Icon(
-                                  Icons.person_add_alt_1_rounded,
-                                ),
-                                label: const Text('Add User'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.brandBlue,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                ),
+                            Text(
+                              'PREVIEW',
+                              style: AppTypography.label.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 11,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: reviewAndContinue,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.brandBlue,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                ),
-                                child: const Text('Continue'),
+                            const Spacer(),
+                            if (currentDocs.isNotEmpty)
+                              TMZBadge.pending(
+                                label:
+                                    '${currentDocs.length} file${currentDocs.length == 1 ? '' : 's'}',
                               ),
-                            ),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        RepaintBoundary(
+                          child: SizedBox(
+                            height: 188,
+                            child: currentDocs.isEmpty
+                                ? DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: AppColors.offWhite,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: AppColors.divider,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: <Widget>[
+                                          const Icon(
+                                            Icons.drive_folder_upload_outlined,
+                                            size: 28,
+                                            color: AppColors.textTertiary,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Add a document to see the preview here.',
+                                            textAlign: TextAlign.center,
+                                            style: AppTypography.body2.copyWith(
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : GridView.builder(
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 3,
+                                          crossAxisSpacing: 10,
+                                          mainAxisSpacing: 10,
+                                          childAspectRatio: 1,
+                                        ),
+                                    itemCount: currentDocs.length,
+                                    itemBuilder:
+                                        (BuildContext context, int index) {
+                                          final _HumanDocumentDraft draft =
+                                              currentDocs[index];
+                                          return _DocumentPreviewTile(
+                                            fileName: draft.file.name,
+                                            fileBytes: draft.file.bytes,
+                                            onRemove: sheetBusy()
+                                                ? () {}
+                                                : () => removeDocument(index),
+                                          );
+                                        },
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          child: Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: TMZButton(
+                                  label: 'Add user',
+                                  icon: Icons.person_add_alt_1_rounded,
+                                  variant: TMZButtonVariant.secondary,
+                                  onPressed: sheetBusy() ? null : addUser,
+                                  showShadow: false,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TMZButton(
+                                  label: isProcessing ? 'Working…' : 'Continue',
+                                  icon: Icons.arrow_forward_rounded,
+                                  isLoading: isProcessing,
+                                  onPressed: sheetBusy()
+                                      ? null
+                                      : reviewAndContinue,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1261,6 +1591,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 
   List<BulkUploadDocumentInput> _documentUploadFiles() {
+    // trumarkz_ocr.md §3.1: backend accepts multiple files under the same
+    // `files` field in ONE request, processed in upload order. Send every
+    // attached image (sorted by user, then attach order) — not just the
+    // first per user — so multi-document bulk truly works.
     final List<BulkUploadDocumentInput> files = <BulkUploadDocumentInput>[];
     final List<int> userIndices = _attachedDocumentsByUser.keys.toList()
       ..sort();
@@ -1281,7 +1615,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             fileName: draft.file.name,
           ),
         );
-        break;
       }
     }
     return files;
@@ -1401,11 +1734,174 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     }
   }
 
+  /// Shared OCR worker — uploads `files[]` once and merges OCR into local
+  /// drafts. No dialogs, no navigation, so both the smooth attach-sheet flow
+  /// and the page-level Upload button can use the exact same sequence.
+  Future<({BulkUploadResponse res, Map<int, String> userIdsByIndex})>
+  _uploadOcrDocumentsAndMerge() async {
+    final VerificationRepository repo = ref.read(
+      verificationRepositoryProvider,
+    );
+    final String verificationTypesCsv = _verificationTypesCsv();
+    final List<_HumanDocumentDraft> selectedDocs = _documentDraftsForUser(
+      _selectedUserIndex,
+    );
+    final String docType = selectedDocs.isNotEmpty
+        ? selectedDocs.first.label.trim()
+        : 'document';
+    final BulkUploadResponse res = await repo.bulkUploadDocuments(
+      batchName: _batchNameController.text.trim(),
+      industryType: _industry.trim().isNotEmpty ? _industry.trim() : null,
+      verificationTypes: verificationTypesCsv.isNotEmpty
+          ? verificationTypesCsv
+          : null,
+      credentialVisibility: _credentialVisibility.trim().isNotEmpty
+          ? _credentialVisibility.trim()
+          : null,
+      docType: docType.isNotEmpty ? docType : 'document',
+      fields: _humanDocumentFieldsCsv,
+      files: _documentUploadFiles(),
+    );
+
+    final Map<int, String> userIdsByIndex = <int, String>{};
+    for (int i = 0; i < res.successfulUsers.length; i++) {
+      final BulkUploadSuccessUser serverUser = res.successfulUsers[i];
+      final int localIndex = _findMatchingDraftIndex(serverUser, i);
+      if (localIndex < 0) continue;
+      userIdsByIndex[localIndex] = serverUser.userId;
+      if (serverUser.extracted.isNotEmpty) {
+        _mergeOcrIntoUser(
+          localIndex,
+          _applyOcrFieldAliases(_normalizeOcrMap(serverUser.extracted)),
+        );
+      }
+    }
+    return (res: res, userIdsByIndex: userIdsByIndex);
+  }
+
+  /// Shared OCR worker — persists reviewed fields per BatchUser.
+  Future<void> _persistReviewedOcrUsers(
+    List<Map<String, dynamic>> reviewedUsers,
+    Map<int, String> userIdsByIndex,
+  ) async {
+    final VerificationRepository repo = ref.read(
+      verificationRepositoryProvider,
+    );
+    for (final MapEntry<int, String> entry in userIdsByIndex.entries) {
+      final int userIndex = entry.key;
+      final String userId = entry.value;
+      await repo.updateBatchUser(
+        userId: userId,
+        fullName: reviewedUsers[userIndex]['full_name']?.toString(),
+        email: reviewedUsers[userIndex]['email']?.toString(),
+        phoneNumber: reviewedUsers[userIndex]['phone_number']?.toString(),
+        dob: reviewedUsers[userIndex]['dob']?.toString(),
+        aadharNumber: reviewedUsers[userIndex]['aadhar_number']?.toString(),
+        panNumber: reviewedUsers[userIndex]['pan_number']?.toString(),
+        addressLine1: reviewedUsers[userIndex]['address_line1']?.toString(),
+        addressLine2: reviewedUsers[userIndex]['address_line2']?.toString(),
+        addressLine3: reviewedUsers[userIndex]['address_line3']?.toString(),
+        pincode: reviewedUsers[userIndex]['pincode']?.toString(),
+        state: reviewedUsers[userIndex]['state']?.toString(),
+        country: reviewedUsers[userIndex]['country']?.toString(),
+        customFields: reviewedUsers[userIndex],
+        markReviewed: true,
+      );
+    }
+  }
+
+  /// Shared OCR worker — stores the batch name and navigates to costing,
+  /// handing it the success navigation as the confirm action.
+  Future<void> _storeBatchAndGoToCosting(BulkUploadResponse res) async {
+    await ref
+        .read(batchNameStoreProvider.notifier)
+        .setBatchName(res.batchId, _batchNameController.text.trim());
+
+    if (!mounted) return;
+    final String resolvedIndustry = _industry.trim();
+    final String verificationChecks = _verificationTypesCsv();
+    final Uri paymentUri = Uri(
+      path: AppRouter.perUnitCostBreakdownPath,
+      queryParameters: <String, String>{
+        if (verificationChecks.isNotEmpty) 'checks': verificationChecks,
+        if (resolvedIndustry.isNotEmpty) 'industry': resolvedIndustry,
+        'industry_label': _prettyIndustry(resolvedIndustry),
+        'identity_type': 'Human',
+        'flow': 'human',
+        'access': _credentialVisibility.trim().isNotEmpty
+            ? _credentialVisibility.trim()
+            : 'public_searchable',
+        'users_count': res.totalUploaded.toString(),
+        'batch': _batchNameController.text.trim(),
+      },
+    );
+    Future<void> confirmAction() async {
+      if (!mounted) return;
+      final Uri successUri = Uri(
+        path: AppRouter.batchCreatedSuccessPath,
+        queryParameters: <String, String>{
+          'batch_id': res.batchId,
+          'total_uploaded': res.totalUploaded.toString(),
+          'total_skipped': res.totalSkipped.toString(),
+          'errors': res.errors.length.toString(),
+          'batch': _batchNameController.text.trim(),
+        },
+      );
+      context.push(successUri.toString());
+    }
+
+    // ignore: use_build_context_synchronously
+    await context.push(paymentUri.toString(), extra: confirmAction);
+  }
+
+  /// Single mapping for OCR upload/save failures (ApiException passthrough,
+  /// Dio status hints, generic fallback).
+  String _ocrFriendlyError(Object e) {
+    if (e is ApiException) return e.message;
+    if (e is DioException) {
+      final Object? inner = e.error;
+      if (inner is ApiException) return inner.message;
+      final dynamic data = e.response?.data;
+      if (data is String && data.trim().isNotEmpty) return data.trim();
+      if (data is Map && data['message'] is String) {
+        final String m = (data['message'] as String).trim();
+        if (m.isNotEmpty) return m;
+      }
+      if (e.response?.statusCode == 404) {
+        return 'User not found. Please re-upload the documents.';
+      }
+      if (e.response?.statusCode == 403) {
+        return 'You don\u2019t have access to this batch.';
+      }
+      if (e.message?.trim().isNotEmpty == true) return e.message!.trim();
+      return 'Could not upload the document images. Please try again.';
+    }
+    return 'Something went wrong. Please try again.';
+  }
+
+  String _ocrPhotoDisplayName(
+    BulkUploadSuccessUser u,
+    Map<String, int> localIndexByUserId,
+    List<Map<String, dynamic>> reviewedUsers,
+  ) {
+    final int? local = localIndexByUserId[u.userId];
+    if (local != null && local >= 0 && local < reviewedUsers.length) {
+      final String name = (reviewedUsers[local]['full_name'] ?? '')
+          .toString()
+          .trim();
+      if (name.isNotEmpty) return name;
+    }
+    if (u.fullName.trim().isNotEmpty) return u.fullName.trim();
+    if (u.email.trim().isNotEmpty) return u.email.trim();
+    return 'User';
+  }
+
   Future<void> _submitDocumentBatch() async {
+    // Page-level entry (Upload button with docs already attached). Same
+    // worker sequence as the smooth attach-sheet flow below.
     if (_isUploading) return;
 
-    final List<BulkUploadDocumentInput> files = _documentUploadFiles();
-    if (files.isEmpty) {
+    if (_documentUploadFiles().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please attach at least one document image.'),
@@ -1416,43 +1912,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     setState(() => _isUploading = true);
     try {
-      final VerificationRepository repo = ref.read(
-        verificationRepositoryProvider,
-      );
-      final String verificationTypesCsv = _verificationTypesCsv();
-      final List<_HumanDocumentDraft> selectedDocs = _documentDraftsForUser(
-        _selectedUserIndex,
-      );
-      final String docType = selectedDocs.isNotEmpty
-          ? selectedDocs.first.label.trim()
-          : 'document';
-      final BulkUploadResponse res = await repo.bulkUploadDocuments(
-        batchName: _batchNameController.text.trim(),
-        industryType: _industry.trim().isNotEmpty ? _industry.trim() : null,
-        verificationTypes: verificationTypesCsv.isNotEmpty
-            ? verificationTypesCsv
-            : null,
-        credentialVisibility: _credentialVisibility.trim().isNotEmpty
-            ? _credentialVisibility.trim()
-            : null,
-        docType: docType.isNotEmpty ? docType : 'document',
-        fields: _humanDocumentFieldsCsv,
-        files: files,
-      );
-
-      final Map<int, String> userIdsByIndex = <int, String>{};
-      for (int i = 0; i < res.successfulUsers.length; i++) {
-        final BulkUploadSuccessUser serverUser = res.successfulUsers[i];
-        final int localIndex = _findMatchingDraftIndex(serverUser, i);
-        if (localIndex < 0) continue;
-        userIdsByIndex[localIndex] = serverUser.userId;
-        if (serverUser.extracted.isNotEmpty) {
-          _mergeOcrIntoUser(
-            localIndex,
-            _applyOcrFieldAliases(_normalizeOcrMap(serverUser.extracted)),
-          );
-        }
-      }
+      final ({BulkUploadResponse res, Map<int, String> userIdsByIndex})
+      uploaded = await _uploadOcrDocumentsAndMerge();
+      final BulkUploadResponse res = uploaded.res;
+      final Map<int, String> userIdsByIndex = uploaded.userIdsByIndex;
 
       if (!mounted) return;
       final List<Map<String, dynamic>>? reviewedUsers =
@@ -1463,114 +1926,56 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
               return _HumanReviewDialog(
                 users: _parsedUsers,
                 documentsByUser: _attachedDocumentsByUser,
+                skipped: res.skippedUsers,
+                errors: res.errors,
+                stepEyebrow: 'STEP 2 OF 3 • REVIEW',
               );
             },
           );
       if (reviewedUsers == null || reviewedUsers.isEmpty) return;
 
-      for (final MapEntry<int, String> entry in userIdsByIndex.entries) {
-        final int userIndex = entry.key;
-        final String userId = entry.value;
-        await repo.updateBatchUser(
-          userId: userId,
-          fullName: reviewedUsers[userIndex]['full_name']?.toString(),
-          email: reviewedUsers[userIndex]['email']?.toString(),
-          phoneNumber: reviewedUsers[userIndex]['phone_number']?.toString(),
-          dob: reviewedUsers[userIndex]['dob']?.toString(),
-          aadharNumber: reviewedUsers[userIndex]['aadhar_number']?.toString(),
-          panNumber: reviewedUsers[userIndex]['pan_number']?.toString(),
-          addressLine1: reviewedUsers[userIndex]['address_line1']?.toString(),
-          addressLine2: reviewedUsers[userIndex]['address_line2']?.toString(),
-          addressLine3: reviewedUsers[userIndex]['address_line3']?.toString(),
-          pincode: reviewedUsers[userIndex]['pincode']?.toString(),
-          state: reviewedUsers[userIndex]['state']?.toString(),
-          country: reviewedUsers[userIndex]['country']?.toString(),
-          customFields: reviewedUsers[userIndex],
-          markReviewed: true,
-        );
-      }
+      await _persistReviewedOcrUsers(reviewedUsers, userIdsByIndex);
 
-      await ref
-          .read(batchNameStoreProvider.notifier)
-          .setBatchName(res.batchId, _batchNameController.text.trim());
-
+      // Stage 2 — photos (trumarkz_ocr.md §3.2/§3.3, §5, §8). Independent
+      // request: documents/BatchUsers stay untouched if photos fail or are
+      // skipped. Positional pairing: successful_users[] order is preserved,
+      // skipped docs have no id and are excluded automatically.
       if (!mounted) return;
-      final String resolvedIndustry = _industry.trim();
-      final String verificationChecks = _verificationTypesCsv();
-      final Uri paymentUri = Uri(
-        path: AppRouter.perUnitCostBreakdownPath,
-        queryParameters: <String, String>{
-          if (verificationChecks.isNotEmpty) 'checks': verificationChecks,
-          if (resolvedIndustry.isNotEmpty) 'industry': resolvedIndustry,
-          'industry_label': _prettyIndustry(resolvedIndustry),
-          'identity_type': 'Human',
-          'flow': 'human',
-          'access': _credentialVisibility.trim().isNotEmpty
-              ? _credentialVisibility.trim()
-              : 'public_searchable',
-          'users_count': res.totalUploaded.toString(),
-          'batch': _batchNameController.text.trim(),
-        },
-      );
-      Future<void> confirmAction() async {
-        if (!mounted) return;
-        final Uri successUri = Uri(
-          path: AppRouter.batchCreatedSuccessPath,
-          queryParameters: <String, String>{
-            'batch_id': res.batchId,
-            'total_uploaded': res.totalUploaded.toString(),
-            'total_skipped': res.totalSkipped.toString(),
-            'errors': res.errors.length.toString(),
-            'batch': _batchNameController.text.trim(),
+      if (res.successfulUsers.isNotEmpty) {
+        final Map<String, int> localIndexByUserId = <String, int>{
+          for (final MapEntry<int, String> e in userIdsByIndex.entries)
+            e.value: e.key,
+        };
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return _OcrPhotoStageDialog(
+              users: res.successfulUsers,
+              skippedCount: res.totalSkipped,
+              skipped: res.skippedUsers,
+              docErrors: res.errors,
+              displayNameFor: (BulkUploadSuccessUser u) =>
+                  _ocrPhotoDisplayName(u, localIndexByUserId, reviewedUsers),
+            );
           },
         );
-        context.push(successUri.toString());
       }
 
-      // ignore: use_build_context_synchronously
-      await context.push(paymentUri.toString(), extra: confirmAction);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
-    } on DioException catch (e) {
-      if (!mounted) return;
-      debugPrint(
-        '[BulkUploadPage] Document upload DioException: type=${e.type} uri=${e.requestOptions.uri} '
-        'status=${e.response?.statusCode} data=${e.response?.data} message=${e.message}',
-      );
-      final Object? inner = e.error;
-      if (inner is ApiException) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(inner.message)));
-      } else {
-        final dynamic data = e.response?.data;
-        String? serverMessage;
-        if (data is String && data.trim().isNotEmpty) {
-          serverMessage = data.trim();
-        } else if (data is Map && data['message'] is String) {
-          final String m = (data['message'] as String).trim();
-          if (m.isNotEmpty) serverMessage = m;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              serverMessage ??
-                  'Could not upload the document images. Please try again.',
-            ),
-          ),
-        );
-      }
+      await _storeBatchAndGoToCosting(res);
     } catch (e) {
       if (!mounted) return;
-      debugPrint('[BulkUploadPage] Document upload failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
-      );
+      if (e is DioException) {
+        debugPrint(
+          '[BulkUploadPage] Document upload DioException: type=${e.type} uri=${e.requestOptions.uri} '
+          'status=${e.response?.statusCode} data=${e.response?.data} message=${e.message}',
+        );
+      } else {
+        debugPrint('[BulkUploadPage] Document upload failed: $e');
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_ocrFriendlyError(e))));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -2029,7 +2434,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                     _BatchNameField(
                                       scale: scale,
                                       controller: _batchNameController,
-                                      onChanged: () => setState(() {}),
+                                      // No page rebuild on keystroke: the
+                                      // Upload button below listens to the
+                                      // controller directly, so typing never
+                                      // relayouts the whole page (keyboard
+                                      // animation stays smooth).
+                                      onChanged: () {},
                                     ),
                                     SizedBox(height: s(10)),
                                     Text(
@@ -2100,9 +2510,13 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                       ),
                                     ),
                                     SizedBox(height: s(22)),
-                                    _DropZone(
-                                      scale: scale,
-                                      onTap: _pickExcelFile,
+                                    // Isolate custom-paint + SVG raster work
+                                    // from keyboard-resize repaints.
+                                    RepaintBoundary(
+                                      child: _DropZone(
+                                        scale: scale,
+                                        onTap: _pickExcelFile,
+                                      ),
                                     ),
                                     SizedBox(height: s(18)),
                                     Row(
@@ -2158,7 +2572,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                               ),
                                               SizedBox(height: s(6)),
                                               Text(
-                                                'Attach supporting documents for reference alongside the batch upload.',
+                                                'Step 1 of 2 — attach ID documents (multi-select). You’ll review OCR, then add each person’s photo in step 2.',
                                                 style: TextStyle(
                                                   fontFamily: 'Inter',
                                                   fontSize: s(12),
@@ -2175,14 +2589,16 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                       ],
                                     ),
                                     SizedBox(height: s(14)),
-                                    _DropZone(
-                                      scale: scale,
-                                      onTap: _openAttachDocumentsDialog,
-                                      title: 'Add documents for users',
-                                      subtitle:
-                                          'Tap to attach docs for each user in the batch.',
-                                      iconAsset:
-                                          'assets/icons/figma/bulk_upload_icon_file_attach.svg',
+                                    RepaintBoundary(
+                                      child: _DropZone(
+                                        scale: scale,
+                                        onTap: _openAttachDocumentsDialog,
+                                        title: 'Add documents for users',
+                                        subtitle:
+                                            'Multi-select supported — 1 image = 1 user. Photos come after review.',
+                                        iconAsset:
+                                            'assets/icons/figma/bulk_upload_icon_file_attach.svg',
+                                      ),
                                     ),
                                     if (_parsedUsers.isNotEmpty &&
                                         _attachedDocumentsByUser
@@ -2268,17 +2684,23 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                             ),
                             _BottomNav(
                               scale: scale,
-                              child: _UploadButton(
-                                scale: scale,
-                                isLoading: _isUploading,
-                                enabled:
-                                    _parsedUsers.isNotEmpty &&
-                                    _batchNameController.text
-                                        .trim()
-                                        .isNotEmpty &&
-                                    !_isUploading &&
-                                    !_preflightChecking,
-                                onTap: () => _confirmAndCreateBatch(),
+                              child: ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: _batchNameController,
+                                builder:
+                                    (
+                                      BuildContext context,
+                                      TextEditingValue batchValue,
+                                      _,
+                                    ) => _UploadButton(
+                                      scale: scale,
+                                      isLoading: _isUploading,
+                                      enabled:
+                                          _parsedUsers.isNotEmpty &&
+                                          batchValue.text.trim().isNotEmpty &&
+                                          !_isUploading &&
+                                          !_preflightChecking,
+                                      onTap: () => _confirmAndCreateBatch(),
+                                    ),
                               ),
                             ),
                           ],
@@ -3294,6 +3716,9 @@ class _BatchNameField extends StatelessWidget {
     return TextField(
       controller: controller,
       onChanged: (_) => onChanged(),
+      autocorrect: false,
+      enableSuggestions: false,
+      textCapitalization: TextCapitalization.words,
       decoration: InputDecoration(
         hintText: 'Enter a batch name, Ex. Driver Verification Q1',
         hintStyle: TextStyle(
@@ -3458,7 +3883,16 @@ class _DocumentPreviewTile extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: _isImage
-                    ? Image.memory(fileBytes, fit: BoxFit.cover)
+                    ? Image.memory(
+                        fileBytes,
+                        fit: BoxFit.cover,
+                        // Thumbnail bounds: decode at display size instead of
+                        // full camera resolution so scroll + keyboard resize
+                        // frames stay cheap.
+                        cacheWidth: 384,
+                        cacheHeight: 384,
+                        filterQuality: FilterQuality.low,
+                      )
                     : Container(
                         color: const Color(0xFFF8FAFC),
                         child: Center(
@@ -3632,10 +4066,16 @@ class _HumanReviewDialog extends StatefulWidget {
   const _HumanReviewDialog({
     required this.users,
     required this.documentsByUser,
+    this.skipped = const <BulkUploadSkippedUser>[],
+    this.errors = const <BulkUploadErrorRow>[],
+    this.stepEyebrow,
   });
 
   final List<Map<String, dynamic>> users;
   final Map<int, List<_HumanDocumentDraft>> documentsByUser;
+  final List<BulkUploadSkippedUser> skipped;
+  final List<BulkUploadErrorRow> errors;
+  final String? stepEyebrow;
 
   @override
   State<_HumanReviewDialog> createState() => _HumanReviewDialogState();
@@ -3765,6 +4205,15 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
             mainAxisSize: MainAxisSize.max,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              if (widget.stepEyebrow != null) ...<Widget>[
+                Text(
+                  widget.stepEyebrow!,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               Row(
                 children: <Widget>[
                   Expanded(
@@ -3796,6 +4245,136 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                   height: 1.35,
                 ),
               ),
+              if (widget.stepEyebrow != null) ...<Widget>[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: const SizedBox(
+                    height: 4,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        DecoratedBox(
+                          decoration: BoxDecoration(color: AppColors.divider),
+                        ),
+                        FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 2 / 3,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: AppColors.brandBlue,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (widget.skipped.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.warning.withAlpha(70)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.info_rounded,
+                            size: 14,
+                            color: AppColors.warning,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Skipped ${widget.skipped.length} — excluded from photos',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      for (final BulkUploadSkippedUser s in widget.skipped.take(
+                        5,
+                      ))
+                        Text(
+                          'Doc ${s.row > 0 ? '#${s.row} ' : ''}• ${s.reason}',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      if (widget.skipped.length > 5)
+                        Text(
+                          '+${widget.skipped.length - 5} more',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.warning,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              if (widget.errors.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.dangerBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.danger.withAlpha(60)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            size: 14,
+                            color: AppColors.danger,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${widget.errors.length} error(s)',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.danger,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      for (final BulkUploadErrorRow e in widget.errors.take(5))
+                        Text(
+                          'Doc ${e.row > 0 ? '#${e.row} ' : ''}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      if (widget.errors.length > 5)
+                        Text(
+                          '+${widget.errors.length - 5} more',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.danger,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Expanded(
                 child: PageView.builder(
@@ -4022,6 +4601,717 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Stage 2 — OCR photos (trumarkz_ocr.md §3.2/§3.3, §5, §8).
+///
+/// Users are shown in `successful_users[]` order and pairing is strictly
+/// positional (`batch_user_ids[i] ↔ photos[i]`). Skipped documents have no
+/// id and never reach this dialog. Photos are optional — Skip keeps the
+/// already-created documents/BatchUsers untouched.
+class _OcrPhotoStageDialog extends ConsumerStatefulWidget {
+  const _OcrPhotoStageDialog({
+    required this.users,
+    required this.displayNameFor,
+    this.skippedCount = 0,
+    this.skipped = const <BulkUploadSkippedUser>[],
+    this.docErrors = const <BulkUploadErrorRow>[],
+  });
+
+  final List<BulkUploadSuccessUser> users;
+  final String Function(BulkUploadSuccessUser) displayNameFor;
+  final int skippedCount;
+  final List<BulkUploadSkippedUser> skipped;
+  final List<BulkUploadErrorRow> docErrors;
+
+  @override
+  ConsumerState<_OcrPhotoStageDialog> createState() =>
+      _OcrPhotoStageDialogState();
+}
+
+enum _OcrPhotoStatus { pending, ready, uploading, uploaded, failed }
+
+class _OcrPhotoStageDialogState extends ConsumerState<_OcrPhotoStageDialog> {
+  late final List<PickedFile?> _photos;
+  late final List<_OcrPhotoStatus> _status;
+  late final List<String> _errors;
+  late final List<String> _photoUrls;
+  late final List<int> _versions;
+  bool _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _photos = List<PickedFile?>.filled(widget.users.length, null);
+    _status = List<_OcrPhotoStatus>.filled(
+      widget.users.length,
+      _OcrPhotoStatus.pending,
+    );
+    _errors = List<String>.filled(widget.users.length, '');
+    _photoUrls = List<String>.filled(widget.users.length, '');
+    _versions = List<int>.filled(widget.users.length, 0);
+  }
+
+  int get _readyCount =>
+      _status.where((s) => s == _OcrPhotoStatus.ready).length;
+  int get _uploadedCount =>
+      _status.where((s) => s == _OcrPhotoStatus.uploaded).length;
+  int get _failedCount =>
+      _status.where((s) => s == _OcrPhotoStatus.failed).length;
+
+  Future<void> _pickSingle(int index) async {
+    final PickedFile? picked = await FilePickerUtil.pickImage();
+    if (!mounted || picked == null) return;
+    if (picked.bytes.isEmpty) return;
+    setState(() {
+      _photos[index] = picked;
+      _status[index] = _OcrPhotoStatus.ready;
+      _errors[index] = '';
+    });
+  }
+
+  Future<void> _pickMultiple() async {
+    final List<PickedFile> picked = await FilePickerUtil.pickImages();
+    if (!mounted || picked.isEmpty) return;
+    setState(() {
+      int p = 0;
+      for (int i = 0; i < _photos.length && p < picked.length; i++) {
+        if (_photos[i] == null && _status[i] != _OcrPhotoStatus.uploaded) {
+          _photos[i] = picked[p++];
+          _status[i] = _OcrPhotoStatus.ready;
+          _errors[i] = '';
+        }
+      }
+      if (p < picked.length) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Only ${_photos.length} user slot(s) — ${picked.length - p} extra photo(s) ignored. Pairing is by order shown.',
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  void _removeAt(int index) {
+    if (_status[index] == _OcrPhotoStatus.uploading) return;
+    setState(() {
+      _photos[index] = null;
+      if (_status[index] != _OcrPhotoStatus.uploaded) {
+        _status[index] = _OcrPhotoStatus.pending;
+      } else {
+        // Keep uploaded state; removing the draft does not delete server copy.
+        _photos[index] = null;
+      }
+      _errors[index] = '';
+    });
+  }
+
+  Future<void> _uploadAll() async {
+    if (_isUploading) return;
+    final List<int> indices = <int>[];
+    for (int i = 0; i < _photos.length; i++) {
+      if (_photos[i] != null &&
+          _status[i] != _OcrPhotoStatus.uploaded &&
+          _status[i] != _OcrPhotoStatus.uploading) {
+        indices.add(i);
+      }
+    }
+    if (indices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Attach at least one photo first.')),
+      );
+      return;
+    }
+    setState(() {
+      _isUploading = true;
+      for (final int i in indices) {
+        _status[i] = _OcrPhotoStatus.uploading;
+        _errors[i] = '';
+      }
+    });
+    try {
+      final VerificationRepository repo = ref.read(
+        verificationRepositoryProvider,
+      );
+      if (indices.length == 1) {
+        final int i = indices.single;
+        try {
+          final OcrPhotoUploadResponse res = await repo.uploadOcrPhoto(
+            batchUserId: widget.users[i].userId,
+            fileBytes: _photos[i]!.bytes,
+            fileName: _photos[i]!.name,
+          );
+          if (!mounted) return;
+          setState(() {
+            _status[i] = _OcrPhotoStatus.uploaded;
+            _photoUrls[i] = res.photoUrl;
+            _versions[i] = res.version;
+          });
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            _status[i] = _OcrPhotoStatus.failed;
+            _errors[i] = _friendlyError(e);
+          });
+        }
+      } else {
+        // Bulk — positional: ids[i] ↔ photos[i] among the ready subset,
+        // preserving dialog order (trumarkz_ocr.md §5).
+        final List<String> ids = <String>[
+          for (final int i in indices) widget.users[i].userId,
+        ];
+        final List<BulkUploadDocumentInput> files = <BulkUploadDocumentInput>[
+          for (final int i in indices)
+            BulkUploadDocumentInput(
+              fileBytes: _photos[i]!.bytes,
+              fileName: _photos[i]!.name,
+            ),
+        ];
+        try {
+          final BulkOcrPhotoUploadResponse res = await repo.bulkUploadOcrPhotos(
+            batchUserIds: ids,
+            photos: files,
+          );
+          if (!mounted) return;
+          final Map<String, OcrPhotoUploadResult> okById =
+              <String, OcrPhotoUploadResult>{
+                for (final OcrPhotoUploadResult r in res.successfulUsers)
+                  r.batchUserId: r,
+              };
+          final Map<String, String> errById = <String, String>{
+            for (final OcrPhotoUploadError e in res.failedUsers)
+              e.batchUserId: e.error,
+          };
+          setState(() {
+            for (final int i in indices) {
+              final String id = widget.users[i].userId;
+              final OcrPhotoUploadResult? ok = okById[id];
+              if (ok != null) {
+                _status[i] = _OcrPhotoStatus.uploaded;
+                _photoUrls[i] = ok.photoUrl;
+                _versions[i] = ok.version;
+                _errors[i] = '';
+              } else {
+                _status[i] = _OcrPhotoStatus.failed;
+                _errors[i] = (errById[id] ?? 'Upload failed').trim().isEmpty
+                    ? 'Upload failed'
+                    : errById[id]!.trim();
+              }
+            }
+          });
+          if (!mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(res.message)));
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            for (final int i in indices) {
+              _status[i] = _OcrPhotoStatus.failed;
+              _errors[i] = _friendlyError(e);
+            }
+          });
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  String _friendlyError(Object e) {
+    if (e is ApiException) return e.message;
+    if (e is DioException) {
+      final dynamic data = e.response?.data;
+      if (data is Map && data['message'] is String) {
+        final String m = (data['message'] as String).trim();
+        if (m.isNotEmpty) return m;
+      }
+      if (e.response?.statusCode == 404) return 'User not found (404)';
+      if (e.response?.statusCode == 403) return 'Not your organization (403)';
+      if (e.response?.statusCode == 400) return 'Invalid photo (400)';
+      return e.message ?? 'Upload failed. Please try again.';
+    }
+    return e.toString();
+  }
+
+  Widget _statusChip(int index) {
+    final _OcrPhotoStatus s = _status[index];
+    switch (s) {
+      case _OcrPhotoStatus.uploaded:
+        return TMZBadge.complete(
+          label: _versions[index] > 0
+              ? 'Uploaded • v${_versions[index]}'
+              : 'Uploaded',
+        );
+      case _OcrPhotoStatus.ready:
+        return TMZBadge.pending(label: 'Ready');
+      case _OcrPhotoStatus.uploading:
+        return TMZBadge.processing(label: 'Uploading');
+      case _OcrPhotoStatus.failed:
+        return TMZBadge.failed(label: 'Failed — retry');
+      case _OcrPhotoStatus.pending:
+        return TMZBadge.manual(label: 'No photo');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Step-aware: documents + review are already done (2/3), so the bar
+    // opens part-filled and reaches full as photos upload — never gray-empty.
+    final double progress = widget.users.isEmpty
+        ? 2 / 3
+        : (2 + _uploadedCount / widget.users.length) / 3;
+    final bool hasResult = _uploadedCount > 0 || _failedCount > 0;
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      backgroundColor: AppColors.cardSurface,
+      surfaceTintColor: AppColors.cardSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 720),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Text(
+                    'STEP 3 OF 3 • PHOTOS',
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '$_uploadedCount/${widget.users.length} done',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _isUploading
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Skip for now',
+                    color: AppColors.textSecondary,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: SizedBox(
+                  height: 4,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      const DecoratedBox(
+                        decoration: BoxDecoration(color: AppColors.divider),
+                      ),
+                      FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: progress.clamp(0.0, 1.0),
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(color: AppColors.brandBlue),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Add photos',
+                style: AppTypography.heading1.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Documents are saved — photos are optional. Pairing follows the order below, never filenames. Saved as 350×350 PNG; re-upload keeps history as a new version.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+              if (widget.skippedCount > 0 ||
+                  widget.skipped.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.warning.withAlpha(70)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.info_rounded,
+                            size: 14,
+                            color: AppColors.warning,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${widget.skippedCount > 0 ? widget.skippedCount : widget.skipped.length} skipped — no photo slot needed.',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      for (final BulkUploadSkippedUser s in widget.skipped.take(
+                        4,
+                      ))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Doc ${s.row > 0 ? '#${s.row} ' : ''}• ${s.reason}',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.warning,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              if (widget.docErrors.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.dangerBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.danger.withAlpha(60)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            size: 14,
+                            color: AppColors.danger,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${widget.docErrors.length} document error(s) — no photo slot.',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.danger,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      for (final BulkUploadErrorRow e in widget.docErrors.take(
+                        4,
+                      ))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Doc ${e.row > 0 ? '#${e.row} ' : ''}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.danger,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TMZButton(
+                      label: 'Add photos',
+                      icon: Icons.photo_library_rounded,
+                      variant: TMZButtonVariant.secondary,
+                      onPressed: _isUploading ? null : _pickMultiple,
+                      showShadow: false,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TMZButton(
+                      label: 'Skip',
+                      icon: Icons.skip_next_rounded,
+                      variant: TMZButtonVariant.secondary,
+                      onPressed: _isUploading
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      showShadow: false,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: widget.users.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (BuildContext context, int i) {
+                    final BulkUploadSuccessUser u = widget.users[i];
+                    final PickedFile? photo = _photos[i];
+                    final bool uploading =
+                        _status[i] == _OcrPhotoStatus.uploading;
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardSurface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.divider),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: Colors.black.withAlpha(10),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Stack(
+                            children: <Widget>[
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: AppColors.blueTint,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.divider),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: photo != null
+                                    ? Image.memory(
+                                        photo.bytes,
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 256,
+                                        cacheHeight: 256,
+                                        filterQuality: FilterQuality.low,
+                                      )
+                                    : const Icon(
+                                        Icons.person_rounded,
+                                        color: AppColors.textTertiary,
+                                        size: 28,
+                                      ),
+                              ),
+                              Positioned(
+                                left: 0,
+                                top: 0,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.brandBlue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '${i + 1}',
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            widget.displayNameFor(u),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.body2.copyWith(
+                                              color: AppColors.textPrimary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Slot ${i + 1} of ${widget.users.length}',
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: AppColors.textTertiary,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _statusChip(i),
+                                  ],
+                                ),
+                                if (_status[i] == _OcrPhotoStatus.failed &&
+                                    _errors[i].isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      const Icon(
+                                        Icons.error_rounded,
+                                        size: 13,
+                                        color: AppColors.danger,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          _errors[i],
+                                          style: AppTypography.caption.copyWith(
+                                            color: AppColors.danger,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: uploading
+                                            ? null
+                                            : () => _pickSingle(i),
+                                        icon: Icon(
+                                          photo == null
+                                              ? Icons.add_a_photo_rounded
+                                              : Icons
+                                                    .photo_camera_front_rounded,
+                                          size: 15,
+                                        ),
+                                        label: Text(
+                                          photo == null ? 'Add' : 'Retake',
+                                          style: AppTypography.caption.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppColors.brandBlue,
+                                          side: const BorderSide(
+                                            color: AppColors.brandBlue,
+                                            width: 1.2,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 9,
+                                          ),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      ),
+                                    ),
+                                    if (photo != null &&
+                                        !uploading) ...<Widget>[
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        onPressed: () => _removeAt(i),
+                                        icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                          size: 18,
+                                        ),
+                                        color: AppColors.textSecondary,
+                                        tooltip: 'Remove photo',
+                                        visualDensity: VisualDensity.compact,
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: AppColors.offWhite,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 14),
+              TMZButton(
+                label: _isUploading
+                    ? 'Uploading…'
+                    : hasResult
+                    ? 'Continue • $_uploadedCount uploaded'
+                    : _readyCount == 0
+                    ? 'Upload'
+                    : 'Upload ($_readyCount)',
+                icon: hasResult
+                    ? Icons.arrow_forward_rounded
+                    : Icons.cloud_upload_rounded,
+                isLoading: _isUploading,
+                onPressed: _isUploading
+                    ? null
+                    : hasResult
+                    ? () => Navigator.of(context).pop()
+                    : _readyCount == 0
+                    ? null
+                    : _uploadAll,
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(
+                  hasResult
+                      ? (_failedCount > 0
+                            ? '($_failedCount failed — you can retry after continue)'
+                            : '(photos saved — continue to costing)')
+                      : '(or Skip above to continue without photos)',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
               ),
             ],
           ),
