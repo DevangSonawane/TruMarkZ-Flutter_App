@@ -13,7 +13,6 @@ import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/data/auth_repository.dart';
-import '../../../onboarding/presentation/pages/org_onboarding_page.dart';
 
 class OrganisationRegistrationPage extends ConsumerStatefulWidget {
   const OrganisationRegistrationPage({super.key});
@@ -315,51 +314,6 @@ class _OrganisationRegistrationPageState
             ),
           );
         },
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.x6,
-            AppSpacing.x2,
-            AppSpacing.x6,
-            AppSpacing.x6,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              OutlinedButton(
-                onPressed: () {
-                  final String email = _officialEmail.text.trim().isEmpty
-                      ? 'test@org.com'
-                      : _officialEmail.text.trim();
-                  context.go(
-                    '${AppRouter.otpVerificationPath}?email=${Uri.encodeComponent(email)}&type=organization&after=register',
-                  );
-                },
-                child: const Text('OTP (test)'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const OrgOnboardingPage(),
-                    ),
-                  );
-                },
-                child: const Text('Onboarding (test)'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              OutlinedButton(
-                onPressed: () {
-                  context.go(AppRouter.orgInterestSelectionPath);
-                },
-                child: const Text('Interests (test)'),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

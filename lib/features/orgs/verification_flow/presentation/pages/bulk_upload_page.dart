@@ -49,18 +49,19 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     'pan_number',
     'dob',
     'gender',
-    'dl_number',
+    'license_no',
     'nationality',
   ];
   static const String _humanDocumentFieldsCsv =
-      'full_name,name,email,phone_number,dob,license_number,dl_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
+      'full_name,name,email,phone_number,dob,gender,nationality,license_no,license_number,dl_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
   static const List<String> _drivingLicenseTemplateHeaders = <String>[
     'full_name',
+    'gender',
+    'dob',
+    'nationality',
     'phone_number',
     'email',
-    'dob',
-    'dl_number',
-    'nationality',
+    'license_no',
   ];
 
   String? _lastRouteSignature;
@@ -451,6 +452,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           ) ??
           -1,
       'dob': pick(<String>['dob', 'date_of_birth']) ?? -1,
+      'gender': pick(<String>['gender', 'sex']) ?? -1,
+      'nationality': pick(<String>['nationality', 'citizenship']) ?? -1,
       'phone_number':
           pick(<String>['phone_number', 'phone', 'mobile', 'mobile_number']) ??
           pickWhere((String k) => k.contains('phone')) ??
@@ -469,12 +472,13 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           ]) ??
           -1,
       'pan_number': pick(<String>['pan_number', 'pan']) ?? -1,
-      // Excel-facing DL column is `dl_number`. Keep accepting the legacy
-      // `license_number` (and common aliases) so older files still parse.
+      // Excel-facing DL column is `license_no`. Keep accepting legacy
+      // `license_number`/DL aliases so older files still parse.
       // Both keys resolve to the same column; backend still receives
-      // `license_number` (dl_number → license_number mapping preserved).
+      // `license_number` (license_no → license_number mapping preserved).
       'license_number':
           pick(<String>[
+            'license_no',
             'dl_number',
             'license_number',
             'dl_no',
@@ -485,6 +489,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           -1,
       'dl_number':
           pick(<String>[
+            'license_no',
             'dl_number',
             'license_number',
             'dl_no',
@@ -546,12 +551,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (email.isEmpty || phone.isEmpty) return null;
 
     final String? dob = _normalizeDob(valueAt('dob'));
-    // Excel-facing DL column is `dl_number`; backend still expects
-    // `license_number` (dl_number → license_number mapping preserved).
-    final String dlRaw = valueAt('dl_number').trim().isNotEmpty
-        ? valueAt('dl_number')
-        : valueAt('license_number');
+    // Excel-facing DL column is `license_no`; backend still expects
+    // `license_number` (license_no → license_number mapping preserved).
+    final String dlRaw = valueAt('license_number');
     final String licenseNumber = _normalizeAlphaNum(dlRaw);
+    final String gender = valueAt('gender').trim();
+    final String nationality = valueAt('nationality').trim();
     final String aadhar = _normalizeDigits(valueAt('aadhar_number'));
     final String pan = _normalizeAlphaNum(valueAt('pan_number'));
 
@@ -565,6 +570,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return <String, dynamic>{
       'full_name': fullName,
       if (dob case final String v) 'dob': v,
+      if (gender.isNotEmpty) 'gender': gender,
+      if (nationality.isNotEmpty) 'nationality': nationality,
       if (licenseNumber.isNotEmpty) 'license_number': licenseNumber,
       if (phone.isNotEmpty) 'phone_number': phone,
       if (email.isNotEmpty) 'email': email,
@@ -757,6 +764,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       'name_hindi',
     ]);
     setIfMissing('license_number', <String>[
+      'license_no',
       'license_number',
       'dl_no',
       'dl_number',
@@ -1251,330 +1259,341 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       LayoutBuilder(
-                          builder:
-                              (
-                                BuildContext context,
-                                BoxConstraints constraints,
-                              ) {
-                                if (constraints.maxWidth < 320) {
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      stepLabel(),
-                                      const SizedBox(height: 6),
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: headerActions(),
-                                      ),
-                                    ],
-                                  );
-                                }
-                                return Row(
+                        builder:
+                            (BuildContext context, BoxConstraints constraints) {
+                              if (constraints.maxWidth < 320) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    Expanded(child: stepLabel()),
-                                    const SizedBox(width: 8),
-                                    headerActions(),
+                                    stepLabel(),
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: headerActions(),
+                                    ),
                                   ],
                                 );
-                              },
-                        ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: const SizedBox(
-                            height: 4,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: <Widget>[
-                                DecoratedBox(
+                              }
+                              return Row(
+                                children: <Widget>[
+                                  Expanded(child: stepLabel()),
+                                  const SizedBox(width: 8),
+                                  headerActions(),
+                                ],
+                              );
+                            },
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: const SizedBox(
+                          height: 4,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: <Widget>[
+                              DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: AppColors.divider,
+                                ),
+                              ),
+                              FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: 1 / 3,
+                                child: DecoratedBox(
                                   decoration: BoxDecoration(
-                                    color: AppColors.divider,
+                                    color: AppColors.brandBlue,
                                   ),
                                 ),
-                                FractionallySizedBox(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: 1 / 3,
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: AppColors.brandBlue,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Add documents',
+                        style: AppTypography.heading1.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _parsedUsers.length > 1
+                            ? 'Move between users with the arrows, then attach each person’s ID. Multi-select is fine — everything goes in one request (1 image = 1 user). Photos come after review.'
+                            : 'Attach this user’s ID. Multi-select is fine — everything goes in one request. Photos come after review.',
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.offWhite,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.divider),
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.blueTint,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '${selectedIndex + 1}',
+                                        style: AppTypography.heading2.copyWith(
+                                          color: AppColors.brandBlue,
+                                          fontSize: 16,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            _displayUserLabel(
+                                              _parsedUsers[selectedIndex],
+                                              selectedIndex,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.body2.copyWith(
+                                              color: AppColors.textPrimary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          Text(
+                                            _parsedUsers.length > 1
+                                                ? 'User ${selectedIndex + 1} of ${_parsedUsers.length}'
+                                                : 'Single user batch',
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: AppColors.textTertiary,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (_parsedUsers.length > 1) ...<Widget>[
+                                      TMZBadge.manual(
+                                        label:
+                                            '${selectedIndex + 1}/${_parsedUsers.length}',
+                                      ),
+                                      const SizedBox(width: 6),
+                                      IconButton(
+                                        onPressed: sheetBusy()
+                                            ? null
+                                            : removeCurrentUser,
+                                        icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                          size: 18,
+                                        ),
+                                        color: AppColors.textSecondary,
+                                        tooltip: 'Remove user',
+                                        visualDensity: VisualDensity.compact,
+                                        style: IconButton.styleFrom(
+                                          backgroundColor:
+                                              AppColors.cardSurface,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Add documents',
-                          style: AppTypography.heading1.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _parsedUsers.length > 1
-                              ? 'Move between users with the arrows, then attach each person’s ID. Multi-select is fine — everything goes in one request (1 image = 1 user). Photos come after review.'
-                              : 'Attach this user’s ID. Multi-select is fine — everything goes in one request. Photos come after review.',
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
+                              ),
+                              const SizedBox(height: 12),
+                              TMZButton(
+                                label: isAddingDocs
+                                    ? 'Reading…'
+                                    : 'Add documents',
+                                icon: Icons.attach_file_rounded,
+                                variant: TMZButtonVariant.secondary,
+                                isLoading: isAddingDocs,
+                                onPressed: sheetBusy() ? null : addDocuments,
+                                showShadow: false,
+                              ),
+                              if (isProcessing) ...<Widget>[
+                                const SizedBox(height: 10),
                                 Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.offWhite,
-                                    borderRadius: BorderRadius.circular(16),
+                                    color: AppColors.blueTint,
+                                    borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
                                       color: AppColors.divider,
                                     ),
                                   ),
                                   child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: <Widget>[
-                                      Container(
-                                        width: 40,
-                                        height: 40,
-                                decoration: BoxDecoration(
-                                  color: AppColors.blueTint,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '${selectedIndex + 1}',
-                                  style: AppTypography.heading2.copyWith(
-                                    color: AppColors.brandBlue,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      _displayUserLabel(
-                                        _parsedUsers[selectedIndex],
-                                        selectedIndex,
+                                      const Icon(
+                                        Icons.sync_rounded,
+                                        size: 14,
+                                        color: AppColors.brandBlue,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTypography.body2.copyWith(
-                                        color: AppColors.textPrimary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    Text(
-                                      _parsedUsers.length > 1
-                                          ? 'User ${selectedIndex + 1} of ${_parsedUsers.length}'
-                                          : 'Single user batch',
-                                      style: AppTypography.caption.copyWith(
-                                        color: AppColors.textTertiary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (_parsedUsers.length > 1) ...<Widget>[
-                                TMZBadge.manual(
-                                  label:
-                                      '${selectedIndex + 1}/${_parsedUsers.length}',
-                                ),
-                                const SizedBox(width: 6),
-                                IconButton(
-                                  onPressed: sheetBusy()
-                                      ? null
-                                      : removeCurrentUser,
-                                  icon: const Icon(
-                                    Icons.delete_outline_rounded,
-                                    size: 18,
-                                  ),
-                                  color: AppColors.textSecondary,
-                                  tooltip: 'Remove user',
-                                  visualDensity: VisualDensity.compact,
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: AppColors.cardSurface,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      TMZButton(
-                        label: isAddingDocs
-                            ? 'Reading…'
-                            : 'Add documents',
-                        icon: Icons.attach_file_rounded,
-                        variant: TMZButtonVariant.secondary,
-                        isLoading: isAddingDocs,
-                        onPressed: sheetBusy() ? null : addDocuments,
-                        showShadow: false,
-                      ),
-                        if (isProcessing) ...<Widget>[
-                          const SizedBox(height: 10),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.blueTint,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.divider),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: <Widget>[
-                                const Icon(
-                                  Icons.sync_rounded,
-                                  size: 14,
-                                  color: AppColors.brandBlue,
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(
-                                    busyStatus.isNotEmpty
-                                        ? busyStatus
-                                        : 'Working…',
-                                    textAlign: TextAlign.center,
-                                    style: AppTypography.caption.copyWith(
-                                      color: AppColors.brandBlue,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        Row(
-                          children: <Widget>[
-                            Text(
-                              'PREVIEW',
-                              style: AppTypography.label.copyWith(
-                                color: AppColors.textTertiary,
-                                fontSize: 11,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (currentDocs.isNotEmpty)
-                              TMZBadge.pending(
-                                label:
-                                    '${currentDocs.length} file${currentDocs.length == 1 ? '' : 's'}',
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        RepaintBoundary(
-                          child: SizedBox(
-                            height: 188,
-                            child: currentDocs.isEmpty
-                                ? DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: AppColors.offWhite,
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(
-                                        color: AppColors.divider,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          const Icon(
-                                            Icons.drive_folder_upload_outlined,
-                                            size: 28,
-                                            color: AppColors.textTertiary,
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          busyStatus.isNotEmpty
+                                              ? busyStatus
+                                              : 'Working…',
+                                          textAlign: TextAlign.center,
+                                          style: AppTypography.caption.copyWith(
+                                            color: AppColors.brandBlue,
+                                            fontWeight: FontWeight.w800,
                                           ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            'Add a document to see the preview here.',
-                                            textAlign: TextAlign.center,
-                                            style: AppTypography.body2.copyWith(
-                                              color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              Row(
+                                children: <Widget>[
+                                  Text(
+                                    'PREVIEW',
+                                    style: AppTypography.label.copyWith(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  if (currentDocs.isNotEmpty)
+                                    TMZBadge.pending(
+                                      label:
+                                          '${currentDocs.length} file${currentDocs.length == 1 ? '' : 's'}',
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              RepaintBoundary(
+                                child: SizedBox(
+                                  height: 188,
+                                  child: currentDocs.isEmpty
+                                      ? DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: AppColors.offWhite,
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
+                                            border: Border.all(
+                                              color: AppColors.divider,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                : GridView.builder(
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                          crossAxisCount: 3,
-                                          crossAxisSpacing: 10,
-                                          mainAxisSpacing: 10,
-                                          childAspectRatio: 1,
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: <Widget>[
+                                                const Icon(
+                                                  Icons
+                                                      .drive_folder_upload_outlined,
+                                                  size: 28,
+                                                  color: AppColors.textTertiary,
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Add a document to see the preview here.',
+                                                  textAlign: TextAlign.center,
+                                                  style: AppTypography.body2
+                                                      .copyWith(
+                                                        color: AppColors
+                                                            .textSecondary,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        )
+                                      : GridView.builder(
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 3,
+                                                crossAxisSpacing: 10,
+                                                mainAxisSpacing: 10,
+                                                childAspectRatio: 1,
+                                              ),
+                                          itemCount: currentDocs.length,
+                                          itemBuilder:
+                                              (
+                                                BuildContext context,
+                                                int index,
+                                              ) {
+                                                final _HumanDocumentDraft
+                                                draft = currentDocs[index];
+                                                return _DocumentPreviewTile(
+                                                  fileName: draft.file.name,
+                                                  fileBytes: draft.file.bytes,
+                                                  onRemove: sheetBusy()
+                                                      ? () {}
+                                                      : () => removeDocument(
+                                                          index,
+                                                        ),
+                                                );
+                                              },
                                         ),
-                                    itemCount: currentDocs.length,
-                                    itemBuilder:
-                                        (BuildContext context, int index) {
-                                          final _HumanDocumentDraft draft =
-                                              currentDocs[index];
-                                          return _DocumentPreviewTile(
-                                            fileName: draft.file.name,
-                                            fileBytes: draft.file.bytes,
-                                            onRemove: sheetBusy()
-                                                ? () {}
-                                                : () => removeDocument(index),
-                                  );
-                                },
-                              ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                          child: Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: TMZButton(
-                                  label: 'Add user',
-                                  icon: Icons.person_add_alt_1_rounded,
-                                  variant: TMZButtonVariant.secondary,
-                                  onPressed: sheetBusy() ? null : addUser,
-                                  showShadow: false,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TMZButton(
-                                  label: isProcessing ? 'Working…' : 'Continue',
-                                  icon: Icons.arrow_forward_rounded,
-                                  isLoading: isProcessing,
-                                  onPressed: sheetBusy()
-                                      ? null
-                                      : reviewAndContinue,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: TMZButton(
+                                label: 'Add user',
+                                icon: Icons.person_add_alt_1_rounded,
+                                variant: TMZButtonVariant.secondary,
+                                onPressed: sheetBusy() ? null : addUser,
+                                showShadow: false,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TMZButton(
+                                label: isProcessing ? 'Working…' : 'Continue',
+                                icon: Icons.arrow_forward_rounded,
+                                isLoading: isProcessing,
+                                onPressed: sheetBusy()
+                                    ? null
+                                    : reviewAndContinue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
             );
           },
         );
@@ -1830,6 +1849,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         email: reviewedUsers[userIndex]['email']?.toString(),
         phoneNumber: reviewedUsers[userIndex]['phone_number']?.toString(),
         dob: reviewedUsers[userIndex]['dob']?.toString(),
+        gender: reviewedUsers[userIndex]['gender']?.toString(),
+        nationality: reviewedUsers[userIndex]['nationality']?.toString(),
         aadharNumber: reviewedUsers[userIndex]['aadhar_number']?.toString(),
         panNumber: reviewedUsers[userIndex]['pan_number']?.toString(),
         addressLine1: reviewedUsers[userIndex]['address_line1']?.toString(),
@@ -2056,6 +2077,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           email: reviewedUsers[userIndex]['email']?.toString(),
           phoneNumber: reviewedUsers[userIndex]['phone_number']?.toString(),
           dob: reviewedUsers[userIndex]['dob']?.toString(),
+          gender: reviewedUsers[userIndex]['gender']?.toString(),
+          nationality: reviewedUsers[userIndex]['nationality']?.toString(),
           aadharNumber: reviewedUsers[userIndex]['aadhar_number']?.toString(),
           panNumber: reviewedUsers[userIndex]['pan_number']?.toString(),
           addressLine1: reviewedUsers[userIndex]['address_line1']?.toString(),
@@ -2914,6 +2937,12 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
   static const MethodChannel _downloadsChannel = MethodChannel(
     'trumarkz/downloads',
   );
+  static const List<String> _requiredHeaders = <String>[
+    'full_name',
+    'gender',
+    'dob',
+    'nationality',
+  ];
 
   late final TextEditingController _headerInputController;
   late List<String> _headers;
@@ -2938,15 +2967,33 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     final List<String> merged = <String>[];
     final Set<String> seen = <String>{};
 
-    for (final String raw in headers) {
+    for (final String raw in <String>[..._requiredHeaders, ...headers]) {
       final String cleaned = raw.trim();
       if (cleaned.isEmpty) continue;
-      final String key = cleaned.toLowerCase();
+      final String canonical = _canonicalTemplateHeader(cleaned);
+      final String key = canonical.toLowerCase();
       if (seen.add(key)) {
-        merged.add(cleaned);
+        merged.add(canonical);
       }
     }
     return merged;
+  }
+
+  String _canonicalTemplateHeader(String header) {
+    return switch (header.trim().toLowerCase()) {
+      'dl_number' ||
+      'dl_no' ||
+      'license_number' ||
+      'driving_license_number' ||
+      'driver_license_number' ||
+      'driving_licence_number' => 'license_no',
+      _ => header.trim(),
+    };
+  }
+
+  bool _isRequiredHeader(String header) {
+    final String key = _canonicalTemplateHeader(header).toLowerCase();
+    return _requiredHeaders.contains(key);
   }
 
   void _addHeader() {
@@ -2966,6 +3013,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
   }
 
   void _removeHeader(String header) {
+    if (_isRequiredHeader(header)) return;
     setState(() {
       _headers = List<String>.from(_headers)
         ..removeWhere(
@@ -3223,6 +3271,12 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                   <VerificationTypeDefinition>[])
             item.id: item,
         };
+    final List<String> requiredHeaders = _headers
+        .where(_isRequiredHeader)
+        .toList();
+    final List<String> optionalHeaders = _headers
+        .where((String header) => !_isRequiredHeader(header))
+        .toList();
 
     return Dialog.fullscreen(
       backgroundColor: surfaceColor,
@@ -3279,72 +3333,13 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                 ),
                 children: <Widget>[
                   Text(
-                    'Add headers one at a time. Added headers are saved automatically, then generate the Excel template. Selected verification types will be added automatically.',
+                    'Review the selected checks, keep the required fields, then add any optional Excel headers you need.',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: s(12),
                       fontWeight: FontWeight.w500,
                       height: 18 / 12,
                       color: const Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  TextField(
-                    controller: _headerInputController,
-                    onSubmitted: (_) => _addHeader(),
-                    textInputAction: TextInputAction.done,
-                    scrollPadding: const EdgeInsets.only(bottom: 180),
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(14),
-                      fontWeight: FontWeight.w400,
-                      height: 20 / 14,
-                      color: const Color(0xFF0F172A),
-                    ),
-                    cursorColor: AppColors.brandBlue,
-                    decoration: InputDecoration(
-                      hintText: 'Enter header name',
-                      hintStyle: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: s(14),
-                        fontWeight: FontWeight.w400,
-                        height: 20 / 14,
-                        color: const Color(0xFF94A3B8),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x3),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _addHeader,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandBlue,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: EdgeInsets.symmetric(vertical: s(14)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: Text(
-                        'Add New',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: s(14),
-                          fontWeight: FontWeight.w700,
-                          height: 20 / 14,
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x4),
@@ -3400,6 +3395,43 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                     ),
                   const SizedBox(height: AppSpacing.x4),
                   Text(
+                    'Required fields',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                      height: 18 / 12,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: <Widget>[
+                      for (final String header in requiredHeaders)
+                        Chip(
+                          avatar: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 15,
+                            color: AppColors.brandBlue,
+                          ),
+                          label: Text(header),
+                          backgroundColor: const Color(0xFFEFF6FF),
+                          side: const BorderSide(color: Color(0xFFBFDBFE)),
+                          labelStyle: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(12),
+                            fontWeight: FontWeight.w700,
+                            height: 16.5 / 12,
+                            color: const Color(0xFF1E3A8A),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+                  Text(
                     'Saved headers',
                     style: TextStyle(
                       fontFamily: 'Inter',
@@ -3411,9 +3443,75 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x2),
-                  if (_headers.isEmpty)
+                  TextField(
+                    controller: _headerInputController,
+                    onSubmitted: (_) => _addHeader(),
+                    textInputAction: TextInputAction.done,
+                    scrollPadding: const EdgeInsets.only(bottom: 180),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: s(14),
+                      fontWeight: FontWeight.w400,
+                      height: 20 / 14,
+                      color: const Color(0xFF0F172A),
+                    ),
+                    cursorColor: AppColors.brandBlue,
+                    decoration: InputDecoration(
+                      hintText: 'Enter optional header name',
+                      hintStyle: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(14),
+                        fontWeight: FontWeight.w400,
+                        height: 20 / 14,
+                        color: const Color(0xFF94A3B8),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(
+                          color: AppColors.brandBlue,
+                          width: 1.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x3),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _addHeader,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: EdgeInsets.symmetric(vertical: s(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Add header',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: s(14),
+                          fontWeight: FontWeight.w700,
+                          height: 20 / 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x3),
+                  if (optionalHeaders.isEmpty)
                     Text(
-                      'No headers added yet.',
+                      'No optional headers added yet.',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: s(12),
@@ -3427,13 +3525,14 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                       spacing: 8,
                       runSpacing: 8,
                       children: <Widget>[
-                        for (final String header in _headers)
+                        for (final String header in optionalHeaders)
                           InputChip(
                             label: Text(header),
-                            backgroundColor: AppColors.brandBlue,
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
                             deleteIcon: const Icon(
                               Icons.close_rounded,
-                              color: Colors.white,
+                              color: Color(0xFF475569),
                             ),
                             onDeleted: () => _removeHeader(header),
                             labelStyle: TextStyle(
@@ -3441,9 +3540,9 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
                               fontSize: s(12),
                               fontWeight: FontWeight.w600,
                               height: 16.5 / 12,
-                              color: Colors.white,
+                              color: const Color(0xFF0F172A),
                             ),
-                            deleteIconColor: Colors.white,
+                            deleteIconColor: const Color(0xFF475569),
                           ),
                       ],
                     ),
@@ -4121,6 +4220,8 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
     'phone_number',
     'email',
     'dob',
+    'gender',
+    'nationality',
     'license_number',
     'doi',
     'valid_till',
@@ -4172,6 +4273,24 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
 
   void _updateValue(int userIndex, String key, String value) {
     _users[userIndex][key] = value;
+  }
+
+  String? _firstMissingRequiredField() {
+    const Map<String, String> requiredLabels = <String, String>{
+      'full_name': 'Full name',
+      'gender': 'Gender',
+      'dob': 'DOB',
+      'nationality': 'Nationality',
+    };
+    for (int i = 0; i < _users.length; i++) {
+      final Map<String, dynamic> user = _users[i];
+      for (final MapEntry<String, String> entry in requiredLabels.entries) {
+        if ((user[entry.key] ?? '').toString().trim().isEmpty) {
+          return 'User ${i + 1}: ${entry.value} is required.';
+        }
+      }
+    }
+    return null;
   }
 
   InputDecoration _decoration(String label) {
@@ -4427,10 +4546,17 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                       docs,
                     );
 
-                    Widget field(String key, String label, {String? hint}) {
+                    Widget field(
+                      String key,
+                      String label, {
+                      String? hint,
+                      bool required = false,
+                    }) {
                       return TextFormField(
                         controller: controllers[key],
-                        decoration: _decoration(label).copyWith(hintText: hint),
+                        decoration: _decoration(
+                          required ? '$label *' : label,
+                        ).copyWith(hintText: hint),
                         onChanged: (String value) =>
                             _updateValue(pageIndex, key, value),
                       );
@@ -4469,7 +4595,7 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                               ),
                             const SizedBox(height: 12),
                           ],
-                          field('full_name', 'Full name'),
+                          field('full_name', 'Full name', required: true),
                           const SizedBox(height: 12),
                           Row(
                             children: <Widget>[
@@ -4484,13 +4610,38 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                           Row(
                             children: <Widget>[
                               Expanded(
-                                child: field('dob', 'DOB', hint: 'YYYY-MM-DD'),
+                                child: field(
+                                  'dob',
+                                  'DOB',
+                                  hint: 'YYYY-MM-DD',
+                                  required: true,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: field(
                                   'license_number',
                                   'License number',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: field(
+                                  'gender',
+                                  'Gender',
+                                  required: true,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: field(
+                                  'nationality',
+                                  'Nationality',
+                                  required: true,
                                 ),
                               ),
                             ],
@@ -4624,6 +4775,13 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                     flex: 2,
                     child: ElevatedButton(
                       onPressed: () {
+                        final String? missing = _firstMissingRequiredField();
+                        if (missing != null) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(missing)));
+                          return;
+                        }
                         Navigator.of(context).pop(_users);
                       },
                       style: ElevatedButton.styleFrom(

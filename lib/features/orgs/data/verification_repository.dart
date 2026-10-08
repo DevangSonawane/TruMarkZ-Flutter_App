@@ -797,6 +797,8 @@ class VerificationRepository {
     String? email,
     String? phoneNumber,
     String? dob,
+    String? gender,
+    String? nationality,
     String? aadharNumber,
     String? panNumber,
     String? addressLine1,
@@ -817,6 +819,9 @@ class VerificationRepository {
         if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
           'phone_number': phoneNumber.trim(),
         if (dob != null && dob.trim().isNotEmpty) 'dob': dob.trim(),
+        if (gender != null && gender.trim().isNotEmpty) 'gender': gender.trim(),
+        if (nationality != null && nationality.trim().isNotEmpty)
+          'nationality': nationality.trim(),
         if (aadharNumber != null && aadharNumber.trim().isNotEmpty)
           'aadhar_number': aadharNumber.trim(),
         if (panNumber != null && panNumber.trim().isNotEmpty)

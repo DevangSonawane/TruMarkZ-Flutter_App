@@ -48,13 +48,15 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
   static const Color _panelBg = Color(0xFFF7F9FC);
 
   static const String _humanDocumentFieldsCsv =
-      'full_name,name,email,phone_number,dob,license_number,dl_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
+      'full_name,name,email,phone_number,dob,gender,nationality,license_no,license_number,dl_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
 
   static const List<String> _reviewFieldKeys = <String>[
     'full_name',
     'phone_number',
     'email',
     'dob',
+    'gender',
+    'nationality',
     'license_number',
     'doi',
     'valid_till',
@@ -420,6 +422,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
       'name_hindi',
     ]);
     setIfMissing('license_number', <String>[
+      'license_no',
       'license_number',
       'dl_no',
       'dl_number',
@@ -630,10 +633,35 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
     return payload;
   }
 
+  String? _firstMissingReviewRequiredField() {
+    const Map<String, String> requiredLabels = <String, String>{
+      'full_name': 'Full name',
+      'gender': 'Gender',
+      'dob': 'DOB',
+      'nationality': 'Nationality',
+    };
+    for (int i = 0; i < _reviewUsers.length; i++) {
+      final Map<String, dynamic> user = _reviewUsers[i];
+      for (final MapEntry<String, String> entry in requiredLabels.entries) {
+        if ((user[entry.key] ?? '').toString().trim().isEmpty) {
+          return 'User ${i + 1}: ${entry.value} is required.';
+        }
+      }
+    }
+    return null;
+  }
+
   Future<void> _confirmReview() async {
     if (_isSavingReview) return;
     final List<Map<String, dynamic>> reviewed = _reviewUsers;
     if (reviewed.isEmpty) return;
+    final String? missing = _firstMissingReviewRequiredField();
+    if (missing != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(missing)));
+      return;
+    }
     // Manual path — no OCR batch yet.
     if (_uploadRes == null) {
       setState(() => _isSavingReview = true);
@@ -685,6 +713,8 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
           email: reviewed[entry.key]['email']?.toString(),
           phoneNumber: reviewed[entry.key]['phone_number']?.toString(),
           dob: reviewed[entry.key]['dob']?.toString(),
+          gender: reviewed[entry.key]['gender']?.toString(),
+          nationality: reviewed[entry.key]['nationality']?.toString(),
           aadharNumber: reviewed[entry.key]['aadhar_number']?.toString(),
           panNumber: reviewed[entry.key]['pan_number']?.toString(),
           addressLine1: reviewed[entry.key]['address_line1']?.toString(),
@@ -1880,13 +1910,19 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
 
   // ----------------------------------------------------- step 1 review ---
 
-  Widget _rfield(int pageIndex, String key, String label, {String? hint}) {
+  Widget _rfield(
+    int pageIndex,
+    String key,
+    String label, {
+    String? hint,
+    bool required = false,
+  }) {
     final Map<String, TextEditingController> controllers =
         _reviewControllers[pageIndex];
     return TextFormField(
       controller: controllers[key],
       decoration: InputDecoration(
-        labelText: label,
+        labelText: required ? '$label *' : label,
         hintText: hint,
         filled: true,
         fillColor: Colors.white,
@@ -2053,7 +2089,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
             ],
           ),
           const SizedBox(height: 12),
-          _rfield(pageIndex, 'full_name', 'Full name'),
+          _rfield(pageIndex, 'full_name', 'Full name', required: true),
           const SizedBox(height: 12),
           Row(
             children: <Widget>[
@@ -2068,11 +2104,34 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
           Row(
             children: <Widget>[
               Expanded(
-                child: _rfield(pageIndex, 'dob', 'DOB', hint: 'YYYY-MM-DD'),
+                child: _rfield(
+                  pageIndex,
+                  'dob',
+                  'DOB',
+                  hint: 'YYYY-MM-DD',
+                  required: true,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _rfield(pageIndex, 'license_number', 'License number'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _rfield(pageIndex, 'gender', 'Gender', required: true),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _rfield(
+                  pageIndex,
+                  'nationality',
+                  'Nationality',
+                  required: true,
+                ),
               ),
             ],
           ),
