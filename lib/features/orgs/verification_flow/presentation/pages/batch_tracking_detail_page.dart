@@ -1685,11 +1685,12 @@ class _UserTile extends StatelessWidget {
               ? (user.photoUrl ?? '').trim()
               : user.firstImageDocumentUrl);
     final String? photoUrl = imageUrl.trim().isEmpty ? null : imageUrl.trim();
-    final String title = isProductRecord
+    final String baseTitle = isProductRecord
         ? (user.productName.trim().isEmpty
               ? 'Unnamed product'
               : user.productName)
         : (user.fullName.trim().isEmpty ? 'Unnamed' : user.fullName);
+    final String serial = (user.batchSerial ?? '').trim();
     final String subtitle = isProductRecord
         ? <String>[
             if (user.skuNo.trim().isNotEmpty) 'SKU ${user.skuNo.trim()}',
@@ -1744,18 +1745,28 @@ class _UserTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 const SizedBox(height: 6),
-                Text(
-                  title,
-                  textAlign: TextAlign.left,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    height: 18 / 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+                Row(
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        baseTitle,
+                        textAlign: TextAlign.left,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          height: 18 / 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    if (serial.isNotEmpty) ...<Widget>[
+                      const SizedBox(width: AppSpacing.x2),
+                      _BatchSerialPill(serial: serial),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 1),
                 if (subtitle.trim().isNotEmpty)
@@ -1827,6 +1838,37 @@ class _UserTile extends StatelessWidget {
       return 'verified';
     }
     return 'pending';
+  }
+}
+
+class _BatchSerialPill extends StatelessWidget {
+  const _BatchSerialPill({required this.serial});
+
+  final String serial;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 92),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.blueTint,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Text(
+        serial,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          height: 14 / 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.deepNavy,
+        ),
+      ),
+    );
   }
 }
 

@@ -216,6 +216,7 @@ class VerificationUser {
     required this.orgId,
     required this.publicId,
     required this.fullName,
+    this.batchSerial,
     required this.dob,
     required this.phoneNumber,
     required this.email,
@@ -247,6 +248,7 @@ class VerificationUser {
   final String orgId;
   final String publicId;
   final String fullName;
+  final String? batchSerial;
   final String? dob;
   final String phoneNumber;
   final String email;
@@ -422,6 +424,9 @@ class VerificationUser {
             customFields['product_name'] ??
             customFields['productName'],
       ),
+      batchSerial: (json['batch_serial'] ?? json['batchSerial'])
+          ?.toString()
+          .trim(),
       dob: json['dob']?.toString(),
       phoneNumber: readString(json['phone_number']),
       email: readString(json['email']),
@@ -455,6 +460,7 @@ class VerificationUser {
     'org_id': orgId,
     'public_id': publicId,
     'full_name': fullName,
+    'batch_serial': batchSerial,
     'dob': dob,
     'phone_number': phoneNumber,
     'email': email,
