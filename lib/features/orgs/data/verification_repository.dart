@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http_parser/http_parser.dart';
 
+import '../../../core/models/sdc_approval_models.dart';
 import '../../../core/models/verification_models.dart';
 import '../../../core/network/api_client.dart';
 
@@ -15,6 +16,19 @@ final verificationRepositoryProvider = Provider<VerificationRepository>((ref) {
 final verificationBatchesProvider =
     FutureProvider.autoDispose<List<VerificationBatchSummary>>((ref) async {
       return ref.read(verificationRepositoryProvider).getBatches();
+    });
+
+/// Pending + decided partial-SDC approval requests for one batch,
+/// newest first. Auto-disposed per batch id; invalidate to refresh after
+/// a decide call or on pull-to-refresh.
+final sdcApprovalsProvider = FutureProvider.family
+    .autoDispose<List<SdcPartialApprovalRequest>, String>((
+      ref,
+      batchId,
+    ) async {
+      return ref
+          .read(verificationRepositoryProvider)
+          .getSdcApprovals(batchId.trim());
     });
 
 final verificationTypesProvider = FutureProvider.family
@@ -1230,5 +1244,63 @@ class VerificationRepository {
       formData,
     );
     return BulkOcrPhotoUploadResponse.fromJson(res);
+  }
+
+  /// Partial-SDC approval (org side only, sdc_partial_approval_flutter.md).
+  ///
+  /// GET /sdc/batches/{batch_id}/approvals — list, newest first, every
+  /// request ever made for that batch (not just pending). Callers filter
+  /// client-side for `status == pending` for badge counts.
+  Future<List<SdcPartialApprovalRequest>> getSdcApprovals(
+    String batchId,
+  ) async {
+    final String encoded = Uri.encodeComponent(batchId.trim());
+    final dynamic res = await _api.verificationGetAny(
+      '/sdc/batches/$encoded/approvals',
+    );
+    final List<dynamic> rawItems;
+    if (res is List) {
+      rawItems = res;
+    } else if (res is Map) {
+      final Map<String, dynamic> json = Map<String, dynamic>.from(res);
+      final dynamic data =
+          json['data'] ?? json['approvals'] ?? json['requests'] ?? json['items'];
+      rawItems = data is List ? data : const <dynamic>[];
+    } else {
+      rawItems = const <dynamic>[];
+    }
+    final List<SdcPartialApprovalRequest> items = rawItems
+        .whereType<Map>()
+        .map(
+          (Map e) => SdcPartialApprovalRequest.fromJson(
+            Map<String, dynamic>.from(e),
+          ),
+        )
+        .where((SdcPartialApprovalRequest r) => r.id.isNotEmpty)
+        .toList();
+    // Response is newest-first from the server; keep that order.
+    return items;
+  }
+
+  /// POST /sdc/approvals/{request_id}/decide
+  /// [decision] must be exactly 'approved' or 'rejected' (lowercase).
+  /// Returns the updated request. Throws [ApiException] with:
+  /// 404 (not found / wrong org), 409 (already decided), 400 (bad decision).
+  Future<SdcPartialApprovalRequest> decideSdcApproval({
+    required String requestId,
+    required String decision,
+    String? reason,
+  }) async {
+    final String normalized = decision.trim().toLowerCase();
+    final String encoded = Uri.encodeComponent(requestId.trim());
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '/sdc/approvals/$encoded/decide',
+      data: <String, dynamic>{
+        'decision': normalized,
+        if (reason != null && reason.trim().isNotEmpty)
+          'reason': reason.trim(),
+      },
+    );
+    return SdcPartialApprovalRequest.fromJson(res);
   }
 }

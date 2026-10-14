@@ -19,6 +19,7 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
+import '../widgets/sdc_partial_approval_section.dart';
 
 class BatchTrackingDetailPage extends ConsumerStatefulWidget {
   const BatchTrackingDetailPage({super.key});
@@ -62,6 +63,7 @@ class _BatchTrackingDetailPageState
       _batchSummary = null;
       _lastOpenSdcStatus = null;
     });
+    ref.invalidate(sdcApprovalsProvider(_batchId.trim()));
     final VerificationRepository repo = ref.read(
       verificationRepositoryProvider,
     );
@@ -588,6 +590,21 @@ class _BatchTrackingDetailPageState
                                         _downloadRejectedList(rejectedList),
                                   ),
                                 ],
+                                const SizedBox(height: AppSpacing.x3),
+                                SdcPartialApprovalSection(
+                                  batchId: _batchId,
+                                  batchUsers: const <VerificationUser>[],
+                                  isProductBatch: true,
+                                  nameById: <String, String>{
+                                    for (final WarrantyBatchProduct p
+                                        in res.products)
+                                      if (p.id.trim().isNotEmpty)
+                                        p.id.trim(): p.productName.trim()
+                                                .isNotEmpty
+                                            ? p.productName.trim()
+                                            : p.serialNumber.trim(),
+                                  },
+                                ),
                                 const SizedBox(height: AppSpacing.x4),
                                 const _SectionHeader(
                                   title: 'PRODUCTS',
@@ -731,6 +748,12 @@ class _BatchTrackingDetailPageState
                                     ),
                                   ),
                                 ],
+                                const SizedBox(height: AppSpacing.x3),
+                                SdcPartialApprovalSection(
+                                  batchId: _batchId,
+                                  batchUsers: res.users,
+                                  isProductBatch: isProductBatch,
+                                ),
                                 const SizedBox(height: AppSpacing.x3),
                                 const _SectionHeader(
                                   title: 'RECORDS',
