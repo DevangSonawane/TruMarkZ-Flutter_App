@@ -43,14 +43,14 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   static const Color _panelText = Color(0xFF3A3A3A);
   static const List<String> _defaultHumanTemplateHeaders = <String>[
     'full_name',
+    'dob',
+    'gender',
+    'nationality',
     'email',
     'phone_number',
     'aadhar_number',
     'pan_number',
-    'dob',
-    'gender',
     'license_no',
-    'nationality',
   ];
   static const String _humanDocumentFieldsCsv =
       'full_name,name,email,phone_number,dob,gender,nationality,license_no,license_number,dl_number,dl_no,doi,valid_till,cov_lmv_doi,cov_mcwg_doi,blood_group,sdw_of,issuing_authority,aadhar_number,pan_number,address_line1,address_line2,address_line3,address,pincode,pin,state,country';
@@ -416,7 +416,44 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       // Keep as-is for decimals (rare in our sheet).
       return v.toString();
     }
-    return v.toString().trim();
+    if (v is DateTime) {
+      final String m = v.month.toString().padLeft(2, '0');
+      final String d = v.day.toString().padLeft(2, '0');
+      return '${v.year}-$m-$d';
+    }
+    // excel v4 wraps values (TextCellValue, DateCellValue,
+    // DateTimeCellValue, ...). Unwrap `.value` dynamically so date cells
+    // don't stringify as `DateTimeCellValue(...)`.
+    try {
+      final dynamic inner = (v as dynamic).value;
+      if (inner is DateTime) {
+        final String m = inner.month.toString().padLeft(2, '0');
+        final String d = inner.day.toString().padLeft(2, '0');
+        return '${inner.year}-$m-$d';
+      }
+      if (inner is num) {
+        if (inner.isNaN || (inner is double && inner.isInfinite)) return '';
+        final num rounded = inner.round();
+        final bool isIntLike = (inner - rounded).abs() < 1e-9;
+        if (isIntLike) return rounded.toInt().toString();
+        return inner.toString();
+      }
+      if (inner is String && inner.trim().isNotEmpty) {
+        return inner.trim();
+      }
+      // Some wrappers expose `.text` instead of `.value`.
+      final dynamic text = (v as dynamic).text;
+      if (text is String && text.trim().isNotEmpty) return text.trim();
+    } catch (_) {
+      // Fall through to raw toString.
+    }
+    final String raw = v.toString().trim();
+    // Last resort: pull an ISO date out of wrapper strings like
+    // `DateTimeCellValue(1998-05-12 00:00:00.000)`.
+    final RegExp isoInWrapper = RegExp(r'(\d{4}-\d{2}-\d{2})');
+    final Match? m = isoInWrapper.firstMatch(raw);
+    if (m != null) return m.group(1)!;
+    return raw;
   }
 
   Map<String, int> _userIndexMap(List<String> header) {
@@ -451,9 +488,31 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             (String k) => k.endsWith('_name') || k.startsWith('name_'),
           ) ??
           -1,
-      'dob': pick(<String>['dob', 'date_of_birth']) ?? -1,
-      'gender': pick(<String>['gender', 'sex']) ?? -1,
-      'nationality': pick(<String>['nationality', 'citizenship']) ?? -1,
+      'dob':
+          pick(<String>[
+            'dob',
+            'date_of_birth',
+            'birth_date',
+            'birthday',
+            'dateofbirth',
+            'birthdate',
+          ]) ??
+          pickWhere((String k) => k.contains('dob')) ??
+          pickWhere(
+            (String k) =>
+                k.contains('birth') &&
+                (k.contains('date') || k.contains('day')),
+          ) ??
+          -1,
+      'gender':
+          pick(<String>['gender', 'sex']) ??
+          pickWhere((String k) => k.contains('gender')) ??
+          -1,
+      'nationality':
+          pick(<String>['nationality', 'citizenship', 'nation']) ??
+          pickWhere((String k) => k.contains('nationality')) ??
+          pickWhere((String k) => k.contains('citizenship')) ??
+          -1,
       'phone_number':
           pick(<String>['phone_number', 'phone', 'mobile', 'mobile_number']) ??
           pickWhere((String k) => k.contains('phone')) ??
@@ -511,27 +570,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   static Map<String, String> _sampleRequiredFields({
     required String Function(String) valueAt,
   }) {
-    String maskEmail(String v) {
-      final String raw = v.trim();
-      final int at = raw.indexOf('@');
-      if (at <= 1) return raw.isEmpty ? '' : '***';
-      return '${raw[0]}***${raw.substring(at)}';
-    }
-
-    String maskPhone(String v) {
-      final String digits = _BulkUploadPageState._normalizeDigits(v);
-      if (digits.isEmpty) return '';
-      final String tail = digits.length <= 4
-          ? digits
-          : digits.substring(digits.length - 4);
-      return '***$tail';
-    }
-
     return <String, String>{
       'full_name': valueAt('full_name').trim(),
-      'email': maskEmail(valueAt('email')),
-      'phone_number': maskPhone(valueAt('phone_number')),
       'dob': valueAt('dob').trim(),
+      'gender': valueAt('gender').trim(),
+      'nationality': valueAt('nationality').trim(),
     };
   }
 
@@ -539,24 +582,27 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     required String Function(String) valueAt,
   }) {
     final String fullName = valueAt('full_name').trim();
+    final String? dob = _normalizeDob(valueAt('dob'));
+    final String gender = valueAt('gender').trim();
+    final String nationality = valueAt('nationality').trim();
+
+    // New backend contract for human bulk upload:
+    // full_name, dob, gender, and nationality are required.
+    // email and phone_number are optional.
+    if (fullName.isEmpty) return null;
+    if (dob == null || dob.isEmpty) return null;
+    if (gender.isEmpty || nationality.isEmpty) return null;
+
     final String rawEmail = valueAt('email');
     final String email = _looksLikeEmail(rawEmail)
         ? _normalizeEmail(rawEmail)
         : '';
     final String phone = _normalizePhone(valueAt('phone_number'));
 
-    if (fullName.isEmpty) return null;
-    // Match the backend contract for human bulk upload:
-    // full_name, email, and phone_number are all required.
-    if (email.isEmpty || phone.isEmpty) return null;
-
-    final String? dob = _normalizeDob(valueAt('dob'));
     // Excel-facing DL column is `license_no`; backend still expects
     // `license_number` (license_no → license_number mapping preserved).
     final String dlRaw = valueAt('license_number');
     final String licenseNumber = _normalizeAlphaNum(dlRaw);
-    final String gender = valueAt('gender').trim();
-    final String nationality = valueAt('nationality').trim();
     final String aadhar = _normalizeDigits(valueAt('aadhar_number'));
     final String pan = _normalizeAlphaNum(valueAt('pan_number'));
 
@@ -569,9 +615,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
     return <String, dynamic>{
       'full_name': fullName,
-      if (dob case final String v) 'dob': v,
-      if (gender.isNotEmpty) 'gender': gender,
-      if (nationality.isNotEmpty) 'nationality': nationality,
+      'dob': dob,
+      'gender': gender,
+      'nationality': nationality,
       if (licenseNumber.isNotEmpty) 'license_number': licenseNumber,
       if (phone.isNotEmpty) 'phone_number': phone,
       if (email.isNotEmpty) 'email': email,
@@ -849,11 +895,13 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   Map<String, dynamic> _userPayloadFromDraft(Map<String, dynamic> user) {
     final Map<String, dynamic> payload = <String, dynamic>{
       'full_name': (user['full_name'] ?? '').toString().trim(),
-      'email': (user['email'] ?? '').toString().trim(),
-      'phone_number': (user['phone_number'] ?? '').toString().trim(),
+      'dob': (user['dob'] ?? '').toString().trim(),
+      'gender': (user['gender'] ?? '').toString().trim(),
+      'nationality': (user['nationality'] ?? '').toString().trim(),
     };
     const List<String> optionalKeys = <String>[
-      'dob',
+      'email',
+      'phone_number',
       'aadhar_number',
       'pan_number',
       'address_line1',
@@ -2163,11 +2211,43 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final String v = raw.trim();
     if (v.isEmpty) return null;
 
+    // Excel serial date (e.g. date-formatted cells decoded as numbers).
+    final bool isSerial = RegExp(r'^\d{4,6}([.]\d+)?$').hasMatch(v);
+    if (isSerial) {
+      final double? serial = double.tryParse(v);
+      if (serial != null && serial >= 20000 && serial <= 80000) {
+        try {
+          final DateTime base = DateTime(1899, 12, 30);
+          final DateTime dt = base.add(Duration(days: serial.floor()));
+          if (dt.year >= 1900 && dt.year <= 2100) {
+            final String m2 = dt.month.toString().padLeft(2, '0');
+            final String d2 = dt.day.toString().padLeft(2, '0');
+            return '${dt.year}-$m2-$d2';
+          }
+        } catch (_) {
+          // Fall through to string parsing.
+        }
+      }
+    }
+
     final RegExp iso = RegExp(r'^\d{4}-\d{2}-\d{2}$');
     if (iso.hasMatch(v)) return v;
 
+    // DateTime strings from Excel wrappers / text cells:
+    // `1998-05-12 00:00:00.000`, `1998-05-12T00:00:00`, `05/12/1998 00:00`.
+    final RegExp isoPrefix = RegExp(r'^(\d{4}-\d{2}-\d{2})[T ].*');
+    final Match? isoM = isoPrefix.firstMatch(v);
+    if (isoM != null) return isoM.group(1);
+
+    final DateTime? parsed = DateTime.tryParse(v);
+    if (parsed != null && parsed.year >= 1900 && parsed.year <= 2100) {
+      final String m2 = parsed.month.toString().padLeft(2, '0');
+      final String d2 = parsed.day.toString().padLeft(2, '0');
+      return '${parsed.year}-$m2-$d2';
+    }
+
     final RegExp dmy = RegExp(r'^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$');
-    final Match? m = dmy.firstMatch(v);
+    final Match? m = dmy.firstMatch(v.split(' ').first);
     if (m == null) return null;
     final int? dd = int.tryParse(m.group(1)!);
     final int? mm = int.tryParse(m.group(2)!);
