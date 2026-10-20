@@ -1,3 +1,5 @@
+import 'org_permission.dart';
+
 class LoginRequest {
   const LoginRequest({
     required this.loginType,
@@ -325,6 +327,7 @@ class OrganizationProfileUpdateRequest {
     this.warrantySchemaId,
     this.dhiwaySpaceId,
     this.dhiwaysDetails,
+    this.permissionMode,
   });
 
   final String? organizationName;
@@ -345,6 +348,10 @@ class OrganizationProfileUpdateRequest {
   final String? warrantySchemaId;
   final String? dhiwaySpaceId;
   final List<DhiwayDetail>? dhiwaysDetails;
+
+  /// Organization-level consent default for Human batches
+  /// (new_flutter_trumarkz.md §12a). `null` leaves the stored value alone.
+  final OrgPermissionMode? permissionMode;
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = <String, dynamic>{};
@@ -378,6 +385,9 @@ class OrganizationProfileUpdateRequest {
     putIfNonEmpty('product_schema_id', productSchemaId);
     putIfNonEmpty('warranty_schema_id', warrantySchemaId);
     putIfNonEmpty('dhiway_space_id', dhiwaySpaceId);
+    if (permissionMode != null) {
+      json['permission_mode'] = permissionMode!.wireValue;
+    }
     if (dhiwaysDetails != null) {
       final List<Map<String, dynamic>> details = dhiwaysDetails!
           .map((DhiwayDetail detail) => detail.toJson())
@@ -432,6 +442,7 @@ class UserProfile {
     required this.warrantySchemaId,
     required this.storagePath,
     required this.createdAt,
+    this.permissionMode,
   });
 
   final String id;
@@ -468,6 +479,16 @@ class UserProfile {
   final String? warrantySchemaId;
   final String storagePath;
   final DateTime? createdAt;
+
+  /// Organization-level consent default for Human batches
+  /// (new_flutter_trumarkz.md §12a). `null` means the backend has no
+  /// explicit value set, which is equivalent to
+  /// [OrgPermissionMode.openSearch].
+  final OrgPermissionMode? permissionMode;
+
+  /// Effective consent mode for this organization.
+  OrgPermissionMode get effectivePermissionMode =>
+      permissionMode ?? OrgPermissionMode.openSearch;
 
   String? get phoneNumber => mobile;
   String? get gstin => gstNumber;
@@ -572,6 +593,9 @@ class UserProfile {
       ),
       storagePath: (json['storage_path'] ?? '').toString(),
       createdAt: createdAt,
+      permissionMode: OrgPermissionMode.fromWire(
+        json['permission_mode'] ?? json['permissionMode'],
+      ),
     );
   }
 }

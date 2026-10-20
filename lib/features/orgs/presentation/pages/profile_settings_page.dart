@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/models/auth_models.dart';
+import '../../../../core/models/org_permission.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
@@ -118,8 +119,31 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         onVerifyGst: () => _verifyGst(profile),
         isVerifyingGst: _isVerifyingGst,
         onEditSpaceIds: () => _showServiceIdsDialog(profile),
+        onEditPermissionMode: () => _showPermissionModeSheet(profile),
       ),
     );
+  }
+
+  /// Organization-level consent default for Human batches
+  /// (new_flutter_trumarkz.md §12a).
+  Future<void> _showPermissionModeSheet(UserProfile? profile) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withAlpha(120),
+      builder: (BuildContext sheetContext) {
+        final double height = MediaQuery.sizeOf(sheetContext).height * 0.6;
+        return SizedBox(
+          height: height,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: _PermissionModeSheet(profile: profile),
+          ),
+        );
+      },
+    );
+    await _refreshProfile();
   }
 
   Future<void> _showOrgProfileDialog(UserProfile? profile) async {
@@ -471,6 +495,7 @@ class OrgSettingsSectionArgs {
     required this.onVerifyGst,
     required this.isVerifyingGst,
     required this.onEditSpaceIds,
+    required this.onEditPermissionMode,
   });
 
   final String sectionName;
@@ -480,6 +505,9 @@ class OrgSettingsSectionArgs {
   final VoidCallback onVerifyGst;
   final bool isVerifyingGst;
   final VoidCallback onEditSpaceIds;
+
+  /// Opens the consent-mode editor (new_flutter_trumarkz.md §12a).
+  final VoidCallback onEditPermissionMode;
 }
 
 _ProfileSection? _parseSettingsSection(String? name) {
@@ -515,6 +543,7 @@ Widget buildOrgSettingsSection(Object? extra, {String? sectionName}) {
     onVerifyGst: extra.onVerifyGst,
     isVerifyingGst: extra.isVerifyingGst,
     onEditSpaceIds: extra.onEditSpaceIds,
+    onEditPermissionMode: extra.onEditPermissionMode,
   );
 }
 
@@ -1184,6 +1213,175 @@ class _VerificationPrefsSheetState
             ),
             if (_errorText != null) ...<Widget>[
               const SizedBox(height: 8),
+              Text(
+                _errorText!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TMZButton(
+                label: 'Save',
+                onPressed: _isSaving ? null : _save,
+                isLoading: _isSaving,
+                fullWidth: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Editor for the organization-level consent mode
+/// (new_flutter_trumarkz.md §12a).
+///
+/// Persists through PATCH /auth/me (`permission_mode`).
+class _PermissionModeSheet extends ConsumerStatefulWidget {
+  const _PermissionModeSheet({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  ConsumerState<_PermissionModeSheet> createState() =>
+      _PermissionModeSheetState();
+}
+
+class _PermissionModeSheetState extends ConsumerState<_PermissionModeSheet> {
+  late OrgPermissionMode _mode;
+  bool _isSaving = false;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.profile?.effectivePermissionMode ?? OrgPermissionMode.openSearch;
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+    setState(() {
+      _isSaving = true;
+      _errorText = null;
+    });
+    final NavigatorState navigator = Navigator.of(context);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(authNotifierProvider.notifier)
+          .updatePermissionMode(_mode);
+      if (!mounted) return;
+      navigator.pop();
+      messenger.showSnackBar(
+        SnackBar(content: Text('Consent mode set to ${_mode.label}.')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorText = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorText = 'Could not save. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Widget _option(OrgPermissionMode option) {
+    final bool isSelected = _mode == option;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: _isSaving
+            ? null
+            : () => setState(() {
+                _mode = option;
+                _errorText = null;
+              }),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? _profileNavy : const Color(0xFFE2E8F0),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: isSelected ? _profileNavy : const Color(0xFF94A3B8),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      option.label,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      option.description,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text('Consent Mode')),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),
+          children: <Widget>[
+            Text(
+              'This is the default for new Human batches. Each batch can still '
+              'choose its own access mode.',
+              style: AppTypography.body2.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...<OrgPermissionMode>[
+              OrgPermissionMode.openSearch,
+              OrgPermissionMode.permissionRequired,
+            ].map(_option),
+            if (_errorText != null) ...<Widget>[
+              const SizedBox(height: 4),
               Text(
                 _errorText!,
                 style: const TextStyle(color: Colors.red, fontSize: 12),
@@ -1973,6 +2171,7 @@ class _ProfileSectionPage extends ConsumerWidget {
     required this.onVerifyGst,
     required this.isVerifyingGst,
     required this.onEditSpaceIds,
+    required this.onEditPermissionMode,
   });
 
   final _ProfileSection section;
@@ -1982,6 +2181,9 @@ class _ProfileSectionPage extends ConsumerWidget {
   final VoidCallback onVerifyGst;
   final bool isVerifyingGst;
   final VoidCallback onEditSpaceIds;
+
+  /// Opens the consent-mode editor (new_flutter_trumarkz.md §12a).
+  final VoidCallback onEditPermissionMode;
 
   String get _title {
     return switch (section) {
@@ -2006,6 +2208,7 @@ class _ProfileSectionPage extends ConsumerWidget {
         onEditIndustryType: onEditIndustryType,
         onVerifyGst: onVerifyGst,
         isVerifyingGst: isVerifyingGst,
+        onEditPermissionMode: onEditPermissionMode,
       ),
       _ProfileSection.dhiway => _SpaceIdsCard(
         profile: currentProfile,
@@ -2103,6 +2306,7 @@ class _OrganisationDetailsCard extends StatelessWidget {
     required this.onEditIndustryType,
     required this.onVerifyGst,
     required this.isVerifyingGst,
+    required this.onEditPermissionMode,
   });
 
   final UserProfile? profile;
@@ -2110,6 +2314,9 @@ class _OrganisationDetailsCard extends StatelessWidget {
   final VoidCallback onEditIndustryType;
   final VoidCallback onVerifyGst;
   final bool isVerifyingGst;
+
+  /// Opens the consent-mode editor (new_flutter_trumarkz.md §12a).
+  final VoidCallback onEditPermissionMode;
 
   @override
   Widget build(BuildContext context) {
@@ -2132,6 +2339,12 @@ class _OrganisationDetailsCard extends StatelessWidget {
         .where((String value) => value.isNotEmpty)
         .toList();
     final bool hasIndustries = industries.isNotEmpty;
+
+    // Consent mode for Human batches. `null` on the wire means the backend
+    // has no explicit value, which is Open Search.
+    final OrgPermissionMode permissionMode =
+        profile?.effectivePermissionMode ?? OrgPermissionMode.openSearch;
+    final bool hasExplicitPermissionMode = profile?.permissionMode != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2255,6 +2468,34 @@ class _OrganisationDetailsCard extends StatelessWidget {
                   size: s(16),
                 ),
                 label: Text(hasIndustries ? 'Edit' : 'Set'),
+                style: TextButton.styleFrom(
+                  foregroundColor: _profileNavy,
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: Size.zero,
+                  padding: EdgeInsets.zero,
+                  textStyle: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.05859375,
+                    height: 16 / 12,
+                  ),
+                ),
+              ),
+            ),
+            _InfoRow(
+              label: 'Consent Mode',
+              value: permissionMode.label,
+              trailing: TextButton.icon(
+                onPressed: onEditPermissionMode,
+                icon: Icon(
+                  hasExplicitPermissionMode
+                      ? Icons.edit_outlined
+                      : Icons.add_rounded,
+                  size: s(16),
+                ),
+                label: Text(hasExplicitPermissionMode ? 'Edit' : 'Set'),
                 style: TextButton.styleFrom(
                   foregroundColor: _profileNavy,
                   visualDensity: VisualDensity.compact,

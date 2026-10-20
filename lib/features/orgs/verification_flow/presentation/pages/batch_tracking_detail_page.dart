@@ -82,6 +82,8 @@ class _BatchTrackingDetailPageState
       setState(() => _detailData = AsyncError(e, st));
     }
 
+    await _loadConsentStates(repo);
+
     final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
     if (detail == null) return;
 
@@ -141,6 +143,46 @@ class _BatchTrackingDetailPageState
           _sdcData = AsyncError(e, st);
         }
       });
+    }
+  }
+
+  /// Merges the per-person consent state into the batch's records.
+  ///
+  /// `GET /verification/batches/{batch_id}` does not carry the consent
+  /// fields (new_flutter_trumarkz.md §12c known gap) — they only come from
+  /// `GET /verification/all` and `GET /verification/user/{user_id}`. So the
+  /// batch view pulls the list endpoint for this batch and merges the
+  /// consent fields by user id. Failures are non-fatal: the records simply
+  /// show no consent state.
+  Future<void> _loadConsentStates(VerificationRepository repo) async {
+    final VerificationBatchDetailResponse? detail = _detailData.valueOrNull;
+    if (detail == null) return;
+    try {
+      final VerificationListResponse list = await repo.getAllVerifications(
+        batchId: _batchId.trim(),
+        limit: 200,
+      );
+      if (!mounted) return;
+      final Map<String, VerificationUser> byId = <String, VerificationUser>{
+        for (final VerificationUser user in list.users)
+          if (user.id.trim().isNotEmpty) user.id.trim(): user,
+      };
+      if (byId.isEmpty) return;
+      final List<VerificationUser> merged = <VerificationUser>[
+        for (final VerificationUser user in detail.users)
+          byId[user.id.trim()]?.hasConsentStatus == true
+              ? user.copyWith(
+                  consentStatus: byId[user.id.trim()]!.consentStatus,
+                  consentDeadline: byId[user.id.trim()]!.consentDeadline,
+                  consentAutoExpired:
+                      byId[user.id.trim()]!.consentAutoExpired,
+                )
+              : user,
+      ];
+      if (!mounted) return;
+      setState(() => _detailData = AsyncData(detail.copyWith(users: merged)));
+    } catch (e) {
+      debugPrint('[batch-detail] consent lookup failed: $e');
     }
   }
 
@@ -1681,6 +1723,57 @@ class _SharingGateBanner extends StatelessWidget {
   }
 }
 
+/// Consent state for a Human record in a batch that resolved to Permission
+/// Required (new_flutter_trumarkz.md §12c).
+///
+/// Only rendered when the backend actually sent a consent status — consent
+/// does not apply to Product or Warranty records, or to Open Search Human
+/// records, and the backend sends `null` for all of those.
+class _ConsentBadge extends StatelessWidget {
+  const _ConsentBadge({required this.user});
+
+  final VerificationUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool accepted = user.isConsentAccepted;
+    final bool pending = user.isConsentPending;
+    final Color background = accepted
+        ? AppColors.successBg
+        : (pending ? AppColors.warningBg : AppColors.dangerBg);
+    final Color foreground = accepted
+        ? AppColors.success
+        : (pending ? AppColors.warning : AppColors.danger);
+    final IconData icon = accepted
+        ? Icons.verified_user_rounded
+        : (pending ? Icons.schedule_rounded : Icons.block_rounded);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 12, color: foreground),
+          const SizedBox(width: 5),
+          Text(
+            user.consentStatusLabel,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UserTile extends StatelessWidget {
   const _UserTile({
     required this.user,
@@ -1809,7 +1902,16 @@ class _UserTile extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.start,
-                  children: <Widget>[_StatusBadge(label: label, style: style)],
+                  children: <Widget>[
+                    _StatusBadge(label: label, style: style),
+                    // Consent only exists for Human records in a batch that
+                    // resolved to Permission Required — never for Product or
+                    // Warranty records (new_flutter_trumarkz.md §12c).
+                    if (user.hasConsentStatus) ...<Widget>[
+                      const SizedBox(width: AppSpacing.x2),
+                      _ConsentBadge(user: user),
+                    ],
+                  ],
                 ),
               ],
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/auth_models.dart';
+import '../../../core/models/org_permission.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/token_storage.dart';
 
@@ -281,6 +282,7 @@ class AuthRepository {
     String? warrantySchemaId,
     String? dhiwaySpaceId,
     List<DhiwayDetail>? dhiwaysDetails,
+    String? permissionMode,
   }) async {
     if (serviceType != null) {
       final String normalizedServiceType = serviceType.trim().toLowerCase();
@@ -292,6 +294,21 @@ class AuthRepository {
         );
       }
       serviceType = normalizedServiceType;
+    }
+
+    // `permission_mode` accepts "open_search" / "permission_required" plus
+    // the "public" / "private" aliases the backend also tolerates
+    // (new_flutter_trumarkz.md §12a).
+    OrgPermissionMode? resolvedPermissionMode;
+    if (permissionMode != null) {
+      resolvedPermissionMode = OrgPermissionMode.fromWire(permissionMode);
+      if (resolvedPermissionMode == null) {
+        throw const ApiException(
+          statusCode: null,
+          message:
+              'Permission mode must be either open_search or permission_required.',
+        );
+      }
     }
 
     final OrganizationProfileUpdateRequest request =
@@ -314,6 +331,7 @@ class AuthRepository {
           warrantySchemaId: warrantySchemaId,
           dhiwaySpaceId: dhiwaySpaceId,
           dhiwaysDetails: dhiwaysDetails,
+          permissionMode: resolvedPermissionMode,
         );
 
     final Map<String, dynamic> payload = request.toJson();

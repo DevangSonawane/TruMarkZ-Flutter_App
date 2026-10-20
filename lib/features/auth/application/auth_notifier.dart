@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/auth_models.dart';
+import '../../../core/models/org_permission.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/token_storage.dart';
@@ -294,6 +295,12 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     return updateOrganizationProfile(serviceType: serviceType);
   }
 
+  /// Updates the organization-level consent default for Human batches
+  /// (new_flutter_trumarkz.md §12a).
+  Future<UserProfile> updatePermissionMode(OrgPermissionMode mode) async {
+    return updateOrganizationProfile(permissionMode: mode.wireValue);
+  }
+
   Future<UserProfile> updateOrganizationProfile({
     String? organizationName,
     String? fullName,
@@ -313,6 +320,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     String? warrantySchemaId,
     String? dhiwaySpaceId,
     List<DhiwayDetail>? dhiwaysDetails,
+    String? permissionMode,
   }) async {
     state = AsyncData(
       (state.value ?? const AuthState()).copyWith(
@@ -340,6 +348,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         warrantySchemaId: warrantySchemaId,
         dhiwaySpaceId: dhiwaySpaceId,
         dhiwaysDetails: dhiwaysDetails,
+        permissionMode: permissionMode,
       );
       final AuthState nextState = AuthState(
         status: AuthStatus.authenticated,

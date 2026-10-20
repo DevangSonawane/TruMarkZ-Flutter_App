@@ -12,6 +12,7 @@ import 'package:excel/excel.dart' hide Border;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../../core/models/org_permission.dart';
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
@@ -84,6 +85,34 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   final Map<int, List<_HumanDocumentDraft>> _attachedDocumentsByUser =
       <int, List<_HumanDocumentDraft>>{};
   int _selectedUserIndex = 0;
+
+  /// Whether the picked Excel/CSV file has an `email` column at all.
+  bool _pickedFileHasEmailColumn = false;
+
+  /// Rows dropped because the batch requires consent and the row had no
+  /// usable email (new_flutter_trumarkz.md §12b).
+  int _skippedMissingEmailRows = 0;
+
+  /// Effective consent mode for this batch.
+  ///
+  /// The batch's own access mode wins; the organization's `permission_mode`
+  /// default applies when the batch has none.
+  OrgPermissionMode get _effectivePermissionMode {
+    final OrgPermissionMode? organizationDefault = ref
+        .read(authNotifierProvider)
+        .valueOrNull
+        ?.userProfile
+        ?.permissionMode;
+    return resolvePermissionMode(
+      organizationDefault: organizationDefault,
+      credentialVisibility: _credentialVisibility,
+    );
+  }
+
+  /// Email becomes a required, validated field for Human batches that
+  /// resolve to Permission Required (new_flutter_trumarkz.md §12b).
+  bool get _emailRequired =>
+      _effectivePermissionMode == OrgPermissionMode.permissionRequired;
 
   @override
   void initState() {
@@ -286,6 +315,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         .map((dynamic v) => (v?.toString() ?? '').trim())
         .toList();
     final Map<String, int> ix = _userIndexMap(header);
+    _pickedFileHasEmailColumn = (ix['email'] ?? -1) >= 0;
 
     final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
     List<dynamic>? firstNonEmptyRow;
@@ -295,6 +325,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       firstNonEmptyRow ??= row;
       final Map<String, dynamic>? user = _userFromRow(
         valueAt: (String key) => _Identifiers._rowValue(row, ix[key]),
+        requireEmail: _emailRequired,
       );
       if (user != null) out.add(user);
     }
@@ -361,6 +392,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         .map((Data? d) => _excelCellToString(d).trim())
         .toList();
     final Map<String, int> ix = _userIndexMap(header);
+    _pickedFileHasEmailColumn = (ix['email'] ?? -1) >= 0;
     _logLong('[BulkUploadPage] XLSX header(raw)=$header');
     _logLong(
       '[BulkUploadPage] XLSX header(normalized)=${header.map(_Identifiers._normHeader).toList()}',
@@ -381,6 +413,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           if (idx == null || idx < 0 || idx >= row.length) return '';
           return _excelCellToString(row[idx]);
         },
+        requireEmail: _emailRequired,
       );
       if (user != null) out.add(user);
     }
@@ -580,23 +613,31 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   Map<String, dynamic>? _userFromRow({
     required String Function(String) valueAt,
+    bool requireEmail = false,
   }) {
     final String fullName = valueAt('full_name').trim();
     final String? dob = _normalizeDob(valueAt('dob'));
     final String gender = valueAt('gender').trim();
     final String nationality = valueAt('nationality').trim();
 
-    // New backend contract for human bulk upload:
+    // Backend contract for human bulk upload:
     // full_name, dob, gender, and nationality are required.
-    // email and phone_number are optional.
+    // email and phone_number are optional — unless the batch resolves to
+    // Permission Required, where email becomes required too
+    // (new_flutter_trumarkz.md §12b).
     if (fullName.isEmpty) return null;
     if (dob == null || dob.isEmpty) return null;
     if (gender.isEmpty || nationality.isEmpty) return null;
 
     final String rawEmail = valueAt('email');
-    final String email = _looksLikeEmail(rawEmail)
-        ? _normalizeEmail(rawEmail)
-        : '';
+    final bool hasValidEmail = _looksLikeEmail(rawEmail);
+    if (requireEmail && !hasValidEmail) {
+      // Same shape as the other missing-required-field rejections: the row
+      // is dropped and the server reports it as a validation error.
+      _skippedMissingEmailRows += 1;
+      return null;
+    }
+    final String email = hasValidEmail ? _normalizeEmail(rawEmail) : '';
     final String phone = _normalizePhone(valueAt('phone_number'));
 
     // Excel-facing DL column is `license_no`; backend still expects
@@ -677,6 +718,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     );
     setState(() {
       _pickedFile = picked;
+      _skippedMissingEmailRows = 0;
       _parsedUsers = _parseUsersFromPickedFile(picked);
       _attachedDocumentsByUser.clear();
       _selectedUserIndex = 0;
@@ -1049,6 +1091,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           skipped: uploadedRes.skippedUsers,
                           errors: uploadedRes.errors,
                           stepEyebrow: 'STEP 2 OF 3 • REVIEW',
+                          requireEmail: _emailRequired,
                         );
                       },
                     );
@@ -1679,6 +1722,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             return _HumanReviewDialog(
               users: _parsedUsers,
               documentsByUser: _attachedDocumentsByUser,
+              requireEmail: _emailRequired,
             );
           },
         );
@@ -1730,6 +1774,22 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       return;
     }
     if (_isUploading) return;
+
+    // Permission-based batches need an email for every person, so the file
+    // must carry an `email` column (new_flutter_trumarkz.md §12b). The
+    // backend answers a missing column with a 400, so catch it here with a
+    // message the organization can act on.
+    if (_emailRequired && !_pickedFileHasEmailColumn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This batch uses permission-based access, so the file needs an '
+            '"email" column. Add it and upload again.',
+          ),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isUploading = true);
     try {
@@ -2032,6 +2092,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                 skipped: res.skippedUsers,
                 errors: res.errors,
                 stepEyebrow: 'STEP 2 OF 3 • REVIEW',
+                requireEmail: _emailRequired,
               );
             },
           );
@@ -2646,15 +2707,22 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                         color: const Color(0xFF94A3B8),
                                       ),
                                     ),
-                                    SizedBox(height: s(22)),
-                                    // Isolate custom-paint + SVG raster work
-                                    // from keyboard-resize repaints.
-                                    RepaintBoundary(
-                                      child: _DropZone(
-                                        scale: scale,
-                                        onTap: _pickExcelFile,
-                                      ),
-                                    ),
+                                     SizedBox(height: s(22)),
+                                     if (_emailRequired) ...<Widget>[
+                                       _PermissionNotice(
+                                         scale: scale,
+                                         skippedRows: _skippedMissingEmailRows,
+                                       ),
+                                       SizedBox(height: s(18)),
+                                     ],
+                                     // Isolate custom-paint + SVG raster work
+                                     // from keyboard-resize repaints.
+                                     RepaintBoundary(
+                                       child: _DropZone(
+                                         scale: scale,
+                                         onTap: _pickExcelFile,
+                                       ),
+                                     ),
                                     SizedBox(height: s(18)),
                                     Row(
                                       children: <Widget>[
@@ -3817,6 +3885,86 @@ class _DropZone extends StatelessWidget {
   }
 }
 
+/// Banner shown when the batch resolves to Permission Required, where email
+/// becomes a required field for every person (new_flutter_trumarkz.md §12b).
+class _PermissionNotice extends StatelessWidget {
+  const _PermissionNotice({required this.scale, this.skippedRows = 0});
+
+  final double scale;
+
+  /// Rows already dropped because they had no usable email.
+  final int skippedRows;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * scale;
+    final bool hasSkipped = skippedRows > 0;
+    final Color background = hasSkipped
+        ? const Color(0xFFFEF2F2)
+        : const Color(0xFFEFF6FF);
+    final Color border = hasSkipped
+        ? const Color(0xFFFECACA)
+        : const Color(0xFFBFDBFE);
+    final Color foreground = hasSkipped
+        ? const Color(0xFFB91C1C)
+        : const Color(0xFF1B3387);
+
+    return Container(
+      padding: EdgeInsets.all(s(14)),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(s(14)),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            hasSkipped ? Icons.error_outline_rounded : Icons.lock_outline,
+            color: foreground,
+            size: s(20),
+          ),
+          SizedBox(width: s(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  hasSkipped
+                      ? '$skippedRows row${skippedRows == 1 ? '' : 's'} skipped — email is required'
+                      : 'Permission-based access',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(13),
+                    fontWeight: FontWeight.w700,
+                    color: foreground,
+                  ),
+                ),
+                SizedBox(height: s(4)),
+                Text(
+                  hasSkipped
+                      ? 'These rows had no valid email. Add an email address to '
+                          'each person and upload the file again.'
+                      : 'Everyone in this batch must approve before their '
+                          'credential is processed. The file needs an "email" '
+                          'column and every row needs a valid address.',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 12,
+                    color: foreground.withAlpha(200),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SelectedFileCard extends StatelessWidget {
   const _SelectedFileCard({
     required this.scale,
@@ -4282,6 +4430,7 @@ class _HumanReviewDialog extends StatefulWidget {
     this.skipped = const <BulkUploadSkippedUser>[],
     this.errors = const <BulkUploadErrorRow>[],
     this.stepEyebrow,
+    this.requireEmail = false,
   });
 
   final List<Map<String, dynamic>> users;
@@ -4289,6 +4438,10 @@ class _HumanReviewDialog extends StatefulWidget {
   final List<BulkUploadSkippedUser> skipped;
   final List<BulkUploadErrorRow> errors;
   final String? stepEyebrow;
+
+  /// Email is required for every person when the batch resolves to
+  /// Permission Required (new_flutter_trumarkz.md §12b).
+  final bool requireEmail;
 
   @override
   State<_HumanReviewDialog> createState() => _HumanReviewDialogState();
@@ -4356,11 +4509,12 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
   }
 
   String? _firstMissingRequiredField() {
-    const Map<String, String> requiredLabels = <String, String>{
+    final Map<String, String> requiredLabels = <String, String>{
       'full_name': 'Full name',
       'gender': 'Gender',
       'dob': 'DOB',
       'nationality': 'Nationality',
+      if (widget.requireEmail) 'email': 'Email',
     };
     for (int i = 0; i < _users.length; i++) {
       final Map<String, dynamic> user = _users[i];

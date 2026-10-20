@@ -208,6 +208,12 @@ String _readStringValue(Map<String, dynamic> json, List<String> keys) {
   return '';
 }
 
+/// Reads an optional string field, collapsing empty/missing values to `null`.
+String? _readOptionalString(dynamic raw) {
+  final String value = (raw ?? '').toString().trim();
+  return value.isEmpty ? null : value;
+}
+
 class VerificationUser {
   const VerificationUser({
     required this.id,
@@ -240,6 +246,9 @@ class VerificationUser {
     required this.documents,
     required this.customFields,
     required this.verificationTypeStatus,
+    this.consentStatus,
+    this.consentDeadline,
+    this.consentAutoExpired = false,
   });
 
   final String id;
@@ -273,6 +282,98 @@ class VerificationUser {
   final List<VerificationDocument> documents;
   final Map<String, dynamic> customFields;
   final Map<String, dynamic> verificationTypeStatus;
+
+  /// Consent state for this person — `pending`, `accepted` or `rejected`.
+  ///
+  /// `null` for every Product/Warranty record and every Open Search Human
+  /// record (new_flutter_trumarkz.md §12c): consent is not applicable there,
+  /// so no consent UI element should ever be rendered for those.
+  final String? consentStatus;
+
+  /// When the person must respond by (ISO-8601). Only set while consent is
+  /// pending.
+  final String? consentDeadline;
+
+  /// `true` when a `rejected` status was reached by the 24h deadline
+  /// passing, rather than by the person explicitly declining. Both states
+  /// mean the same thing for eligibility.
+  final bool consentAutoExpired;
+
+  /// Whether consent tracking applies to this record at all.
+  bool get hasConsentStatus {
+    final String value = consentStatus?.trim() ?? '';
+    return value.isNotEmpty;
+  }
+
+  bool get isConsentPending =>
+      (consentStatus?.trim().toLowerCase() ?? '') == 'pending';
+
+  bool get isConsentAccepted =>
+      (consentStatus?.trim().toLowerCase() ?? '') == 'accepted';
+
+  bool get isConsentRejected =>
+      (consentStatus?.trim().toLowerCase() ?? '') == 'rejected';
+
+  /// Parsed [consentDeadline], when the backend sent a usable timestamp.
+  DateTime? get consentDeadlineAt => DateTime.tryParse(
+    (consentDeadline ?? '').trim(),
+  );
+
+  /// Human-readable label for the consent state.
+  String get consentStatusLabel {
+    if (!hasConsentStatus) return '';
+    if (isConsentAccepted) return 'Consent given';
+    if (isConsentPending) return 'Awaiting consent';
+    if (isConsentRejected) {
+      return consentAutoExpired
+          ? 'Consent expired'
+          : 'Consent declined';
+    }
+    return consentStatus!.trim();
+  }
+
+  /// Returns a copy carrying the given consent state.
+  VerificationUser copyWith({
+    String? consentStatus,
+    String? consentDeadline,
+    bool? consentAutoExpired,
+  }) {
+    return VerificationUser(
+      id: id,
+      batchId: batchId,
+      batchName: batchName,
+      orgId: orgId,
+      publicId: publicId,
+      fullName: fullName,
+      batchSerial: batchSerial,
+      dob: dob,
+      phoneNumber: phoneNumber,
+      email: email,
+      aadharNumber: aadharNumber,
+      panNumber: panNumber,
+      addressLine1: addressLine1,
+      addressLine2: addressLine2,
+      addressLine3: addressLine3,
+      pincode: pincode,
+      state: state,
+      country: country,
+      verificationStatus: verificationStatus,
+      overallStatusLabel: overallStatusLabel,
+      verificationReason: verificationReason,
+      verifiedAt: verifiedAt,
+      photoUrl: photoUrl,
+      storagePath: storagePath,
+      inviteAccepted: inviteAccepted,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      documents: documents,
+      customFields: customFields,
+      verificationTypeStatus: verificationTypeStatus,
+      consentStatus: consentStatus ?? this.consentStatus,
+      consentDeadline: consentDeadline ?? this.consentDeadline,
+      consentAutoExpired: consentAutoExpired ?? this.consentAutoExpired,
+    );
+  }
 
   List<VerificationCheckStatus> get verificationChecks {
     final List<VerificationCheckStatus> checks = <VerificationCheckStatus>[];
@@ -450,6 +551,15 @@ class VerificationUser {
       documents: docs,
       customFields: customFields,
       verificationTypeStatus: verificationTypeStatus,
+      consentStatus: _readOptionalString(
+        json['consent_status'] ?? json['consentStatus'],
+      ),
+      consentDeadline: _readOptionalString(
+        json['consent_deadline'] ?? json['consentDeadline'],
+      ),
+      consentAutoExpired:
+          json['consent_auto_expired'] == true ||
+          json['consentAutoExpired'] == true,
     );
   }
 
@@ -484,6 +594,9 @@ class VerificationUser {
     'documents': documents.map((VerificationDocument d) => d.toJson()).toList(),
     'custom_fields': customFields,
     'verification_type_status': verificationTypeStatus,
+    'consent_status': consentStatus,
+    'consent_deadline': consentDeadline,
+    'consent_auto_expired': consentAutoExpired,
   };
 }
 
@@ -1156,6 +1269,31 @@ class VerificationBatchDetailResponse {
     final String type = batchType.trim().toLowerCase();
     if (type.isNotEmpty) return type == 'warranty';
     return sdcSpaceType.toLowerCase() == 'warranty';
+  }
+
+  /// Returns a copy with a different set of users.
+  VerificationBatchDetailResponse copyWith({
+    List<VerificationUser>? users,
+  }) {
+    return VerificationBatchDetailResponse(
+      batchId: batchId,
+      batchName: batchName,
+      batchType: batchType,
+      description: description,
+      industryTypes: industryTypes,
+      verificationTypes: verificationTypes,
+      credentialVisibility: credentialVisibility,
+      totalUsers: totalUsers,
+      verificationProgress: verificationProgress,
+      users: users ?? this.users,
+      excelStoragePath: excelStoragePath,
+      reportStoragePaths: reportStoragePaths,
+      sharedWithOrg: sharedWithOrg,
+      sharedAt: sharedAt,
+      sharedBy: sharedBy,
+      canGenerateSdc: canGenerateSdc,
+      rejectedList: rejectedList,
+    );
   }
 
   factory VerificationBatchDetailResponse.fromJson(Map<String, dynamic> json) {

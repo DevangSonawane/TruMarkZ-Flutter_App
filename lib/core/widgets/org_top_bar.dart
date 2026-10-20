@@ -27,6 +27,7 @@ class OrgTopBar extends StatelessWidget {
     this.onAvatarTap,
     this.avatarAssetPath = 'assets/icons/dashbaord/profile.png',
     this.fallbackPath = AppRouter.dashboardPath,
+    this.hasUnreadNotifications = false,
   });
 
   final String title;
@@ -37,6 +38,9 @@ class OrgTopBar extends StatelessWidget {
   final VoidCallback? onAvatarTap;
   final String avatarAssetPath;
   final String fallbackPath;
+
+  /// Drives the bell's unread dot (new_flutter_trumarkz.md §13d).
+  final bool hasUnreadNotifications;
 
   void _defaultBack(BuildContext context) {
     if (onBack != null) {
@@ -95,23 +99,24 @@ class OrgTopBar extends StatelessWidget {
                 onBellTap ??
                 () => context.go('${AppRouter.notificationsPath}?flow=org'),
             behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.all(7),
+            child: Padding(
+              padding: const EdgeInsets.all(7),
               child: Stack(
                 alignment: Alignment.center,
                 children: <Widget>[
-                  Icon(LucideIcons.bell, color: Colors.white, size: 23),
-                  Positioned(
-                    right: 1,
-                    top: 2,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Color(0xFFFBBF24),
-                        shape: BoxShape.circle,
+                  const Icon(LucideIcons.bell, color: Colors.white, size: 23),
+                  if (hasUnreadNotifications)
+                    const Positioned(
+                      right: 1,
+                      top: 2,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFBBF24),
+                          shape: BoxShape.circle,
+                        ),
+                        child: SizedBox(width: 7, height: 7),
                       ),
-                      child: SizedBox(width: 7, height: 7),
                     ),
-                  ),
                 ],
               ),
             ),

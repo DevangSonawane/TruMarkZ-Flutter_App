@@ -11,6 +11,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/tmz_card.dart';
 import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
+import '../../../notifications/application/notification_notifier.dart';
 import '../../data/verification_repository.dart';
 
 /// MrBob-style home, Trumarkz colours:
@@ -26,7 +27,8 @@ class OrgDashboardPage extends ConsumerStatefulWidget {
   ConsumerState<OrgDashboardPage> createState() => _OrgDashboardPageState();
 }
 
-class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
+class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage>
+    with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
@@ -37,6 +39,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _searchController.addListener(() {
       final String next = _searchController.text;
       if (next == _query) return;
@@ -44,6 +47,30 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
       setState(() => _query = next);
     });
     Future<void>.microtask(_loadSectors);
+    // The bell's unread dot needs the organization's notifications; there is
+    // no push channel, so the dashboard fetches them on entry.
+    Future<void>.microtask(
+      () => ref
+          .read(notificationNotifierProvider.notifier)
+          .refresh(showLoader: false),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // No real-time delivery, so a resumed app is the cheapest moment to
+    // pick up notifications created while away
+    // (new_flutter_trumarkz.md §13d).
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.read(notificationNotifierProvider.notifier).refresh(showLoader: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSectors() async {
@@ -70,16 +97,13 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
   Future<void> _refreshDashboard() async {
     final List<VerificationBatchSummary> _ = await ref.refresh(
       verificationBatchesProvider.future,
     );
+    await ref
+        .read(notificationNotifierProvider.notifier)
+        .refresh(showLoader: false);
   }
 
   void _onTapNewBatch(String serviceType) {
@@ -325,6 +349,9 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage> {
                       horizontalInset: horizontalInset,
                       orgName: displayName,
                       orgCaption: headerLine2,
+                      hasUnreadNotifications: ref
+                          .watch(notificationNotifierProvider)
+                          .hasUnread,
                       onAlertsTap: () =>
                           context.go('${AppRouter.notificationsPath}?flow=org'),
                       onProfileTap: () => context.go(AppRouter.settingsPath),
@@ -639,6 +666,7 @@ class _LocationBarDelegate extends SliverPersistentHeaderDelegate {
     required this.orgCaption,
     required this.onAlertsTap,
     required this.onProfileTap,
+    this.hasUnreadNotifications = false,
   });
 
   final double scale;
@@ -647,6 +675,9 @@ class _LocationBarDelegate extends SliverPersistentHeaderDelegate {
   final String orgCaption;
   final VoidCallback onAlertsTap;
   final VoidCallback onProfileTap;
+
+  /// Drives the bell's unread dot (new_flutter_trumarkz.md §13d).
+  final bool hasUnreadNotifications;
 
   @override
   double get minExtent => 64;
@@ -669,6 +700,7 @@ class _LocationBarDelegate extends SliverPersistentHeaderDelegate {
         orgCaption: orgCaption,
         onAlertsTap: onAlertsTap,
         onProfileTap: onProfileTap,
+        hasUnreadNotifications: hasUnreadNotifications,
       ),
     );
   }
@@ -678,7 +710,8 @@ class _LocationBarDelegate extends SliverPersistentHeaderDelegate {
       oldDelegate.scale != scale ||
       oldDelegate.horizontalInset != horizontalInset ||
       oldDelegate.orgName != orgName ||
-      oldDelegate.orgCaption != orgCaption;
+      oldDelegate.orgCaption != orgCaption ||
+      oldDelegate.hasUnreadNotifications != hasUnreadNotifications;
 }
 
 class _LocationBar extends StatelessWidget {
@@ -688,6 +721,7 @@ class _LocationBar extends StatelessWidget {
     required this.orgCaption,
     required this.onAlertsTap,
     required this.onProfileTap,
+    this.hasUnreadNotifications = false,
   });
 
   final double scale;
@@ -695,6 +729,9 @@ class _LocationBar extends StatelessWidget {
   final String orgCaption;
   final VoidCallback onAlertsTap;
   final VoidCallback onProfileTap;
+
+  /// Drives the bell's unread dot (new_flutter_trumarkz.md §13d).
+  final bool hasUnreadNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -762,7 +799,7 @@ class _LocationBar extends StatelessWidget {
           _CircleAction(
             scale: scale,
             icon: LucideIcons.bell,
-            hasDot: true,
+            hasDot: hasUnreadNotifications,
             onTap: onAlertsTap,
           ),
           SizedBox(width: 10 * scale),

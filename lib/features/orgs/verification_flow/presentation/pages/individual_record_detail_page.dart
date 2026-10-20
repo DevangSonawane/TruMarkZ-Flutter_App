@@ -372,6 +372,15 @@ class _IndividualRecordDetailPageState
                               ],
                             ),
                           ),
+                          // Consent only applies to Human records in a batch
+                          // that resolved to Permission Required. The backend
+                          // sends no consent status for anything else, so
+                          // nothing is rendered here
+                          // (new_flutter_trumarkz.md §12c).
+                          if (user.hasConsentStatus) ...<Widget>[
+                            const SizedBox(height: AppSpacing.x4),
+                            _ConsentCard(user: user),
+                          ],
                           if (user.verificationChecks.isNotEmpty) ...<Widget>[
                             const SizedBox(height: AppSpacing.x4),
                             _VerificationChecksCard(
@@ -522,6 +531,107 @@ class _IndividualRecordDetailPageState
       return 'verified';
     }
     return 'pending';
+  }
+}
+
+/// Consent details for a Human record in a Permission Required batch
+/// (new_flutter_trumarkz.md §12c).
+class _ConsentCard extends StatelessWidget {
+  const _ConsentCard({required this.user});
+
+  final VerificationUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool accepted = user.isConsentAccepted;
+    final bool pending = user.isConsentPending;
+    final Color background = accepted
+        ? AppColors.successBg
+        : (pending ? AppColors.warningBg : AppColors.dangerBg);
+    final Color foreground = accepted
+        ? AppColors.success
+        : (pending ? AppColors.warning : AppColors.danger);
+    final IconData icon = accepted
+        ? Icons.verified_user_rounded
+        : (pending ? Icons.schedule_rounded : Icons.block_rounded);
+
+    final DateTime? deadline = user.consentDeadlineAt;
+    final String deadlineLabel = deadline == null
+        ? ''
+        : '${deadline.day.toString().padLeft(2, '0')}/'
+            '${deadline.month.toString().padLeft(2, '0')}/'
+            '${deadline.year}';
+
+    final String detail = accepted
+        ? 'This person approved the verification request.'
+        : (pending
+              ? (deadlineLabel.isEmpty
+                    ? 'Waiting for this person to approve the request.'
+                    : 'Waiting for this person to approve. No response by '
+                          '$deadlineLabel and the request is declined.')
+              : (user.consentAutoExpired
+                    ? 'No response was received before the deadline, so this '
+                          'record was declined.'
+                    : 'This person declined the verification request.'));
+
+    return TMZCard(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: background,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: foreground, size: 19),
+              ),
+              const SizedBox(width: AppSpacing.x3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Consent',
+                      style: AppTypography.heading2.copyWith(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.consentStatusLabel,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        height: 16 / 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          Text(
+            detail,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              height: 18 / 13,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

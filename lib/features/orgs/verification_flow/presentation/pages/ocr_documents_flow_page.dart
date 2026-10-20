@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/org_permission.dart';
 import '../../../../../core/models/verification_models.dart';
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
@@ -14,6 +15,7 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/widgets/tmz_badge.dart';
 import '../../../../../core/widgets/tmz_button.dart';
+import '../../../../auth/application/auth_notifier.dart';
 import '../../../data/verification_repository.dart';
 
 /// Full-page OCR Human flow (trumarkz_ocr.md): documents → review → photos.
@@ -83,6 +85,27 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
   String _industry = '';
   String _credentialVisibility = 'public_searchable';
   Set<String> _checks = <String>{};
+
+  /// Effective consent mode for this batch (new_flutter_trumarkz.md §12b).
+  ///
+  /// The batch's own access mode wins; the organization's `permission_mode`
+  /// default applies when the batch has none.
+  OrgPermissionMode get _effectivePermissionMode {
+    final OrgPermissionMode? organizationDefault = ref
+        .read(authNotifierProvider)
+        .valueOrNull
+        ?.userProfile
+        ?.permissionMode;
+    return resolvePermissionMode(
+      organizationDefault: organizationDefault,
+      credentialVisibility: _credentialVisibility,
+    );
+  }
+
+  /// Email becomes a required, validated field for Human batches that
+  /// resolve to Permission Required (new_flutter_trumarkz.md §12b).
+  bool get _emailRequired =>
+      _effectivePermissionMode == OrgPermissionMode.permissionRequired;
 
   // Step 0 — documents.
   _OcrFlowMode _docMode = _OcrFlowMode.single;
@@ -634,11 +657,14 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
   }
 
   String? _firstMissingReviewRequiredField() {
-    const Map<String, String> requiredLabels = <String, String>{
+    final Map<String, String> requiredLabels = <String, String>{
       'full_name': 'Full name',
       'gender': 'Gender',
       'dob': 'DOB',
       'nationality': 'Nationality',
+      // Email becomes required for batches that resolve to Permission
+      // Required (new_flutter_trumarkz.md §12b).
+      if (_emailRequired) 'email': 'Email',
     };
     for (int i = 0; i < _reviewUsers.length; i++) {
       final Map<String, dynamic> user = _reviewUsers[i];
@@ -2097,7 +2123,14 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
                 child: _rfield(pageIndex, 'phone_number', 'Phone number'),
               ),
               const SizedBox(width: 12),
-              Expanded(child: _rfield(pageIndex, 'email', 'Email')),
+              Expanded(
+                child: _rfield(
+                  pageIndex,
+                  'email',
+                  'Email',
+                  required: _emailRequired,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
