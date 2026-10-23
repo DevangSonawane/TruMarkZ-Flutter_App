@@ -49,11 +49,7 @@ class _VerificationPlanSetupPageState
   int _stepIndex = 0;
   int _lastStepIndex = 0;
 
-  final Set<String> _selectedCheckIds = <String>{
-    'police',
-    'dob',
-    'education',
-  };
+  final Set<String> _selectedCheckIds = <String>{'police', 'dob', 'education'};
 
   _AccessType _accessType = _AccessType.publicSearchable;
   bool _whatsAppConsent = true;
@@ -114,7 +110,9 @@ class _VerificationPlanSetupPageState
       final List<String> sortedCheckIds = _selectedCheckIds.toList()..sort();
       qp['checks'] = sortedCheckIds.join(',');
     }
-    qp['access'] = _accessType.name;
+    qp['access'] = _accessType == _AccessType.permissionBased
+        ? 'private'
+        : 'public';
     if (_accessType == _AccessType.permissionBased) {
       final List<String> channels = <String>[
         if (_whatsAppConsent) 'whatsapp',
@@ -204,29 +202,29 @@ class _VerificationPlanSetupPageState
         : 'human';
     final AsyncValue<List<VerificationTypeDefinition>> humanTypesAsync = ref
         .watch(verificationTypesProvider(verificationFilter));
-    final List<_VerificationCheck> apiChecks =
-        _checksFromApi(
-          humanTypesAsync.valueOrNull ?? const <VerificationTypeDefinition>[],
-        );
+    final List<_VerificationCheck> apiChecks = _checksFromApi(
+      humanTypesAsync.valueOrNull ?? const <VerificationTypeDefinition>[],
+    );
     final bool movingForward = _stepIndex >= _lastStepIndex;
 
     final Widget content = switch (_stepIndex) {
-      0 => humanTypesAsync.isLoading && apiChecks.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : _ChecksStep(
-              checks: apiChecks,
-              selectedCheckIds: _selectedCheckIds,
-              formatInr: _formatInr,
-              onToggleCheck: (String id, bool selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedCheckIds.add(id);
-                  } else {
-                    _selectedCheckIds.remove(id);
-                  }
-                });
-              },
-            ),
+      0 =>
+        humanTypesAsync.isLoading && apiChecks.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : _ChecksStep(
+                checks: apiChecks,
+                selectedCheckIds: _selectedCheckIds,
+                formatInr: _formatInr,
+                onToggleCheck: (String id, bool selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedCheckIds.add(id);
+                    } else {
+                      _selectedCheckIds.remove(id);
+                    }
+                  });
+                },
+              ),
       _ => _PermissionsStep(
         accessType: _accessType,
         whatsAppConsent: _whatsAppConsent,
@@ -263,10 +261,7 @@ class _VerificationPlanSetupPageState
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
-        title: OrgTopBar(
-          title: _stepTitle,
-          onBack: () => _goBack(context),
-        ),
+        title: OrgTopBar(title: _stepTitle, onBack: () => _goBack(context)),
       ),
       body: Container(
         color: AppColors.pageBg,
@@ -304,7 +299,10 @@ class _VerificationPlanSetupPageState
                             begin: Offset(movingForward ? 0.08 : -0.08, 0),
                             end: Offset.zero,
                           ).animate(
-                            CurvedAnimation(parent: anim, curve: Curves.easeOut),
+                            CurvedAnimation(
+                              parent: anim,
+                              curve: Curves.easeOut,
+                            ),
                           );
                       return FadeTransition(
                         opacity: anim,

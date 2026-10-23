@@ -1,5 +1,8 @@
-package com.example.trumarkz
+package com.asynk.trumarkz
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +15,7 @@ import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity() {
   private val downloadsChannelName = "trumarkz/downloads"
+  private val notificationsChannelId = "trumarkz_notifications"
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -19,10 +23,25 @@ class MainActivity : FlutterActivity() {
     WindowCompat.setDecorFitsSystemWindows(window, false)
     window.statusBarColor = Color.TRANSPARENT
     window.navigationBarColor = Color.TRANSPARENT
+    createNotificationChannel()
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       window.isNavigationBarContrastEnforced = false
     }
+  }
+
+  private fun createNotificationChannel() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val channel = NotificationChannel(
+      notificationsChannelId,
+      "TruMarkZ notifications",
+      NotificationManager.IMPORTANCE_DEFAULT,
+    ).apply {
+      description = "Updates about your TruMarkZ account and batches."
+    }
+    val notificationManager =
+      getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    notificationManager.createNotificationChannel(channel)
   }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http_parser/http_parser.dart';
 
 import '../../../core/models/sdc_approval_models.dart';
+import '../../../core/models/org_permission.dart';
 import '../../../core/models/verification_models.dart';
 import '../../../core/network/api_client.dart';
 
@@ -22,10 +23,7 @@ final verificationBatchesProvider =
 /// newest first. Auto-disposed per batch id; invalidate to refresh after
 /// a decide call or on pull-to-refresh.
 final sdcApprovalsProvider = FutureProvider.family
-    .autoDispose<List<SdcPartialApprovalRequest>, String>((
-      ref,
-      batchId,
-    ) async {
+    .autoDispose<List<SdcPartialApprovalRequest>, String>((ref, batchId) async {
       return ref
           .read(verificationRepositoryProvider)
           .getSdcApprovals(batchId.trim());
@@ -646,9 +644,20 @@ class VerificationRepository {
     String? verificationTypes,
     String? credentialVisibility,
     String? templateId,
+    String? bulkGender,
+    String? bulkNationality,
     required Uint8List fileBytes,
     required String fileName,
   }) async {
+    final String? backendVisibility = canonicalCredentialVisibility(
+      credentialVisibility,
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[Consent] bulk upload visibility raw=${credentialVisibility ?? ''} '
+        'backend=${backendVisibility ?? '(organization default)'}',
+      );
+    }
     final String safeName = fileName.trim().isEmpty ? 'upload.xlsx' : fileName;
     final String ext = safeName.split('.').last.toLowerCase();
     final MediaType contentType = switch (ext) {
@@ -667,11 +676,16 @@ class VerificationRepository {
         'industry_type': industryType.trim(),
       if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
         'verification_types': verificationTypes.trim(),
-      if (credentialVisibility != null &&
-          credentialVisibility.trim().isNotEmpty)
-        'credential_visibility': credentialVisibility.trim(),
+      if (backendVisibility case final String visibility)
+        'credential_visibility': visibility,
       if (templateId != null && templateId.trim().isNotEmpty)
         'template_id': templateId.trim(),
+      // The API deliberately receives a single comma-separated Form value.
+      // Omit empty selections rather than sending an empty string.
+      if (bulkGender != null && bulkGender.trim().isNotEmpty)
+        'bulk_gender': bulkGender.trim(),
+      if (bulkNationality != null && bulkNationality.trim().isNotEmpty)
+        'bulk_nationality': bulkNationality.trim(),
       'file': MultipartFile.fromBytes(
         fileBytes,
         filename: safeName,
@@ -695,6 +709,15 @@ class VerificationRepository {
     String? fields,
     required List<BulkUploadDocumentInput> files,
   }) async {
+    final String? backendVisibility = canonicalCredentialVisibility(
+      credentialVisibility,
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[Consent] document upload visibility raw=${credentialVisibility ?? ''} '
+        'backend=${backendVisibility ?? '(organization default)'}',
+      );
+    }
     final List<BulkUploadDocumentInput> cleanFiles = files
         .where(
           (BulkUploadDocumentInput file) =>
@@ -709,9 +732,8 @@ class VerificationRepository {
         'industry_type': industryType.trim(),
       if (verificationTypes != null && verificationTypes.trim().isNotEmpty)
         'verification_types': verificationTypes.trim(),
-      if (credentialVisibility != null &&
-          credentialVisibility.trim().isNotEmpty)
-        'credential_visibility': credentialVisibility.trim(),
+      if (backendVisibility case final String visibility)
+        'credential_visibility': visibility,
       if (docType != null && docType.trim().isNotEmpty)
         'doc_type': docType.trim(),
       if (fields != null && fields.trim().isNotEmpty) 'fields': fields.trim(),
@@ -1264,7 +1286,10 @@ class VerificationRepository {
     } else if (res is Map) {
       final Map<String, dynamic> json = Map<String, dynamic>.from(res);
       final dynamic data =
-          json['data'] ?? json['approvals'] ?? json['requests'] ?? json['items'];
+          json['data'] ??
+          json['approvals'] ??
+          json['requests'] ??
+          json['items'];
       rawItems = data is List ? data : const <dynamic>[];
     } else {
       rawItems = const <dynamic>[];
@@ -1272,9 +1297,8 @@ class VerificationRepository {
     final List<SdcPartialApprovalRequest> items = rawItems
         .whereType<Map>()
         .map(
-          (Map e) => SdcPartialApprovalRequest.fromJson(
-            Map<String, dynamic>.from(e),
-          ),
+          (Map e) =>
+              SdcPartialApprovalRequest.fromJson(Map<String, dynamic>.from(e)),
         )
         .where((SdcPartialApprovalRequest r) => r.id.isNotEmpty)
         .toList();
@@ -1297,8 +1321,7 @@ class VerificationRepository {
       '/sdc/approvals/$encoded/decide',
       data: <String, dynamic>{
         'decision': normalized,
-        if (reason != null && reason.trim().isNotEmpty)
-          'reason': reason.trim(),
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
       },
     );
     return SdcPartialApprovalRequest.fromJson(res);

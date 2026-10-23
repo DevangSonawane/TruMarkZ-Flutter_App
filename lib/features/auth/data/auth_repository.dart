@@ -4,11 +4,13 @@ import '../../../core/models/auth_models.dart';
 import '../../../core/models/org_permission.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/token_storage.dart';
+import '../../../core/services/push_notification_service.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(
     ref.read(apiClientProvider),
     ref.read(tokenStorageProvider),
+    ref.read(pushNotificationServiceProvider),
   );
 });
 
@@ -23,10 +25,11 @@ final organizationIndustryTypeProvider = FutureProvider.family<String?, String>(
 );
 
 class AuthRepository {
-  AuthRepository(this._api, this._tokenStorage);
+  AuthRepository(this._api, this._tokenStorage, this._pushNotifications);
 
   final ApiClient _api;
   final TokenStorage _tokenStorage;
+  final PushNotificationService _pushNotifications;
 
   Map<String, dynamic> _authPayload(Map<String, dynamic> res) {
     if ((res['access_token'] ?? '').toString().trim().isNotEmpty) {
@@ -51,6 +54,9 @@ class AuthRepository {
     if (parsed.loginType.trim().isNotEmpty) {
       await _tokenStorage.saveLoginType(parsed.loginType);
     }
+    await _pushNotifications.activateForAuthenticatedUser(
+      requestPermission: true,
+    );
   }
 
   Future<LoginResponse> loginIndividual({
@@ -406,5 +412,8 @@ class AuthRepository {
     return const <AssignedIndividual>[];
   }
 
-  Future<void> logout() => _tokenStorage.clearAll();
+  Future<void> logout() async {
+    await _pushNotifications.unregisterCurrentToken();
+    await _tokenStorage.clearAll();
+  }
 }

@@ -88,3 +88,16 @@ OrgPermissionMode resolvePermissionMode({
   if (fromBatch != null) return fromBatch;
   return organizationDefault ?? OrgPermissionMode.openSearch;
 }
+
+/// Converts the app's display/navigation aliases to the documented batch API
+/// values. An empty value stays empty so the backend can apply the
+/// organization's permission-mode default.
+String? canonicalCredentialVisibility(String? raw) {
+  final String value = (raw ?? '').trim();
+  if (value.isEmpty) return null;
+  return switch (OrgPermissionMode.fromBatchVisibility(value)) {
+    OrgPermissionMode.permissionRequired => 'private',
+    OrgPermissionMode.openSearch => 'public',
+    null => value,
+  };
+}

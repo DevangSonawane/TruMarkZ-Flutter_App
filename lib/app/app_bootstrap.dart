@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/services/deep_link_service.dart';
+import '../core/services/push_notification_service.dart';
+import '../core/services/token_storage.dart';
 import '../core/theme/theme_controller.dart';
 import 'trumarkz_app.dart';
 
@@ -20,7 +22,18 @@ class _TruMarkZBootstrapAppState extends State<TruMarkZBootstrapApp> {
     super.initState();
     _controllerFuture = ThemeController.create();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await DeepLinkService.init(ProviderScope.containerOf(context));
+      final ProviderContainer container = ProviderScope.containerOf(context);
+      await DeepLinkService.init(container);
+      final String? token = await container
+          .read(tokenStorageProvider)
+          .getToken();
+      if (token != null && token.trim().isNotEmpty) {
+        await container
+            .read(pushNotificationServiceProvider)
+            .activateForAuthenticatedUser();
+      } else {
+        await container.read(pushNotificationServiceProvider).start();
+      }
     });
   }
 

@@ -64,6 +64,210 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     'email',
     'license_no',
   ];
+  static const List<String> _genderOptions = <String>[
+    'Male',
+    'Female',
+    'Other',
+  ];
+  // Kept in the same wire casing as the backend's NATIONALITY_OPTIONS.
+  // There is intentionally no "All" option for either override.
+  static const List<String> _nationalityOptions = <String>[
+    'Afghan',
+    'Albanian',
+    'Algerian',
+    'Andorran',
+    'Angolan',
+    'Antiguan and Barbudan',
+    'Argentine',
+    'Armenian',
+    'Australian',
+    'Austrian',
+    'Azerbaijani',
+    'Bahamian',
+    'Bahraini',
+    'Bangladeshi',
+    'Barbadian',
+    'Belarusian',
+    'Belgian',
+    'Belizean',
+    'Beninese',
+    'Bhutanese',
+    'Bolivian',
+    'Bosnian and Herzegovinian',
+    'Botswanan',
+    'Brazilian',
+    'Bruneian',
+    'Bulgarian',
+    'Burkinabe',
+    'Burundian',
+    'Cabo Verdean',
+    'Cambodian',
+    'Cameroonian',
+    'Canadian',
+    'Central African',
+    'Chadian',
+    'Chilean',
+    'Chinese',
+    'Colombian',
+    'Comoran',
+    'Congolese',
+    'Congolese',
+    'Costa Rican',
+    'Croatian',
+    'Cuban',
+    'Cypriot',
+    'Czech',
+    'Danish',
+    'Djiboutian',
+    'Dominican',
+    'Dominican',
+    'Dutch',
+    'East Timorese',
+    'Ecuadorian',
+    'Egyptian',
+    'Emirati',
+    'Equatorial Guinean',
+    'Eritrean',
+    'Estonian',
+    'Eswatini',
+    'Ethiopian',
+    'Fijian',
+    'Finnish',
+    'French',
+    'Gabonese',
+    'Gambian',
+    'Georgian',
+    'German',
+    'Ghanaian',
+    'Greek',
+    'Grenadian',
+    'Guatemalan',
+    'Guinean',
+    'Guinea-Bissauan',
+    'Guyanese',
+    'Haitian',
+    'Honduran',
+    'Hungarian',
+    'Icelandic',
+    'Indian',
+    'Indonesian',
+    'Iranian',
+    'Iraqi',
+    'Irish',
+    'Israeli',
+    'Italian',
+    'Ivorian',
+    'Jamaican',
+    'Japanese',
+    'Jordanian',
+    'Kazakh',
+    'Kenyan',
+    'Kiribati',
+    'Kuwaiti',
+    'Kyrgyz',
+    'Laotian',
+    'Latvian',
+    'Lebanese',
+    'Liberian',
+    'Libyan',
+    'Liechtensteiner',
+    'Lithuanian',
+    'Luxembourgish',
+    'Mosotho',
+    'Madagascan',
+    'Malawian',
+    'Malaysian',
+    'Maldivian',
+    'Malian',
+    'Maltese',
+    'Marshallese',
+    'Mauritanian',
+    'Mauritian',
+    'Mexican',
+    'Micronesian',
+    'Moldovan',
+    'Monacan',
+    'Mongolian',
+    'Montenegrin',
+    'Moroccan',
+    'Mozambican',
+    'Myanmar',
+    'Namibian',
+    'Nauruan',
+    'Nepalese',
+    'New Zealander',
+    'Nicaraguan',
+    'Nigerian',
+    'Nigerien',
+    'North Korean',
+    'North Macedonian',
+    'Norwegian',
+    'Omani',
+    'Pakistani',
+    'Palauan',
+    'Palestinian',
+    'Panamanian',
+    'Papua New Guinean',
+    'Paraguayan',
+    'Peruvian',
+    'Filipino',
+    'Polish',
+    'Portuguese',
+    'Qatari',
+    'Romanian',
+    'Russian',
+    'Rwandan',
+    'Saint Kitts and Nevis',
+    'Saint Lucian',
+    'Saint Vincent and the Grenadines',
+    'Samoan',
+    'San Marinese',
+    'Sao Tome and Principe',
+    'Saudi',
+    'Senegalese',
+    'Serbian',
+    'Seychellois',
+    'Sierra Leonean',
+    'Singaporean',
+    'Slovak',
+    'Slovenian',
+    'Solomon Islander',
+    'Somali',
+    'South African',
+    'South Korean',
+    'South Sudanese',
+    'Spanish',
+    'Sri Lankan',
+    'Sudanese',
+    'Surinamese',
+    'Swedish',
+    'Swiss',
+    'Syrian',
+    'Taiwanese',
+    'Tajik',
+    'Tanzanian',
+    'Thai',
+    'Togolese',
+    'Tongan',
+    'Trinidadian and Tobagonian',
+    'Tunisian',
+    'Turkish',
+    'Turkmen',
+    'Tuvaluan',
+    'British',
+    'Ugandan',
+    'Ukrainian',
+    'Uruguayan',
+    'American',
+    'Uzbek',
+    'Vanuatuan',
+    'Vatican',
+    'Venezuelan',
+    'Vietnamese',
+    'Yemeni',
+    'Zambian',
+    'Zimbabwean',
+  ];
 
   String? _lastRouteSignature;
 
@@ -76,6 +280,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   String _credentialVisibility = 'public_searchable';
   Set<String> _checks = <String>{};
   Set<String> _checkIds = <String>{};
+  Set<String> _bulkGenders = <String>{};
+  Set<String> _bulkNationalities = <String>{};
   bool _seededDefaultChecks = false;
 
   PickedFile? _pickedFile;
@@ -113,6 +319,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   /// resolve to Permission Required (new_flutter_trumarkz.md §12b).
   bool get _emailRequired =>
       _effectivePermissionMode == OrgPermissionMode.permissionRequired;
+
+  bool get _hasGenderOverride => _bulkGenders.length == 1;
+  bool get _hasNationalityOverride => _bulkNationalities.length == 1;
+
+  String? _formValueFor(Set<String> values, List<String> options) {
+    if (values.isEmpty) return null;
+    // Some country demonyms are shared by distinct countries in the source
+    // list. A selected wire value must still occur only once in the Form
+    // field, otherwise it would accidentally become a 2+ selection.
+    return options.where(values.contains).toSet().join(',');
+  }
 
   @override
   void initState() {
@@ -156,7 +373,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     });
 
     debugPrint(
-      '[BulkUploadPage] route checks=${nextChecks.join(",")} check_ids=${nextCheckIds.join(",")} columns=${nextColumns.join(",")}',
+      '[Consent] route access=${nextVisibility.isEmpty ? '(organization default)' : nextVisibility} '
+      'backend=${canonicalCredentialVisibility(nextVisibility) ?? '(organization default)'} '
+      'effective=${_effectivePermissionMode.wireValue} email_required=$_emailRequired '
+      'checks=${nextChecks.length} check_ids=${nextCheckIds.length}',
     );
   }
 
@@ -620,14 +840,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final String gender = valueAt('gender').trim();
     final String nationality = valueAt('nationality').trim();
 
-    // Backend contract for human bulk upload:
-    // full_name, dob, gender, and nationality are required.
+    // Gender/nationality columns become optional only when this request has
+    // exactly one corresponding bulk value. The backend then hard-overrides
+    // every row with it. A multi-selection intentionally does not relax the
+    // Excel requirements because it is not an override.
     // email and phone_number are optional — unless the batch resolves to
     // Permission Required, where email becomes required too
     // (new_flutter_trumarkz.md §12b).
     if (fullName.isEmpty) return null;
     if (dob == null || dob.isEmpty) return null;
-    if (gender.isEmpty || nationality.isEmpty) return null;
+    if (gender.isEmpty && !_hasGenderOverride) return null;
+    if (nationality.isEmpty && !_hasNationalityOverride) return null;
 
     final String rawEmail = valueAt('email');
     final bool hasValidEmail = _looksLikeEmail(rawEmail);
@@ -657,8 +880,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     return <String, dynamic>{
       'full_name': fullName,
       'dob': dob,
-      'gender': gender,
-      'nationality': nationality,
+      if (gender.isNotEmpty) 'gender': gender,
+      if (nationality.isNotEmpty) 'nationality': nationality,
       if (licenseNumber.isNotEmpty) 'license_number': licenseNumber,
       if (phone.isNotEmpty) 'phone_number': phone,
       if (email.isNotEmpty) 'email': email,
@@ -685,6 +908,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       builder: (BuildContext dialogContext) {
         return _HumanTemplateDialog(
           initialHeaders: initialHeaders,
+          requiredHeaders: <String>[
+            'full_name',
+            'dob',
+            if (!_hasGenderOverride) 'gender',
+            if (!_hasNationalityOverride) 'nationality',
+          ],
           selectedChecks: _checks,
           selectedCheckIds: _checkIds,
           verificationFilter: 'human',
@@ -723,6 +952,46 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       _attachedDocumentsByUser.clear();
       _selectedUserIndex = 0;
     });
+  }
+
+  Future<void> _editBulkValues({required bool nationality}) async {
+    // Prevent the batch-name field from regaining focus (and reopening the
+    // keyboard) when this picker is dismissed.
+    FocusManager.instance.primaryFocus?.unfocus();
+    final Set<String> current = nationality ? _bulkNationalities : _bulkGenders;
+    final Set<String>? selected = await showDialog<Set<String>>(
+      context: context,
+      builder: (BuildContext context) => _BulkOverridePickerDialog(
+        title: nationality
+            ? 'Nationality for this upload'
+            : 'Gender for this upload',
+        options: nationality
+            ? _nationalityOptions.toSet().toList()
+            : _genderOptions,
+        initialSelection: current,
+      ),
+    );
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!mounted || selected == null) return;
+    setState(() {
+      if (nationality) {
+        _bulkNationalities = selected;
+      } else {
+        _bulkGenders = selected;
+      }
+      // Re-parse to allow an omitted column only after its single-value
+      // override has been selected, and to restore the requirement otherwise.
+      if (_pickedFile != null) {
+        _skippedMissingEmailRows = 0;
+        _parsedUsers = _parseUsersFromPickedFile(_pickedFile!);
+      }
+    });
+  }
+
+  String _bulkSelectionLabel(Set<String> values, String emptyLabel) {
+    if (values.isEmpty) return emptyLabel;
+    if (values.length == 1) return values.single;
+    return '${values.length} selected — Excel values kept';
   }
 
   String _displayUserLabel(Map<String, dynamic> user, int index) {
@@ -1805,9 +2074,13 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         credentialVisibility: _credentialVisibility.trim().isNotEmpty
             ? _credentialVisibility.trim()
             : null,
+        bulkGender: _formValueFor(_bulkGenders, _genderOptions),
+        bulkNationality: _formValueFor(_bulkNationalities, _nationalityOptions),
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
+
+      await _logConsentDispatch(repo, res.batchId);
 
       await ref
           .read(batchNameStoreProvider.notifier)
@@ -1892,6 +2165,40 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       );
     } finally {
       if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  /// Logs the backend-visible consent state after a Permission Required upload.
+  /// It deliberately reports counts only, never recipient names, emails or
+  /// consent tokens.
+  Future<void> _logConsentDispatch(
+    VerificationRepository repo,
+    String batchId,
+  ) async {
+    if (!_emailRequired || batchId.trim().isEmpty) return;
+    try {
+      final VerificationListResponse response = await repo.getAllVerifications(
+        batchId: batchId.trim(),
+        limit: 200,
+      );
+      final int pending = response.users
+          .where((VerificationUser user) => user.isConsentPending)
+          .length;
+      final int withConsentState = response.users
+          .where((VerificationUser user) => user.hasConsentStatus)
+          .length;
+      debugPrint(
+        '[Consent] post-upload batch=$batchId users=${response.users.length} '
+        'with_consent_state=$withConsentState pending=$pending',
+      );
+      if (withConsentState == 0) {
+        debugPrint(
+          '[Consent] backend did not return consent_status. Check backend '
+          'resolution of credential_visibility and email-service logs.',
+        );
+      }
+    } catch (error) {
+      debugPrint('[Consent] post-upload state check failed: $error');
     }
   }
 
@@ -2707,22 +3014,66 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                         color: const Color(0xFF94A3B8),
                                       ),
                                     ),
-                                     SizedBox(height: s(22)),
-                                     if (_emailRequired) ...<Widget>[
-                                       _PermissionNotice(
-                                         scale: scale,
-                                         skippedRows: _skippedMissingEmailRows,
-                                       ),
-                                       SizedBox(height: s(18)),
-                                     ],
-                                     // Isolate custom-paint + SVG raster work
-                                     // from keyboard-resize repaints.
-                                     RepaintBoundary(
-                                       child: _DropZone(
-                                         scale: scale,
-                                         onTap: _pickExcelFile,
-                                       ),
-                                     ),
+                                    SizedBox(height: s(22)),
+                                    if (_emailRequired) ...<Widget>[
+                                      _PermissionNotice(
+                                        scale: scale,
+                                        skippedRows: _skippedMissingEmailRows,
+                                      ),
+                                      SizedBox(height: s(18)),
+                                    ],
+                                    // Isolate custom-paint + SVG raster work
+                                    // from keyboard-resize repaints.
+                                    RepaintBoundary(
+                                      child: _DropZone(
+                                        scale: scale,
+                                        onTap: _pickExcelFile,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(16)),
+                                    Text(
+                                      'OPTIONAL COLUMN OVERRIDES',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(11),
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: s(1),
+                                        color: _panelText,
+                                      ),
+                                    ),
+                                    SizedBox(height: s(6)),
+                                    Text(
+                                      'Choose one value to apply it to every row. Choose two or more to keep the Excel values.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: s(11),
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.35,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    SizedBox(height: s(10)),
+                                    _BulkOverrideSelector(
+                                      scale: scale,
+                                      label: 'Gender',
+                                      value: _bulkSelectionLabel(
+                                        _bulkGenders,
+                                        'Use Excel values',
+                                      ),
+                                      onTap: () =>
+                                          _editBulkValues(nationality: false),
+                                    ),
+                                    SizedBox(height: s(8)),
+                                    _BulkOverrideSelector(
+                                      scale: scale,
+                                      label: 'Nationality',
+                                      value: _bulkSelectionLabel(
+                                        _bulkNationalities,
+                                        'Use Excel values',
+                                      ),
+                                      onTap: () =>
+                                          _editBulkValues(nationality: true),
+                                    ),
                                     SizedBox(height: s(18)),
                                     Row(
                                       children: <Widget>[
@@ -3061,9 +3412,272 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   }
 }
 
+class _BulkOverrideSelector extends StatelessWidget {
+  const _BulkOverrideSelector({
+    required this.scale,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final double scale;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double value) => value * scale;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(s(12)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(s(12)),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(11)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(s(12)),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                    SizedBox(height: s(2)),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: s(11),
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.expand_more_rounded,
+                color: AppColors.brandBlue,
+                size: s(20),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BulkOverridePickerDialog extends StatefulWidget {
+  const _BulkOverridePickerDialog({
+    required this.title,
+    required this.options,
+    required this.initialSelection,
+  });
+
+  final String title;
+  final List<String> options;
+  final Set<String> initialSelection;
+
+  @override
+  State<_BulkOverridePickerDialog> createState() =>
+      _BulkOverridePickerDialogState();
+}
+
+class _BulkOverridePickerDialogState extends State<_BulkOverridePickerDialog> {
+  late Set<String> _selected;
+  late final TextEditingController _searchController;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set<String>.from(widget.initialSelection);
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String normalizedQuery = _query.trim().toLowerCase();
+    final List<String> visibleOptions = widget.options
+        .where(
+          (String option) =>
+              normalizedQuery.isEmpty ||
+              option.toLowerCase().contains(normalizedQuery),
+        )
+        .toList(growable: false);
+    return Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      backgroundColor: AppColors.cardSurface,
+      surfaceTintColor: AppColors.cardSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 620),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(widget.title, style: AppTypography.heading2),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      Navigator.of(context).pop();
+                    },
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _selected.length == 1
+                    ? '1 selected — it will apply to every row.'
+                    : _selected.isEmpty
+                    ? 'No selection — Excel values will be used.'
+                    : '${_selected.length} selected — Excel values will be kept.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _searchController,
+                onChanged: (String value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: 'Search options',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                  filled: true,
+                  fillColor: AppColors.offWhite,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: visibleOptions.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No matching options',
+                          style: AppTypography.body2.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: visibleOptions.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (BuildContext context, int index) {
+                          final String option = visibleOptions[index];
+                          final bool isSelected = _selected.contains(option);
+                          return ListTile(
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                            ),
+                            onTap: () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selected.remove(option);
+                                } else {
+                                  _selected.add(option);
+                                }
+                              });
+                            },
+                            title: Text(option, style: AppTypography.body1),
+                            trailing: Checkbox(
+                              value: isSelected,
+                              onChanged: (_) {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selected.remove(option);
+                                  } else {
+                                    _selected.add(option);
+                                  }
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  TextButton(
+                    onPressed: _selected.isEmpty
+                        ? null
+                        : () => setState(() => _selected.clear()),
+                    child: const Text('Clear'),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      Navigator.of(context).pop(_selected);
+                    },
+                    child: const Text('Apply'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HumanTemplateDialog extends ConsumerStatefulWidget {
   const _HumanTemplateDialog({
     required this.initialHeaders,
+    required this.requiredHeaders,
     required this.selectedChecks,
     required this.selectedCheckIds,
     required this.verificationFilter,
@@ -3071,6 +3685,7 @@ class _HumanTemplateDialog extends ConsumerStatefulWidget {
   });
 
   final List<String> initialHeaders;
+  final List<String> requiredHeaders;
   final Set<String> selectedChecks;
   final Set<String> selectedCheckIds;
   final String verificationFilter;
@@ -3085,13 +3700,6 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
   static const MethodChannel _downloadsChannel = MethodChannel(
     'trumarkz/downloads',
   );
-  static const List<String> _requiredHeaders = <String>[
-    'full_name',
-    'gender',
-    'dob',
-    'nationality',
-  ];
-
   late final TextEditingController _headerInputController;
   late List<String> _headers;
   bool _isGenerating = false;
@@ -3115,7 +3723,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
     final List<String> merged = <String>[];
     final Set<String> seen = <String>{};
 
-    for (final String raw in <String>[..._requiredHeaders, ...headers]) {
+    for (final String raw in <String>[...widget.requiredHeaders, ...headers]) {
       final String cleaned = raw.trim();
       if (cleaned.isEmpty) continue;
       final String canonical = _canonicalTemplateHeader(cleaned);
@@ -3141,7 +3749,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
 
   bool _isRequiredHeader(String header) {
     final String key = _canonicalTemplateHeader(header).toLowerCase();
-    return _requiredHeaders.contains(key);
+    return widget.requiredHeaders.contains(key);
   }
 
   void _addHeader() {
@@ -3944,10 +4552,10 @@ class _PermissionNotice extends StatelessWidget {
                 Text(
                   hasSkipped
                       ? 'These rows had no valid email. Add an email address to '
-                          'each person and upload the file again.'
+                            'each person and upload the file again.'
                       : 'Everyone in this batch must approve before their '
-                          'credential is processed. The file needs an "email" '
-                          'column and every row needs a valid address.',
+                            'credential is processed. The file needs an "email" '
+                            'column and every row needs a valid address.',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(12),

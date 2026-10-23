@@ -261,7 +261,10 @@ class _VerificationPermissionsPageState
                                   if (rawCheckIds.isNotEmpty) {
                                     nextQp['check_ids'] = rawCheckIds;
                                   }
-                                  nextQp['access'] = _mode.name;
+                                  nextQp['access'] =
+                                      _mode == _AccessMode.permissionBasedAccess
+                                      ? 'private'
+                                      : 'public';
                                   if (industry.isNotEmpty) {
                                     nextQp['industry'] = industry;
                                   }

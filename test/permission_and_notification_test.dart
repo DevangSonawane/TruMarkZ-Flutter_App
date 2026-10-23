@@ -19,7 +19,10 @@ void main() {
     });
 
     test('parses the public/private aliases', () {
-      expect(OrgPermissionMode.fromWire('public'), OrgPermissionMode.openSearch);
+      expect(
+        OrgPermissionMode.fromWire('public'),
+        OrgPermissionMode.openSearch,
+      );
       expect(
         OrgPermissionMode.fromWire('private'),
         OrgPermissionMode.permissionRequired,
@@ -61,6 +64,12 @@ void main() {
         OrgPermissionMode.openSearch,
       );
     });
+
+    test('converts app navigation aliases to backend batch values', () {
+      expect(canonicalCredentialVisibility('permissionBasedAccess'), 'private');
+      expect(canonicalCredentialVisibility('publicSearchable'), 'public');
+      expect(canonicalCredentialVisibility(null), isNull);
+    });
   });
 
   group('UserProfile permission_mode', () {
@@ -71,7 +80,10 @@ void main() {
         'permission_mode': 'permission_required',
       });
       expect(profile.permissionMode, OrgPermissionMode.permissionRequired);
-      expect(profile.effectivePermissionMode, OrgPermissionMode.permissionRequired);
+      expect(
+        profile.effectivePermissionMode,
+        OrgPermissionMode.permissionRequired,
+      );
     });
 
     test('treats a missing permission_mode as open search', () {
@@ -107,38 +119,38 @@ void main() {
       expect(user.consentStatusLabel, '');
     });
 
-    test('distinguishes an auto-expired rejection from an explicit decline', () {
-      final VerificationUser expired = VerificationUser.fromJson(
-        <String, dynamic>{
-          'id': 'user-1',
-          'consent_status': 'rejected',
-          'consent_auto_expired': true,
-        },
-      );
-      final VerificationUser declined = VerificationUser.fromJson(
-        <String, dynamic>{
-          'id': 'user-2',
-          'consent_status': 'rejected',
-          'consent_auto_expired': false,
-        },
-      );
-      expect(expired.consentStatusLabel, 'Consent expired');
-      expect(declined.consentStatusLabel, 'Consent declined');
-    });
+    test(
+      'distinguishes an auto-expired rejection from an explicit decline',
+      () {
+        final VerificationUser expired =
+            VerificationUser.fromJson(<String, dynamic>{
+              'id': 'user-1',
+              'consent_status': 'rejected',
+              'consent_auto_expired': true,
+            });
+        final VerificationUser declined =
+            VerificationUser.fromJson(<String, dynamic>{
+              'id': 'user-2',
+              'consent_status': 'rejected',
+              'consent_auto_expired': false,
+            });
+        expect(expired.consentStatusLabel, 'Consent expired');
+        expect(declined.consentStatusLabel, 'Consent declined');
+      },
+    );
   });
 
   group('OrgNotification', () {
     test('parses a batch_deleted notification', () {
-      final OrgNotification notification = OrgNotification.fromJson(
-        <String, dynamic>{
-          'id': 'n-1',
-          'notification_type': 'batch_deleted',
-          'message': "Batch 'Q1' was deleted by the superadmin.",
-          'batch_id': 'batch-1',
-          'is_read': false,
-          'created_at': '2026-10-22T10:00:00Z',
-        },
-      );
+      final OrgNotification notification =
+          OrgNotification.fromJson(<String, dynamic>{
+            'id': 'n-1',
+            'notification_type': 'batch_deleted',
+            'message': "Batch 'Q1' was deleted by the superadmin.",
+            'batch_id': 'batch-1',
+            'is_read': false,
+            'created_at': '2026-10-22T10:00:00Z',
+          });
       expect(notification.id, 'n-1');
       expect(notification.isBatchDeleted, isTrue);
       expect(notification.isUnread, isTrue);
@@ -147,16 +159,15 @@ void main() {
     });
 
     test('keeps a null batch id as null', () {
-      final OrgNotification notification = OrgNotification.fromJson(
-        <String, dynamic>{
-          'id': 'n-1',
-          'notification_type': 'batch_deleted',
-          'message': 'Something happened.',
-          'batch_id': null,
-          'is_read': true,
-          'created_at': '2026-10-22T10:00:00Z',
-        },
-      );
+      final OrgNotification notification =
+          OrgNotification.fromJson(<String, dynamic>{
+            'id': 'n-1',
+            'notification_type': 'batch_deleted',
+            'message': 'Something happened.',
+            'batch_id': null,
+            'is_read': true,
+            'created_at': '2026-10-22T10:00:00Z',
+          });
       expect(notification.batchId, isNull);
       expect(notification.isRead, isTrue);
     });
