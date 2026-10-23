@@ -282,6 +282,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   Set<String> _checkIds = <String>{};
   Set<String> _bulkGenders = <String>{};
   Set<String> _bulkNationalities = <String>{};
+  Set<int> _genderOverrideUsers = <int>{};
+  Set<int> _nationalityOverrideUsers = <int>{};
   bool _seededDefaultChecks = false;
 
   PickedFile? _pickedFile;
@@ -320,8 +322,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   bool get _emailRequired =>
       _effectivePermissionMode == OrgPermissionMode.permissionRequired;
 
-  bool get _hasGenderOverride => _bulkGenders.length == 1;
-  bool get _hasNationalityOverride => _bulkNationalities.length == 1;
+  bool get _hasGenderOverride =>
+      _bulkGenders.length == 1 &&
+      _parsedUsers.isNotEmpty &&
+      _genderOverrideUsers.length == _parsedUsers.length;
+  bool get _hasNationalityOverride =>
+      _bulkNationalities.length == 1 &&
+      _parsedUsers.isNotEmpty &&
+      _nationalityOverrideUsers.length == _parsedUsers.length;
+
+  bool _targetsEveryParsedUser(Set<int> selected) =>
+      _parsedUsers.isNotEmpty && selected.length == _parsedUsers.length;
 
   String? _formValueFor(Set<String> values, List<String> options) {
     if (values.isEmpty) return null;
@@ -973,11 +984,28 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     );
     FocusManager.instance.primaryFocus?.unfocus();
     if (!mounted || selected == null) return;
+    Set<int> targets = <int>{};
+    if (selected.length == 1 && _parsedUsers.isNotEmpty) {
+      final Set<int>? pickedTargets = await showDialog<Set<int>>(
+        context: context,
+        builder: (BuildContext context) => _OverrideUsersDialog(
+          title: nationality ? 'Apply nationality to' : 'Apply gender to',
+          users: _parsedUsers,
+          initialSelection: nationality
+              ? _nationalityOverrideUsers
+              : _genderOverrideUsers,
+        ),
+      );
+      if (!mounted || pickedTargets == null) return;
+      targets = pickedTargets;
+    }
     setState(() {
       if (nationality) {
         _bulkNationalities = selected;
+        _nationalityOverrideUsers = targets;
       } else {
         _bulkGenders = selected;
+        _genderOverrideUsers = targets;
       }
       // Re-parse to allow an omitted column only after its single-value
       // override has been selected, and to restore the requirement otherwise.
@@ -992,6 +1020,97 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     if (values.isEmpty) return emptyLabel;
     if (values.length == 1) return values.single;
     return '${values.length} selected — Excel values kept';
+  }
+
+  String _overrideUserLabel(Set<String> values, Set<int> targets) {
+    if (values.length != 1) return 'Choose one value first';
+    if (targets.isEmpty) return 'Choose users';
+    if (_targetsEveryParsedUser(targets)) {
+      return 'All ${_parsedUsers.length} users';
+    }
+    return '${targets.length} user${targets.length == 1 ? '' : 's'} selected';
+  }
+
+  Future<void> _editOverrideUsers({required bool nationality}) async {
+    final Set<String> values = nationality ? _bulkNationalities : _bulkGenders;
+    if (values.length != 1 || _parsedUsers.isEmpty) return;
+    final Set<int>? selected = await showDialog<Set<int>>(
+      context: context,
+      builder: (BuildContext context) => _OverrideUsersDialog(
+        title: nationality ? 'Apply nationality to' : 'Apply gender to',
+        users: _parsedUsers,
+        initialSelection: nationality
+            ? _nationalityOverrideUsers
+            : _genderOverrideUsers,
+      ),
+    );
+    if (!mounted || selected == null) return;
+    setState(() {
+      if (nationality) {
+        _nationalityOverrideUsers = selected;
+      } else {
+        _genderOverrideUsers = selected;
+      }
+      if (_pickedFile != null) {
+        _skippedMissingEmailRows = 0;
+        _parsedUsers = _parseUsersFromPickedFile(_pickedFile!);
+      }
+    });
+  }
+
+  Future<void> _applyTargetedOverrides(
+    VerificationRepository repo,
+    BulkUploadResponse response,
+  ) async {
+    final bool targetAllGender = _targetsEveryParsedUser(_genderOverrideUsers);
+    final bool targetAllNationality = _targetsEveryParsedUser(
+      _nationalityOverrideUsers,
+    );
+    if ((targetAllGender || _genderOverrideUsers.isEmpty) &&
+        (targetAllNationality || _nationalityOverrideUsers.isEmpty)) {
+      return;
+    }
+
+    final Set<String> genderNames = _genderOverrideUsers
+        .where((int index) => index >= 0 && index < _parsedUsers.length)
+        .map(
+          (int index) => (_parsedUsers[index]['full_name'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase(),
+        )
+        .where((String name) => name.isNotEmpty)
+        .toSet();
+    final Set<String> nationalityNames = _nationalityOverrideUsers
+        .where((int index) => index >= 0 && index < _parsedUsers.length)
+        .map(
+          (int index) => (_parsedUsers[index]['full_name'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase(),
+        )
+        .where((String name) => name.isNotEmpty)
+        .toSet();
+    final String? gender = _bulkGenders.length == 1
+        ? _bulkGenders.single
+        : null;
+    final String? nationality = _bulkNationalities.length == 1
+        ? _bulkNationalities.single
+        : null;
+
+    for (final BulkUploadSuccessUser user in response.successfulUsers) {
+      final String name = user.fullName.trim().toLowerCase();
+      final bool applyGender = !targetAllGender && genderNames.contains(name);
+      final bool applyNationality =
+          !targetAllNationality && nationalityNames.contains(name);
+      if (!applyGender && !applyNationality) continue;
+      await repo.updateBatchUser(
+        userId: user.userId,
+        gender: applyGender ? gender : null,
+        nationality: applyNationality ? nationality : null,
+        markReviewed: false,
+      );
+    }
   }
 
   String _displayUserLabel(Map<String, dynamic> user, int index) {
@@ -2074,12 +2193,17 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         credentialVisibility: _credentialVisibility.trim().isNotEmpty
             ? _credentialVisibility.trim()
             : null,
-        bulkGender: _formValueFor(_bulkGenders, _genderOptions),
-        bulkNationality: _formValueFor(_bulkNationalities, _nationalityOptions),
+        bulkGender: _targetsEveryParsedUser(_genderOverrideUsers)
+            ? _formValueFor(_bulkGenders, _genderOptions)
+            : null,
+        bulkNationality: _targetsEveryParsedUser(_nationalityOverrideUsers)
+            ? _formValueFor(_bulkNationalities, _nationalityOptions)
+            : null,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
 
+      await _applyTargetedOverrides(repo, res);
       await _logConsentDispatch(repo, res.batchId);
 
       await ref
@@ -3074,6 +3198,36 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                       onTap: () =>
                                           _editBulkValues(nationality: true),
                                     ),
+                                    if (_bulkGenders.length == 1 &&
+                                        _parsedUsers.isNotEmpty) ...<Widget>[
+                                      SizedBox(height: s(8)),
+                                      _BulkOverrideSelector(
+                                        scale: scale,
+                                        label: 'Gender applies to',
+                                        value: _overrideUserLabel(
+                                          _bulkGenders,
+                                          _genderOverrideUsers,
+                                        ),
+                                        onTap: () => _editOverrideUsers(
+                                          nationality: false,
+                                        ),
+                                      ),
+                                    ],
+                                    if (_bulkNationalities.length == 1 &&
+                                        _parsedUsers.isNotEmpty) ...<Widget>[
+                                      SizedBox(height: s(8)),
+                                      _BulkOverrideSelector(
+                                        scale: scale,
+                                        label: 'Nationality applies to',
+                                        value: _overrideUserLabel(
+                                          _bulkNationalities,
+                                          _nationalityOverrideUsers,
+                                        ),
+                                        onTap: () => _editOverrideUsers(
+                                          nationality: true,
+                                        ),
+                                      ),
+                                    ],
                                     SizedBox(height: s(18)),
                                     Row(
                                       children: <Widget>[
@@ -3520,6 +3674,7 @@ class _BulkOverridePickerDialogState extends State<_BulkOverridePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isCompact = widget.options.length <= 3;
     final String normalizedQuery = _query.trim().toLowerCase();
     final List<String> visibleOptions = widget.options
         .where(
@@ -3534,7 +3689,10 @@ class _BulkOverridePickerDialogState extends State<_BulkOverridePickerDialog> {
       surfaceTintColor: AppColors.cardSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 620),
+        constraints: BoxConstraints(
+          maxWidth: 460,
+          maxHeight: isCompact ? 330 : 620,
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 14),
           child: Column(
@@ -3566,31 +3724,33 @@ class _BulkOverridePickerDialogState extends State<_BulkOverridePickerDialog> {
                   color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _searchController,
-                onChanged: (String value) => setState(() => _query = value),
-                decoration: InputDecoration(
-                  hintText: 'Search options',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear search',
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _query = '');
-                          },
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                  filled: true,
-                  fillColor: AppColors.offWhite,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
+              if (!isCompact) ...<Widget>[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _searchController,
+                  onChanged: (String value) => setState(() => _query = value),
+                  decoration: InputDecoration(
+                    hintText: 'Search options',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                    filled: true,
+                    fillColor: AppColors.offWhite,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 12),
               Expanded(
                 child: visibleOptions.isEmpty
@@ -3662,6 +3822,115 @@ class _BulkOverridePickerDialogState extends State<_BulkOverridePickerDialog> {
                       FocusManager.instance.primaryFocus?.unfocus();
                       Navigator.of(context).pop(_selected);
                     },
+                    child: const Text('Apply'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OverrideUsersDialog extends StatefulWidget {
+  const _OverrideUsersDialog({
+    required this.title,
+    required this.users,
+    required this.initialSelection,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> users;
+  final Set<int> initialSelection;
+
+  @override
+  State<_OverrideUsersDialog> createState() => _OverrideUsersDialogState();
+}
+
+class _OverrideUsersDialogState extends State<_OverrideUsersDialog> {
+  late Set<int> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set<int>.from(widget.initialSelection);
+  }
+
+  String _label(int index) {
+    final Map<String, dynamic> user = widget.users[index];
+    final String name = (user['full_name'] ?? '').toString().trim();
+    final String email = (user['email'] ?? '').toString().trim();
+    return name.isNotEmpty
+        ? name
+        : (email.isNotEmpty ? email : 'User ${index + 1}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool allSelected = _selected.length == widget.users.length;
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 560),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(widget.title, style: AppTypography.heading2),
+              const SizedBox(height: 4),
+              Text(
+                'Select users manually or apply to everyone in this file.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Select all users'),
+                value: allSelected,
+                onChanged: (bool? value) => setState(() {
+                  _selected = value == true
+                      ? Set<int>.from(
+                          List<int>.generate(widget.users.length, (int i) => i),
+                        )
+                      : <int>{};
+                }),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: widget.users.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final bool selected = _selected.contains(index);
+                    return CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(_label(index)),
+                      value: selected,
+                      onChanged: (_) => setState(() {
+                        if (selected) {
+                          _selected.remove(index);
+                        } else {
+                          _selected.add(index);
+                        }
+                      }),
+                    );
+                  },
+                ),
+              ),
+              Row(
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(_selected),
                     child: const Text('Apply'),
                   ),
                 ],
