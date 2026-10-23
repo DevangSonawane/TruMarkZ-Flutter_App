@@ -185,6 +185,28 @@ class BulkUploadDocumentInput {
   final String fileName;
 }
 
+/// Demographic values to apply while the matching OCR files are processed.
+/// Indices are deliberately positions in the `files` multipart list, not user
+/// ids or labels (those do not exist until the upload finishes).
+class BulkUploadDocumentAssignment {
+  const BulkUploadDocumentAssignment({
+    required this.fileIndices,
+    this.gender,
+    this.nationality,
+  });
+
+  final List<int> fileIndices;
+  final String? gender;
+  final String? nationality;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'file_indices': fileIndices,
+    if (gender != null && gender!.trim().isNotEmpty) 'gender': gender!.trim(),
+    if (nationality != null && nationality!.trim().isNotEmpty)
+      'nationality': nationality!.trim(),
+  };
+}
+
 class VerificationRepository {
   VerificationRepository(this._api);
 
@@ -644,8 +666,6 @@ class VerificationRepository {
     String? verificationTypes,
     String? credentialVisibility,
     String? templateId,
-    String? bulkGender,
-    String? bulkNationality,
     required Uint8List fileBytes,
     required String fileName,
   }) async {
@@ -680,12 +700,6 @@ class VerificationRepository {
         'credential_visibility': visibility,
       if (templateId != null && templateId.trim().isNotEmpty)
         'template_id': templateId.trim(),
-      // The API deliberately receives a single comma-separated Form value.
-      // Omit empty selections rather than sending an empty string.
-      if (bulkGender != null && bulkGender.trim().isNotEmpty)
-        'bulk_gender': bulkGender.trim(),
-      if (bulkNationality != null && bulkNationality.trim().isNotEmpty)
-        'bulk_nationality': bulkNationality.trim(),
       'file': MultipartFile.fromBytes(
         fileBytes,
         filename: safeName,
@@ -707,6 +721,8 @@ class VerificationRepository {
     String? credentialVisibility,
     String? docType,
     String? fields,
+    List<BulkUploadDocumentAssignment> assignments =
+        const <BulkUploadDocumentAssignment>[],
     required List<BulkUploadDocumentInput> files,
   }) async {
     final String? backendVisibility = canonicalCredentialVisibility(
@@ -737,6 +753,12 @@ class VerificationRepository {
       if (docType != null && docType.trim().isNotEmpty)
         'doc_type': docType.trim(),
       if (fields != null && fields.trim().isNotEmpty) 'fields': fields.trim(),
+      if (assignments.isNotEmpty)
+        'assignments': jsonEncode(
+          assignments
+              .map((BulkUploadDocumentAssignment item) => item.toJson())
+              .toList(),
+        ),
     });
     for (final BulkUploadDocumentInput file in cleanFiles) {
       final String safeName = file.fileName.trim().isEmpty

@@ -2193,12 +2193,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         credentialVisibility: _credentialVisibility.trim().isNotEmpty
             ? _credentialVisibility.trim()
             : null,
-        bulkGender: _targetsEveryParsedUser(_genderOverrideUsers)
-            ? _formValueFor(_bulkGenders, _genderOptions)
-            : null,
-        bulkNationality: _targetsEveryParsedUser(_nationalityOverrideUsers)
-            ? _formValueFor(_bulkNationalities, _nationalityOptions)
-            : null,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
       );
@@ -3154,80 +3148,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                         onTap: _pickExcelFile,
                                       ),
                                     ),
-                                    SizedBox(height: s(16)),
-                                    Text(
-                                      'OPTIONAL COLUMN OVERRIDES',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: s(11),
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: s(1),
-                                        color: _panelText,
-                                      ),
-                                    ),
-                                    SizedBox(height: s(6)),
-                                    Text(
-                                      'Choose one value to apply it to every row. Choose two or more to keep the Excel values.',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: s(11),
-                                        fontWeight: FontWeight.w500,
-                                        height: 1.35,
-                                        color: const Color(0xFF94A3B8),
-                                      ),
-                                    ),
-                                    SizedBox(height: s(10)),
-                                    _BulkOverrideSelector(
-                                      scale: scale,
-                                      label: 'Gender',
-                                      value: _bulkSelectionLabel(
-                                        _bulkGenders,
-                                        'Use Excel values',
-                                      ),
-                                      onTap: () =>
-                                          _editBulkValues(nationality: false),
-                                    ),
-                                    SizedBox(height: s(8)),
-                                    _BulkOverrideSelector(
-                                      scale: scale,
-                                      label: 'Nationality',
-                                      value: _bulkSelectionLabel(
-                                        _bulkNationalities,
-                                        'Use Excel values',
-                                      ),
-                                      onTap: () =>
-                                          _editBulkValues(nationality: true),
-                                    ),
-                                    if (_bulkGenders.length == 1 &&
-                                        _parsedUsers.isNotEmpty) ...<Widget>[
-                                      SizedBox(height: s(8)),
-                                      _BulkOverrideSelector(
-                                        scale: scale,
-                                        label: 'Gender applies to',
-                                        value: _overrideUserLabel(
-                                          _bulkGenders,
-                                          _genderOverrideUsers,
-                                        ),
-                                        onTap: () => _editOverrideUsers(
-                                          nationality: false,
-                                        ),
-                                      ),
-                                    ],
-                                    if (_bulkNationalities.length == 1 &&
-                                        _parsedUsers.isNotEmpty) ...<Widget>[
-                                      SizedBox(height: s(8)),
-                                      _BulkOverrideSelector(
-                                        scale: scale,
-                                        label: 'Nationality applies to',
-                                        value: _overrideUserLabel(
-                                          _bulkNationalities,
-                                          _nationalityOverrideUsers,
-                                        ),
-                                        onTap: () => _editOverrideUsers(
-                                          nationality: true,
-                                        ),
-                                      ),
-                                    ],
                                     SizedBox(height: s(18)),
                                     Row(
                                       children: <Widget>[

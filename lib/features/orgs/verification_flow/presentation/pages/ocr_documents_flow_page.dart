@@ -39,6 +39,349 @@ class _OcrDocDraft {
   final PickedFile file;
 }
 
+class _OcrDemographicAssignmentsDialog extends StatefulWidget {
+  const _OcrDemographicAssignmentsDialog({
+    required this.fileLabels,
+    required this.initialAssignments,
+    required this.isNationality,
+  });
+
+  final List<String> fileLabels;
+  final List<BulkUploadDocumentAssignment> initialAssignments;
+  final bool isNationality;
+
+  @override
+  State<_OcrDemographicAssignmentsDialog> createState() =>
+      _OcrDemographicAssignmentsDialogState();
+}
+
+class _OcrDemographicAssignmentsDialogState
+    extends State<_OcrDemographicAssignmentsDialog> {
+  static const List<String> _nationalityOptions = <String>[
+    'Indian',
+    'Chinese',
+    'American',
+    'British',
+    'Australian',
+    'Bangladeshi',
+    'Brazilian',
+    'Canadian',
+    'Emirati',
+    'French',
+    'German',
+    'Indonesian',
+    'Japanese',
+    'Kenyan',
+    'Malaysian',
+    'Mexican',
+    'Nepalese',
+    'Nigerian',
+    'Pakistani',
+    'Filipino',
+    'Russian',
+    'Singaporean',
+    'South African',
+    'South Korean',
+    'Sri Lankan',
+    'Thai',
+    'Vietnamese',
+  ];
+
+  late List<BulkUploadDocumentAssignment> _assignments;
+  final Set<int> _selectedFiles = <int>{};
+  String? _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _assignments = List<BulkUploadDocumentAssignment>.from(
+      widget.initialAssignments,
+    );
+  }
+
+  bool get _allSelected => _selectedFiles.length == widget.fileLabels.length;
+
+  void _addGroup() {
+    if (_selectedFiles.isEmpty || _value == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select one or more images and choose a value first.'),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _assignments.add(
+        BulkUploadDocumentAssignment(
+          fileIndices: _selectedFiles.toList()..sort(),
+          gender: widget.isNationality ? null : _value,
+          nationality: widget.isNationality ? _value : null,
+        ),
+      );
+      _selectedFiles.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: Material(
+      color: AppColors.cardSurface,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .88,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.blueTint,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      widget.isNationality
+                          ? Icons.flag_outlined
+                          : Icons.person_outline_rounded,
+                      color: AppColors.brandBlue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.isNationality
+                          ? 'Assign nationality'
+                          : 'Assign gender',
+                      style: AppTypography.heading2,
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final bool selectAll = !_allSelected;
+                      setState(() {
+                        _selectedFiles.clear();
+                        if (selectAll) {
+                          _selectedFiles.addAll(
+                            List<int>.generate(
+                              widget.fileLabels.length,
+                              (int i) => i,
+                            ),
+                          );
+                        }
+                      });
+                    },
+                    icon: Icon(
+                      _allSelected
+                          ? Icons.clear_all_rounded
+                          : Icons.select_all_rounded,
+                    ),
+                    label: Text(_allSelected ? 'Clear all' : 'Set all'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.brandBlue,
+                      side: const BorderSide(color: AppColors.brandBlue),
+                      shape: const StadiumBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  children: <Widget>[
+                    for (int i = 0; i < widget.fileLabels.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => setState(() {
+                            _selectedFiles.contains(i)
+                                ? _selectedFiles.remove(i)
+                                : _selectedFiles.add(i);
+                          }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _selectedFiles.contains(i)
+                                  ? AppColors.blueTint
+                                  : AppColors.offWhite,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: _selectedFiles.contains(i)
+                                    ? AppColors.brandBlue
+                                    : AppColors.divider,
+                              ),
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                Container(
+                                  width: 30,
+                                  height: 30,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: _selectedFiles.contains(i)
+                                        ? AppColors.brandBlue
+                                        : AppColors.cardSurface,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${i + 1}',
+                                    style: AppTypography.caption.copyWith(
+                                      color: _selectedFiles.contains(i)
+                                          ? Colors.white
+                                          : AppColors.textSecondary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Image ${i + 1}',
+                                    style: AppTypography.body2.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  _selectedFiles.contains(i)
+                                      ? Icons.check_circle_rounded
+                                      : Icons.circle_outlined,
+                                  color: _selectedFiles.contains(i)
+                                      ? AppColors.brandBlue
+                                      : AppColors.textTertiary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    const Divider(height: 32),
+                    if (widget.isNationality)
+                      DropdownButtonFormField<String>(
+                        initialValue: _value,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Nationality',
+                        ),
+                        hint: const Text('Choose nationality'),
+                        items: _nationalityOptions
+                            .map(
+                              (String option) => DropdownMenuItem<String>(
+                                value: option,
+                                child: Text(option),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (String? value) =>
+                            setState(() => _value = value),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue: _value,
+                        decoration: const InputDecoration(labelText: 'Gender'),
+                        hint: const Text('Choose gender'),
+                        items: const <DropdownMenuItem<String>>[
+                          DropdownMenuItem<String>(
+                            value: 'Male',
+                            child: Text('Male'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Female',
+                            child: Text('Female'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Other',
+                            child: Text('Other'),
+                          ),
+                        ],
+                        onChanged: (String? value) =>
+                            setState(() => _value = value),
+                      ),
+                    if (_assignments.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 16),
+                      const Divider(height: 1),
+                      for (int i = 0; i < _assignments.length; i++)
+                        if (widget.isNationality
+                            ? _assignments[i].nationality != null
+                            : _assignments[i].gender != null)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Images ${_assignments[i].fileIndices.map((int n) => n + 1).join(', ')}',
+                            ),
+                            subtitle: Text(
+                              <String>[
+                                if (_assignments[i].gender != null)
+                                  _assignments[i].gender!,
+                                if (_assignments[i].nationality != null)
+                                  _assignments[i].nationality!,
+                              ].join(' • '),
+                            ),
+                            trailing: IconButton(
+                              tooltip: 'Remove group',
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              onPressed: () =>
+                                  setState(() => _assignments.removeAt(i)),
+                            ),
+                          ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, _assignments),
+                    child: const Text('Done'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _addGroup,
+                      icon: Icon(
+                        widget.isNationality
+                            ? Icons.flag_outlined
+                            : Icons.person_add_alt_1_rounded,
+                      ),
+                      label: Text(
+                        widget.isNationality
+                            ? 'Apply nationality'
+                            : 'Apply gender',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 enum _OcrPhotoStatus { pending, ready, uploading, uploaded, failed }
 
 /// Single = 1 document -> 1 BatchUser. Bulk = N documents -> N BatchUsers
@@ -116,6 +459,10 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
   bool _isAddingDocs = false;
   bool _isUploadingDocs = false;
   String _docsStatus = '';
+  // Kept as request groups so overlapping groups preserve the API's
+  // documented "last matching entry wins" behaviour.
+  List<BulkUploadDocumentAssignment> _documentAssignments =
+      <BulkUploadDocumentAssignment>[];
 
   // Step 1 — review.
   List<Map<String, dynamic>> _reviewUsers = <Map<String, dynamic>>[];
@@ -243,6 +590,42 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
     return files;
   }
 
+  List<String> _documentFileLabels() {
+    final List<String> labels = <String>[];
+    final List<int> indices = _documentsByUser.keys.toList()..sort();
+    for (final int userIndex in indices) {
+      for (final _OcrDocDraft draft in _documentsByUser[userIndex]!) {
+        if (_isDocImage(draft.file.name)) labels.add(draft.file.name);
+      }
+    }
+    return labels;
+  }
+
+  Future<void> _editDocumentAssignments({required bool nationality}) async {
+    final List<String> labels = _documentFileLabels();
+    if (labels.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add document images before assigning demographics.'),
+        ),
+      );
+      return;
+    }
+    final List<BulkUploadDocumentAssignment>? assignments =
+        await showModalBottomSheet<List<BulkUploadDocumentAssignment>>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (BuildContext context) => _OcrDemographicAssignmentsDialog(
+            fileLabels: labels,
+            initialAssignments: _documentAssignments,
+            isNationality: nationality,
+          ),
+        );
+    if (!mounted || assignments == null) return;
+    setState(() => _documentAssignments = assignments);
+  }
+
   Future<void> _addDocuments() async {
     if (_isAddingDocs || _isUploadingDocs) return;
     if (_batchNameController.text.trim().isEmpty) {
@@ -272,6 +655,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
             )
             .toList();
         setState(() {
+          _documentAssignments.clear();
           _documentsByUser
               .putIfAbsent(target, () => <_OcrDocDraft>[])
               .addAll(drafts);
@@ -304,6 +688,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
       );
       if (images.isEmpty) {
         setState(() {
+          _documentAssignments.clear();
           for (final PickedFile f in others) {
             _documentsByUser
                 .putIfAbsent(firstTarget, () => <_OcrDocDraft>[])
@@ -315,6 +700,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
       }
       final List<int> targets = <int>[firstTarget];
       setState(() {
+        _documentAssignments.clear();
         for (int k = 1; k < images.length; k++) {
           _parsedUsers.add(<String, dynamic>{
             'full_name': 'User ${_parsedUsers.length + 1}',
@@ -527,6 +913,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
     }
     if (index < 0 || index >= _parsedUsers.length) return;
     setState(() {
+      _documentAssignments.clear();
       _parsedUsers.removeAt(index);
       _documentsByUser.remove(index);
       final Map<int, List<_OcrDocDraft>> shifted = <int, List<_OcrDocDraft>>{};
@@ -583,6 +970,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
         docType: 'document',
         fields: _humanDocumentFieldsCsv,
         files: _documentFiles(),
+        assignments: _documentAssignments,
       );
       final Map<int, String> idsByIndex = <int, String>{};
       for (int i = 0; i < res.successfulUsers.length; i++) {
@@ -1578,19 +1966,56 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
 
   // ------------------------------------------------------- step 0 docs ---
 
+  Widget _documentActions(bool busy) => Column(
+    children: <Widget>[
+      TMZButton(
+        label: _isAddingDocs ? 'Reading…' : 'Add documents',
+        icon: Icons.attach_file_rounded,
+        variant: TMZButtonVariant.secondary,
+        isLoading: _isAddingDocs,
+        onPressed: (_isAddingDocs || _isUploadingDocs) ? null : _addDocuments,
+        showShadow: false,
+      ),
+      if (_documentFiles().isNotEmpty) ...<Widget>[
+        const SizedBox(height: 10),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TMZButton(
+                label: 'Gender',
+                icon: Icons.person_outline_rounded,
+                variant: TMZButtonVariant.secondary,
+                onPressed: busy
+                    ? null
+                    : () => _editDocumentAssignments(nationality: false),
+                showShadow: false,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TMZButton(
+                label: 'Nationality',
+                icon: Icons.flag_outlined,
+                variant: TMZButtonVariant.secondary,
+                onPressed: busy
+                    ? null
+                    : () => _editDocumentAssignments(nationality: true),
+                showShadow: false,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ],
+  );
+
   Widget _docsSection(double Function(double v) s) {
     final bool busy = _isAddingDocs || _isUploadingDocs;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          '${_parsedUsers.length} user${_parsedUsers.length == 1 ? '' : 's'} — tap to select for attach',
-          style: AppTypography.caption.copyWith(
-            color: AppColors.textTertiary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
+        _documentActions(busy),
+        const SizedBox(height: 16),
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -1708,6 +2133,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
                           draft: userDocs[di],
                           busy: busy,
                           onRemove: () => setState(() {
+                            _documentAssignments.clear();
                             final List<_OcrDocDraft>? docs =
                                 _documentsByUser[i];
                             docs?.removeAt(di);
@@ -1725,19 +2151,6 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
               ],
             );
           },
-        ),
-        const SizedBox(height: 12),
-        TMZButton(
-          label: _isAddingDocs
-              ? 'Reading…'
-              : _docMode == _OcrFlowMode.single
-              ? 'Add document (Single)'
-              : 'Add documents (Bulk)',
-          icon: Icons.attach_file_rounded,
-          variant: TMZButtonVariant.secondary,
-          isLoading: _isAddingDocs,
-          onPressed: (_isAddingDocs || _isUploadingDocs) ? null : _addDocuments,
-          showShadow: false,
         ),
         if (_isUploadingDocs && _docsStatus.isNotEmpty) ...<Widget>[
           const SizedBox(height: 10),
