@@ -193,17 +193,22 @@ class BulkUploadDocumentAssignment {
     required this.fileIndices,
     this.gender,
     this.nationality,
+    this.email,
   });
 
   final List<int> fileIndices;
   final String? gender;
   final String? nationality;
 
+  /// An email is always scoped to exactly one uploaded file/user.
+  final String? email;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'file_indices': fileIndices,
     if (gender != null && gender!.trim().isNotEmpty) 'gender': gender!.trim(),
     if (nationality != null && nationality!.trim().isNotEmpty)
       'nationality': nationality!.trim(),
+    if (email != null && email!.trim().isNotEmpty) 'email': email!.trim(),
   };
 }
 

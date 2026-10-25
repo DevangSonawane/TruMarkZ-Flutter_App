@@ -382,6 +382,527 @@ class _OcrDemographicAssignmentsDialogState
   );
 }
 
+/// A scalable per-person demographic editor. The old group selector worked
+/// for a handful of images, but made a large batch difficult to review.
+class _OcrPeopleDemographicsSheet extends StatefulWidget {
+  const _OcrPeopleDemographicsSheet({
+    required this.fileLabels,
+    required this.initialEmails,
+    required this.initialAssignments,
+  });
+
+  final List<String> fileLabels;
+  final List<String> initialEmails;
+  final List<BulkUploadDocumentAssignment> initialAssignments;
+
+  @override
+  State<_OcrPeopleDemographicsSheet> createState() =>
+      _OcrPeopleDemographicsSheetState();
+}
+
+class _OcrPeopleDemographicsSheetState
+    extends State<_OcrPeopleDemographicsSheet> {
+  static const List<String> _nationalities = <String>[
+    'Indian',
+    'American',
+    'Australian',
+    'Bangladeshi',
+    'British',
+    'Canadian',
+    'Chinese',
+    'Emirati',
+    'French',
+    'German',
+    'Indonesian',
+    'Japanese',
+    'Kenyan',
+    'Malaysian',
+    'Mexican',
+    'Nepalese',
+    'Nigerian',
+    'Pakistani',
+    'Filipino',
+    'Russian',
+    'Singaporean',
+    'South African',
+    'South Korean',
+    'Sri Lankan',
+    'Thai',
+    'Vietnamese',
+  ];
+
+  late final List<_PersonDemographics> _people;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _people = List<_PersonDemographics>.generate(
+      widget.fileLabels.length,
+      (int index) => _PersonDemographics(
+        index: index,
+        email: index < widget.initialEmails.length
+            ? widget.initialEmails[index]
+            : null,
+      ),
+    );
+    // Assignments may have been created in groups. Flatten them here so each
+    // person is independently editable; later entries retain API precedence.
+    for (final BulkUploadDocumentAssignment assignment
+        in widget.initialAssignments) {
+      for (final int index in assignment.fileIndices) {
+        if (index < 0 || index >= _people.length) continue;
+        if (assignment.gender != null) {
+          _people[index].gender = assignment.gender;
+        }
+        if (assignment.nationality != null) {
+          _people[index].nationality = assignment.nationality;
+        }
+        if (assignment.email != null) {
+          _people[index].email = assignment.email;
+        }
+      }
+    }
+  }
+
+  List<_PersonDemographics> get _visiblePeople => _people.where((person) {
+    final String haystack =
+        '${person.index + 1} ${widget.fileLabels[person.index]}'.toLowerCase();
+    return haystack.contains(_query.toLowerCase());
+  }).toList();
+
+  Color _genderColor(String? gender) {
+    switch (gender) {
+      case 'Male':
+        return const Color(0xFF2563EB);
+      case 'Female':
+        return const Color(0xFFDB2777);
+      case 'Other':
+        return const Color(0xFF7C3AED);
+      default:
+        return AppColors.textTertiary;
+    }
+  }
+
+  Color _genderBackground(String? gender) {
+    switch (gender) {
+      case 'Male':
+        return const Color(0xFFEFF6FF);
+      case 'Female':
+        return const Color(0xFFFDF2F8);
+      case 'Other':
+        return const Color(0xFFF5F3FF);
+      default:
+        return AppColors.offWhite;
+    }
+  }
+
+  Future<void> _editPerson(_PersonDemographics person) async {
+    String? gender = person.gender;
+    String? nationality = person.nationality;
+    String? email = person.email;
+    bool showNationalities = false;
+    String nationalityQuery = '';
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (BuildContext sheetContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              MediaQuery.viewInsetsOf(context).bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  'Person ${person.index + 1}',
+                  style: AppTypography.heading2,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.fileLabels[person.index],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: <Widget>[
+                    for (final String option in const <String>[
+                      'Male',
+                      'Female',
+                      'Other',
+                    ])
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            right: option == 'Other' ? 0 : 8,
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () => setSheetState(() => gender = option),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOutCubic,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 13,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: gender == option
+                                      ? _genderBackground(option)
+                                      : AppColors.offWhite,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: gender == option
+                                        ? _genderColor(option)
+                                        : AppColors.divider,
+                                    width: gender == option ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 180),
+                                  style: AppTypography.body2.copyWith(
+                                    color: _genderColor(option),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                  child: Text(
+                                    option,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: email,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const <String>[AutofillHints.email],
+                  decoration: const InputDecoration(
+                    labelText: 'Email address',
+                    hintText: 'name@example.com',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                  onChanged: (String value) => email = value.trim(),
+                ),
+                const SizedBox(height: 16),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => setSheetState(
+                      () => showNationalities = !showNationalities,
+                    ),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 15,
+                      ),
+                      decoration: BoxDecoration(
+                        color: showNationalities
+                            ? AppColors.blueTint
+                            : AppColors.offWhite,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: showNationalities
+                              ? AppColors.brandBlue
+                              : AppColors.divider,
+                        ),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.flag_outlined,
+                            color: AppColors.brandBlue,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              nationality ?? 'Choose nationality',
+                              style: AppTypography.body2.copyWith(
+                                color: nationality == null
+                                    ? AppColors.textSecondary
+                                    : AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          AnimatedRotation(
+                            turns: showNationalities ? .5 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            child: const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  child: showNationalities
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Container(
+                            height: 190,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                TextField(
+                                  autofocus: true,
+                                  onChanged: (String value) => setSheetState(
+                                    () => nationalityQuery = value,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    prefixIcon: Icon(Icons.search_rounded),
+                                    hintText: 'Search nationality',
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Expanded(
+                                  child: ListView(
+                                    children: _nationalities
+                                        .where(
+                                          (String value) =>
+                                              value.toLowerCase().contains(
+                                                nationalityQuery.toLowerCase(),
+                                              ),
+                                        )
+                                        .map(
+                                          (String value) => Material(
+                                            color: Colors.transparent,
+                                            clipBehavior: Clip.antiAlias,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            child: ListTile(
+                                              dense: true,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              title: Text(value),
+                                              trailing: nationality == value
+                                                  ? const Icon(
+                                                      Icons.check_rounded,
+                                                      color:
+                                                          AppColors.brandBlue,
+                                                    )
+                                                  : null,
+                                              onTap: () => setSheetState(() {
+                                                nationality = value;
+                                                showNationalities = false;
+                                              }),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      setState(() {
+                        person.gender = gender;
+                        person.nationality = nationality;
+                        person.email = email;
+                      });
+                      Navigator.pop(sheetContext);
+                    },
+                    child: const Text('Save person'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<BulkUploadDocumentAssignment> _result() => _people
+      .where((person) => person.gender != null || person.nationality != null)
+      .map(
+        (person) => BulkUploadDocumentAssignment(
+          fileIndices: <int>[person.index],
+          gender: person.gender,
+          nationality: person.nationality,
+          email: person.email,
+        ),
+      )
+      .toList();
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: Material(
+      color: AppColors.cardSurface,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .88,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('People in this batch', style: AppTypography.heading2),
+              const SizedBox(height: 4),
+              Text(
+                'Tap a person to set their email, gender and nationality.',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                onChanged: (String value) => setState(() => _query = value),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search_rounded),
+                  hintText: 'Search people or document name',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: _visiblePeople.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (BuildContext context, int itemIndex) {
+                    final _PersonDemographics person =
+                        _visiblePeople[itemIndex];
+                    final Color color = _genderColor(person.gender);
+                    return Material(
+                      color: _genderBackground(person.gender),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => _editPerson(person),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: <Widget>[
+                              CircleAvatar(
+                                backgroundColor: color,
+                                child: Text(
+                                  '${person.index + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      'Person ${person.index + 1}',
+                                      style: AppTypography.body2.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    Text(
+                                      widget.fileLabels[person.index],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.caption.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      <String>[
+                                        person.gender ?? 'Gender not set',
+                                        person.nationality ??
+                                            'Nationality not set',
+                                      ].join('  •  '),
+                                      style: AppTypography.caption.copyWith(
+                                        color: color,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded, color: color),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context, _result()),
+                  child: const Text('Done'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _PersonDemographics {
+  _PersonDemographics({required this.index, this.email});
+  final int index;
+  String? gender;
+  String? nationality;
+  String? email;
+}
+
 enum _OcrPhotoStatus { pending, ready, uploading, uploaded, failed }
 
 /// Single = 1 document -> 1 BatchUser. Bulk = N documents -> N BatchUsers
@@ -601,7 +1122,34 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
     return labels;
   }
 
-  Future<void> _editDocumentAssignments({required bool nationality}) async {
+  /// Mirrors [_documentFileLabels] so `file_indices` and the pre-upload email
+  /// always refer to the same multipart document position.
+  List<String> _documentEmails() {
+    final List<String> emails = <String>[];
+    final List<int> indices = _documentsByUser.keys.toList()..sort();
+    for (final int userIndex in indices) {
+      final String email = userIndex < _parsedUsers.length
+          ? (_parsedUsers[userIndex]['email'] ?? '').toString().trim()
+          : '';
+      for (final _OcrDocDraft draft in _documentsByUser[userIndex]!) {
+        if (_isDocImage(draft.file.name)) emails.add(email);
+      }
+    }
+    return emails;
+  }
+
+  List<int> _documentUserIndices() {
+    final List<int> userIndices = <int>[];
+    final List<int> indices = _documentsByUser.keys.toList()..sort();
+    for (final int userIndex in indices) {
+      for (final _OcrDocDraft draft in _documentsByUser[userIndex]!) {
+        if (_isDocImage(draft.file.name)) userIndices.add(userIndex);
+      }
+    }
+    return userIndices;
+  }
+
+  Future<void> _editDocumentAssignments() async {
     final List<String> labels = _documentFileLabels();
     if (labels.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -616,14 +1164,25 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          builder: (BuildContext context) => _OcrDemographicAssignmentsDialog(
+          builder: (BuildContext context) => _OcrPeopleDemographicsSheet(
             fileLabels: labels,
+            initialEmails: _documentEmails(),
             initialAssignments: _documentAssignments,
-            isNationality: nationality,
           ),
         );
     if (!mounted || assignments == null) return;
-    setState(() => _documentAssignments = assignments);
+    final List<int> userIndices = _documentUserIndices();
+    setState(() {
+      _documentAssignments = assignments;
+      for (final BulkUploadDocumentAssignment assignment in assignments) {
+        if (assignment.email == null || assignment.fileIndices.length != 1) {
+          continue;
+        }
+        final int fileIndex = assignment.fileIndices.single;
+        if (fileIndex < 0 || fileIndex >= userIndices.length) continue;
+        _parsedUsers[userIndices[fileIndex]]['email'] = assignment.email;
+      }
+    });
   }
 
   Future<void> _addDocuments() async {
@@ -1978,32 +2537,12 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
       ),
       if (_documentFiles().isNotEmpty) ...<Widget>[
         const SizedBox(height: 10),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: TMZButton(
-                label: 'Gender',
-                icon: Icons.person_outline_rounded,
-                variant: TMZButtonVariant.secondary,
-                onPressed: busy
-                    ? null
-                    : () => _editDocumentAssignments(nationality: false),
-                showShadow: false,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TMZButton(
-                label: 'Nationality',
-                icon: Icons.flag_outlined,
-                variant: TMZButtonVariant.secondary,
-                onPressed: busy
-                    ? null
-                    : () => _editDocumentAssignments(nationality: true),
-                showShadow: false,
-              ),
-            ),
-          ],
+        TMZButton(
+          label: 'Set people details',
+          icon: Icons.groups_2_rounded,
+          variant: TMZButtonVariant.secondary,
+          onPressed: busy ? null : _editDocumentAssignments,
+          showShadow: false,
         ),
       ],
     ],

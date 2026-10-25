@@ -103,15 +103,19 @@ Optional multipart text field, one JSON array:
 [
   {"file_indices": [0, 1, 2, 3, 4], "gender": "Male"},
   {"file_indices": [5, 6, 7, 8, 9], "gender": "Female"},
-  {"file_indices": [0, 2, 7], "nationality": "Indian"}
+  {"file_indices": [0, 2, 7], "nationality": "Indian"},
+  {"file_indices": [0], "email": "driver@example.com"}
 ]
 ```
 - `file_indices`: required, non-empty array of 0-based integers —
   positions into **this same request's** `files` list, in upload order.
   Not a database ID (none exists yet at upload time), not a display
   label.
-- Each entry needs at least one of `gender` / `nationality` (both
-  allowed in the same entry).
+- Each entry needs at least one of `gender`, `nationality`, or `email`.
+  An email entry must target exactly one `file_index`; an address can never
+  be applied to more than one person.
+- `email` is normalized and validated with the endpoint's normal email
+  validation. It takes precedence over an email OCR happens to extract.
 - A file index may appear in multiple entries — for the **same** field,
   the **last matching entry in array order wins** (simple, fixed,
   documented precedence — not derived from the people themselves).
@@ -128,6 +132,7 @@ formData.append('assignments', JSON.stringify([
   { file_indices: [0, 1, 2, 3, 4], gender: 'Male' },
   { file_indices: [5, 6, 7, 8, 9], gender: 'Female' },
   { file_indices: [0, 2, 7], nationality: 'Indian' },
+  { file_indices: [0], email: 'driver@example.com' },
 ]));
 await fetch('/verification/bulk-upload/documents', {
   method: 'POST',
@@ -145,6 +150,7 @@ final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/verification/b
     {'file_indices': [0, 1, 2, 3, 4], 'gender': 'Male'},
     {'file_indices': [5, 6, 7, 8, 9], 'gender': 'Female'},
     {'file_indices': [0, 2, 7], 'nationality': 'Indian'},
+    {'file_indices': [0], 'email': 'driver@example.com'},
   ]);
 for (final (i, path) in imagePaths.indexed) {
   request.files.add(await http.MultipartFile.fromPath('files', path)); // order == file_indices
@@ -158,7 +164,9 @@ final response = await request.send();
 400 {"detail": "assignments must be a valid JSON array"}
 400 {"detail": "assignments must be a JSON array of objects"}
 400 {"detail": "Each assignments entry needs a non-empty 'file_indices' array"}
-400 {"detail": "Each assignments entry needs at least one of 'gender' or 'nationality'"}
+400 {"detail": "Each assignments entry needs at least one of 'gender', 'nationality', or 'email'"}
+400 {"detail": "An assignments email must target exactly one file_index"}
+400 {"detail": "Invalid email value in assignments: '<value>'"}
 400 {"detail": "Unsupported gender value in assignments: '<value>'. Supported values: Male, Female, Other."}
 400 {"detail": "Unsupported nationality value in assignments: '<value>'. Supported values: Afghan, ... Zimbabwean."}
 400 {"detail": "assignments file_indices contains an out-of-range index: <n> (this request has <N> file(s), valid indices are 0..<N-1>)"}
@@ -184,7 +192,8 @@ at all on this error (verified: validation runs before the OCR loop).
 }
 ```
 `gender`/`nationality` are `null` when neither OCR nor an assignment
-produced one — unchanged from before this feature, still correctable via
+produced one. `email` is the final persisted assignment or OCR value —
+never a value borrowed from another file. All are still correctable via
 the existing `PATCH /verification/batch-users/{user_id}` review flow.
 
 ## 8. Persistence & later retrieval
@@ -222,6 +231,8 @@ Product/Warranty endpoint.
       defines `file_indices`.
 - [ ] Assignments built and attached to the **same** upload request as
       the files — never a follow-up call.
+- [ ] Email assignments target exactly one file; never reuse one address for
+      multiple people.
 - [ ] Multiple assignment groups (different subsets, different fields)
       supported in one `assignments` array.
 - [ ] Old `bulk_gender`/`bulk_nationality` fields removed from the
