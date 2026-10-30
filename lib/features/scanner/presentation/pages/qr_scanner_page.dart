@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -9,17 +10,18 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/org_top_bar.dart';
+import '../../../orgs/application/report_link_opener.dart';
 
-class QRScannerPage extends StatefulWidget {
+class QRScannerPage extends ConsumerStatefulWidget {
   const QRScannerPage({super.key, this.onScanned});
 
   final ValueChanged<String>? onScanned;
 
   @override
-  State<QRScannerPage> createState() => _QRScannerPageState();
+  ConsumerState<QRScannerPage> createState() => _QRScannerPageState();
 }
 
-class _QRScannerPageState extends State<QRScannerPage> {
+class _QRScannerPageState extends ConsumerState<QRScannerPage> {
   late final MobileScannerController _controller;
   String? _lastValue;
   bool _isShowingSheet = false;
@@ -41,6 +43,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
   Future<void> _showResultSheet(String value) async {
     if (_isShowingSheet) return;
     _isShowingSheet = true;
+    final bool isReportLink = ReportLinkOpener.isReportLink(value);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -69,6 +72,12 @@ class _QRScannerPageState extends State<QRScannerPage> {
                     child: FilledButton(
                       onPressed: () {
                         Navigator.of(context).pop();
+                        if (isReportLink && mounted) {
+                          // Certificate report QRs carry the same gated URL;
+                          // open it with the organization session.
+                          ReportLinkOpener.open(this.context, ref, value);
+                          return;
+                        }
                         final ValueChanged<String>? cb = widget.onScanned;
                         if (cb != null) {
                           cb(value);
@@ -77,7 +86,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                         if (!mounted) return;
                         context.go(AppRouter.publicVerificationResultPath);
                       },
-                      child: const Text('Confirm'),
+                      child: Text(isReportLink ? 'Open report' : 'Confirm'),
                     ),
                   ),
                 ],

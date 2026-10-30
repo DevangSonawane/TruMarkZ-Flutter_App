@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/animations/screen_entry_mixin.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -10,6 +10,7 @@ import '../../../../core/widgets/tmz_badge.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_card.dart';
 import '../../../../core/widgets/org_top_bar.dart';
+import '../../application/report_link_opener.dart';
 
 class VerificationReportDetailPage extends StatelessWidget
     with ScreenEntryMixin {
@@ -118,15 +119,21 @@ class VerificationReportDetailPage extends StatelessWidget
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  TMZButton(
-                    label: 'Open Report',
-                    icon: Icons.open_in_new_rounded,
-                    onPressed: canOpen
-                        ? () => launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          )
-                        : null,
+                  // Gated reports 403 in a browser; open with the session.
+                  Consumer(
+                    builder: (BuildContext context, WidgetRef ref, _) =>
+                        TMZButton(
+                          label: 'Open Report',
+                          icon: Icons.open_in_new_rounded,
+                          onPressed: canOpen
+                              ? () => ReportLinkOpener.open(
+                                  context,
+                                  ref,
+                                  url,
+                                  title: title,
+                                )
+                              : null,
+                        ),
                   ),
                   const SizedBox(height: AppSpacing.x2),
                   TMZButton(

@@ -398,17 +398,35 @@ class _BatchRowCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      Text(
-                        'Batch: ${item.batchName}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          color: AppColors.textPrimary,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.1,
-                        ),
+                      Row(
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              'Batch: ${item.batchName}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                color: AppColors.textPrimary,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ),
+                          if (item.reportsProtected) ...<Widget>[
+                            const SizedBox(width: 6),
+                            const Tooltip(
+                              message:
+                                  'Reports require the holder\'s approval',
+                              child: Icon(
+                                LucideIcons.lock,
+                                size: 13,
+                                color: AppColors.brandBlue,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 1),
                       Text(
@@ -560,6 +578,7 @@ class _BatchDirectoryItem {
     required this.createdLabel,
     required this.createdAt,
     this.alertMessage,
+    this.reportsProtected = false,
   });
 
   final String batchId;
@@ -574,6 +593,9 @@ class _BatchDirectoryItem {
   final String createdLabel;
   final DateTime? createdAt;
   final String? alertMessage;
+
+  /// `certificate_access_mode == holder_approval`.
+  final bool reportsProtected;
 
   static _BatchDirectoryItem fromSummary(VerificationBatchSummary item) {
     final DateTime? created = DateTime.tryParse(item.createdAt);
@@ -602,6 +624,7 @@ class _BatchDirectoryItem {
       createdLabel: _formatShortDate(created),
       createdAt: created,
       alertMessage: failed > 0 ? '$failed record(s) failed verification' : null,
+      reportsProtected: item.isHolderApprovalGated,
     );
   }
 

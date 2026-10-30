@@ -24,6 +24,7 @@ import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
+import '../widgets/schema_config_selector.dart';
 import '../../../../../core/services/batch_name_store.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_badge.dart';
@@ -288,6 +289,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   PickedFile? _pickedFile;
   bool _isUploading = false;
+  String? _schemaName;
   bool _preflightChecking = false;
   List<Map<String, dynamic>> _parsedUsers = <Map<String, dynamic>>[];
   final Map<int, List<_HumanDocumentDraft>> _attachedDocumentsByUser =
@@ -928,6 +930,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           selectedChecks: _checks,
           selectedCheckIds: _checkIds,
           verificationFilter: 'human',
+          schemaName: _schemaName,
           onSave: (List<String> headers) {
             if (!mounted) return;
             setState(() {
@@ -1371,6 +1374,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         if (sortedCheckIds.isNotEmpty) 'check_ids': sortedCheckIds.join(','),
         if (_columnsController.text.trim().isNotEmpty)
           'columns': _columnsController.text.trim(),
+        if (_schemaName case final String schema) 'schema_name': schema,
       },
     );
     context.push(uri.toString());
@@ -2195,6 +2199,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             : null,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
+        schemaName: _schemaName,
       );
 
       await _applyTargetedOverrides(repo, res);
@@ -2243,7 +2248,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(e))));
     } on DioException catch (e) {
       if (!mounted) return;
       debugPrint(
@@ -2254,7 +2259,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (inner is ApiException) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(inner.message)));
+        ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(inner))));
       } else {
         final dynamic data = e.response?.data;
         String? serverMessage;
@@ -2347,6 +2352,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       docType: docType.isNotEmpty ? docType : 'document',
       fields: _humanDocumentFieldsCsv,
       files: _documentUploadFiles(),
+      schemaName: _schemaName,
     );
 
     final Map<int, String> userIdsByIndex = <int, String>{};
@@ -2442,13 +2448,25 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     await context.push(paymentUri.toString(), extra: confirmAction);
   }
 
+  /// Unknown/ambiguous `schema_name` → clear the pick, refresh the list and
+  /// ask the user to re-select; otherwise the parsed API message.
+  String _schemaAwareMessage(ApiException e) {
+    return SchemaConfigSelector.handleStaleSelection(
+          ref,
+          'human',
+          e,
+          (String? v) => setState(() => _schemaName = v),
+        ) ??
+        e.message;
+  }
+
   /// Single mapping for OCR upload/save failures (ApiException passthrough,
   /// Dio status hints, generic fallback).
   String _ocrFriendlyError(Object e) {
-    if (e is ApiException) return e.message;
+    if (e is ApiException) return _schemaAwareMessage(e);
     if (e is DioException) {
       final Object? inner = e.error;
-      if (inner is ApiException) return inner.message;
+      if (inner is ApiException) return _schemaAwareMessage(inner);
       final dynamic data = e.response?.data;
       if (data is String && data.trim().isNotEmpty) return data.trim();
       if (data is Map && data['message'] is String) {
@@ -2582,6 +2600,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       final BulkUploadResponse res = await repo.createHumanBatch(
         batchName: _batchNameController.text.trim(),
         users: reviewedUsers.map(_userPayloadFromDraft).toList(),
+        schemaName: _schemaName,
       );
       final Map<int, String> userIdsByIndex = <int, String>{};
       for (int i = 0; i < res.successfulUsers.length; i++) {
@@ -2646,7 +2665,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(e))));
     } on DioException catch (e) {
       if (!mounted) return;
       debugPrint(
@@ -2657,7 +2676,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (inner is ApiException) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(inner.message)));
+        ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(inner))));
       } else {
         final dynamic data = e.response?.data;
         String? serverMessage;
@@ -3074,6 +3093,14 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                         height: 16 / 11,
                                         color: const Color(0xFF94A3B8),
                                       ),
+                                    ),
+                                    SchemaConfigSelector(
+                                      spaceType: 'human',
+                                      value: _schemaName,
+                                      enabled: !_isUploading,
+                                      padding: EdgeInsets.only(top: s(16)),
+                                      onChanged: (String? v) =>
+                                          setState(() => _schemaName = v),
                                     ),
                                     SizedBox(height: s(26)),
                                     Row(
@@ -3871,6 +3898,7 @@ class _HumanTemplateDialog extends ConsumerStatefulWidget {
     required this.selectedCheckIds,
     required this.verificationFilter,
     required this.onSave,
+    this.schemaName,
   });
 
   final List<String> initialHeaders;
@@ -3878,6 +3906,9 @@ class _HumanTemplateDialog extends ConsumerStatefulWidget {
   final Set<String> selectedChecks;
   final Set<String> selectedCheckIds;
   final String verificationFilter;
+
+  /// Same schema the batch will use; appends its fields as template columns.
+  final String? schemaName;
   final ValueChanged<List<String>> onSave;
 
   @override
@@ -4009,6 +4040,7 @@ class _HumanTemplateDialogState extends ConsumerState<_HumanTemplateDialog> {
       final VerificationBinaryResponse res = await repo.generateHumanTemplate(
         headers: headersCsv,
         verificationTypes: verificationTypesCsv,
+        schemaName: widget.schemaName,
       );
       if (!mounted) return;
 
@@ -5543,7 +5575,7 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                       const SizedBox(height: 4),
                       for (final BulkUploadErrorRow e in widget.errors.take(5))
                         Text(
-                          'Doc ${e.row > 0 ? '#${e.row} ' : ''}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
+                          'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
                           style: AppTypography.caption.copyWith(
                             color: AppColors.danger,
                           ),
@@ -6257,7 +6289,7 @@ class _OcrPhotoStageDialogState extends ConsumerState<_OcrPhotoStageDialog> {
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(
-                            'Doc ${e.row > 0 ? '#${e.row} ' : ''}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
+                            'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
                             style: AppTypography.caption.copyWith(
                               color: AppColors.danger,
                             ),

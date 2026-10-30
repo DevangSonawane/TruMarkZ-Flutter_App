@@ -12,6 +12,7 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../../core/widgets/tmz_card.dart';
+import '../../../application/report_link_opener.dart';
 import '../../../data/verification_repository.dart';
 
 class IndividualRecordDetailPage extends ConsumerStatefulWidget {
@@ -93,24 +94,15 @@ class _IndividualRecordDetailPageState
     }
   }
 
-  Future<void> _openReportUrl(String rawUrl) async {
-    final Uri? uri = Uri.tryParse(rawUrl.trim());
-    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This report is not openable in the app.'),
-        ),
-      );
-      return;
-    }
-    final bool opened = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!mounted || opened) return;
-    ScaffoldMessenger.of(
+  /// Report links may be `holder_approval`-gated, so they are fetched with
+  /// the organization session rather than handed to the browser.
+  Future<void> _openReportUrl(String rawUrl) {
+    return ReportLinkOpener.open(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Unable to open report.')));
+      ref,
+      rawUrl,
+      title: _data.valueOrNull?.fullName,
+    );
   }
 
   void _showCertificateSheet(GenerateCertificateResponse res) {

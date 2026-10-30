@@ -877,6 +877,8 @@ class VerificationBatchSummary {
     required this.sharedWithOrg,
     required this.sharedAt,
     required this.sharedBy,
+    this.batchSdcSpaceId = '',
+    this.certificateAccessMode = '',
   });
 
   final String batchId;
@@ -895,6 +897,21 @@ class VerificationBatchSummary {
   final bool sharedWithOrg;
   final String? sharedAt;
   final String? sharedBy;
+
+  /// Top-level `sdc_space_id`: generated-into space, else the space frozen by
+  /// a schema configuration at creation. Not a "generated" signal on its own.
+  final String batchSdcSpaceId;
+
+  /// `public` | `holder_approval`; empty from older backends.
+  final String certificateAccessMode;
+
+  /// Report links need the org session (or holder approval) to open.
+  bool get isHolderApprovalGated =>
+      certificateAccessMode == certificateAccessHolderApproval;
+
+  /// Space this batch's certificates belong to, preferring generated data.
+  String get resolvedSdcSpaceId =>
+      sdcSpaceId.isNotEmpty ? sdcSpaceId : batchSdcSpaceId;
 
   String get sdcOrgId {
     final dynamic sdc = verificationProgress['sdc'];
@@ -1029,8 +1046,24 @@ class VerificationBatchSummary {
       sharedWithOrg: sharedWithOrg,
       sharedAt: (json['shared_at'] ?? json['sharedAt'])?.toString().trim(),
       sharedBy: (json['shared_by'] ?? json['sharedBy'])?.toString().trim(),
+      batchSdcSpaceId: (json['sdc_space_id'] ?? json['sdcSpaceId'] ?? '')
+          .toString()
+          .trim(),
+      certificateAccessMode: _readCertificateAccessMode(json),
     );
   }
+}
+
+const String certificateAccessPublic = 'public';
+const String certificateAccessHolderApproval = 'holder_approval';
+
+String _readCertificateAccessMode(Map<String, dynamic> json) {
+  return (json['certificate_access_mode'] ??
+          json['certificateAccessMode'] ??
+          '')
+      .toString()
+      .trim()
+      .toLowerCase();
 }
 
 class VerificationBatchGroup {
@@ -1168,6 +1201,7 @@ class VerificationBatchDetailResponse {
     required this.sharedBy,
     required this.canGenerateSdc,
     required this.rejectedList,
+    this.certificateAccessMode = '',
   });
 
   final String batchId;
@@ -1187,6 +1221,12 @@ class VerificationBatchDetailResponse {
   final String? sharedBy;
   final bool canGenerateSdc;
   final RejectedListInfo? rejectedList;
+
+  /// `public` | `holder_approval`; empty from older backends.
+  final String certificateAccessMode;
+
+  bool get isHolderApprovalGated =>
+      certificateAccessMode == certificateAccessHolderApproval;
 
   String get sdcOrgId {
     final dynamic sdc = verificationProgress['sdc'];
@@ -1293,6 +1333,7 @@ class VerificationBatchDetailResponse {
       sharedBy: sharedBy,
       canGenerateSdc: canGenerateSdc,
       rejectedList: rejectedList,
+      certificateAccessMode: certificateAccessMode,
     );
   }
 
@@ -1371,6 +1412,7 @@ class VerificationBatchDetailResponse {
           json['can_generate_sdc']?.toString().trim().toLowerCase() == 'true' ||
           json['canGenerateSdc']?.toString().trim().toLowerCase() == 'true',
       rejectedList: rejectedList,
+      certificateAccessMode: _readCertificateAccessMode(json),
     );
   }
 }
@@ -1731,6 +1773,7 @@ class SdcGenerateResponse {
     required this.dhiwayResponse,
     required this.issuedCount,
     required this.issuePending,
+    this.schemaMappingWarnings = const <String>[],
   });
 
   final String batchId;
@@ -1744,8 +1787,13 @@ class SdcGenerateResponse {
   final int issuedCount;
   final bool issuePending;
 
+  /// Advisory notes from dynamic-schema mapping (e.g. fields not in the
+  /// credential).
+  final List<String> schemaMappingWarnings;
+
   factory SdcGenerateResponse.fromJson(Map<String, dynamic> json) {
     final dynamic dhiwayResponseRaw = json['dhiway_response'];
+    final dynamic warningsRaw = json['schema_mapping_warnings'];
     return SdcGenerateResponse(
       batchId: (json['batch_id'] ?? json['batchId'] ?? '').toString().trim(),
       recordsSent:
@@ -1779,6 +1827,12 @@ class SdcGenerateResponse {
       issuePending:
           (json['issue_pending'] ?? json['issuePending']) == true ||
           (json['issue_pending']?.toString().trim().toLowerCase() == 'true'),
+      schemaMappingWarnings: warningsRaw is List
+          ? warningsRaw
+                .map((dynamic e) => e?.toString().trim() ?? '')
+                .where((String e) => e.isNotEmpty)
+                .toList()
+          : const <String>[],
     );
   }
 }
@@ -1885,17 +1939,32 @@ class BulkUploadErrorRow {
     required this.row,
     required this.field,
     required this.error,
+    this.file = '',
   });
 
+  /// Excel row for spreadsheet uploads; 0 for document (OCR) uploads.
   final int row;
   final String field;
+
+  /// May be `Schema field error(s): …` for schema-configured batches.
   final String error;
+
+  /// Source filename for OCR document-level errors.
+  final String file;
+
+  /// `#3 ` / `scan.jpg ` prefix for compact error lists.
+  String get sourceLabel {
+    if (file.isNotEmpty) return '$file ';
+    if (row > 0) return '#$row ';
+    return '';
+  }
 
   factory BulkUploadErrorRow.fromJson(Map<String, dynamic> json) {
     return BulkUploadErrorRow(
       row: int.tryParse((json['row'] ?? '').toString()) ?? 0,
       field: (json['field'] ?? '').toString(),
       error: (json['error'] ?? '').toString(),
+      file: (json['file'] ?? '').toString().trim(),
     );
   }
 }

@@ -11,6 +11,7 @@ import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../data/verification_repository.dart';
+import '../widgets/schema_config_selector.dart';
 import 'org_flow_display_label_utils.dart';
 
 class SingleHumanUploadPage extends ConsumerStatefulWidget {
@@ -45,6 +46,7 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
   final TextEditingController _country = TextEditingController();
 
   bool _submitting = false;
+  String? _schemaName;
 
   @override
   void didChangeDependencies() {
@@ -123,14 +125,23 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
         pincode: _pincode.text,
         state: _state.text,
         country: _country.text,
+        schemaName: _schemaName,
       );
       if (!mounted) return;
       _goToInviteSuccess();
     } on ApiException catch (e) {
       if (!mounted) return;
+      final String message =
+          SchemaConfigSelector.handleStaleSelection(
+            ref,
+            'human',
+            e,
+            (String? v) => setState(() => _schemaName = v),
+          ) ??
+          e.message;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -269,6 +280,12 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
                 ),
               ],
               const SizedBox(height: AppSpacing.x4),
+              SchemaConfigSelector(
+                spaceType: 'human',
+                value: _schemaName,
+                enabled: !_submitting,
+                onChanged: (String? v) => setState(() => _schemaName = v),
+              ),
               TextFormField(
                 controller: _fullName,
                 textInputAction: TextInputAction.next,

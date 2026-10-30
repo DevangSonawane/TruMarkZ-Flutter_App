@@ -19,6 +19,7 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
+import '../widgets/certificate_access_section.dart';
 import '../widgets/sdc_partial_approval_section.dart';
 
 class BatchTrackingDetailPage extends ConsumerStatefulWidget {
@@ -778,6 +779,12 @@ class _BatchTrackingDetailPageState
                                   total: res.totalUsers,
                                   sharedWithOrg: sharedWithOrg,
                                 ),
+                                if (res.isHolderApprovalGated ||
+                                    _batchSummary?.isHolderApprovalGated ==
+                                        true) ...<Widget>[
+                                  const SizedBox(height: AppSpacing.x2),
+                                  const _ProtectedReportsNote(),
+                                ],
                                 if (res.rejectedList != null) ...<Widget>[
                                   const SizedBox(height: AppSpacing.x3),
                                   _RejectedListCard(
@@ -788,6 +795,18 @@ class _BatchTrackingDetailPageState
                                     onDownload: () => _downloadRejectedList(
                                       res.rejectedList!,
                                     ),
+                                  ),
+                                ],
+                                // Secure Certificate Access is Human-only.
+                                if (!isProductBatch &&
+                                    !res.isWarrantyBatch) ...<Widget>[
+                                  const SizedBox(height: AppSpacing.x3),
+                                  CertificateAccessSection(
+                                    batchId: _batchId,
+                                    credentialVisibility:
+                                        res.credentialVisibility,
+                                    batchUsers: res.users,
+                                    onModeChanged: _load,
                                   ),
                                 ],
                                 const SizedBox(height: AppSpacing.x3),
@@ -2105,4 +2124,42 @@ class _StatusStyle {
       fg = AppColors.warning;
 
   const _StatusStyle.failed() : bg = AppColors.dangerBg, fg = AppColors.error;
+}
+
+/// §18B: labels batches whose report links need the holder's approval.
+class _ProtectedReportsNote extends StatelessWidget {
+  const _ProtectedReportsNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.blueTint,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Row(
+        children: <Widget>[
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 16,
+            color: AppColors.brandBlue,
+          ),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Protected reports: links open only for your organization or '
+              'visitors the holder approves.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.brandBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -23,6 +23,7 @@ import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
+import '../widgets/schema_config_selector.dart';
 import '../../../../../core/services/batch_name_store.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import 'flow_step_progress.dart';
@@ -57,6 +58,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   PickedFile? _pickedFile;
   bool _parsingFile = false;
   bool _creating = false;
+  String? _schemaName;
+
+  String get _schemaSpaceType => _mode == 'warranty' ? 'warranty' : 'product';
   List<String> _savedTemplateHeaders = <String>[];
   String get _resolvedBatchName {
     final String typed = _batchNameController.text.trim();
@@ -550,6 +554,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                 },
           categoryId: _categoryId,
           isWarranty: _mode == 'warranty',
+          schemaName: _schemaName,
           onSave: (List<String> headers) {
             setState(() {
               _savedTemplateHeaders = List<String>.from(headers);
@@ -710,6 +715,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               documents: _buildWarrantyDocuments(),
               fileBytes: pickedFile.bytes,
               fileName: pickedFile.name,
+              schemaName: _schemaName,
             )
           : await repo.bulkUploadProducts(
               batchName: _resolvedBatchName,
@@ -718,6 +724,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               verificationTypes: _resolvedVerificationTypesCsv(),
               fileBytes: pickedFile.bytes,
               fileName: pickedFile.name,
+              schemaName: _schemaName,
             );
       await ref
           .read(batchNameStoreProvider.notifier)
@@ -747,9 +754,17 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       context.go(uri.toString(), extra: res);
     } on ApiException catch (e) {
       if (!mounted) return;
+      final String message =
+          SchemaConfigSelector.handleStaleSelection(
+            ref,
+            _schemaSpaceType,
+            e,
+            (String? v) => setState(() => _schemaName = v),
+          ) ??
+          e.message;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -975,6 +990,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                         height: 16 / 11,
                                         color: const Color(0xFF94A3B8),
                                       ),
+                                    ),
+                                    SchemaConfigSelector(
+                                      spaceType: _schemaSpaceType,
+                                      value: _schemaName,
+                                      enabled: !_creating,
+                                      padding: EdgeInsets.only(top: s(16)),
+                                      onChanged: (String? v) =>
+                                          setState(() => _schemaName = v),
                                     ),
                                     if (_checks.isNotEmpty) ...<Widget>[
                                       SizedBox(height: s(16)),
@@ -1258,12 +1281,17 @@ class _ProductTemplateDialog extends ConsumerStatefulWidget {
     required this.categoryId,
     required this.isWarranty,
     required this.onSave,
+    this.schemaName,
   });
 
   final List<String> initialHeaders;
   final Set<String> requiredHeaders;
   final String categoryId;
   final bool isWarranty;
+
+  /// Appends the schema's fields as extra template columns (product only;
+  /// the warranty template takes no schema_name).
+  final String? schemaName;
   final ValueChanged<List<String>> onSave;
 
   @override
@@ -1367,6 +1395,7 @@ class _ProductTemplateDialogState
           ? await repo.generateWarrantyTemplate()
           : await repo.generateProductsTemplate(
               categoryId: widget.categoryId,
+              schemaName: widget.schemaName,
               headers: <String>[
                 for (final String header in _headers)
                   if (header.trim().isNotEmpty)

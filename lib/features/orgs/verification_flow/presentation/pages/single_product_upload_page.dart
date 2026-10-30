@@ -12,6 +12,7 @@ import '../../../../../core/theme/app_typography.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../data/verification_repository.dart';
+import '../widgets/schema_config_selector.dart';
 
 class SingleProductUploadPage extends ConsumerStatefulWidget {
   const SingleProductUploadPage({super.key});
@@ -33,6 +34,10 @@ class _SingleProductUploadPageState
   final TextEditingController _customFieldsJson = TextEditingController();
 
   bool _submitting = false;
+  String? _schemaName;
+
+  String get _schemaSpaceType =>
+      _mode == 'warranty' ? 'warranty' : 'product';
 
   @override
   void didChangeDependencies() {
@@ -102,6 +107,7 @@ class _SingleProductUploadPageState
           'mode': _mode,
           if (customFields != null) ...customFields,
         },
+        schemaName: _schemaName,
       );
       if (!mounted) return;
       _goToInviteSuccess();
@@ -112,9 +118,17 @@ class _SingleProductUploadPageState
       ).showSnackBar(SnackBar(content: Text(e.message)));
     } on ApiException catch (e) {
       if (!mounted) return;
+      final String message =
+          SchemaConfigSelector.handleStaleSelection(
+            ref,
+            _schemaSpaceType,
+            e,
+            (String? v) => setState(() => _schemaName = v),
+          ) ??
+          e.message;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,6 +188,12 @@ class _SingleProductUploadPageState
                 ),
               ),
               const SizedBox(height: AppSpacing.x4),
+              SchemaConfigSelector(
+                spaceType: _schemaSpaceType,
+                value: _schemaName,
+                enabled: !_submitting,
+                onChanged: (String? v) => setState(() => _schemaName = v),
+              ),
               TextFormField(
                 controller: _categoryId,
                 textInputAction: TextInputAction.next,

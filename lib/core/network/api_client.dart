@@ -8,10 +8,34 @@ import '../router/app_router.dart';
 import '../services/token_storage.dart';
 
 class ApiException implements Exception {
-  const ApiException({required this.statusCode, required this.message});
+  const ApiException({
+    required this.statusCode,
+    required this.message,
+    this.errors = const <String>[],
+    this.errorId,
+  });
 
   final int? statusCode;
+
+  /// Display-ready text. When the backend returns an object `detail`
+  /// (`{"message": ..., "errors": [...]}`) the errors are appended as bullets.
   final String message;
+
+  /// Individual entries from an object `detail.errors` (or a top-level
+  /// `errors` list on schema-config 400s). Empty for string `detail`.
+  final List<String> errors;
+
+  /// `error_id` from a JSON 500 body, for support lookups.
+  final String? errorId;
+
+  /// True for the schema-selection 400s (unknown or ambiguous
+  /// `schema_name`): the cached schema list is stale and should be re-fetched.
+  bool get isStaleSchemaSelection {
+    if (statusCode != 400) return false;
+    final String m = message.toLowerCase();
+    return (m.contains('no active') && m.contains('schema named')) ||
+        (m.contains('more than one active') && m.contains('schema is named'));
+  }
 
   @override
   String toString() =>
@@ -432,6 +456,66 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> verificationPut(
+    String path, {
+    Object? data,
+  }) async {
+    try {
+      final Response<dynamic> res = await _verificationDio.put<dynamic>(
+        path,
+        data: data,
+        options: Options(contentType: Headers.jsonContentType),
+      );
+      return _asMap(res.data);
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
+  /// True when [uri] points at the TruMarkZ API, i.e. it is safe to attach
+  /// the organization's Bearer session to it.
+  bool isApiUrl(Uri uri) {
+    final String host = uri.host.toLowerCase();
+    if (host.isEmpty || uri.scheme != 'https') return false;
+    return host == Uri.parse(_verificationDio.options.baseUrl).host ||
+        host == Uri.parse(_dio.options.baseUrl).host;
+  }
+
+  /// Downloads an absolute TruMarkZ API URL (e.g. a report link) with the
+  /// organization session. Gated (`holder_approval`) reports return 403 to
+  /// unauthenticated browsers, so they must be fetched this way.
+  Future<VerificationBinaryResponse> verificationGetBinaryUrl(Uri uri) async {
+    if (!isApiUrl(uri)) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'This link is not a TruMarkZ report.',
+      );
+    }
+    try {
+      final Response<dynamic> res = await _verificationDio.getUri<dynamic>(
+        uri,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return VerificationBinaryResponse(
+        bytes: _asBytes(res.data),
+        contentDisposition: res.headers.value('content-disposition'),
+        contentType: res.headers.value(Headers.contentTypeHeader),
+      );
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    } catch (_) {
+      throw const ApiException(
+        statusCode: null,
+        message: 'Something went wrong. Please try again.',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> verificationPostMultipart(
     String path,
     FormData formData, {
@@ -543,18 +627,12 @@ class ApiClient {
             return;
           }
 
-          final String message =
-              _extractErrorMessage(err) ??
-              _fallbackMessageForType(err.type) ??
-              (statusCode != null
-                  ? 'Request failed ($statusCode). Please try again.'
-                  : 'Something went wrong. Please try again.');
           handler.reject(
             DioException(
               requestOptions: err.requestOptions,
               response: err.response,
               type: err.type,
-              error: ApiException(statusCode: statusCode, message: message),
+              error: _buildApiException(err),
               stackTrace: err.stackTrace,
               message: err.message,
             ),
@@ -567,14 +645,62 @@ class ApiClient {
   ApiException _toApiException(DioException e) {
     final Object? inner = e.error;
     if (inner is ApiException) return inner;
+    return _buildApiException(e);
+  }
+
+  ApiException _buildApiException(DioException e) {
     final int? statusCode = e.response?.statusCode;
-    final String message =
+    final List<String> errors = _extractErrorList(e);
+    final String? errorId = _extractErrorId(e);
+    String message =
         _extractErrorMessage(e) ??
         _fallbackMessageForType(e.type) ??
         (statusCode != null
             ? 'Request failed ($statusCode). Please try again.'
             : 'Something went wrong. Please try again.');
-    return ApiException(statusCode: statusCode, message: message);
+    final dynamic body = e.response?.data;
+    final bool genericServerError =
+        statusCode == 500 &&
+        (errorId != null ||
+            body is String ||
+            message.toLowerCase() == 'internal server error');
+    if (genericServerError) {
+      // JSON 500s are {"detail": "Internal server error", "error_id": ...};
+      // older revisions return a plain-text body. Never surface raw bodies.
+      message = 'Something went wrong on our side. Please try again.';
+      if (errorId != null) message = '$message (Error ID: $errorId)';
+    } else if (errors.isNotEmpty) {
+      message = <String>[
+        message,
+        ...errors.map((String error) => '• $error'),
+      ].join('\n');
+    }
+    return ApiException(
+      statusCode: statusCode,
+      message: message,
+      errors: errors,
+      errorId: errorId,
+    );
+  }
+
+  List<String> _extractErrorList(DioException err) {
+    final dynamic data = err.response?.data;
+    if (data is! Map) return const <String>[];
+    final dynamic detail = data['detail'];
+    final dynamic raw = detail is Map ? detail['errors'] : data['errors'];
+    if (raw is! List) return const <String>[];
+    return raw
+        .map((dynamic e) => e?.toString().trim() ?? '')
+        .where((String e) => e.isNotEmpty)
+        .toList();
+  }
+
+  String? _extractErrorId(DioException err) {
+    final dynamic data = err.response?.data;
+    if (data is! Map) return null;
+    final dynamic id = data['error_id'];
+    if (id is String && id.trim().isNotEmpty) return id.trim();
+    return null;
   }
 
   String? _fallbackMessageForType(DioExceptionType type) {
@@ -628,10 +754,23 @@ class VerificationBinaryResponse {
   const VerificationBinaryResponse({
     required this.bytes,
     this.contentDisposition,
+    this.contentType,
   });
 
   final Uint8List bytes;
   final String? contentDisposition;
+  final String? contentType;
+
+  /// Filename from Content-Disposition, or null when the header has none.
+  String? get dispositionFilename {
+    final String? disposition = contentDisposition;
+    if (disposition == null || disposition.trim().isEmpty) return null;
+    final Match? match = RegExp(
+      r'filename="?([^\";]+)"?',
+    ).firstMatch(disposition);
+    final String? name = match?.group(1)?.trim();
+    return name == null || name.isEmpty ? null : name;
+  }
 
   String get filename {
     final String? disposition = contentDisposition;

@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http_parser/http_parser.dart';
 
+import '../../../core/models/schema_config_models.dart';
 import '../../../core/models/sdc_approval_models.dart';
+import '../../../core/models/certificate_access_models.dart';
 import '../../../core/models/org_permission.dart';
 import '../../../core/models/verification_models.dart';
 import '../../../core/network/api_client.dart';
@@ -27,6 +29,31 @@ final sdcApprovalsProvider = FutureProvider.family
       return ref
           .read(verificationRepositoryProvider)
           .getSdcApprovals(batchId.trim());
+    });
+
+/// Active schema configurations for an organization, keyed by
+/// `'<org_id>::<space_type>'`. Invalidate after a stale-selection 400.
+final schemaConfigsProvider = FutureProvider.family
+    .autoDispose<List<SchemaConfig>, String>((ref, key) async {
+      final List<String> parts = key.split('::');
+      final String orgId = parts.first.trim();
+      final String spaceType = parts.length > 1 ? parts[1].trim() : '';
+      if (orgId.isEmpty) return const <SchemaConfig>[];
+      return ref
+          .read(verificationRepositoryProvider)
+          .getSchemaConfigs(
+            orgId: orgId,
+            spaceType: spaceType.isEmpty ? null : spaceType,
+          );
+    });
+
+/// Secure Certificate Access state (mode + visitor grants) for one Human
+/// batch. Invalidate after a mode change or a revoke.
+final certificateAccessProvider = FutureProvider.family
+    .autoDispose<CertificateAccessInfo, String>((ref, batchId) async {
+      return ref
+          .read(verificationRepositoryProvider)
+          .getCertificateAccess(batchId.trim());
     });
 
 final verificationTypesProvider = FutureProvider.family
@@ -217,6 +244,25 @@ class VerificationRepository {
 
   final ApiClient _api;
 
+  /// Reserved key holding the nested schema record; display-only and never
+  /// sent back in edits.
+  static const String schemaRecordKey = '__schema_record__';
+
+  static String? _cleanSchemaName(String? schemaName) {
+    final String value = schemaName?.trim() ?? '';
+    return value.isEmpty ? null : value;
+  }
+
+  /// Backend treats empty/"null"/"undefined"/"none" as no template, but a
+  /// malformed id is a 400 — only send a real-looking id.
+  static String? _cleanTemplateId(String? templateId) {
+    final String value = templateId?.trim() ?? '';
+    if (value.isEmpty) return null;
+    const Set<String> placeholders = <String>{'null', 'undefined', 'none'};
+    if (placeholders.contains(value.toLowerCase())) return null;
+    return value;
+  }
+
   static MediaType _mediaTypeForFileName(String fileName) {
     final String safeName = fileName.trim().isEmpty ? 'upload.xlsx' : fileName;
     final String ext = safeName.split('.').last.toLowerCase();
@@ -339,6 +385,151 @@ class VerificationRepository {
         )
         .where((VerificationIndustryType item) => item.name.trim().isNotEmpty)
         .toList();
+  }
+
+  String _schemaConfigsPath(String orgId) =>
+      '/auth/organizations/${Uri.encodeComponent(orgId.trim())}/schema-configs';
+
+  Future<List<SchemaConfig>> getSchemaConfigs({
+    required String orgId,
+    String? spaceType,
+    bool activeOnly = true,
+  }) async {
+    final dynamic res = await _api.verificationGetAny(
+      _schemaConfigsPath(orgId),
+      queryParameters: <String, String>{
+        if (spaceType != null && spaceType.trim().isNotEmpty)
+          'space_type': spaceType.trim().toLowerCase(),
+        'active_only': activeOnly.toString(),
+      },
+    );
+    final dynamic raw = res is Map ? res['configs'] : res;
+    if (raw is! List) return const <SchemaConfig>[];
+    return raw
+        .whereType<Map>()
+        .map((Map e) => SchemaConfig.fromJson(Map<String, dynamic>.from(e)))
+        .where((SchemaConfig c) => c.label.isNotEmpty)
+        .toList();
+  }
+
+  /// [sampleRecord] is the user's pasted JSON record, sent verbatim. Never
+  /// pre-fill [inputMap] by guessing meaning; send only explicit choices.
+  Future<SchemaConfigSaveResponse> createSchemaConfig({
+    required String orgId,
+    required String spaceType,
+    required String schemaVariant,
+    required String schemaId,
+    required String spaceId,
+    required String label,
+    bool isDefault = false,
+    Map<String, dynamic>? sampleRecord,
+    List<SchemaLocalField>? localFields,
+    Map<String, dynamic>? inputMap,
+    Map<String, dynamic>? outputMap,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      _schemaConfigsPath(orgId),
+      data: _schemaConfigBody(
+        spaceType: spaceType,
+        schemaVariant: schemaVariant,
+        schemaId: schemaId,
+        spaceId: spaceId,
+        label: label,
+        isDefault: isDefault,
+        sampleRecord: sampleRecord,
+        localFields: localFields,
+        inputMap: inputMap,
+        outputMap: outputMap,
+      ),
+    );
+    return SchemaConfigSaveResponse.fromJson(res);
+  }
+
+  /// Creates a new version. Omitting both [localFields] and a non-empty
+  /// [sampleRecord] keeps the previous fields; `localFields: []` clears them.
+  Future<SchemaConfigSaveResponse> createSchemaConfigVersion({
+    required String orgId,
+    required String configId,
+    required String spaceType,
+    required String schemaVariant,
+    required String schemaId,
+    required String spaceId,
+    required String label,
+    bool isDefault = false,
+    Map<String, dynamic>? sampleRecord,
+    List<SchemaLocalField>? localFields,
+    Map<String, dynamic>? inputMap,
+    Map<String, dynamic>? outputMap,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '${_schemaConfigsPath(orgId)}/${Uri.encodeComponent(configId.trim())}/versions',
+      data: _schemaConfigBody(
+        spaceType: spaceType,
+        schemaVariant: schemaVariant,
+        schemaId: schemaId,
+        spaceId: spaceId,
+        label: label,
+        isDefault: isDefault,
+        sampleRecord: sampleRecord,
+        localFields: localFields,
+        inputMap: inputMap,
+        outputMap: outputMap,
+      ),
+    );
+    return SchemaConfigSaveResponse.fromJson(res);
+  }
+
+  Future<SchemaConfig> setDefaultSchemaConfig({
+    required String orgId,
+    required String configId,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '${_schemaConfigsPath(orgId)}/${Uri.encodeComponent(configId.trim())}/set-default',
+    );
+    return SchemaConfig.fromJson(
+      res['config'] is Map ? Map<String, dynamic>.from(res['config']) : res,
+    );
+  }
+
+  Future<SchemaConfig> deactivateSchemaConfig({
+    required String orgId,
+    required String configId,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '${_schemaConfigsPath(orgId)}/${Uri.encodeComponent(configId.trim())}/deactivate',
+    );
+    return SchemaConfig.fromJson(
+      res['config'] is Map ? Map<String, dynamic>.from(res['config']) : res,
+    );
+  }
+
+  Map<String, dynamic> _schemaConfigBody({
+    required String spaceType,
+    required String schemaVariant,
+    required String schemaId,
+    required String spaceId,
+    required String label,
+    required bool isDefault,
+    Map<String, dynamic>? sampleRecord,
+    List<SchemaLocalField>? localFields,
+    Map<String, dynamic>? inputMap,
+    Map<String, dynamic>? outputMap,
+  }) {
+    return <String, dynamic>{
+      'space_type': spaceType.trim().toLowerCase(),
+      'schema_variant': schemaVariant.trim(),
+      'schema_id': schemaId.trim(),
+      'space_id': spaceId.trim(),
+      'label': label.trim(),
+      'is_default': isDefault,
+      'sample_record': ?sampleRecord,
+      if (localFields != null)
+        'local_fields': localFields
+            .map((SchemaLocalField f) => f.toJson())
+            .toList(),
+      'input_map': ?inputMap,
+      'output_map': ?outputMap,
+    };
   }
 
   Future<List<VerificationBatchSummary>> getBatches() async {
@@ -466,6 +657,51 @@ class VerificationRepository {
     return VerificationBatchDetailResponse.fromJson(res);
   }
 
+  String _certificateAccessPath(String batchId) =>
+      '/verification/batches/${Uri.encodeComponent(batchId.trim())}/certificate-access';
+
+  /// Human batches only; another organization's batch returns 404.
+  Future<CertificateAccessInfo> getCertificateAccess(String batchId) async {
+    final Map<String, dynamic> res = await _api.verificationGet(
+      _certificateAccessPath(batchId),
+    );
+    return CertificateAccessInfo.fromJson(res);
+  }
+
+  /// `409` (message shown as-is) when [mode] contradicts the batch's consent
+  /// mode; the only accepted change is gating a Permission Required batch
+  /// created before Secure Certificate Access shipped.
+  Future<CertificateAccessInfo> setCertificateAccessMode({
+    required String batchId,
+    required String mode,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPut(
+      _certificateAccessPath(batchId),
+      data: <String, dynamic>{'mode': mode.trim().toLowerCase()},
+    );
+    return CertificateAccessInfo.fromJson(res);
+  }
+
+  Future<CertificateAccessGrant> revokeCertificateAccessGrant({
+    required String batchId,
+    required String grantId,
+  }) async {
+    final Map<String, dynamic> res = await _api.verificationPost(
+      '${_certificateAccessPath(batchId)}/grants/${Uri.encodeComponent(grantId.trim())}/revoke',
+    );
+    return CertificateAccessGrant.fromJson(
+      res['grant'] is Map ? Map<String, dynamic>.from(res['grant']) : res,
+    );
+  }
+
+  /// Fetches a report link with the organization session (§18C). Works for
+  /// both public and `holder_approval` batches.
+  Future<VerificationBinaryResponse> downloadReport(Uri reportUri) {
+    return _api.verificationGetBinaryUrl(reportUri);
+  }
+
+  bool isApiReportUrl(Uri uri) => _api.isApiUrl(uri);
+
   Future<VerificationBinaryResponse> viewRejectedList(String batchId) {
     return _api.verificationGetBinary(
       '/verification/batches/${Uri.encodeComponent(batchId.trim())}/rejected-list/view',
@@ -495,7 +731,9 @@ class VerificationRepository {
     required String categoryId,
     required String productName,
     Map<String, dynamic>? customFields,
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
     final Map<String, dynamic> res = await _api.verificationPost(
       '/verification/single/product',
       data: <String, dynamic>{
@@ -503,6 +741,7 @@ class VerificationRepository {
         'product_name': productName.trim(),
         if (customFields != null && customFields.isNotEmpty)
           'custom_fields': customFields,
+        'schema_name': ?schema,
       },
     );
     return SingleProductUploadResponse.fromJson(res);
@@ -517,11 +756,14 @@ class VerificationRepository {
         const <ProductBulkUploadDocumentInput>[],
     required Uint8List fileBytes,
     required String fileName,
+    String? schemaName,
   }) async {
     final String safeName = fileName.trim().isEmpty ? 'upload.xlsx' : fileName;
     final MediaType contentType = _mediaTypeForFileName(safeName);
+    final String? schema = _cleanSchemaName(schemaName);
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
+      'schema_name': ?schema,
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
       if (industryType != null && industryType.trim().isNotEmpty)
@@ -586,7 +828,9 @@ class VerificationRepository {
   Future<VerificationBinaryResponse> generateProductsTemplate({
     String? categoryId,
     List<String> headers = const <String>[],
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
     final List<String> cleanHeaders = headers
         .map((String h) => h.trim())
         .where((String h) => h.isNotEmpty)
@@ -599,6 +843,7 @@ class VerificationRepository {
           'category_id': categoryId.trim(),
         // Backend expects a string in x-www-form-urlencoded.
         if (headersCsv.isNotEmpty) 'headers': headersCsv,
+        'schema_name': ?schema,
       },
     );
   }
@@ -612,13 +857,16 @@ class VerificationRepository {
   Future<VerificationBinaryResponse> generateHumanTemplate({
     required String headers,
     required String verificationTypes,
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
     return _api.verificationPostFormUrlEncodedBinary(
       '/verification/generate-human-template',
       data: <String, dynamic>{
         'headers': headers.trim(),
         if (verificationTypes.trim().isNotEmpty)
           'verification_types': verificationTypes.trim(),
+        'schema_name': ?schema,
       },
     );
   }
@@ -636,7 +884,9 @@ class VerificationRepository {
     String? pincode,
     String? state,
     String? country,
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
     final Map<String, dynamic> res = await _api.verificationPost(
       '/verification/single/human',
       data: <String, dynamic>{
@@ -659,6 +909,7 @@ class VerificationRepository {
         if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
         if (country != null && country.trim().isNotEmpty)
           'country': country.trim(),
+        'schema_name': ?schema,
       },
     );
     return SingleHumanUploadResponse.fromJson(res);
@@ -673,7 +924,10 @@ class VerificationRepository {
     String? templateId,
     required Uint8List fileBytes,
     required String fileName,
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
+    final String? template = _cleanTemplateId(templateId);
     final String? backendVisibility = canonicalCredentialVisibility(
       credentialVisibility,
     );
@@ -703,8 +957,8 @@ class VerificationRepository {
         'verification_types': verificationTypes.trim(),
       if (backendVisibility case final String visibility)
         'credential_visibility': visibility,
-      if (templateId != null && templateId.trim().isNotEmpty)
-        'template_id': templateId.trim(),
+      'template_id': ?template,
+      'schema_name': ?schema,
       'file': MultipartFile.fromBytes(
         fileBytes,
         filename: safeName,
@@ -729,7 +983,9 @@ class VerificationRepository {
     List<BulkUploadDocumentAssignment> assignments =
         const <BulkUploadDocumentAssignment>[],
     required List<BulkUploadDocumentInput> files,
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
     final String? backendVisibility = canonicalCredentialVisibility(
       credentialVisibility,
     );
@@ -758,6 +1014,7 @@ class VerificationRepository {
       if (docType != null && docType.trim().isNotEmpty)
         'doc_type': docType.trim(),
       if (fields != null && fields.trim().isNotEmpty) 'fields': fields.trim(),
+      'schema_name': ?schema,
       if (assignments.isNotEmpty)
         'assignments': jsonEncode(
           assignments
@@ -791,11 +1048,14 @@ class VerificationRepository {
     required String batchName,
     String? description,
     required List<Map<String, dynamic>> users,
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
     final Map<String, dynamic> payload = <String, dynamic>{
       'batch_name': batchName.trim(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
+      'schema_name': ?schema,
       'users': users,
     };
     final Map<String, dynamic> res = await _api.verificationPost(
@@ -900,11 +1160,22 @@ class VerificationRepository {
         if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
         if (country != null && country.trim().isNotEmpty)
           'country': country.trim(),
-        if (customFields != null && customFields.isNotEmpty)
-          'custom_fields': customFields,
+        if (_editableCustomFields(customFields)
+            case final Map<String, dynamic> fields)
+          'custom_fields': fields,
         'mark_reviewed': markReviewed,
       },
     );
+  }
+
+  /// Drops the reserved nested schema record so it is never sent back.
+  static Map<String, dynamic>? _editableCustomFields(
+    Map<String, dynamic>? customFields,
+  ) {
+    if (customFields == null || customFields.isEmpty) return null;
+    final Map<String, dynamic> cleaned = Map<String, dynamic>.from(customFields)
+      ..remove(schemaRecordKey);
+    return cleaned.isEmpty ? null : cleaned;
   }
 
   Future<BulkUploadResponse> uploadWarrantyProducts({
@@ -915,7 +1186,9 @@ class VerificationRepository {
         const <WarrantyBulkUploadDocumentInput>[],
     required Uint8List fileBytes,
     required String fileName,
+    String? schemaName,
   }) async {
+    final String? schema = _cleanSchemaName(schemaName);
     final String safeName = fileName.trim().isEmpty
         ? 'warranty.xlsx'
         : fileName;
@@ -923,6 +1196,7 @@ class VerificationRepository {
     final FormData formData = FormData.fromMap(<String, dynamic>{
       'batch_name': batchName.trim(),
       'batch_type': 'warranty',
+      'schema_name': ?schema,
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
       'file': MultipartFile.fromBytes(

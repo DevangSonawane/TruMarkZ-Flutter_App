@@ -36,6 +36,8 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
   }
 
   Future<void> _onReset() async {
+    // Reset OTPs are single-use; never let a double-tap send it twice.
+    if (_isLoading) return;
     final String email = _emailController.text.trim();
     final String otpCode = _otpController.text.trim();
     final String newPassword = _passwordController.text;
@@ -67,10 +69,12 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
     }
 
     setState(() => _isLoading = true);
+    bool succeeded = false;
     try {
       await ref
           .read(authRepositoryProvider)
           .resetPassword(email: email, otpCode: otpCode, newPassword: newPassword);
+      succeeded = true;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password reset successfully. Please log in.')),
@@ -85,7 +89,8 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
         const SnackBar(content: Text('Something went wrong. Please try again.')),
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      // Stay disabled on success: we're navigating away and the OTP is spent.
+      if (mounted && !succeeded) setState(() => _isLoading = false);
     }
   }
 

@@ -39,6 +39,11 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
   bool _hasError = false;
   int _shake = 0;
   bool _isVerifying = false;
+
+  /// Set once the OTP is accepted. The backend consumes it, so the button
+  /// stays disabled through the post-verify navigation — a second tap would
+  /// otherwise surface "Invalid or expired OTP" after a success.
+  bool _otpAccepted = false;
   bool _isResending = false;
 
   @override
@@ -153,7 +158,7 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
       });
       return false;
     }
-    if (_isVerifying) return false;
+    if (_isVerifying || _otpAccepted) return false;
     final String otp = _controllers
         .map((TextEditingController c) => c.text)
         .join();
@@ -170,6 +175,7 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
       await ref
           .read(authRepositoryProvider)
           .verifyOtp(email: email, otpCode: otp);
+      _otpAccepted = true;
       if (!mounted) return false;
       return true;
     } on ApiException catch (e) {
@@ -203,7 +209,7 @@ class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
       });
       return false;
     } finally {
-      if (mounted) setState(() => _isVerifying = false);
+      if (mounted && !_otpAccepted) setState(() => _isVerifying = false);
     }
   }
 
