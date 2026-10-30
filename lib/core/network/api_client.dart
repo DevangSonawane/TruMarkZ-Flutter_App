@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../router/app_router.dart';
 import '../services/token_storage.dart';
+import '../utils/field_text.dart';
 
 class ApiException implements Exception {
   const ApiException({
@@ -650,10 +651,13 @@ class ApiClient {
 
   ApiException _buildApiException(DioException e) {
     final int? statusCode = e.response?.statusCode;
-    final List<String> errors = _extractErrorList(e);
+    final List<String> errors = _extractErrorList(
+      e,
+    ).map(friendlyFieldText).toList();
     final String? errorId = _extractErrorId(e);
+    final String? extracted = _extractErrorMessage(e);
     String message =
-        _extractErrorMessage(e) ??
+        (extracted == null ? null : friendlyFieldText(extracted)) ??
         _fallbackMessageForType(e.type) ??
         (statusCode != null
             ? 'Request failed ($statusCode). Please try again.'
@@ -732,7 +736,18 @@ class ApiClient {
         if (first is Map) {
           final Map<String, dynamic> m = Map<String, dynamic>.from(first);
           final dynamic msg = m['msg'] ?? m['message'] ?? m['detail'];
-          if (msg is String && msg.trim().isNotEmpty) return msg.trim();
+          if (msg is String && msg.trim().isNotEmpty) {
+            // FastAPI validation errors name the field in `loc`; say which
+            // field it is when the message itself doesn't.
+            final dynamic loc = m['loc'];
+            final String field = loc is List && loc.isNotEmpty
+                ? loc.last.toString()
+                : '';
+            if (field == 'phone_number' && !msg.contains('phone')) {
+              return 'Phone number: ${msg.trim()}';
+            }
+            return msg.trim();
+          }
         }
       }
       if (detail is Map) {

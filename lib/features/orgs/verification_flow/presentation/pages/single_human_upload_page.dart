@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/models/org_permission.dart';
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/utils/holder_phone.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/application/auth_notifier.dart';
@@ -44,6 +46,22 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
   final TextEditingController _country = TextEditingController();
 
   bool _submitting = false;
+
+  /// Human + Permission Required (picked on the plan step, or the
+  /// organization's default when nothing was picked): the holder's mobile
+  /// number must be present and in the backend's accepted format.
+  bool get _phoneRequiredByPermission {
+    final OrgPermissionMode? organizationDefault = ref
+        .watch(authNotifierProvider)
+        .valueOrNull
+        ?.userProfile
+        ?.permissionMode;
+    return resolvePermissionMode(
+          organizationDefault: organizationDefault,
+          credentialVisibility: _access,
+        ) ==
+        OrgPermissionMode.permissionRequired;
+  }
 
   @override
   void didChangeDependencies() {
@@ -134,9 +152,14 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
     }
   }
 
-  InputDecoration _decoration(String label, {String? hint}) {
+  InputDecoration _decoration(
+    String label, {
+    String? hint,
+    bool redAsterisk = false,
+  }) {
     return InputDecoration(
-      labelText: label,
+      labelText: redAsterisk ? null : label,
+      label: redAsterisk ? requiredFieldLabel(label, required: true) : null,
       hintText: hint,
       filled: true,
       fillColor: Colors.white,
@@ -265,9 +288,17 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
                 controller: _phone,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
-                decoration: _decoration('Phone Number', hint: '+91…'),
-                validator: (String? v) =>
-                    _requiredValidator(v, label: 'Phone number'),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                decoration: _decoration(
+                  'Phone Number',
+                  hint: '+91…',
+                  redAsterisk: _phoneRequiredByPermission,
+                ),
+                // Single-person uploads always need a phone (backend
+                // contract); Permission Required adds the format check.
+                validator: (String? v) => _phoneRequiredByPermission
+                    ? holderPhoneError(v, required: true)
+                    : _requiredValidator(v, label: 'Phone number'),
               ),
               const SizedBox(height: AppSpacing.x3),
               TextFormField(

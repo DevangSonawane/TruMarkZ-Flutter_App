@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../utils/field_text.dart';
 
 bool _readSharedWithOrg(Map<String, dynamic> json) {
   final List<Map<String, dynamic>> sources = <Map<String, dynamic>>[
@@ -1956,6 +1957,16 @@ class BulkUploadErrorRow {
 
   /// Source filename for OCR document-level errors.
   final String file;
+
+  /// Field name for people (`phone_number` → `Phone number`).
+  String get fieldLabel {
+    final String f = field.trim().replaceAll('_', ' ');
+    return f.isEmpty ? '' : '${f[0].toUpperCase()}${f.substring(1)}';
+  }
+
+  /// [error] with backend field names reworded (`phone_number` → "phone
+  /// number").
+  String get displayError => friendlyFieldText(error);
 
   /// `#3 ` / `scan.jpg ` prefix for compact error lists.
   String get sourceLabel {

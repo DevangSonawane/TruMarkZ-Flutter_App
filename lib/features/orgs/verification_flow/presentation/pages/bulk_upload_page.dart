@@ -24,6 +24,7 @@ import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../../../core/models/schema_config_models.dart';
+import '../../../../../core/utils/holder_phone.dart';
 import '../../../data/verification_repository.dart';
 import '../widgets/schema_config_selector.dart';
 import '../../../../../core/services/batch_name_store.dart';
@@ -330,6 +331,22 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   bool get _rowEmailRequired =>
       _emailRequired && (_pickedFileHasEmailColumn || _schemaConfig == null);
 
+  /// Human + Permission Required: every holder needs a valid mobile number
+  /// (same condition as the email requirement).
+  bool get _phoneRequired => _emailRequired;
+
+  /// Whether the picked file has a phone column (`phone_number`, or the
+  /// backend aliases `phone`, `mobile`, `mobile_number`).
+  bool _pickedFileHasPhoneColumn = false;
+
+  /// Excel row numbers whose phone is missing/invalid while required.
+  final List<int> _invalidPhoneRows = <int>[];
+
+  /// Per-row phone check; with a schema whose phone column this page can't
+  /// recognise, the server makes the final check.
+  bool get _rowPhoneRequired =>
+      _phoneRequired && (_pickedFileHasPhoneColumn || _schemaConfig == null);
+
   /// Re-reads the picked file so column matching follows the current schema.
   void _reparsePickedFile() {
     final PickedFile? picked = _pickedFile;
@@ -519,6 +536,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   // TODO: Remove once backend file parsing is fully relied upon everywhere.
   // ignore: unused_element
   List<Map<String, dynamic>> _parseUsersFromPickedFile(PickedFile file) {
+    _invalidPhoneRows.clear();
     final String safeName = file.name.trim();
     final String ext = safeName.contains('.')
         ? safeName.split('.').last.toLowerCase()
@@ -572,6 +590,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       _schemaConfig,
     );
     _pickedFileHasEmailColumn = (ix['email'] ?? -1) >= 0;
+    _pickedFileHasPhoneColumn = (ix['phone_number'] ?? -1) >= 0;
 
     final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
     List<dynamic>? firstNonEmptyRow;
@@ -582,6 +601,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       final Map<String, dynamic>? user = _userFromRow(
         valueAt: (String key) => _Identifiers._rowValue(row, ix[key]),
         requireEmail: _rowEmailRequired,
+        requirePhone: _rowPhoneRequired,
+        rowNumber: i + 1,
       );
       if (user != null) out.add(user);
     }
@@ -653,6 +674,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       _schemaConfig,
     );
     _pickedFileHasEmailColumn = (ix['email'] ?? -1) >= 0;
+    _pickedFileHasPhoneColumn = (ix['phone_number'] ?? -1) >= 0;
     _logLong('[BulkUploadPage] XLSX header(raw)=$header');
     _logLong(
       '[BulkUploadPage] XLSX header(normalized)=${header.map(_Identifiers._normHeader).toList()}',
@@ -674,6 +696,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           return _excelCellToString(row[idx]);
         },
         requireEmail: _rowEmailRequired,
+        requirePhone: _rowPhoneRequired,
+        rowNumber: i + 1,
       );
       if (user != null) out.add(user);
     }
@@ -874,6 +898,8 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   Map<String, dynamic>? _userFromRow({
     required String Function(String) valueAt,
     bool requireEmail = false,
+    bool requirePhone = false,
+    int? rowNumber,
   }) {
     final String fullName = valueAt('full_name').trim();
     final String? dob = _normalizeDob(valueAt('dob'));
@@ -898,6 +924,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       // Same shape as the other missing-required-field rejections: the row
       // is dropped and the server reports it as a validation error.
       _skippedMissingEmailRows += 1;
+      return null;
+    }
+    if (requirePhone && !isValidHolderPhone(valueAt('phone_number'))) {
+      // Permission Required: a missing/invalid mobile number blocks the
+      // upload; the row is listed so the organization can fix it.
+      if (rowNumber != null) _invalidPhoneRows.add(rowNumber);
       return null;
     }
     final String email = hasValidEmail ? _normalizeEmail(rawEmail) : '';
@@ -1510,6 +1542,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                           errors: uploadedRes.errors,
                           stepEyebrow: 'STEP 2 OF 3 • REVIEW',
                           requireEmail: _emailRequired,
+                          requirePhone: _phoneRequired,
                         );
                       },
                     );
@@ -2141,6 +2174,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
               users: _parsedUsers,
               documentsByUser: _attachedDocumentsByUser,
               requireEmail: _emailRequired,
+              requirePhone: _phoneRequired,
             );
           },
         );
@@ -2151,6 +2185,42 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
   String _verificationTypesCsv() {
     final List<String> sortedChecks = _checks.toList()..sort();
     return sortedChecks.join(',');
+  }
+
+  /// Attaches each person's already-entered mobile number to their own
+  /// files (same order as [_documentUploadFiles]), so Permission Required
+  /// batches get it at creation.
+  List<BulkUploadDocumentAssignment> _documentPhoneAssignments() {
+    final List<BulkUploadDocumentAssignment> out =
+        <BulkUploadDocumentAssignment>[];
+    int fileIndex = 0;
+    final List<int> userIndices = _attachedDocumentsByUser.keys.toList()
+      ..sort();
+    for (final int userIndex in userIndices) {
+      final String phone = userIndex < _parsedUsers.length
+          ? (_parsedUsers[userIndex]['phone_number'] ?? '').toString().trim()
+          : '';
+      for (final _HumanDocumentDraft draft
+          in _attachedDocumentsByUser[userIndex] ?? <_HumanDocumentDraft>[]) {
+        final String ext = draft.file.extension.toLowerCase();
+        final bool isImage =
+            ext.contains('jpg') ||
+            ext.contains('jpeg') ||
+            ext.contains('png') ||
+            ext.contains('webp');
+        if (!isImage) continue;
+        if (phone.isNotEmpty) {
+          out.add(
+            BulkUploadDocumentAssignment(
+              fileIndices: <int>[fileIndex],
+              phoneNumber: phone,
+            ),
+          );
+        }
+        fileIndex += 1;
+      }
+    }
+    return out;
   }
 
   List<BulkUploadDocumentInput> _documentUploadFiles() {
@@ -2208,6 +2278,34 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           content: Text(
             'This batch uses permission-based access, so the file needs an '
             '"email" column. Add it and upload again.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_phoneRequired &&
+        !_pickedFileHasPhoneColumn &&
+        _schemaConfig == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This batch uses permission-based access, so the file needs a '
+            '"phone_number" column (phone, mobile or mobile_number also '
+            'work). Add it and upload again.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_phoneRequired && _invalidPhoneRows.isNotEmpty) {
+      final List<int> rows = _invalidPhoneRows;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Add a valid mobile number (10–15 digits) in Excel '
+            'row${rows.length == 1 ? '' : 's'} ${rows.take(5).join(', ')}'
+            '${rows.length > 5 ? ' and ${rows.length - 5} more' : ''}. '
+            'Phone is required for Permission Required batches.',
           ),
         ),
       );
@@ -2347,6 +2445,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       docType: docType.isNotEmpty ? docType : 'document',
       fields: _humanDocumentFieldsCsv,
       files: _documentUploadFiles(),
+      assignments: _documentPhoneAssignments(),
     );
 
     final Map<int, String> userIdsByIndex = <int, String>{};
@@ -2518,6 +2617,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                 errors: res.errors,
                 stepEyebrow: 'STEP 2 OF 3 • REVIEW',
                 requireEmail: _emailRequired,
+                requirePhone: _phoneRequired,
               );
             },
           );
@@ -3142,7 +3242,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                     if (_emailRequired) ...<Widget>[
                                       _PermissionNotice(
                                         scale: scale,
-                                        skippedRows: _skippedMissingEmailRows,
+                                        skippedRows:
+                                            _skippedMissingEmailRows +
+                                            _invalidPhoneRows.length,
                                       ),
                                       SizedBox(height: s(18)),
                                     ],
@@ -4739,7 +4841,7 @@ class _PermissionNotice extends StatelessWidget {
               children: <Widget>[
                 Text(
                   hasSkipped
-                      ? '$skippedRows row${skippedRows == 1 ? '' : 's'} skipped — email is required'
+                      ? '$skippedRows row${skippedRows == 1 ? '' : 's'} skipped — email and phone are required'
                       : 'Permission-based access',
                   style: TextStyle(
                     fontFamily: 'Inter',
@@ -4751,12 +4853,13 @@ class _PermissionNotice extends StatelessWidget {
                 SizedBox(height: s(4)),
                 Text(
                   hasSkipped
-                      ? 'These rows had no valid email. Add an email address to '
-                            'each person and upload the file again.'
+                      ? 'These rows had no valid email or mobile number. Add '
+                            'them for each person and upload the file again.'
                       : 'Reports for this batch open only for your '
                             'organization and visitors the holder approves. '
-                            'The file needs an "email" column and every row '
-                            'needs a valid address.',
+                            'The file needs "email" and "phone_number" columns '
+                            '(phone, mobile or mobile_number also work), and '
+                            'every row needs a valid email and mobile number.',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(12),
@@ -5240,6 +5343,7 @@ class _HumanReviewDialog extends StatefulWidget {
     this.errors = const <BulkUploadErrorRow>[],
     this.stepEyebrow,
     this.requireEmail = false,
+    this.requirePhone = false,
   });
 
   final List<Map<String, dynamic>> users;
@@ -5251,6 +5355,9 @@ class _HumanReviewDialog extends StatefulWidget {
   /// Email is required for every person when the batch resolves to
   /// Permission Required (new_flutter_trumarkz.md §12b).
   final bool requireEmail;
+
+  /// Mobile number is required (10–15 digits) for Permission Required.
+  final bool requirePhone;
 
   @override
   State<_HumanReviewDialog> createState() => _HumanReviewDialogState();
@@ -5332,13 +5439,21 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
           return 'User ${i + 1}: ${entry.value} is required.';
         }
       }
+      final String? phoneError = holderPhoneError(
+        user['phone_number']?.toString(),
+        required: widget.requirePhone,
+      );
+      if (widget.requirePhone && phoneError != null) {
+        return 'User ${i + 1}: $phoneError';
+      }
     }
     return null;
   }
 
-  InputDecoration _decoration(String label) {
+  InputDecoration _decoration(String label, {Widget? labelWidget}) {
     return InputDecoration(
-      labelText: label,
+      labelText: labelWidget == null ? label : null,
+      label: labelWidget,
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -5555,7 +5670,7 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                       const SizedBox(height: 4),
                       for (final BulkUploadErrorRow e in widget.errors.take(5))
                         Text(
-                          'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
+                          'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.fieldLabel}: ' : ''}${e.displayError}',
                           style: AppTypography.caption.copyWith(
                             color: AppColors.danger,
                           ),
@@ -5643,7 +5758,27 @@ class _HumanReviewDialogState extends State<_HumanReviewDialog> {
                           Row(
                             children: <Widget>[
                               Expanded(
-                                child: field('phone_number', 'Phone number'),
+                                child: TextFormField(
+                                  controller: controllers['phone_number'],
+                                  keyboardType: TextInputType.phone,
+                                  autovalidateMode:
+                                      AutovalidateMode.onUserInteraction,
+                                  validator: (String? v) => widget.requirePhone
+                                      ? holderPhoneError(v, required: true)
+                                      : null,
+                                  decoration: _decoration(
+                                    'Phone number',
+                                    labelWidget: requiredFieldLabel(
+                                      'Phone number',
+                                      required: widget.requirePhone,
+                                    ),
+                                  ),
+                                  onChanged: (String value) => _updateValue(
+                                    pageIndex,
+                                    'phone_number',
+                                    value,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(child: field('email', 'Email')),
@@ -6269,7 +6404,7 @@ class _OcrPhotoStageDialogState extends ConsumerState<_OcrPhotoStageDialog> {
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(
-                            'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
+                            'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.fieldLabel}: ' : ''}${e.displayError}',
                             style: AppTypography.caption.copyWith(
                               color: AppColors.danger,
                             ),

@@ -12,6 +12,7 @@ import '../../../../../core/router/app_router.dart';
 import '../../../../../core/services/batch_name_store.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/utils/holder_phone.dart';
 import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../../core/widgets/tmz_badge.dart';
 import '../../../../../core/widgets/tmz_button.dart';
@@ -389,11 +390,17 @@ class _OcrPeopleDemographicsSheet extends StatefulWidget {
     required this.fileLabels,
     required this.initialEmails,
     required this.initialAssignments,
+    this.initialPhones = const <String>[],
+    this.phoneRequired = false,
   });
 
   final List<String> fileLabels;
   final List<String> initialEmails;
   final List<BulkUploadDocumentAssignment> initialAssignments;
+  final List<String> initialPhones;
+
+  /// Human + Permission Required: each person needs a valid mobile number.
+  final bool phoneRequired;
 
   @override
   State<_OcrPeopleDemographicsSheet> createState() =>
@@ -444,6 +451,11 @@ class _OcrPeopleDemographicsSheetState
         email: index < widget.initialEmails.length
             ? widget.initialEmails[index]
             : null,
+        phone:
+            index < widget.initialPhones.length &&
+                widget.initialPhones[index].isNotEmpty
+            ? widget.initialPhones[index]
+            : null,
       ),
     );
     // Assignments may have been created in groups. Flatten them here so each
@@ -460,6 +472,9 @@ class _OcrPeopleDemographicsSheetState
         }
         if (assignment.email != null) {
           _people[index].email = assignment.email;
+        }
+        if (assignment.phoneNumber != null) {
+          _people[index].phone = assignment.phoneNumber;
         }
       }
     }
@@ -501,6 +516,8 @@ class _OcrPeopleDemographicsSheetState
     String? gender = person.gender;
     String? nationality = person.nationality;
     String? email = person.email;
+    String? phone = person.phone;
+    String? phoneError;
     bool showNationalities = false;
     String nationalityQuery = '';
     await showModalBottomSheet<void>(
@@ -600,6 +617,26 @@ class _OcrPeopleDemographicsSheetState
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   onChanged: (String value) => email = value.trim(),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: phone,
+                  keyboardType: TextInputType.phone,
+                  autofillHints: const <String>[AutofillHints.telephoneNumber],
+                  decoration: InputDecoration(
+                    label: requiredFieldLabel(
+                      'Mobile number',
+                      required: widget.phoneRequired,
+                    ),
+                    hintText: '+91 98000 00000',
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    errorText: phoneError,
+                    errorMaxLines: 2,
+                  ),
+                  onChanged: (String value) => setSheetState(() {
+                    phone = value.trim();
+                    phoneError = null;
+                  }),
                 ),
                 const SizedBox(height: 16),
                 Material(
@@ -736,10 +773,19 @@ class _OcrPeopleDemographicsSheetState
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: () {
+                      final String? error = holderPhoneError(
+                        phone,
+                        required: widget.phoneRequired,
+                      );
+                      if (error != null) {
+                        setSheetState(() => phoneError = error);
+                        return;
+                      }
                       setState(() {
                         person.gender = gender;
                         person.nationality = nationality;
                         person.email = email;
+                        person.phone = (phone ?? '').isEmpty ? null : phone;
                       });
                       Navigator.pop(sheetContext);
                     },
@@ -755,13 +801,19 @@ class _OcrPeopleDemographicsSheetState
   }
 
   List<BulkUploadDocumentAssignment> _result() => _people
-      .where((person) => person.gender != null || person.nationality != null)
+      .where(
+        (person) =>
+            person.gender != null ||
+            person.nationality != null ||
+            person.phone != null,
+      )
       .map(
         (person) => BulkUploadDocumentAssignment(
           fileIndices: <int>[person.index],
           gender: person.gender,
           nationality: person.nationality,
           email: person.email,
+          phoneNumber: person.phone,
         ),
       )
       .toList();
@@ -794,7 +846,8 @@ class _OcrPeopleDemographicsSheetState
               Text('People in this batch', style: AppTypography.heading2),
               const SizedBox(height: 4),
               Text(
-                'Tap a person to set their email, gender and nationality.',
+                'Tap a person to set their email, mobile, gender and '
+                'nationality.',
                 style: AppTypography.body2.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -861,6 +914,10 @@ class _OcrPeopleDemographicsSheetState
                                         person.gender ?? 'Gender not set',
                                         person.nationality ??
                                             'Nationality not set',
+                                        if (person.phone != null)
+                                          person.phone!
+                                        else if (widget.phoneRequired)
+                                          'Mobile missing',
                                       ].join('  •  '),
                                       style: AppTypography.caption.copyWith(
                                         color: color,
@@ -896,11 +953,12 @@ class _OcrPeopleDemographicsSheetState
 }
 
 class _PersonDemographics {
-  _PersonDemographics({required this.index, this.email});
+  _PersonDemographics({required this.index, this.email, this.phone});
   final int index;
   String? gender;
   String? nationality;
   String? email;
+  String? phone;
 }
 
 enum _OcrPhotoStatus { pending, ready, uploading, uploaded, failed }
@@ -970,6 +1028,10 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
   /// resolve to Permission Required (new_flutter_trumarkz.md §12b).
   bool get _emailRequired =>
       _effectivePermissionMode == OrgPermissionMode.permissionRequired;
+
+  /// Human + Permission Required: every holder needs a valid mobile number
+  /// (same condition as the email requirement).
+  bool get _phoneRequired => _emailRequired;
 
   // Step 0 — documents.
   _OcrFlowMode _docMode = _OcrFlowMode.single;
@@ -1138,6 +1200,41 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
     return emails;
   }
 
+  /// Mobile number per document position, mirroring [_documentEmails].
+  List<String> _documentPhones() {
+    final List<String> phones = <String>[];
+    final List<int> indices = _documentsByUser.keys.toList()..sort();
+    for (final int userIndex in indices) {
+      final String phone = userIndex < _parsedUsers.length
+          ? (_parsedUsers[userIndex]['phone_number'] ?? '').toString().trim()
+          : '';
+      for (final _OcrDocDraft draft in _documentsByUser[userIndex]!) {
+        if (_isDocImage(draft.file.name)) phones.add(phone);
+      }
+    }
+    return phones;
+  }
+
+  /// Assignments for the upload, with each holder's mobile number attached
+  /// to their own file so the backend gets it at batch creation.
+  List<BulkUploadDocumentAssignment> _assignmentsWithPhones() {
+    final List<String> phones = _documentPhones();
+    final Set<int> covered = <int>{
+      for (final BulkUploadDocumentAssignment a in _documentAssignments)
+        if ((a.phoneNumber ?? '').isNotEmpty && a.fileIndices.length == 1)
+          a.fileIndices.single,
+    };
+    return <BulkUploadDocumentAssignment>[
+      ..._documentAssignments,
+      for (int i = 0; i < phones.length; i++)
+        if (phones[i].isNotEmpty && !covered.contains(i))
+          BulkUploadDocumentAssignment(
+            fileIndices: <int>[i],
+            phoneNumber: phones[i],
+          ),
+    ];
+  }
+
   List<int> _documentUserIndices() {
     final List<int> userIndices = <int>[];
     final List<int> indices = _documentsByUser.keys.toList()..sort();
@@ -1167,6 +1264,8 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
           builder: (BuildContext context) => _OcrPeopleDemographicsSheet(
             fileLabels: labels,
             initialEmails: _documentEmails(),
+            initialPhones: _documentPhones(),
+            phoneRequired: _phoneRequired,
             initialAssignments: _documentAssignments,
           ),
         );
@@ -1175,12 +1274,16 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
     setState(() {
       _documentAssignments = assignments;
       for (final BulkUploadDocumentAssignment assignment in assignments) {
-        if (assignment.email == null || assignment.fileIndices.length != 1) {
-          continue;
-        }
+        if (assignment.fileIndices.length != 1) continue;
         final int fileIndex = assignment.fileIndices.single;
         if (fileIndex < 0 || fileIndex >= userIndices.length) continue;
-        _parsedUsers[userIndices[fileIndex]]['email'] = assignment.email;
+        if (assignment.email != null) {
+          _parsedUsers[userIndices[fileIndex]]['email'] = assignment.email;
+        }
+        if (assignment.phoneNumber != null) {
+          _parsedUsers[userIndices[fileIndex]]['phone_number'] =
+              assignment.phoneNumber;
+        }
       }
     });
   }
@@ -1508,6 +1611,29 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
       _startManualReview();
       return;
     }
+    if (_phoneRequired) {
+      // Permission Required: each holder's mobile must travel with their
+      // own file, so block the upload until every person has a valid one.
+      final List<String> phones = _documentPhones();
+      final List<int> missing = <int>[
+        for (int i = 0; i < phones.length; i++)
+          if (!isValidHolderPhone(phones[i])) i + 1,
+      ];
+      if (missing.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Add a valid mobile number (10–15 digits) for '
+              'Person ${missing.take(5).join(', ')}'
+              '${missing.length > 5 ? ' and ${missing.length - 5} more' : ''} '
+              'in "People in this batch". Phone is required for Permission '
+              'Required batches.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     setState(() {
       _isUploadingDocs = true;
       _docsStatus = 'Uploading ${_documentFiles().length} document(s)…';
@@ -1529,7 +1655,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
         docType: 'document',
         fields: _humanDocumentFieldsCsv,
         files: _documentFiles(),
-        assignments: _documentAssignments,
+        assignments: _assignmentsWithPhones(),
       );
       final Map<int, String> idsByIndex = <int, String>{};
       for (int i = 0; i < res.successfulUsers.length; i++) {
@@ -1619,6 +1745,13 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
         if ((user[entry.key] ?? '').toString().trim().isEmpty) {
           return 'User ${i + 1}: ${entry.value} is required.';
         }
+      }
+      if (_phoneRequired) {
+        final String? phoneError = holderPhoneError(
+          user['phone_number']?.toString(),
+          required: true,
+        );
+        if (phoneError != null) return 'User ${i + 1}: $phoneError';
       }
     }
     return null;
@@ -2893,13 +3026,25 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
     String label, {
     String? hint,
     bool required = false,
+    bool redAsterisk = false,
+    TextInputType? keyboardType,
+    FormFieldValidator<String>? validator,
   }) {
     final Map<String, TextEditingController> controllers =
         _reviewControllers[pageIndex];
     return TextFormField(
       controller: controllers[key],
+      keyboardType: keyboardType,
+      validator: validator,
+      autovalidateMode: validator == null
+          ? null
+          : AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
-        labelText: required ? '$label *' : label,
+        labelText: redAsterisk ? null : (required ? '$label *' : label),
+        label: redAsterisk
+            ? requiredFieldLabel(label, required: required)
+            : null,
+        errorMaxLines: 2,
         hintText: hint,
         filled: true,
         fillColor: Colors.white,
@@ -2944,7 +3089,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
             title: '${res.errors.length} error(s)',
             lines: <String>[
               for (final BulkUploadErrorRow e in res.errors.take(5))
-                'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.field}: ' : ''}${e.error}',
+                'Doc ${e.sourceLabel}• ${e.field.isNotEmpty ? '${e.fieldLabel}: ' : ''}${e.displayError}',
             ],
           ),
           const SizedBox(height: 10),
@@ -3071,7 +3216,17 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
           Row(
             children: <Widget>[
               Expanded(
-                child: _rfield(pageIndex, 'phone_number', 'Phone number'),
+                child: _rfield(
+                  pageIndex,
+                  'phone_number',
+                  'Phone number',
+                  required: _phoneRequired,
+                  redAsterisk: true,
+                  keyboardType: TextInputType.phone,
+                  validator: _phoneRequired
+                      ? (String? v) => holderPhoneError(v, required: true)
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
