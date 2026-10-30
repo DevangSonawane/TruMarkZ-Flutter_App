@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +10,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { Input } from '@/components/ui/Input';
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { skillsAPI, getApiError } from '@/services/api';
 import toast from 'react-hot-toast';
 import {
@@ -168,9 +168,7 @@ export const SkillTree = () => {
   if (loading) {
     return (
       <AuthLayout title="My Skill Tree">
-        <div className="flex items-center justify-center py-20">
-          <LoadingSpinner size="lg" />
-        </div>
+        <LoadingSkeleton variant="detail" />
       </AuthLayout>
     );
   }
@@ -397,7 +395,7 @@ export const SkillTree = () => {
               onRemove={() => setDocFile(null)}
             />
           </div>
-          <Button
+          <Modal.Footer><Button
             variant="primary"
             size="lg"
             className="w-full"
@@ -406,7 +404,7 @@ export const SkillTree = () => {
             disabled={uploading}
           >
             {uploading ? 'Uploading...' : 'Upload Document'}
-          </Button>
+          </Button></Modal.Footer>
         </div>
       </Modal>
 
@@ -457,7 +455,7 @@ export const SkillTree = () => {
               </div>
             ))
           )}
-          <Button
+          <Modal.Footer><Button
             variant="ghost"
             size="sm"
             icon={Upload}
@@ -468,7 +466,7 @@ export const SkillTree = () => {
             }}
           >
             Upload Another
-          </Button>
+          </Button></Modal.Footer>
         </div>
       </Modal>
 
@@ -485,7 +483,7 @@ export const SkillTree = () => {
               <span className="font-medium capitalize">{docToDelete?.doc?.document_label || docToDelete?.doc?.label || 'This document'}</span> will be permanently deleted. This cannot be undone.
             </p>
           </div>
-          <div className="flex gap-3">
+          <Modal.Footer className="flex gap-3">
             <Button variant="ghost" size="lg" className="flex-1" onClick={() => setDocToDelete(null)} disabled={deletingDoc}>
               Cancel
             </Button>
@@ -499,7 +497,7 @@ export const SkillTree = () => {
             >
               {deletingDoc ? 'Deleting...' : 'Delete'}
             </Button>
-          </div>
+          </Modal.Footer>
         </div>
       </Modal>
 
@@ -517,7 +515,7 @@ export const SkillTree = () => {
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <Modal.Footer className="flex gap-3">
             <Button variant="ghost" size="lg" className="flex-1" onClick={() => setDeleteModal(null)}>
               Cancel
             </Button>
@@ -531,7 +529,7 @@ export const SkillTree = () => {
             >
               {deleting ? 'Deleting...' : 'Delete'}
             </Button>
-          </div>
+          </Modal.Footer>
         </div>
       </Modal>
 
@@ -549,7 +547,7 @@ export const SkillTree = () => {
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <Modal.Footer className="flex gap-3">
             <Button variant="ghost" size="lg" className="flex-1" onClick={() => setDeleteAllModal(false)}>
               Cancel
             </Button>
@@ -563,7 +561,7 @@ export const SkillTree = () => {
             >
               {deleting ? 'Deleting...' : 'Delete All'}
             </Button>
-          </div>
+          </Modal.Footer>
         </div>
       </Modal>
     </AuthLayout>

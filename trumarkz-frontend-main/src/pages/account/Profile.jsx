@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { AuthLayout } from '@/components/layout/AuthLayout';
+import { BrowserNotifications } from '@/components/shared/BrowserNotifications';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/context/AuthContext';
-import { authAPI, getApiError } from '@/services/api';
+import { authAPI, adminAPI, getApiError } from '@/services/api';
 import {
   Mail, Phone, Building2, Save,
   CheckCircle, FileText, MapPin, RefreshCw, Shield, ShieldCheck, ShieldOff, AlertTriangle,
@@ -13,7 +15,8 @@ import {
 } from 'lucide-react';
 import { SERVICE_TYPE_OPTIONS } from '@/data/serviceTypeOptions';
 import { DhiwaysDetailsEditor } from '@/components/shared/DhiwaysDetailsEditor';
-import { normalizeDhiwayDetails, getDhiwaySpaceTypeLabel } from '@/utils/dhiway';
+import { OrgSchemaConfigsPanel } from '@/components/shared/OrgSchemaConfigsPanel';
+import { normalizeDhiwayDetails, getDhiwaySpaceTypeLabel, mergeSchemaConfigSpaces } from '@/utils/dhiway';
 import toast from 'react-hot-toast';
 
 const roleLabels = {
@@ -98,10 +101,19 @@ export const Profile = () => {
   const [organizationIndustry, setOrganizationIndustry] = useState(() => normalizeIndustryList(user?.industryType));
 
   const isOrg = role === 'organization';
+  // AuthContext normalizes the backend's `super_admin` to `'super-admin'`,
+  // but this file's own roleLabels/roleColors maps already defend against
+  // either spelling reaching here — match both the same way.
+  const isSuperAdmin = role === 'super-admin' || role === 'super_admin';
 
-  // Personal Information card — Organization Name + Phone Number, org users only.
+  // Personal Information card — editable for org (Organization Name + Phone
+  // Number, via PATCH /auth/me) and superadmin (Full Name + Phone + Email,
+  // via the dedicated PATCH /auth/superadmins/{user_id} — the same endpoint
+  // used to manage OTHER superadmins from User List, here targeting the
+  // logged-in superadmin's own id). Individual accounts have no edit
+  // control on this card — unchanged, pre-existing scope.
   const [editingPersonal, setEditingPersonal] = useState(false);
-  const [personalDraft, setPersonalDraft] = useState({ organizationName: '', phoneNumber: '' });
+  const [personalDraft, setPersonalDraft] = useState({ organizationName: '', phoneNumber: '', email: '' });
   const [savingPersonal, setSavingPersonal] = useState(false);
 
   // Organization Details card — Service Type, Dhiway spaces, GSTIN, business
@@ -153,6 +165,27 @@ export const Profile = () => {
   const roleLabel = roleLabels[user?.role] || user?.role || 'Account';
   const roleColor = roleColors[user?.role] || 'bg-gray-100 text-gray-600';
 
+  // Same rule as the SuperAdmin editor: a Schema Configuration's space/schema is added to this org's
+  // Dhiway Spaces (saved at once), and to the open edit draft so its Save doesn't drop it.
+  const syncingSchemaSpaces = useRef(false);
+  const syncSchemaSpaces = useCallback(async (configs) => {
+    if (syncingSchemaSpaces.current || !user) return;
+    const { rows, changed } = mergeSchemaConfigSpaces(user.dhiwaysDetails || [], configs);
+    if (!changed) return;
+    syncingSchemaSpaces.current = true;
+    try {
+      await authAPI.updateOwnProfile({ dhiwaysDetails: rows });
+      updateUserProfile({ dhiwaysDetails: rows });
+      setOrgDraft((d) => ({ ...d, dhiwaysDetails: mergeSchemaConfigSpaces(d.dhiwaysDetails || [], configs).rows }));
+      toast.success('Dhiway Spaces updated from Schema Configurations');
+      await refreshUser?.();
+    } catch (err) {
+      toast.error(getApiError(err, 'Could not add the schema configuration’s space to Dhiway Spaces'));
+    } finally {
+      syncingSchemaSpaces.current = false;
+    }
+  }, [user, updateUserProfile, refreshUser]);
+
   const startEditOrg = () => {
     setOrgDraft({
       serviceType: user?.serviceType || '',
@@ -173,6 +206,7 @@ export const Profile = () => {
     setPersonalDraft({
       organizationName: user?.name || '',
       phoneNumber: user?.phoneNumber || '',
+      email: user?.email || '',
     });
     setEditingPersonal(true);
   };
@@ -182,23 +216,34 @@ export const Profile = () => {
   const savePersonal = async () => {
     setSavingPersonal(true);
     try {
-      const payload = {};
-      const updates = {};
-
       const trimmedName = personalDraft.organizationName.trim();
-      if (trimmedName !== (user?.name || '')) {
-        payload.organizationName = trimmedName;
-        updates.name = trimmedName;
-      }
-
       const trimmedPhone = personalDraft.phoneNumber.trim();
-      if (trimmedPhone !== (user?.phoneNumber || '')) {
-        payload.phoneNumber = trimmedPhone;
-        updates.phoneNumber = trimmedPhone;
+      const updates = {};
+      let hasChanges = false;
+
+      if (isSuperAdmin) {
+        // Own-account edit through the same superadmin-management endpoint
+        // used for other superadmins — self-targeted via `user.id`. Email
+        // is editable here (unlike the org path below); there's no
+        // password field on this card — that stays in the dedicated
+        // superadmin-management modal in User List, to keep this page's
+        // single "Edit" toggle from also doubling as a password-change form.
+        const payload = {};
+        if (trimmedName !== (user?.name || '')) { payload.full_name = trimmedName; updates.name = trimmedName; }
+        if (trimmedPhone !== (user?.phoneNumber || '')) { payload.phone_number = trimmedPhone; updates.phoneNumber = trimmedPhone; }
+        const trimmedEmail = personalDraft.email.trim();
+        if (trimmedEmail !== (user?.email || '')) { payload.email = trimmedEmail; updates.email = trimmedEmail; }
+        hasChanges = Object.keys(payload).length > 0;
+        if (hasChanges) await adminAPI.updateSuperAdmin(user.id, payload);
+      } else {
+        const payload = {};
+        if (trimmedName !== (user?.name || '')) { payload.organizationName = trimmedName; updates.name = trimmedName; }
+        if (trimmedPhone !== (user?.phoneNumber || '')) { payload.phoneNumber = trimmedPhone; updates.phoneNumber = trimmedPhone; }
+        hasChanges = Object.keys(payload).length > 0;
+        if (hasChanges) await authAPI.updateOwnProfile(payload);
       }
 
-      if (Object.keys(payload).length > 0) {
-        await authAPI.updateOwnProfile(payload);
+      if (hasChanges) {
         updateUserProfile(updates);
         await refreshUser();
         toast.success('Profile updated');
@@ -382,6 +427,8 @@ export const Profile = () => {
           </div>
         </Card>
 
+        <BrowserNotifications />
+
         {/* Main content grid */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
 
@@ -390,7 +437,7 @@ export const Profile = () => {
             <Card className="p-5">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h3 className="font-sora font-bold text-brand-dark">Personal Information</h3>
-                {isOrg && (
+                {(isOrg || isSuperAdmin) && (
                   <CardEditControl
                     isEditing={editingPersonal}
                     saving={savingPersonal}
@@ -413,7 +460,22 @@ export const Profile = () => {
                   <DetailRow icon={Building2} label={isOrg ? 'Organization Name' : 'Full Name'} value={user?.name} />
                 )}
                 <div className="border-t border-gray-50" />
-                <DetailRow icon={Mail} label="Email Address" value={user?.email} hint="Cannot be changed" />
+                {editingPersonal && isSuperAdmin ? (
+                  <FieldInput
+                    icon={Mail}
+                    label="Email Address"
+                    value={personalDraft.email}
+                    onChange={(v) => updatePersonalDraft('email', v)}
+                    disabled={savingPersonal}
+                  />
+                ) : (
+                  <DetailRow
+                    icon={Mail}
+                    label="Email Address"
+                    value={user?.email}
+                    hint={isSuperAdmin ? undefined : 'Cannot be changed'}
+                  />
+                )}
                 <div className="border-t border-gray-50" />
                 {editingPersonal ? (
                   <FieldInput
@@ -676,6 +738,25 @@ export const Profile = () => {
                 </div>
               </Card>
             )}
+
+            {/* Separate, additive system from the legacy Dhiway Spaces
+                editor above — see OrgSchemaConfigsPanel. Each action here is
+                its own immediate API call, not tied to this card's own
+                Edit/Save/Cancel state. */}
+            {isOrg && (
+              <Card className="p-6">
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Database size={15} className="text-brand-blue" />
+                  </div>
+                  <div>
+                    <h3 className="font-sora font-bold text-brand-dark">Schema Configurations</h3>
+                    <p className="text-xs text-gray-400 font-inter mt-0.5">Use your own Dhiway schema(s) and field names for batches instead of the default layout</p>
+                  </div>
+                </div>
+                <OrgSchemaConfigsPanel orgId={user?.id} onConfigsChange={syncSchemaSpaces} />
+              </Card>
+            )}
           </div>
 
           {/* Right sidebar — account info */}
@@ -716,6 +797,12 @@ export const Profile = () => {
             </Card>
           </div>
         </div>
+
+        <p className="mt-6 text-center text-xs text-gray-400 font-inter">
+          <Link to="/privacy-policy" className="hover:text-brand-blue hover:underline transition-colors">Privacy Policy</Link>
+          <span className="mx-2">·</span>
+          <Link to="/terms-of-service" className="hover:text-brand-blue hover:underline transition-colors">Terms of Service</Link>
+        </p>
       </motion.div>
     </AuthLayout>
   );

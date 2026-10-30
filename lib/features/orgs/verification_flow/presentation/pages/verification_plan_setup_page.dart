@@ -52,8 +52,6 @@ class _VerificationPlanSetupPageState
   final Set<String> _selectedCheckIds = <String>{'police', 'dob', 'education'};
 
   _AccessType _accessType = _AccessType.publicSearchable;
-  bool _whatsAppConsent = true;
-  bool _emailConsent = false;
 
   static const Color _deepBlue = AppColors.deepNavy;
 
@@ -113,13 +111,6 @@ class _VerificationPlanSetupPageState
     qp['access'] = _accessType == _AccessType.permissionBased
         ? 'private'
         : 'public';
-    if (_accessType == _AccessType.permissionBased) {
-      final List<String> channels = <String>[
-        if (_whatsAppConsent) 'whatsapp',
-        if (_emailConsent) 'email',
-      ];
-      qp['consent'] = channels.join(',');
-    }
 
     final String qs = qp.entries
         .where((MapEntry<String, String> e) => e.value.trim().isNotEmpty)
@@ -227,21 +218,15 @@ class _VerificationPlanSetupPageState
               ),
       _ => _PermissionsStep(
         accessType: _accessType,
-        whatsAppConsent: _whatsAppConsent,
-        emailConsent: _emailConsent,
         onAccessTypeChanged: (value) => setState(() => _accessType = value),
-        onWhatsAppConsentChanged: (value) =>
-            setState(() => _whatsAppConsent = value),
-        onEmailConsentChanged: (value) => setState(() => _emailConsent = value),
       ),
     };
 
+    // Holder consent is not a prerequisite for verification, so either
+    // access type can continue.
     final bool canContinue = switch (_stepIndex) {
       0 => _selectedCheckIds.isNotEmpty,
-      _ =>
-        _accessType == _AccessType.permissionBased
-            ? (_whatsAppConsent || _emailConsent)
-            : true,
+      _ => true,
     };
 
     final String ctaLabel = switch (_stepIndex) {
@@ -724,19 +709,11 @@ class _CheckTile extends StatelessWidget {
 class _PermissionsStep extends StatelessWidget {
   const _PermissionsStep({
     required this.accessType,
-    required this.whatsAppConsent,
-    required this.emailConsent,
     required this.onAccessTypeChanged,
-    required this.onWhatsAppConsentChanged,
-    required this.onEmailConsentChanged,
   });
 
   final _AccessType accessType;
-  final bool whatsAppConsent;
-  final bool emailConsent;
   final ValueChanged<_AccessType> onAccessTypeChanged;
-  final ValueChanged<bool> onWhatsAppConsentChanged;
-  final ValueChanged<bool> onEmailConsentChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -760,47 +737,11 @@ class _PermissionsStep extends StatelessWidget {
         _PermissionCard(
           title: 'Permission-Based Access',
           description:
-              'Requires explicit consent via WhatsApp or Email from the individual before data access.',
+              'Reports and certificate links open only for your organization and visitors the holder approves. Verification starts right away.',
           icon: Icons.lock_person_rounded,
           selected: permissionBased,
           onTap: () => onAccessTypeChanged(_AccessType.permissionBased),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: !permissionBased
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.x4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Container(height: 1, color: AppColors.divider),
-                        const SizedBox(height: AppSpacing.x4),
-                        Text(
-                          'CONSENT CHANNELS',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.brandBlue,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.x3),
-                        _ConsentToggle(
-                          icon: Icons.chat_bubble_outline_rounded,
-                          title: 'WhatsApp Consent',
-                          value: whatsAppConsent,
-                          onChanged: onWhatsAppConsentChanged,
-                        ),
-                        const SizedBox(height: AppSpacing.x2),
-                        _ConsentToggle(
-                          icon: Icons.mail_outline_rounded,
-                          title: 'Email Consent',
-                          value: emailConsent,
-                          onChanged: onEmailConsentChanged,
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
+          child: null,
         ),
         const SizedBox(height: AppSpacing.x4),
         Container(
@@ -820,7 +761,7 @@ class _PermissionsStep extends StatelessWidget {
               const SizedBox(width: AppSpacing.x3),
               Expanded(
                 child: Text(
-                  'TruMarkZ uses cryptographic signing for every consent request. Selecting Permission-Based Access ensures GDPR and SOC2 compliance for sensitive professional data.',
+                  'Permission-Based Access protects certificate and report links. It does not delay verification: verifiers can be assigned immediately.',
                   style: AppTypography.body2.copyWith(
                     color: AppColors.textSecondary,
                     height: 1.35,
@@ -959,55 +900,6 @@ class _RadioIndicator extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ConsentToggle extends StatelessWidget {
-  const _ConsentToggle({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.x4,
-        vertical: AppSpacing.x3,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FF),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, color: AppColors.textSecondary),
-          const SizedBox(width: AppSpacing.x3),
-          Expanded(
-            child: Text(
-              title,
-              style: AppTypography.body1.copyWith(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: AppColors.brandBlue,
-            activeThumbColor: Colors.white,
-          ),
-        ],
       ),
     );
   }

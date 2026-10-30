@@ -17,6 +17,7 @@ import '../../data/verification_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import 'schema_configs_page.dart';
 
 /// New brand navy for the org account page.
 const Color _profileNavy = Color(0xFF1B3387);
@@ -450,6 +451,15 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                                 selected: null,
                                 onSelected: (section) =>
                                     _openSection(section, profile),
+                                onCustomSchemas: () =>
+                                    Navigator.of(context).push<void>(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) =>
+                                            const SchemaConfigsPage(),
+                                      ),
+                                    ),
+                                onScanQr: () =>
+                                    context.push(AppRouter.qrScannerPath),
                               ),
                               SizedBox(height: s(24)),
                               _LogoutCard(
@@ -1275,7 +1285,7 @@ class _PermissionModeSheetState extends ConsumerState<_PermissionModeSheet> {
       if (!mounted) return;
       navigator.pop();
       messenger.showSnackBar(
-        SnackBar(content: Text('Consent mode set to ${_mode.label}.')),
+        SnackBar(content: Text('Access mode set to ${_mode.label}.')),
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -1362,7 +1372,7 @@ class _PermissionModeSheetState extends ConsumerState<_PermissionModeSheet> {
     final double bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Consent Mode')),
+      appBar: AppBar(title: const Text('Report Access Mode')),
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),
@@ -1858,10 +1868,25 @@ class _ManageAccountSection extends StatelessWidget {
   const _ManageAccountSection({
     required this.selected,
     required this.onSelected,
+    required this.onCustomSchemas,
+    required this.onScanQr,
   });
 
   final _ProfileSection? selected;
   final ValueChanged<_ProfileSection> onSelected;
+
+  /// Settings is the only entry point for schema management and the scanner.
+  final VoidCallback onCustomSchemas;
+  final VoidCallback onScanQr;
+
+  static const _ProfileSectionData _customSchemas = _ProfileSectionData(
+    title: 'Custom Schemas',
+    icon: Icons.schema_outlined,
+  );
+  static const _ProfileSectionData _scanQr = _ProfileSectionData(
+    title: 'Scan QR',
+    icon: Icons.qr_code_scanner_rounded,
+  );
 
   static const List<_ProfileSectionData> _sections = <_ProfileSectionData>[
     _ProfileSectionData(
@@ -1917,11 +1942,21 @@ class _ManageAccountSection extends StatelessWidget {
                 _ManageAccountRow(
                   data: _sections[index],
                   selected: selected == _sections[index].section,
-                  onTap: () => onSelected(_sections[index].section),
+                  onTap: () => onSelected(_sections[index].section!),
                 ),
-                if (index != _sections.length - 1)
-                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
               ],
+              _ManageAccountRow(
+                data: _customSchemas,
+                selected: false,
+                onTap: onCustomSchemas,
+              ),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              _ManageAccountRow(
+                data: _scanQr,
+                selected: false,
+                onTap: onScanQr,
+              ),
             ],
           ),
         ),
@@ -1932,12 +1967,13 @@ class _ManageAccountSection extends StatelessWidget {
 
 class _ProfileSectionData {
   const _ProfileSectionData({
-    required this.section,
+    this.section,
     required this.title,
     required this.icon,
   });
 
-  final _ProfileSection section;
+  /// Null for rows that open their own screen (Custom Schemas, Scan QR).
+  final _ProfileSection? section;
   final String title;
   final IconData icon;
 }
@@ -2485,7 +2521,7 @@ class _OrganisationDetailsCard extends StatelessWidget {
               ),
             ),
             _InfoRow(
-              label: 'Consent Mode',
+              label: 'Report Access Mode',
               value: permissionMode.label,
               trailing: TextButton.icon(
                 onPressed: onEditPermissionMode,

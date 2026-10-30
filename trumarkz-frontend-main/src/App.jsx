@@ -1,10 +1,10 @@
+import OrganizationDetail from '@/pages/admin/OrganizationDetail';
 import React from 'react';
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { Logo } from '@/components/ui/Logo';
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
 
 const AuthLoadingScreen = () => (
   <motion.div
@@ -12,18 +12,9 @@ const AuthLoadingScreen = () => (
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
     transition={{ duration: 0.25 }}
-    className="fixed inset-0 bg-brand-bg flex items-center justify-center"
+    className="fixed inset-0 overflow-y-auto bg-brand-bg"
   >
-    <motion.div
-      initial={{ opacity: 0, y: 12, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 28, delay: 0.08 }}
-      className="flex flex-col items-center gap-5"
-    >
-      <Logo size="lg" />
-      <LoadingSpinner size="md" />
-      <p className="text-sm text-gray-400 font-inter tracking-wide">Loading your workspace…</p>
-    </motion.div>
+    <LoadingSkeleton variant="workspace" label="Loading your workspace" />
   </motion.div>
 );
 import { AppProvider } from '@/context/AppContext';
@@ -34,6 +25,7 @@ import AuthCallback from '@/pages/public/AuthCallback';
 import AuthError from '@/pages/public/AuthError';
 import GoogleCallback from '@/pages/public/GoogleCallback';
 import DocumentUpload from '@/pages/public/DocumentUpload';
+import ConsentRequest from '@/pages/public/ConsentRequest';
 import OrgRegistration from '@/pages/org/OrgRegistration';
 import IndividualRegistration from '@/pages/individual/IndividualRegistration';
 import OTPVerification from '@/pages/org/OTPVerification';
@@ -46,7 +38,7 @@ import DownloadTemplate from '@/pages/org/DownloadTemplate';
 import CostBreakdown from '@/pages/org/CostBreakdown';
 // import CertificatePreview from '@/pages/org/CertificatePreview';
 import CreateBatch from '@/pages/org/CreateBatch';
-import BatchStatus from '@/pages/org/BatchStatus';
+import BatchStatus, { BatchStatusDetail, WarrantyStatusDetail } from '@/pages/org/BatchStatus';
 import RecordDetail from '@/pages/org/RecordDetail';
 import PermissionSettings from '@/pages/org/PermissionSettings';
 import SelectProductSector from '@/pages/org/SelectProductSector';
@@ -80,17 +72,21 @@ import IndividualCredentials from '@/pages/individual/IndividualCredentials';
 import AllSkills from '@/pages/individual/AllSkills';
 import ShareProfile from '@/pages/individual/ShareProfile';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
-import BatchMonitor from '@/pages/admin/BatchMonitor';
+import BatchMonitor, { WarrantyControlCenter } from '@/pages/admin/BatchMonitor';
+import BatchControlCenter from '@/pages/admin/BatchControlCenter';
 import Verifiers from '@/pages/admin/Verifiers';
 import SDCVerification from '@/pages/admin/SDCVerification';
 import PromoteSuperAdmin from '@/pages/admin/PromoteSuperAdmin';
 import CreateSuperAdmin from '@/pages/admin/CreateSuperAdmin';
 import AllUsersList from '@/pages/admin/AllUsersList';
+import OrganizationList from '@/pages/admin/OrganizationList';
 import EmailDrafts from '@/pages/admin/EmailDrafts';
 import ProductWarrantyAdmin from '@/pages/admin/ProductWarrantyAdmin';
 import ProductWarrantyUpload from '@/pages/org/ProductWarrantyUpload';
 import SkillsManagement from '@/pages/admin/SkillsManagement';
 import SkillVerifierUpload from '@/pages/public/SkillVerifierUpload';
+import PrivacyPolicy from '@/pages/public/PrivacyPolicy';
+import TermsOfService from '@/pages/public/TermsOfService';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -130,6 +126,12 @@ const DashboardRedirect = () => {
 
 const AnimatedRoutes = () => {
   const location = useLocation();
+  // A toast belongs to the page that triggered it — it must never still be
+  // showing on whatever page the user navigates to next (confusing: looks
+  // like a fresh error on a page that never raised it). Toaster is mounted
+  // once at the app root, so toasts survive route changes unless dismissed
+  // here explicitly.
+  React.useEffect(() => { toast.dismiss(); }, [location.pathname]);
   React.useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }, [location.pathname]);
   return (
     <AnimatePresence mode="wait">
@@ -145,7 +147,11 @@ const AnimatedRoutes = () => {
           <Route path="/auth/google/callback" element={<GoogleCallback />} />
           <Route path="/upload" element={<DocumentUpload />} />
           <Route path="/verification/manual/upload/:token" element={<DocumentUpload />} />
+          <Route path="/consent/:token" element={<ConsentRequest />} />
+          <Route path="/verification/consent/:token" element={<ConsentRequest />} />
           <Route path="/skills/verify/upload/:token" element={<SkillVerifierUpload />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
 
           {/* ── Registration routes ── */}
           <Route path="/org-registration" element={<OrgRegistration />} />
@@ -169,6 +175,8 @@ const AnimatedRoutes = () => {
           {/* <Route path="/org/certificate-preview" element={<CertificatePreview />} /> */}
           <Route path="/org/create-batch" element={<CreateBatch />} />
           <Route path="/org/batch-status" element={<ProtectedRoute><BatchStatus /></ProtectedRoute>} />
+          <Route path="/org/batch-status/warranty/:batchId" element={<ProtectedRoute><WarrantyStatusDetail /></ProtectedRoute>} />
+          <Route path="/org/batch-status/:batchId" element={<ProtectedRoute><BatchStatusDetail /></ProtectedRoute>} />
           <Route path="/org/record/:id" element={<RecordDetail />} />
 
           {/* ── Product verification flow ── */}
@@ -215,11 +223,16 @@ const AnimatedRoutes = () => {
           {/* ── Admin routes ── */}
           <Route path="/admin/dashboard" element={<ProtectedRoute><AdminRoute><AdminDashboard /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/batch-monitor" element={<ProtectedRoute><AdminRoute><BatchMonitor /></AdminRoute></ProtectedRoute>} />
+          <Route path="/admin/batch-monitor/:batchId" element={<ProtectedRoute><AdminRoute><BatchControlCenter /></AdminRoute></ProtectedRoute>} />
+          <Route path="/admin/batch-monitor/warranty/:batchId" element={<ProtectedRoute><AdminRoute><WarrantyControlCenter /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/verifiers" element={<ProtectedRoute><AdminRoute><Verifiers /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/sdc-verification" element={<ProtectedRoute><AdminRoute><SDCVerification /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/promote-super-admin" element={<ProtectedRoute><AdminRoute><PromoteSuperAdmin /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/create-super-admin" element={<ProtectedRoute><AdminRoute><CreateSuperAdmin /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/user-list" element={<ProtectedRoute><AdminRoute><AllUsersList /></AdminRoute></ProtectedRoute>} />
+          <Route path="/admin/organizations" element={<ProtectedRoute><AdminRoute><OrganizationList /></AdminRoute></ProtectedRoute>} />
+          <Route path="/admin/organizations/:orgId" element={<ProtectedRoute><AdminRoute><OrganizationDetail /></AdminRoute></ProtectedRoute>} />
+          <Route path="/admin/organizations/:orgId/edit" element={<ProtectedRoute><AdminRoute><OrganizationDetail edit /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/email-drafts" element={<ProtectedRoute><AdminRoute><EmailDrafts /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/product-warranty" element={<ProtectedRoute><AdminRoute><ProductWarrantyAdmin /></AdminRoute></ProtectedRoute>} />
           <Route path="/admin/skills-management" element={<ProtectedRoute><AdminRoute><SkillsManagement /></AdminRoute></ProtectedRoute>} />

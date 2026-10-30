@@ -23,6 +23,7 @@ import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
 import '../../../data/verification_repository.dart';
+import '../../../../../core/models/schema_config_models.dart';
 import '../widgets/schema_config_selector.dart';
 import '../../../../../core/services/batch_name_store.dart';
 import '../../../../../core/widgets/org_top_bar.dart';
@@ -58,9 +59,15 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
   PickedFile? _pickedFile;
   bool _parsingFile = false;
   bool _creating = false;
-  String? _schemaName;
-
   String get _schemaSpaceType => _mode == 'warranty' ? 'warranty' : 'product';
+
+  /// Default schema from Settings → Custom Schemas, for template columns.
+  /// Batches omit `schema_name`, so the backend applies the same default.
+  String? get _defaultSchemaLabel => SchemaConfigSelector.effectiveConfig(
+    ref,
+    _schemaSpaceType,
+    null,
+  )?.label;
   List<String> _savedTemplateHeaders = <String>[];
   String get _resolvedBatchName {
     final String typed = _batchNameController.text.trim();
@@ -260,7 +267,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
     // product_details URLs, serial_no, created_time) and Dhiway config
     // (org_id/space_id/schema_id/template_id) are never Excel columns.
     // Accept legacy 'customer_name'/'name' aliases so older files still parse.
-    final int nameIndex = header.indexWhere(
+    final int standardNameIndex = header.indexWhere(
       (String value) => requiresSku
           ? _matchesAnyHeader(value, const <String>{'productname'})
           : _matchesAnyHeader(value, const <String>{
@@ -270,7 +277,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               'name',
             }),
     );
-    final int skuIndex = header.indexWhere(
+    final int standardSkuIndex = header.indexWhere(
       (String value) => requiresSku
           ? _matchesAnyHeader(value, const <String>{'skuno', 'sku'})
           : _matchesAnyHeader(value, const <String>{
@@ -279,6 +286,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               'model',
             }),
     );
+    // With a schema, its mapped source/alias columns count too (as on web):
+    // the server applies that mapping before its own required-column check.
+    final int nameIndex = standardNameIndex >= 0 || !requiresSku
+        ? standardNameIndex
+        : _schemaColumnIndex(header, 'product_name');
+    final int skuIndex = standardSkuIndex >= 0 || !requiresSku
+        ? standardSkuIndex
+        : _schemaColumnIndex(header, 'sku_no');
     if (nameIndex < 0) {
       return const _ParsedProductRowsResult(
         rows: <_ParsedProductRow>[],
@@ -349,7 +364,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
         .toList();
     final bool requiresSku = _mode != 'warranty';
     // Same org-facing warranty column contract as the CSV parser above.
-    final int nameIndex = header.indexWhere(
+    final int standardNameIndex = header.indexWhere(
       (String value) => requiresSku
           ? _matchesAnyHeader(value, const <String>{'productname'})
           : _matchesAnyHeader(value, const <String>{
@@ -359,7 +374,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               'name',
             }),
     );
-    final int skuIndex = header.indexWhere(
+    final int standardSkuIndex = header.indexWhere(
       (String value) => requiresSku
           ? _matchesAnyHeader(value, const <String>{'skuno', 'sku'})
           : _matchesAnyHeader(value, const <String>{
@@ -368,6 +383,14 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               'model',
             }),
     );
+    // With a schema, its mapped source/alias columns count too (as on web):
+    // the server applies that mapping before its own required-column check.
+    final int nameIndex = standardNameIndex >= 0 || !requiresSku
+        ? standardNameIndex
+        : _schemaColumnIndex(header, 'product_name');
+    final int skuIndex = standardSkuIndex >= 0 || !requiresSku
+        ? standardSkuIndex
+        : _schemaColumnIndex(header, 'sku_no');
     if (nameIndex < 0) {
       return const _ParsedProductRowsResult(
         rows: <_ParsedProductRow>[],
@@ -402,6 +425,20 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       }
     }
     return _ParsedProductRowsResult(rows: parsedRows);
+  }
+
+  int _schemaColumnIndex(List<String> header, String semantic) {
+    final SchemaConfig? config = SchemaConfigSelector.effectiveConfig(
+      ref,
+      _schemaSpaceType,
+      null,
+    );
+    return withSchemaColumns(
+          <String, int>{semantic: -1},
+          header,
+          config,
+        )[semantic] ??
+        -1;
   }
 
   _ParsedProductRowsResult _parseProductRowsFromPickedFile(PickedFile file) {
@@ -554,7 +591,7 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                 },
           categoryId: _categoryId,
           isWarranty: _mode == 'warranty',
-          schemaName: _schemaName,
+          schemaName: _defaultSchemaLabel,
           onSave: (List<String> headers) {
             setState(() {
               _savedTemplateHeaders = List<String>.from(headers);
@@ -715,7 +752,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               documents: _buildWarrantyDocuments(),
               fileBytes: pickedFile.bytes,
               fileName: pickedFile.name,
-              schemaName: _schemaName,
             )
           : await repo.bulkUploadProducts(
               batchName: _resolvedBatchName,
@@ -724,7 +760,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
               verificationTypes: _resolvedVerificationTypesCsv(),
               fileBytes: pickedFile.bytes,
               fileName: pickedFile.name,
-              schemaName: _schemaName,
             );
       await ref
           .read(batchNameStoreProvider.notifier)
@@ -754,17 +789,9 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
       context.go(uri.toString(), extra: res);
     } on ApiException catch (e) {
       if (!mounted) return;
-      final String message =
-          SchemaConfigSelector.handleStaleSelection(
-            ref,
-            _schemaSpaceType,
-            e,
-            (String? v) => setState(() => _schemaName = v),
-          ) ??
-          e.message;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -886,6 +913,12 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Keeps the org's schema list loaded so the default schema is known.
+    ref.watch(
+      schemaConfigsProvider(
+        SchemaConfigSelector.providerKey(ref, _schemaSpaceType, watch: true),
+      ),
+    );
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final bool gstVerified =
         authAsync.valueOrNull?.userProfile?.gstVerified == true;
@@ -990,14 +1023,6 @@ class _ProductBulkUploadPageState extends ConsumerState<ProductBulkUploadPage> {
                                         height: 16 / 11,
                                         color: const Color(0xFF94A3B8),
                                       ),
-                                    ),
-                                    SchemaConfigSelector(
-                                      spaceType: _schemaSpaceType,
-                                      value: _schemaName,
-                                      enabled: !_creating,
-                                      padding: EdgeInsets.only(top: s(16)),
-                                      onChanged: (String? v) =>
-                                          setState(() => _schemaName = v),
                                     ),
                                     if (_checks.isNotEmpty) ...<Widget>[
                                       SizedBox(height: s(16)),

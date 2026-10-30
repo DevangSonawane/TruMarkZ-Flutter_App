@@ -517,7 +517,9 @@ class VerificationRepository {
   }) {
     return <String, dynamic>{
       'space_type': spaceType.trim().toLowerCase(),
-      'schema_variant': schemaVariant.trim(),
+      // Only Human has variants (`human_5qr`); others omit the key.
+      if (schemaVariant.trim().isNotEmpty)
+        'schema_variant': schemaVariant.trim(),
       'schema_id': schemaId.trim(),
       'space_id': spaceId.trim(),
       'label': label.trim(),

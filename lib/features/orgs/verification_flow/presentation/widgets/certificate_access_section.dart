@@ -9,6 +9,7 @@ import '../../../../../core/network/api_client.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/widgets/tmz_card.dart';
+import '../../../../../core/widgets/tmz_sheets.dart';
 import '../../../data/verification_repository.dart';
 
 /// Human Secure Certificate Access for one batch
@@ -74,29 +75,23 @@ class _CertificateAccessSectionState
 
   Future<void> _requireHolderApproval() async {
     if (_changingMode) return;
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('Require holder approval?'),
-        content: const Text(
-          'Report links for this batch will only open for your organization '
-          'or for visitors the certificate holder approves.\n\n'
-          'This also applies to report links and QR codes in certificates '
-          'already issued for this batch.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Require approval'),
-          ),
-        ],
-      ),
+    final bool confirmed = await showConfirmSheet(
+      context,
+      icon: LucideIcons.lockKeyhole,
+      tone: AppColors.brandBlue,
+      title: 'Protect this batch\'s reports?',
+      message:
+          'Only your organization and visitors the certificate holder '
+          'approves will be able to open its verification reports.',
+      bullets: const <String>[
+        'Certificates already issued for this batch are protected too — '
+            'their report links and QR codes stop opening for others.',
+        'Visitors can still ask the holder for access.',
+        'This can\'t be switched back to public afterwards.',
+      ],
+      confirmLabel: 'Protect reports',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _changingMode = true);
     try {
@@ -110,8 +105,15 @@ class _CertificateAccessSectionState
       _refresh();
       widget.onModeChanged?.call();
     } on ApiException catch (e) {
+      if (!mounted) return;
       // 409 messages explain the consent-mode conflict; show them as-is.
-      _toast(e.message);
+      await showMessageSheet(
+        context,
+        icon: LucideIcons.info,
+        tone: AppColors.warning,
+        title: 'Couldn\'t protect reports',
+        message: e.message,
+      );
     } catch (_) {
       _toast('Could not change certificate access. Please try again.');
     } finally {
@@ -121,29 +123,18 @@ class _CertificateAccessSectionState
 
   Future<void> _revoke(CertificateAccessGrant grant) async {
     if (_revoking.contains(grant.id)) return;
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('Revoke access?'),
-        content: Text(
+    final bool confirmed = await showConfirmSheet(
+      context,
+      icon: LucideIcons.userX,
+      tone: AppColors.danger,
+      title: 'Revoke access?',
+      message:
           '${grant.granteeEmail.isEmpty ? 'This visitor' : grant.granteeEmail} '
           'will no longer be able to open reports for '
           '${_holderName(grant.batchUserId)}.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Revoke'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Revoke access',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _revoking.add(grant.id));
     try {

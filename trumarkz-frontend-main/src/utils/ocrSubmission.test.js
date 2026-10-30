@@ -1,0 +1,112 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { extractOcrDraft, submitOcrDraft } from './ocrSubmission.js';
+
+const makeProgress = () => ({ response: null, completedIds: [], photoSavedIds: [], savedAttachments: {} });
+const makeDraft = () => ({ records: [1, 2, 3].map((index) => ({
+  localId: `local-${index}`, file: { name: `source-${index}.png` }, photo: { name: `photo-${index}.png` },
+  attachment: { label: 'supporting_document', file: { name: `extra-${index}.pdf` } },
+  payload: { full_name: `Corrected ${index}`, email: `user${index}@example.test`, mark_reviewed: true, custom_fields: { gender: 'Male' } },
+})) });
+
+test('review extraction reads three documents without creating a batch or uploading attachments', async () => {
+  const unexpectedWrite = async () => assert.fail('No writes before costing');
+  const api = {
+    extractOcrDocument: async () => ({ data: { document_type: 'pan', extracted: { name: 'OCR name' } } }),
+    bulkUploadDocuments: unexpectedWrite, uploadOcrPhoto: unexpectedWrite,
+    uploadHumanDocument: unexpectedWrite, updateBatchUser: unexpectedWrite,
+  };
+  const records = await extractOcrDraft(makeDraft().records.map((record) => ({ id: record.localId, file: record.file })), api);
+  assert.equal(records.length, 3);
+  assert.equal(records[0].id, 'local-1');
+  assert.equal(records[0].document_type, 'pan');
+});
+
+test('final submission creates one batch, saves all files with the correct server IDs, and preserves reviewed corrections', async () => {
+  const calls = [];
+  const draft = makeDraft();
+  const api = {
+    bulkUploadDocuments: async (files) => {
+      calls.push(['batch']);
+      return { data: { batch_id: 'batch', successful_users: files.map((file, index) => ({ id: `server-${index + 1}`, file: file.name })) } };
+    },
+    uploadOcrPhoto: async (id, file) => { calls.push(['photo', id, file.name]); return { data: { document_id: `photo-${id}` } }; },
+    uploadHumanDocument: async (id, label, file) => { calls.push(['extra', id, file.name]); return { data: { document_id: `extra-${id}`, user_id: id } }; },
+    updateBatchUser: async (id, payload) => { calls.push(['review', id, payload.full_name]); },
+  };
+  const progress = makeProgress();
+  const options = { draft, api, progress, checkpoint: () => {}, batchName: 'Approved batch' };
+  await submitOcrDraft(options);
+  await submitOcrDraft(options);
+  assert.equal(calls.filter(([kind]) => kind === 'batch').length, 1);
+  for (const kind of ['photo', 'extra', 'review']) assert.equal(calls.filter(([callKind]) => callKind === kind).length, 3);
+  assert.deepEqual(calls.filter(([kind]) => kind === 'extra').map(([, id, file]) => [id, file]),
+    [['server-1', 'extra-1.pdf'], ['server-2', 'extra-2.pdf'], ['server-3', 'extra-3.pdf']]);
+  assert.deepEqual(calls.filter(([kind]) => kind === 'review').map(([, id, name]) => [id, name]),
+    [['server-1', 'Corrected 1'], ['server-2', 'Corrected 2'], ['server-3', 'Corrected 3']]);
+});
+
+test('retrying a failed final save reuses the existing batch, photo, and attachment', async () => {
+  let batches = 0, photos = 0, extras = 0, updates = 0;
+  const draft = makeDraft();
+  draft.records = draft.records.slice(0, 1);
+  const api = {
+    bulkUploadDocuments: async () => { batches += 1; return { data: { successful_users: [{ id: 'server-1', file: 'source-1.png' }] } }; },
+    uploadOcrPhoto: async () => { photos += 1; return { data: { document_id: 'photo' } }; },
+    uploadHumanDocument: async () => { extras += 1; return { data: { document_id: 'extra' } }; },
+    updateBatchUser: async () => { updates += 1; if (updates === 1) throw new Error('Temporary failure'); },
+  };
+  const options = { draft, api, progress: makeProgress(), checkpoint: () => {}, batchName: 'Approved batch' };
+  await assert.rejects(submitOcrDraft(options), /Temporary failure/);
+  await submitOcrDraft(options);
+  assert.deepEqual([batches, photos, extras, updates], [1, 1, 1, 2]);
+});
+
+test('extraction failures stop the draft before batch creation', async () => {
+  await assert.rejects(extractOcrDraft([{ id: 'local', file: {} }], {
+    extractOcrDocument: async () => { throw new Error('OCR failed'); },
+  }), /No batch was created/);
+});
+
+test('assignment groups travel with final files in draft order and checkpoint retries never send them twice', async () => {
+  const draft = makeDraft();
+  draft.records = [draft.records[2], draft.records[0], draft.records[1]];
+  draft.assignmentGroups = [{ entryIds: ['local-1', 'local-3'], gender: 'Male' }, { entryIds: ['local-3'], nationality: 'Indian' }];
+  const progress = makeProgress(); let batches = 0, edits = 0;
+  const api = {
+    bulkUploadDocuments: async (files, name, options) => {
+      batches += 1;
+      assert.deepEqual(files.map((file) => file.name), ['source-3.png', 'source-1.png', 'source-2.png']);
+      assert.deepEqual(options.assignments, [
+        { file_indices: [1, 0], gender: 'Male' }, { file_indices: [0], nationality: 'Indian' },
+        { file_indices: [0], email: 'user3@example.test' },
+        { file_indices: [1], email: 'user1@example.test' },
+        { file_indices: [2], email: 'user2@example.test' },
+      ]);
+      // Model creation-time eligibility: ID images themselves contain no email.
+      return { data: { successful_users: files.map((file, i) => ({ id: `server-${i}`, file: file.name, email: options.assignments.find((a) => a.email && a.file_indices[0] === i).email, gender: 'Male', nationality: 'Indian' })) } };
+    },
+    uploadOcrPhoto: async () => ({ data: { document_id: 'photo' } }),
+    uploadHumanDocument: async () => ({ data: { document_id: 'extra' } }),
+    updateBatchUser: async () => { if (++edits === 1) throw new Error('Retry review only'); },
+  };
+  const request = { draft, api, progress, checkpoint() {}, options: { batchType: 'human' }, batchName: 'OCR' };
+  await assert.rejects(submitOcrDraft(request), /Retry review only/);
+  const response = await submitOcrDraft(request);
+  assert.equal(batches, 1);
+  assert.deepEqual(response.successful_users.map((user) => user.email), ['user3@example.test', 'user1@example.test', 'user2@example.test']);
+});
+
+test('Open OCR omits blank email assignments and sends each provided email only with its own file', async () => {
+  const draft = makeDraft();
+  delete draft.records[0].payload.email;
+  draft.records[1].payload.email = '  second@example.test  ';
+  draft.records[2].payload.email = '';
+  const api = {
+    bulkUploadDocuments: async (files, name, options) => {
+      assert.deepEqual(options.assignments, [{ file_indices: [1], email: 'second@example.test' }]);
+      return { data: { successful_users: [] } };
+    },
+  };
+  await assert.rejects(submitOcrDraft({ draft, api, progress: makeProgress(), checkpoint() {}, options: { credentialVisibility: 'public' } }), /No OCR records/);
+});

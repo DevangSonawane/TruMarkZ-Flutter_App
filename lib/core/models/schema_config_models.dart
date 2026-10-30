@@ -53,6 +53,26 @@ class SchemaConfig {
   bool get isSuperAdminManaged =>
       createdByRole.trim().toLowerCase() == 'super_admin';
 
+  /// For each mapped semantic field (`full_name`, `email`, …), the upload
+  /// column names that feed it under this schema: its `input_map` source plus
+  /// the aliases of the local field behind it, normalised with
+  /// [normalizeSchemaColumn]. Mirrors the web's `schemaSourceColumns` — the
+  /// backend applies this mapping before its own required-column checks.
+  Map<String, List<String>> get sourceColumns {
+    final Map<String, List<String>> out = <String, List<String>>{};
+    inputMap.forEach((String semantic, dynamic rawSource) {
+      final String source = rawSource?.toString() ?? '';
+      final Set<String> names = <String>{normalizeSchemaColumn(source)};
+      for (final SchemaLocalField f in localFields) {
+        if (f.name != source && f.name != semantic) continue;
+        names.addAll(f.aliases.map(normalizeSchemaColumn));
+      }
+      names.remove('');
+      out[semantic] = names.toList();
+    });
+    return out;
+  }
+
   factory SchemaConfig.fromJson(Map<String, dynamic> json) {
     final dynamic fieldsRaw = json['local_fields'];
     return SchemaConfig(
@@ -88,6 +108,44 @@ class SchemaConfig {
       updatedAt: (json['updated_at'] ?? '').toString(),
     );
   }
+}
+
+/// Same idea as the backend's `normalize_header`: case, surrounding space and
+/// separators don't matter (`Applicant-Name` → `applicant_name`).
+String normalizeSchemaColumn(String value) {
+  return value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+}
+
+/// Fills fields [columnIndex] could not find by their standard names with the
+/// schema's mapped source/alias columns, so a file the server accepts under
+/// that schema isn't rejected locally.
+Map<String, int> withSchemaColumns(
+  Map<String, int> columnIndex,
+  List<String> header,
+  SchemaConfig? config,
+) {
+  if (config == null) return columnIndex;
+  final Map<String, int> byName = <String, int>{};
+  for (int i = 0; i < header.length; i++) {
+    final String key = normalizeSchemaColumn(header[i]);
+    if (key.isNotEmpty) byName.putIfAbsent(key, () => i);
+  }
+  final Map<String, int> out = Map<String, int>.from(columnIndex);
+  config.sourceColumns.forEach((String semantic, List<String> names) {
+    if ((out[semantic] ?? -1) >= 0) return;
+    for (final String name in names) {
+      final int? i = byName[name];
+      if (i != null) {
+        out[semantic] = i;
+        return;
+      }
+    }
+  });
+  return out;
 }
 
 class SchemaLocalField {

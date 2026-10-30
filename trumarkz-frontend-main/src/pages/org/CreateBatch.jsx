@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -29,6 +30,9 @@ import {
   Tractor, Gem, Grid2X2, BadgeCheck, Award, Lock, Globe2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { humanEmailRequired, validateHumanExcelEmails } from '@/utils/humanEmail';
+import { SchemaConfigSelect } from '@/components/shared/SchemaConfigSelect';
+import { schemaSourceColumns } from '@/utils/schemaConfig';
 
 const parseTemplateHeaders = (value) =>
   String(value || '')
@@ -157,7 +161,9 @@ const ProductProgress = ({ step }) => {
 
 // ─── Single Human Modal ───────────────────────────────────────────────────────
 const SingleHumanModal = ({ isOpen, onClose, onSuccess, selectedIndustry, selectedVerifications, selectedPermission }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [schemaName, setSchemaName] = useState('');
   const [form, setForm] = useState({
     full_name: '', phone_number: '', email: '',
     dob: '', aadhar_number: '', pan_number: '',
@@ -180,6 +186,7 @@ const SingleHumanModal = ({ isOpen, onClose, onSuccess, selectedIndustry, select
         industry_type: getIndustryTypeList(selectedIndustry),
         verification_types: getVerificationApiTypes(selectedVerifications),
         credential_visibility: selectedPermission || 'private',
+        schema_name: schemaName,
       });
       toast.success('Human record created! Invite link generated.');
       onSuccess(data);
@@ -198,6 +205,7 @@ const SingleHumanModal = ({ isOpen, onClose, onSuccess, selectedIndustry, select
       address_line1: '', address_line2: '', address_line3: '',
       pincode: '', state: '', country: '',
     });
+    setSchemaName('');
     onClose();
   };
 
@@ -207,6 +215,8 @@ const SingleHumanModal = ({ isOpen, onClose, onSuccess, selectedIndustry, select
         <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
           <p className="text-xs text-blue-700 font-inter font-semibold">Required fields: Full Name, Phone Number, Email</p>
         </div>
+
+        <SchemaConfigSelect orgId={user?.id} spaceType="human" value={schemaName} onChange={setSchemaName} disabled={loading} />
 
         {/* Required */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -244,23 +254,25 @@ const SingleHumanModal = ({ isOpen, onClose, onSuccess, selectedIndustry, select
         </div>
       </div>
 
-      <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
+      <Modal.Footer className="flex gap-3">
         <Button variant="outline" size="md" className="flex-1" onClick={handleClose} disabled={loading}>Cancel</Button>
         <Button variant="primary" size="md" className="flex-1" onClick={handleSubmit} loading={loading} icon={CheckCircle}>
           Create &amp; Generate Invite
         </Button>
-      </div>
+      </Modal.Footer>
     </Modal>
   );
 };
 
 // ─── Single Product Modal ─────────────────────────────────────────────────────
 const SingleProductModal = ({ isOpen, onClose, onSuccess, categories, selectedCategory, selectedService }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [categoryId, setCategoryId] = useState(selectedCategory?.categoryId || '');
   const [productName, setProductName] = useState('');
   const [warrantyStatus, setWarrantyStatus] = useState(selectedService?.warrantyStatus || 'not_applicable');
   const [customFields, setCustomFields] = useState([{ key: '', value: '' }]);
+  const [schemaName, setSchemaName] = useState('');
 
   const addField = () => setCustomFields((f) => [...f, { key: '', value: '' }]);
   const removeField = (i) => setCustomFields((f) => f.filter((_, idx) => idx !== i));
@@ -292,6 +304,7 @@ const SingleProductModal = ({ isOpen, onClose, onSuccess, categories, selectedCa
         custom_fields,
         verification_types: getProductVerificationTypes(selectedService),
         credential_visibility: selectedService?.id === 'verification' ? 'public' : 'private',
+        schema_name: schemaName,
       });
       toast.success('Product record created! Invite link generated.');
       onSuccess(data);
@@ -306,6 +319,7 @@ const SingleProductModal = ({ isOpen, onClose, onSuccess, categories, selectedCa
   const handleClose = () => {
     setCategoryId(selectedCategory?.categoryId || ''); setProductName(''); setWarrantyStatus(selectedService?.warrantyStatus || 'not_applicable');
     setCustomFields([{ key: '', value: '' }]);
+    setSchemaName('');
     onClose();
   };
 
@@ -315,6 +329,14 @@ const SingleProductModal = ({ isOpen, onClose, onSuccess, categories, selectedCa
         <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
           <p className="text-xs text-blue-700 font-inter font-semibold">Required: Category &amp; Product Name. Add custom fields as needed.</p>
         </div>
+
+        <SchemaConfigSelect
+          orgId={user?.id}
+          spaceType={warrantyStatus !== 'not_applicable' ? 'warranty' : 'product'}
+          value={schemaName}
+          onChange={setSchemaName}
+          disabled={loading}
+        />
 
         {/* Category */}
         {selectedCategory?.categoryId ? (
@@ -384,12 +406,12 @@ const SingleProductModal = ({ isOpen, onClose, onSuccess, categories, selectedCa
         </div>
       </div>
 
-      <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
+      <Modal.Footer className="flex gap-3">
         <Button variant="outline" size="md" className="flex-1" onClick={handleClose} disabled={loading}>Cancel</Button>
         <Button variant="primary" size="md" className="flex-1" onClick={handleSubmit} loading={loading} icon={CheckCircle}>
           Create &amp; Generate Invite
         </Button>
-      </div>
+      </Modal.Footer>
     </Modal>
   );
 };
@@ -423,9 +445,12 @@ const InviteResultCard = ({ result, onDismiss }) => (
 
 // ─── Human Bulk Upload Panel ───────────────────────────────────────────────────
 const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, selectedPermission }) => {
+  const { user } = useAuth();
   const fileInputRef = useRef(null);
   const [batchName, setBatchName] = useState('');
   const [description, setDescription] = useState('');
+  const [schemaName, setSchemaName] = useState('');
+  const [schemaConfig, setSchemaConfig] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -438,7 +463,7 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
     const file = e.target.files?.[0];
     if (!file) return;
     const ext = file.name.split('.').pop().toLowerCase();
-    if (!['xlsx', 'xls'].includes(ext)) { toast.error('Only .xlsx or .xls files are accepted'); return; }
+    if (!['xlsx', 'csv'].includes(ext)) { toast.error('Only .xlsx or .csv files are accepted'); return; }
     setSelectedFile(file);
     setUploadResult(null);
   };
@@ -448,6 +473,13 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
     if (!selectedFile) { toast.error('Please select an Excel file'); return; }
     setLoading(true); setUploadProgress(0);
     try {
+      const workbook = XLSX.read(await selectedFile.arrayBuffer(), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+      // A schema's mapped email column counts; with a schema the server makes the final check.
+      validateHumanExcelEmails(rows, selectedPermission, {
+        emailColumns: schemaSourceColumns(schemaConfig).email || [],
+        schemaApplies: !!schemaConfig,
+      });
       const { data } = await verificationAPI.bulkUpload(
         selectedFile,
         batchName.trim(),
@@ -457,6 +489,7 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
           industryType: getIndustryTypeList(selectedIndustry),
           verificationTypes: getVerificationApiTypes(selectedVerifications),
           credentialVisibility: selectedPermission || 'private',
+          schemaName,
         },
         setUploadProgress
       );
@@ -464,7 +497,7 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
       onResult && onResult(data);
       toast.success(`Uploaded ${data.total_uploaded} records. Batch: ${data.batch_id}`);
     } catch (err) {
-      toast.error(getApiError(err, 'Batch upload failed. Please try again.'));
+      toast.error(getApiError(err, err?.message || 'Batch upload failed. Please try again.'));
     } finally {
       setLoading(false); setUploadProgress(0);
     }
@@ -475,7 +508,8 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
     try {
       const { data } = await verificationAPI.generateHumanTemplate(
         getHumanTemplateHeaders(selectedVerifications),
-        getVerificationApiTypes(selectedVerifications)
+        getVerificationApiTypes(selectedVerifications),
+        schemaName
       );
       triggerBlobDownload(data, 'trumarkz-human-template.xlsx');
       toast.success('Template downloaded.');
@@ -529,6 +563,8 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
                             <th className="text-left p-3 text-gray-500 font-medium">#</th>
                             <th className="text-left p-3 text-gray-500 font-medium">Name</th>
                             <th className="text-left p-3 text-gray-500 font-medium">Email</th>
+                            <th className="text-left p-3 text-gray-500 font-medium">Gender</th>
+                            <th className="text-left p-3 text-gray-500 font-medium">Nationality</th>
                             <th className="text-left p-3 text-gray-500 font-medium">Invite Link</th>
                           </tr>
                         </thead>
@@ -538,6 +574,8 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
                               <td className="p-3 text-gray-400">{i + 1}</td>
                               <td className="p-3 font-medium text-brand-dark">{u.full_name}</td>
                               <td className="p-3 text-gray-600">{u.email}</td>
+                              <td className="p-3 text-gray-600">{u.gender ?? '—'}</td>
+                              <td className="p-3 text-gray-600">{u.nationality ?? '—'}</td>
                               <td className="p-3">
                                 <a href={u.invite_link} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:underline truncate block max-w-[180px]">{u.invite_link}</a>
                               </td>
@@ -590,7 +628,8 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
   return (
     <div className="space-y-5">
       <Input label="Batch Name *" placeholder="e.g. Driver Verification - May 2026" value={batchName} onChange={(e) => setBatchName(e.target.value)} icon={Layers} />
-      <div>
+      <SchemaConfigSelect orgId={user?.id} spaceType="human" value={schemaName} onChange={setSchemaName} onConfigChange={setSchemaConfig} disabled={loading} />
+<div>
         <label className="block text-sm font-medium text-gray-700 font-inter mb-1">Description (optional)</label>
         <textarea
           className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-inter focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-none"
@@ -603,8 +642,7 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
           <div>
             <p className="text-xs font-semibold text-blue-700 font-inter mb-1">Required Excel columns</p>
             <p className="text-xs text-blue-600 font-inter">
-              <span className="font-semibold">full_name</span>, <span className="font-semibold">email</span>, <span className="font-semibold">phone_number</span>
-              {' '}plus optional verification-specific columns. The backend template also appends the locked <span className="font-semibold">Photo</span> column.
+              full_name, dob, gender, nationality{humanEmailRequired(selectedPermission) ? ', email' : ''}. Other verification-specific columns remain optional. The backend template also appends the locked Photo column.
             </p>
           </div>
           <Button variant="outline" size="sm" icon={Download} onClick={handleGenerateTemplate} loading={templateLoading}>
@@ -613,8 +651,8 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 font-inter mb-2">Excel File (.xlsx / .xls) *</label>
-        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileSelect} className="hidden" />
+        <label className="block text-sm font-medium text-gray-700 font-inter mb-2">Excel / CSV File (.xlsx / .csv) *</label>
+        <input ref={fileInputRef} type="file" accept=".xlsx,.csv" onChange={handleFileSelect} className="hidden" />
         {selectedFile ? (
           <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-200">
             <FileSpreadsheet size={22} className="text-green-600 flex-shrink-0" />
@@ -634,7 +672,7 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
           >
             <Upload size={24} className="text-gray-400" />
             <span className="text-sm text-gray-500 font-inter">Click to select your Excel file</span>
-            <span className="text-xs text-gray-400 font-inter">.xlsx or .xls</span>
+            <span className="text-xs text-gray-400 font-inter">.xlsx or .csv</span>
           </button>
         )}
       </div>
@@ -657,11 +695,13 @@ const HumanBulkPanel = ({ onResult, selectedIndustry, selectedVerifications, sel
 
 // ─── Product Bulk Upload Panel ─────────────────────────────────────────────────
 const ProductBulkPanel = ({ categories, onResult, selectedCategory, selectedService, selectedPermission }) => {
+  const { user } = useAuth();
   const fileInputRef = useRef(null);
   const [batchName, setBatchName] = useState('');
   const [description, setDescription] = useState('');
   const [numberOfUnits, setNumberOfUnits] = useState('');
   const [visibility, setVisibility] = useState(selectedPermission || 'private');
+  const [schemaName, setSchemaName] = useState('');
   const [templateLoading, setTemplateLoading] = useState(false);
   // warrenty_report / product_details are never Excel columns — both are
   // document-URL destinations, attached post-batch via
@@ -723,6 +763,7 @@ const ProductBulkPanel = ({ categories, onResult, selectedCategory, selectedServ
           batchType: 'product',
           verificationTypes: getProductVerificationTypes(selectedService),
           credentialVisibility: visibility,
+          schemaName,
         },
         setUploadProgress
       );
@@ -750,7 +791,9 @@ const ProductBulkPanel = ({ categories, onResult, selectedCategory, selectedServ
       const normalizedHeaders = headers.map((header) =>
         header.trim().toLowerCase().replace(/\s+/g, '_')
       );
-      const { data } = await verificationAPI.generateProductTemplate(categoryId, normalizedHeaders);
+      // generateProductTemplate takes (headers, schemaName). This used to pass categoryId as the
+      // headers, so the server template always failed and the local fallback was used instead.
+      const { data } = await verificationAPI.generateProductTemplate(normalizedHeaders, schemaName);
       triggerBlobDownload(data, `${batchName.trim() || 'product-template'}.xlsx`);
       toast.success('Template downloaded.');
     } catch (err) {
@@ -837,6 +880,13 @@ const ProductBulkPanel = ({ categories, onResult, selectedCategory, selectedServ
   return (
     <div className="space-y-5">
       <Input label="Batch Name *" placeholder="e.g. Warranty Cards - May 2026" value={batchName} onChange={(e) => setBatchName(e.target.value)} icon={Layers} />
+      <SchemaConfigSelect
+        orgId={user?.id}
+        spaceType={selectedService?.id === 'warranty' ? 'warranty' : 'product'}
+        value={schemaName}
+        onChange={setSchemaName}
+        disabled={loading}
+      />
       <div>
         <label className="block text-sm font-medium text-gray-700 font-inter mb-1">Category *</label>
         {selectedCategory?.categoryId ? (
@@ -1096,11 +1146,11 @@ export const CreateBatch = () => {
         <div className="w-full mx-auto lg:max-w-none">
           <PageHeader title="Create Verification Batch" subtitle="Start a verification flow for people or products" />
           <div className="mx-auto mt-10 max-w-md rounded-2xl border border-amber-100 bg-amber-50 p-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100">
-              <AlertTriangle size={22} className="text-amber-500" />
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100">
+              <AlertTriangle size={18} className="text-amber-600" />
             </div>
-            <p className="mt-4 font-sora text-base font-semibold text-amber-800">GST Verification Required</p>
-            <p className="mt-1.5 font-inter text-sm text-amber-700">
+            <p className="mt-4 font-sora text-base font-semibold text-amber-900">GST Verification Required</p>
+            <p className="mt-1.5 font-inter text-sm leading-6 text-amber-700">
               {user?.gstin
                 ? "Your GSTIN hasn't been verified yet. Verify it from your profile to start creating verification batches."
                 : "Add and verify your organization's GSTIN from your profile to start creating verification batches."}
@@ -1189,7 +1239,7 @@ export const CreateBatch = () => {
           />
 
           {categoriesLoading ? (
-            <Card className="p-10 text-center text-sm text-gray-400 font-inter">Loading product sectors...</Card>
+            <LoadingSkeleton variant="cards" rows={3} label="Loading product sectors" />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
               {productSectors.map((sector, index) => (
@@ -1492,7 +1542,7 @@ export const CreateBatch = () => {
           {isHuman
             ? <HumanBulkPanel onResult={() => {}} selectedIndustry={selectedIndustry} selectedVerifications={selectedVerifications} selectedPermission={selectedPermission} />
             : (categoriesLoading
-              ? <div className="py-10 text-center text-sm text-gray-400 font-inter">Loading categories…</div>
+              ? <LoadingSkeleton variant="form" label="Loading categories" />
               : <ProductBulkPanel categories={categories} onResult={() => {}} selectedCategory={selectedProductSector} selectedService={activeProductService} selectedPermission={selectedPermission} />
             )
           }

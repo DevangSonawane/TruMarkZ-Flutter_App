@@ -1,5 +1,7 @@
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -12,14 +14,33 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { verificationAPI, verifiersAPI, sdcAPI, adminAPI, getApiError, triggerBlobDownload } from '@/services/api';
-import { GenerateSDCModal, CertificateDetailModal } from '@/pages/admin/SDCVerification';
-import { normalizeDhiwayDetails, resolveDhiwaySpaceId } from '@/utils/dhiway';
+import { GenerateSDCModal } from '@/pages/admin/SDCVerification';
+import { TablePagination } from '@/components/shared/TablePagination';
+import { normalizeDhiwayDetails, resolveDhiwaySpaceId, batchSdcSpaceId } from '@/utils/dhiway';
+import { pendingManualUsers } from '@/utils/pendingManualVerifications';
+import { consentAllowsProcessing } from '@/utils/consent';
+import { batchMatchesDate, batchDateError, batchDatePresets } from '@/utils/batchFilters';
+import { useBatchVerificationFilter } from '@/hooks/useBatchVerificationFilter';
 import {
-  ArrowRight, Building2, Calendar, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock, Download, Eye, Info,
-  Layers, Mail, MoreVertical, Package, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, Trash2, User, Users, X, XCircle, Zap,
+  AlertCircle, AlertTriangle, ArrowRight, Building2, Calendar, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock, Download, Eye, FileText, Info,
+  Layers, Mail, MoreVertical, Package, Plus, RefreshCw, Save, Search, Send, ShieldCheck, Sparkles, Trash2, User, Users, X, XCircle, Zap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+
+// Gmail's own multi-colour mark — no icon pack in this codebase ships it
+// (lucide's Mail is a generic outline envelope), so it's inlined here once
+// and reused wherever a "this goes out by email" action wants the real logo
+// instead of a generic icon.
+const GmailIcon = ({ className }) => (
+  <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+    <path fill="#4caf50" d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z" />
+    <path fill="#1e88e5" d="M3,16.2l3.614,1.71L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z" />
+    <polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17" />
+    <path fill="#c62828" d="M3,12.298V16.2l10,7.5V11.2L9.876,8.859C9.132,8.301,8.228,8,7.298,8h0 C4.924,8,3,9.924,3,12.298z" />
+    <path fill="#fbc02d" d="M45,12.298V16.2l-10,7.5V11.2l3.124-2.341C38.868,8.301,39.772,8,40.702,8h0 C43.076,8,45,9.924,45,12.298z" />
+  </svg>
+);
 
 const MANUAL_UPLOAD_LINK_PLACEHOLDER = '__TRUMARKZ_UPLOAD_LINK__';
 
@@ -70,14 +91,24 @@ const buildHtmlBody = (name, uploadUrl) => `<!DOCTYPE html>
 // never be tracked here; sharedWithOrg comes from normaliseApiBatch instead.
 const BATCH_WORKFLOW_KEY = 'trumarkz_admin_batch_workflow_mock';
 
-const statusBadge = (status) => {
+// Accepts either the internal `verification_status` (approved/rejected/
+// pending — unchanged, still the source of truth for backend logic) or the
+// newer, purely-presentational `overall_status_label` (verified/
+// partially_verified/rejected/pending) — callers should prefer the latter
+// for display when it's present, per `record.overall_status_label ||
+// record.verification_status`, but never feed it back into any eligibility
+// check.
+export const statusBadge = (status) => {
   if (status === 'approved') return { variant: 'success', label: 'Approved', icon: CheckCircle };
   if (status === 'verified') return { variant: 'success', label: 'Verified', icon: CheckCircle };
+  // A user with e.g. Police:rejected + Driving License:approved must read as
+  // "Partially Verified", never fall through to "Rejected" below.
+  if (status === 'partially_verified') return { variant: 'partial', label: 'Partially Verified', icon: AlertCircle };
   if (status === 'rejected' || status === 'failed') return { variant: 'error',   label: 'Rejected', icon: XCircle };
   return                            { variant: 'pending', label: 'Pending',  icon: Clock };
 };
 
-const batchStatusMeta = {
+export const batchStatusMeta = {
   pending:                   { label: 'Pending',                   badge: 'warning', tone: 'bg-orange-50 text-orange-700 border-orange-100' },
   processing:                { label: 'Processing',                badge: 'info',    tone: 'bg-blue-50 text-brand-blue border-blue-100' },
   verification_in_progress: { label: 'Verification In Progress',  badge: 'info',    tone: 'bg-blue-50 text-brand-blue border-blue-100' },
@@ -88,7 +119,7 @@ const batchStatusMeta = {
   approved:                  { label: 'Approved',                  badge: 'success', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
 };
 
-const WORKFLOW_STEPS = [
+export const WORKFLOW_STEPS = [
   { id: 'pending',                   label: 'Pending',     icon: Eye },
   { id: 'processing',                label: 'Processing',  icon: Mail },
   { id: 'verification_in_progress',  label: 'Verifying',   icon: ShieldCheck },
@@ -131,10 +162,21 @@ const summarizeRecordCounts = (records = []) => (
 const hasRenderableRecords = (batch) =>
   !!batch && (batch.total > 0 || batch.records.length > 0);
 
-const isProductRecord = (record) =>
-  record?.entity_type === 'product' || !!record?.product_name || !!record?.category_name || !!record?.custom_fields;
+// batchType (the batch's own real batch_type, e.g. from GET /verification/
+// batches/{batch_id}) is the authoritative signal when known — trust it
+// first. Per-record sniffing (falling back on product_name/category_name/
+// custom_fields) is only a guess for when batchType isn't available yet,
+// and !!record?.custom_fields is a real truthy-object trap on its own: it's
+// `true` for ANY non-null object, so a Human record with completely normal
+// custom_fields (license_number, police_verification, etc.) was always
+// misread as "Product" — confirmed live (batch_type: "human", still shown
+// as "Product" in this table) — without batchType ever being checked first.
+export const isProductRecord = (record, batchType) => {
+  if (batchType) return batchType === 'product';
+  return record?.entity_type === 'product' || !!record?.product_name || !!record?.category_name || !!record?.custom_fields;
+};
 
-const recordTitle = (record) =>
+export const recordTitle = (record) =>
   record.product_name || record.full_name || record.email || record.id || record.user_id || record.entity_id || 'Verification record';
 
 const normalizeMatchKey = (value) => String(value || '').trim().toLowerCase();
@@ -173,7 +215,7 @@ const getCertificateSerialNumber = (rec) =>
 // (GET /sdc/records/{publicId}) that credentialSubject.product_id IS present
 // there — same shape as serial_no above — so that's the reliable key for
 // products, at the cost of one extra request per unmatched candidate.
-const getCertificateProductId = (rec) =>
+export const getCertificateProductId = (rec) =>
   rec?.credential?.credentialSubject?.product_id ||
   rec?.credentialSubject?.product_id ||
   rec?.record?.credentialSubject?.product_id ||
@@ -184,7 +226,7 @@ const getCertificateProductId = (rec) =>
 // come from slugifying verification_type_name (e.g. "police_verification" →
 // "Police Verification"); using the label here would show "Manual" as the
 // title for every single report.
-const formatVerifTypeLabel = (report) =>
+export const formatVerifTypeLabel = (report) =>
   report.verification_type_name?.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) ||
   report.verification_type_label ||
   'Manual Verification';
@@ -224,6 +266,9 @@ const normaliseApiBatch = (b) => {
     batchType: b.batch_type || null,
     latestCreatedAt: createdAt,
     sdcInfo: b.verification_progress?.sdc || null,
+    // The list endpoint carries no verification_progress; sdc_space_id is the server's own answer
+    // for where this batch's certificates live (recorded space, else frozen schema space).
+    sdcSpaceId: b.sdc_space_id || null,
     // Real, persisted sharing state from the backend (Batch.shared_with_org)
     // — the actual security gate for certificate visibility, not a local
     // notify-action. See handleSendToOrganization / shareWithOrganization.
@@ -233,105 +278,183 @@ const normaliseApiBatch = (b) => {
   };
 };
 
-// ── Smart Send — Verifier Row ─────────────────────────────────────────────────
-const VerifierRow = ({ row, ri, allVerifiers, batchTotal, countBefore, onUpdate, onRemove }) => {
-  const [showTemplate, setShowTemplate] = useState(false);
+// `specialization` on a verifier object is a comma-joined string of every
+// verification type name they support (confirmed live — this is what was
+// dumping as one giant unreadable line in the dropdown before), so its
+// actual count is the real "N verification types available" figure, not a
+// guess scoped to just this batch's needed types.
+const getVerifierTypeCount = (v) =>
+  String(v?.specialization || '').split(',').map((s) => s.trim()).filter(Boolean).length;
+
+// ── Smart Send — Verifier Table Row ─────────────────────────────────────────
+// A row's own email_subject/email_body only matter once `customized` is set
+// (the admin clicked "Customize Template" and actually edited it in the
+// drawer) — until then it mirrors the single shared `defaultTemplate` from
+// the modal. The row itself never shows an inline editor — clicking
+// "Customize Template" just tells the parent to open the one template
+// drawer pointed at this row instead, so there's only ever a single editor
+// visible at a time.
+const VERIFIER_ROW_GRID = 'grid-cols-[28px_minmax(0,1.7fr)_140px_100px_150px_28px]';
+
+const VerifierRow = ({ index, row, typeLabel, allVerifiers, batchTotal, countBefore, canRemove, isEditing, onCustomize, onUpdate, onRemove }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [verifierSearch, setVerifierSearch] = useState('');
+  const [menuPos, setMenuPos] = useState(null);
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  // The row list this lives in scrolls (`overflow-y-auto`), which clips any
+  // absolutely-positioned child to that scroll viewport — the dropdown was
+  // getting cut off / squashed against the scrollbar instead of floating
+  // above the table. Portal it to <body> and position it with fixed coords
+  // from the trigger's own rect instead, recomputed on open and kept in
+  // sync while the ancestor scrolls or the viewport resizes.
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const updatePos = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setMenuPos({ top: rect.bottom, left: rect.left, width: rect.width });
+    };
+    updatePos();
+    window.addEventListener('scroll', updatePos, true);
+    window.addEventListener('resize', updatePos);
+    return () => {
+      window.removeEventListener('scroll', updatePos, true);
+      window.removeEventListener('resize', updatePos);
+    };
+  }, [dropdownOpen]);
 
   const verifierInfo = allVerifiers.find((v) => v.id === row.verifier_id);
+  const typeCount = verifierInfo ? getVerifierTypeCount(verifierInfo) : 0;
+  // Any of these fields being a non-string (a number, an object — seen
+  // enough surprising API shapes in this app to not assume) would throw on
+  // .toLowerCase() and blank the whole page with an uncaught render error,
+  // so coerce with String(...) first rather than trusting they're strings.
+  const searchQuery = verifierSearch.trim().toLowerCase();
+  const filteredVerifiers = searchQuery
+    ? allVerifiers.filter((v) =>
+        [v.name, v.email, v.organization, v.specialization]
+          .map((f) => (f == null ? '' : String(f)))
+          .some((f) => f.toLowerCase().includes(searchQuery))
+      )
+    : allVerifiers;
   const count     = parseInt(row.count) || 0;
-  const available = batchTotal - countBefore;   // slots left for this row and beyond
+  const available = batchTotal - countBefore;   // slots left for this row and beyond, within its own type
   const isOver    = count > available;
-  const rangeStart = countBefore + 1;
-  const rangeEnd   = countBefore + count;
+
+  const status = count === 0 ? 'pending' : isOver ? 'over' : 'complete';
+  const statusMeta = {
+    pending:  { label: 'Pending',    tone: 'bg-amber-50 text-amber-600' },
+    complete: { label: 'Complete',   tone: 'bg-emerald-50 text-emerald-600' },
+    over:     { label: 'Over Limit', tone: 'bg-red-50 text-red-600' },
+  }[status];
+
+  const menuRef = useRef(null);
 
   useEffect(() => {
     if (!dropdownOpen) return;
     const handler = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false);
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        menuRef.current && !menuRef.current.contains(e.target)
+      ) setDropdownOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [dropdownOpen]);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-3">
+    <div className={`grid ${VERIFIER_ROW_GRID} items-start gap-x-2 px-3 py-2 transition-colors hover:bg-gray-50/60`}>
 
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-[10px] font-bold text-white font-inter">{ri + 1}</span>
-        <p className="flex-1 text-xs font-semibold text-brand-dark font-inter">Verifier {ri + 1}</p>
-        {count > 0 && !isOver && (
-          <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[10px] font-semibold text-brand-blue font-inter">
-            {count} user{count !== 1 ? 's' : ''}
-          </span>
-        )}
-        {isOver && (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-600 font-inter">over limit</span>
-        )}
-        <button type="button" onClick={() => onRemove(row._key)}
-          className="rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-          <Trash2 size={12} />
-        </button>
-      </div>
+      {/* # */}
+      <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand-blue text-[10px] font-bold text-white font-inter">{index + 1}</span>
 
       {/* Verifier picker */}
-      <div>
-        <label className="block text-[11px] font-medium text-gray-500 font-inter mb-1">Select Verifier *</label>
-        <div ref={dropdownRef}>
+      <div className="min-w-0">
+        <div ref={dropdownRef} className="relative">
           <button
+            ref={triggerRef}
             type="button"
-            onClick={() => setDropdownOpen((p) => !p)}
-            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-inter text-left transition-colors focus:outline-none ${dropdownOpen ? 'rounded-t-xl border border-b-0 border-brand-blue/40 bg-white' : 'rounded-xl border border-gray-200 bg-white hover:border-brand-blue/40'}`}
+            onClick={() => {
+              setDropdownOpen((p) => !p);
+              setVerifierSearch('');
+              // Focus the search box the moment it mounts, same tick as open.
+              requestAnimationFrame(() => searchInputRef.current?.focus());
+            }}
+            className={`flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-sm font-inter text-left transition-colors focus:outline-none ${dropdownOpen ? 'rounded-lg border border-brand-blue/40 bg-white ring-2 ring-brand-blue/10' : 'rounded-lg border border-gray-200 bg-white hover:border-brand-blue/40'}`}
           >
-            <span className={verifierInfo ? 'text-brand-dark font-medium' : 'text-gray-400'}>
+            <span className={`truncate ${verifierInfo ? 'text-brand-dark font-medium' : 'text-gray-400'}`}>
               {verifierInfo
                 ? `${verifierInfo.name || verifierInfo.email}${verifierInfo.organization ? ` — ${verifierInfo.organization}` : ''}`
-                : '— Choose a verifier —'}
+                : '— Select a verifier —'}
             </span>
-            <ChevronLeft size={14} className="shrink-0 text-gray-400" style={{ transform: dropdownOpen ? 'rotate(90deg)' : 'rotate(-90deg)' }} />
+            <Search size={13} className="shrink-0 text-gray-400" />
           </button>
-          {dropdownOpen && (
-            <div className="rounded-b-xl border border-t-0 border-brand-blue/40 bg-white overflow-hidden">
-              <button type="button" onClick={() => { onUpdate(row._key, { verifier_id: '' }); setDropdownOpen(false); }}
-                className="w-full px-3 py-2 text-left text-sm font-inter text-gray-400 hover:bg-gray-50 transition-colors border-b border-gray-100">
-                — Choose a verifier —
-              </button>
-              <div className="max-h-36 overflow-y-auto divide-y divide-gray-50">
-                {allVerifiers.map((v) => (
-                  <button key={v.id} type="button"
-                    onClick={() => { onUpdate(row._key, { verifier_id: v.id }); setDropdownOpen(false); }}
-                    className={`w-full px-3 py-2.5 text-left transition-colors hover:bg-blue-50 ${row.verifier_id === v.id ? 'bg-blue-50' : ''}`}>
-                    <p className="text-sm font-semibold text-brand-dark font-inter leading-tight">
-                      {v.name || v.email}
-                      {row.verifier_id === v.id && <span className="ml-1.5 text-[10px] font-bold text-brand-blue">✓</span>}
-                    </p>
-                    {(v.organization || v.specialization) && (
-                      <p className="text-[10px] text-gray-400 font-inter mt-0.5">{[v.organization, v.specialization].filter(Boolean).join(' · ')}</p>
-                    )}
-                  </button>
-                ))}
+          {dropdownOpen && menuPos && createPortal(
+            <div
+              ref={menuRef}
+              style={{ position: 'fixed', top: menuPos.top + 4, left: menuPos.left, width: Math.max(menuPos.width, 240) }}
+              className="z-[60] rounded-lg border border-brand-blue/40 bg-white shadow-xl overflow-hidden"
+            >
+              <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
+                <Search size={13} className="shrink-0 text-gray-400" />
+                <input
+                  ref={searchInputRef}
+                  value={verifierSearch}
+                  onChange={(e) => setVerifierSearch(e.target.value)}
+                  placeholder="Search verifiers"
+                  className="w-full text-sm font-inter text-brand-dark outline-none placeholder:text-gray-400"
+                />
               </div>
-            </div>
+              <div className="max-h-40 overflow-y-auto divide-y divide-gray-50">
+                {!verifierSearch.trim() && row.verifier_id && (
+                  <button type="button" onClick={() => { onUpdate(row._key, { verifier_id: '' }); setDropdownOpen(false); }}
+                    className="w-full px-3 py-2 text-left text-xs italic text-gray-400 font-inter hover:bg-gray-50 transition-colors">
+                    Clear selection
+                  </button>
+                )}
+                {filteredVerifiers.length === 0 ? (
+                  <p className="px-3 py-3 text-center text-xs text-gray-400 font-inter">No verifiers match "{verifierSearch}"</p>
+                ) : (
+                  filteredVerifiers.map((v) => {
+                    const vCount = getVerifierTypeCount(v);
+                    return (
+                      <button key={v.id} type="button"
+                        onClick={() => { onUpdate(row._key, { verifier_id: v.id }); setDropdownOpen(false); }}
+                        className={`w-full px-3 py-2.5 text-left transition-colors hover:bg-blue-50 ${row.verifier_id === v.id ? 'bg-blue-50' : ''}`}>
+                        <p className="text-sm font-semibold text-brand-dark font-inter leading-tight">
+                          {v.name || v.email}
+                          {row.verifier_id === v.id && <span className="ml-1.5 text-[10px] font-bold text-brand-blue">✓</span>}
+                        </p>
+                        <p className="text-[11px] text-gray-400 font-inter mt-0.5">
+                          {vCount} verification type{vCount !== 1 ? 's' : ''} available
+                        </p>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>,
+            document.body
           )}
         </div>
-        {verifierInfo?.email && <p className="mt-1 text-[11px] text-gray-400 font-inter">{verifierInfo.email}</p>}
+        {verifierInfo?.email && <p className="mt-0.5 truncate text-[10px] text-gray-400 font-inter">{verifierInfo.email}</p>}
+        {verifierInfo && (
+          <p className="truncate text-[10px] text-gray-400 font-inter">
+            {typeCount} verification type{typeCount !== 1 ? 's' : ''} available
+          </p>
+        )}
+        <p className="truncate text-[10px] font-semibold text-brand-blue/70 font-inter">{typeLabel}</p>
       </div>
 
-      {/* User count */}
+      {/* Users to assign */}
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-[11px] font-medium text-gray-500 font-inter">Users to assign *</label>
-          <span className={`text-[11px] font-inter ${isOver ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-            {isOver ? `only ${available} available` : `${available} of ${batchTotal} remaining`}
-          </span>
-        </div>
-        <div className={`flex items-center rounded-xl border overflow-hidden ${isOver ? 'border-red-300' : 'border-gray-200'}`}>
+        <div className={`flex items-center rounded-lg border overflow-hidden ${isOver ? 'border-red-300' : 'border-gray-200'}`}>
           <button type="button"
             onClick={() => onUpdate(row._key, { count: String(Math.max(0, count - 1)) })}
             disabled={count === 0}
-            className="px-4 py-2.5 text-gray-400 hover:bg-gray-50 hover:text-brand-dark transition-colors disabled:opacity-30 text-base select-none font-medium">
+            className="px-2 py-1.5 text-gray-400 hover:bg-gray-50 hover:text-brand-dark transition-colors disabled:opacity-30 text-sm select-none font-medium">
             −
           </button>
           <input
@@ -340,106 +463,178 @@ const VerifierRow = ({ row, ri, allVerifiers, batchTotal, countBefore, onUpdate,
             max={batchTotal}
             value={row.count}
             onChange={(e) => onUpdate(row._key, { count: e.target.value })}
-            className={`flex-1 py-2.5 text-sm font-bold font-inter text-center border-x border-gray-100 focus:outline-none bg-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${isOver ? 'text-red-500' : count > 0 ? 'text-brand-blue' : 'text-gray-400'}`}
+            className={`w-full min-w-0 py-1.5 text-sm font-bold font-inter text-center border-x border-gray-100 focus:outline-none bg-transparent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${isOver ? 'text-red-500' : count > 0 ? 'text-brand-blue' : 'text-gray-400'}`}
             placeholder="0"
           />
           <button type="button"
             onClick={() => onUpdate(row._key, { count: String(count + 1) })}
             disabled={available <= 0}
-            className="px-4 py-2.5 text-gray-400 hover:bg-gray-50 hover:text-brand-dark transition-colors disabled:opacity-30 text-base select-none font-medium">
+            className="px-2 py-1.5 text-gray-400 hover:bg-gray-50 hover:text-brand-dark transition-colors disabled:opacity-30 text-sm select-none font-medium">
             +
           </button>
         </div>
-        {count > 0 && !isOver && rangeEnd <= batchTotal && (
-          <p className="mt-1 text-[11px] text-gray-400 font-inter">
-            {count === 1 ? `User ${rangeStart}` : `Users ${rangeStart}–${rangeEnd}`} of {batchTotal}
-          </p>
-        )}
+        {isOver && <p className="mt-0.5 text-[10px] font-medium text-red-500 font-inter">only {available} available</p>}
       </div>
 
-      {/* Email template */}
-      <button type="button" onClick={() => setShowTemplate((p) => !p)}
-        className="flex items-center gap-1.5 text-xs text-brand-blue font-inter hover:opacity-70">
-        <Mail size={11} />{showTemplate ? 'Hide email template' : 'Customize email template'}
-      </button>
+      {/* Assigned / Remaining */}
+      <div className="pt-1">
+        <p className="text-sm font-bold text-brand-dark font-inter">{count}/{batchTotal}</p>
+        <span className={`mt-0.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold font-inter ${statusMeta.tone}`}>{statusMeta.label}</span>
+      </div>
 
-      {showTemplate && (
-        <div className="space-y-2">
-          <div>
-            <label className="block text-[11px] font-medium text-gray-500 font-inter mb-1">Subject *</label>
-            <input value={row.email_subject} onChange={(e) => onUpdate(row._key, { email_subject: e.target.value })}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-inter focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-gray-500 font-inter mb-1">Body *</label>
-            <textarea rows={4} value={row.email_body} onChange={(e) => onUpdate(row._key, { email_body: e.target.value })}
-              className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm font-inter focus:outline-none focus:ring-2 focus:ring-brand-blue/30" />
-            <p className="mt-1 text-[10px] text-gray-400 font-inter">The Excel file and upload link are automatically appended by the system.</p>
-          </div>
-          <label className="flex items-center gap-2.5 cursor-pointer select-none group">
-            <input type="checkbox" checked={row.saveAsDraft || false} onChange={(e) => onUpdate(row._key, { saveAsDraft: e.target.checked })}
-              className="w-4 h-4 rounded border-gray-300 accent-brand-blue cursor-pointer" />
-            <span className="text-xs font-inter text-gray-600 group-hover:text-brand-dark">Save this template as a draft</span>
-          </label>
-        </div>
-      )}
+      {/* Email Template — opens the single shared drawer pointed at this row */}
+      <div>
+        <button type="button" onClick={() => onCustomize(row._key)}
+          className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold font-inter transition-colors ${
+            isEditing
+              ? 'border-brand-blue bg-brand-blue/5 text-brand-blue'
+              : 'border-gray-200 bg-white text-brand-blue hover:bg-blue-50/60'
+          }`}>
+          <Mail size={11} className="shrink-0" />
+          <span className="truncate">{row.customized ? 'Custom Template' : 'Customize Template'}</span>
+        </button>
+        <p className="mt-0.5 flex items-center gap-1 text-[10px] text-gray-400 font-inter">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${row.customized ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+          {row.customized ? 'Template configured' : 'Using default template'}
+        </p>
+      </div>
+
+      {/* Delete — direct icon, no menu */}
+      <button
+        type="button"
+        onClick={() => canRemove && onRemove(row._key)}
+        disabled={!canRemove}
+        title={canRemove ? 'Remove this verifier' : 'This verification type needs at least one verifier row — add another before removing this one'}
+        className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-lg transition-colors ${canRemove ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'text-gray-200 cursor-not-allowed'}`}
+      >
+        <Trash2 size={13} />
+      </button>
     </div>
   );
 };
 
 // ── Smart Send Modal ─────────────────────────────────────────────────────────
-const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
+export const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
   const [verificationTypes, setVerificationTypes] = useState([]);
+  const [batchRecords, setBatchRecords] = useState([]);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadAssignments, setReloadAssignments] = useState(0);
   const [verifiersByType,   setVerifiersByType]    = useState({}); // { [verification_name]: verifier[] }
   const [loading,           setLoading]           = useState(false);
-  // assignments: { [type_name]: [{ _key, verifier_id, email_subject, email_body, count: '' }] }
+  // assignments: { [type_name]: [{ _key, verifier_id, email_subject, email_body, customized, count: '' }] }
   const [assignments, setAssignments] = useState({});
   const [sending,     setSending]     = useState(false);
-  const [expandedType, setExpandedType] = useState(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  // The shared template shown in "Edit Default Template" — only actually
+  // used for a row once the admin has typed into it (defaultTemplateTouched)
+  // AND that row isn't individually customized. Until touched, each
+  // untouched row instead gets its OWN type's auto-generated subject/body
+  // (see rowDefaultSubject/rowDefaultBody below) — a batch with more than
+  // one verification type used to hand every verifier the literal text
+  // generated for the FIRST type only (e.g. an "Active Ingredient" verifier
+  // getting an email that talks about "Allergy Testing"), because this was
+  // one fixed string shared by every type instead of being per-type.
+  const [defaultTemplate, setDefaultTemplate] = useState({ subject: '', body: '' });
+  const [defaultTemplateTouched, setDefaultTemplateTouched] = useState(false);
+  const [saveDefaultAsDraft, setSaveDefaultAsDraft] = useState(false);
+  // null = the template drawer is closed; a row _key = the drawer is open,
+  // pointed at that one row (via its "Customize Template" button). There is
+  // only ever one template editor visible at a time, never a second one
+  // inline in the table row itself.
+  const [editingKey, setEditingKey] = useState(null);
 
   const slugToLabel = (s) => s?.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || s;
   const defaultSubject = (typeName) => `Verification Request: ${slugToLabel(typeName)}`;
+  // verification_name almost always already ends in "...Verification" once
+  // slugified (e.g. "allergy_testing_results_verification" → "Allergy
+  // Testing Results Verification"), so appending the word again here used to
+  // read "...Verification verification." — dropped the trailing word rather
+  // than special-casing every type name.
   const defaultBody = (typeName) =>
-    `Hi,\n\nPlease find the attached Excel file with the candidates assigned to you for ${slugToLabel(typeName)} verification.\n\nComplete the verification and upload your report using the secure link provided.\n\nRegards,\nTruMarkZ Admin`;
+    `Hi,\n\nPlease find the attached Excel file with the candidates assigned to you for ${slugToLabel(typeName)}.\n\nComplete the verification and upload your report using the secure link provided.\n\nRegards,\nTruMarkZ Admin`;
 
-  // Derive batch users from the already-loaded batch.records — confirmed via
+  // Derive batch users from fresh batch details — confirmed via
   // the actual GET /verification/batches/{id} response that each user object
   // is keyed by `user_id`, not `id` (that field name only appears elsewhere,
   // e.g. the bulk-upload response's `entity_id`) — check all three so this
   // doesn't silently send `null` again if the shape varies by caller.
-  const batchUsers = (batch?.records || []).map((r) => ({
+  const consentBlockedCount = batchRecords.filter((record) => !consentAllowsProcessing(record)).length;
+  const batchUsers = batchRecords.filter((record) => consentAllowsProcessing(record)).map((r) => ({
     id: r.id || r.user_id || r.entity_id,
     name: r.full_name || r.product_name || r.email || r.id || r.user_id || r.entity_id,
   }));
+  const pendingUsersByType = useMemo(() => Object.fromEntries(verificationTypes.map((type) =>
+    [type.verification_name, pendingManualUsers(batchRecords, type.verification_name)]
+  )), [verificationTypes, batchRecords]);
+
+  // The template preview defaults to the batch's first needed verification
+  // type — the only unambiguous single choice when one shared template can
+  // end up covering several different types at once. It's just a starting
+  // point for editing, though — see rowDefaultSubject/rowDefaultBody for
+  // what actually gets sent to an untouched row.
+  const primaryTypeName = verificationTypes[0]?.verification_name || null;
+  // What an untouched (non-customized) row actually sends: its own type's
+  // auto-generated text until the admin explicitly edits the shared
+  // default, at which point that literal text is used for every untouched
+  // row instead — an intentional admin choice at that point, not a silent
+  // mismatch.
+  const rowDefaultSubject = (typeName) => (defaultTemplateTouched ? defaultTemplate.subject : defaultSubject(typeName));
+  const rowDefaultBody    = (typeName) => (defaultTemplateTouched ? defaultTemplate.body    : defaultBody(typeName));
 
   useEffect(() => {
     if (!isOpen || !batch?.id) return;
+    let active = true;
     setAssignments({});
-    setExpandedType(null);
+    setVerificationTypes([]);
+    setBatchRecords([]);
+    setLoadError(null);
     setVerifiersByType({});
+    setSaveDefaultAsDraft(false);
+    setDefaultTemplate({ subject: '', body: '' });
+    setDefaultTemplateTouched(false);
+    setEditingKey(null);
     setLoading(true);
     // /verification/batches/{id}/third-party-verifiers is the purpose-built
     // endpoint for "which verification types in this batch need a third
     // party" — confirmed by the Manual Verification API docs, not a stale
-    // endpoint. (batch.verification_types is the batch's *overall* type
-    // list, which can include automatic types and doesn't tell us which
-    // manual types actually have a pending third-party need.)
-    verificationAPI.getThirdPartyVerifiers(batch.id)
-      .then(async ({ data }) => {
+    // endpoint. Its type list does not carry user status, so intersect it
+    // with fresh per-user checks before offering assignments.
+    Promise.all([verificationAPI.getThirdPartyVerifiers(batch.id), verificationAPI.getBatchConsentDetails(batch.id)])
+      .then(async ([{ data }, { data: details }]) => {
+        if (!active) return;
+        if (!Array.isArray(details?.users) || details.users.some((user) => !user.verification_type_status || typeof user.verification_type_status !== 'object')) {
+          throw new Error('Could not confirm per-user verification statuses. Refresh and try again.');
+        }
+        setBatchRecords(details.users);
         const raw = data?.third_party_verifiers || [];
         const typeMap = {};
         raw.forEach((v) => {
           if (!typeMap[v.verification_name]) {
             typeMap[v.verification_name] = {
               verification_name: v.verification_name,
-              label: v.label || slugToLabel(v.verification_name),
+              // v.label here is "manual"/"automatic" — a category, not a
+              // display name (same trap documented on formatVerifTypeLabel
+              // above for the analogous submitted-reports field). Always
+              // derive the readable name from verification_name itself;
+              // v.label is never a fallback candidate for this.
+              label: slugToLabel(v.verification_name),
               defaultEmail: v.email_address || null,
             };
           }
         });
-        const types = Object.values(typeMap);
+        const types = Object.values(typeMap).filter((type) => pendingManualUsers(details.users, type.verification_name).length > 0);
         setVerificationTypes(types);
-        if (types.length > 0) setExpandedType(types[0].verification_name);
+        if (types.length > 0) {
+          setDefaultTemplate({ subject: defaultSubject(types[0].verification_name), body: defaultBody(types[0].verification_name) });
+          // Start with one card per type, matching the common case of one
+          // verifier handling each check — Add Another Verifier covers the
+          // rest (multiple verifiers splitting one type, or a type with none
+          // picked yet).
+          setAssignments(Object.fromEntries(types.map((t) => [
+            t.verification_name,
+            [{ _key: `${t.verification_name}-0`, verifier_id: '', email_subject: '', email_body: '', customized: false, count: '' }],
+          ])));
+        }
 
         // Only verifiers whose own specialization includes each type — keeps
         // an admin from assigning "Address Verification" to a verifier who
@@ -451,41 +646,29 @@ const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
               .catch(() => [t.verification_name, []])
           )
         );
-        setVerifiersByType(Object.fromEntries(entries));
+        if (active) setVerifiersByType(Object.fromEntries(entries));
       })
-      .catch(() => toast.error('Failed to load verification data'))
-      .finally(() => setLoading(false));
-  }, [isOpen, batch?.id]);
+      .catch((err) => { if (active) setLoadError(getApiError(err, 'Failed to load verification data')); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [isOpen, batch?.id, reloadAssignments]);
 
   const addVerifier = (typeName) => {
     setAssignments((prev) => ({
       ...prev,
       [typeName]: [
         ...(prev[typeName] || []),
-        { _key: `${typeName}-${Date.now()}`, verifier_id: '', email_subject: defaultSubject(typeName), email_body: defaultBody(typeName), count: '', saveAsDraft: false },
+        { _key: `${typeName}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, verifier_id: '', email_subject: '', email_body: '', customized: false, count: '' },
       ],
     }));
   };
 
-  const autoSplit = (typeName) => {
-    const activeRows = (assignments[typeName] || []).filter((r) => r.verifier_id);
-    if (activeRows.length === 0) return;
-    const perV    = Math.floor(batchUsers.length / activeRows.length);
-    const remainder = batchUsers.length % activeRows.length;
-    let activeIdx = 0;
-    setAssignments((prev) => ({
-      ...prev,
-      [typeName]: (prev[typeName] || []).map((row) => {
-        if (!row.verifier_id) return row;
-        const c = perV + (activeIdx < remainder ? 1 : 0);
-        activeIdx++;
-        return { ...row, count: String(c) };
-      }),
-    }));
-  };
-
-  const removeVerifier = (typeName, key) =>
+  const removeVerifier = (typeName, key) => {
     setAssignments((prev) => ({ ...prev, [typeName]: (prev[typeName] || []).filter((v) => v._key !== key) }));
+    // Removing the card currently being edited would otherwise leave the
+    // right panel pointed at a row that no longer exists.
+    setEditingKey((current) => (current === key ? null : current));
+  };
 
   const updateVerifier = (typeName, key, patch) =>
     setAssignments((prev) => ({
@@ -495,36 +678,139 @@ const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
 
   const typeRows = (typeName) => assignments[typeName] || [];
 
-  // Coverage: per type, sum of counts of active (verifier-assigned) rows vs batch total
+  // Eligibility comes from each type's verifier list, not its display label.
+  const sharedVerifiers = verificationTypes.length === 0 ? [] :
+    (verifiersByType[verificationTypes[0].verification_name] || []).filter((verifier) =>
+      verifier.id && verificationTypes.every((type) =>
+        (verifiersByType[type.verification_name] || []).some((candidate) => candidate.id === verifier.id)
+      )
+    );
+  const selectedVerifierIds = [...new Set(verificationTypes.flatMap((type) =>
+    typeRows(type.verification_name).map((row) => row.verifier_id).filter(Boolean)
+  ))];
+  const sharedVerifierId = selectedVerifierIds.length === 1 ? selectedVerifierIds[0] : '';
+  const selectedSharedVerifier = Object.values(verifiersByType).flat().find((verifier) => verifier.id === sharedVerifierId);
+  const sharedVerifierEligible = sharedVerifiers.some((verifier) => verifier.id === sharedVerifierId);
+  const alreadyAppliedToAll = sharedVerifierId && verificationTypes.every((type) => {
+    const rows = typeRows(type.verification_name);
+    return rows.length === 1 && rows[0].verifier_id === sharedVerifierId && Number(rows[0].count) === pendingUsersByType[type.verification_name].length;
+  });
+
+  const applySharedVerifier = () => {
+    if (loading || sending || batchUsers.length === 0 || !sharedVerifiers.some((verifier) => verifier.id === sharedVerifierId)) return;
+    setAssignments((previous) => Object.fromEntries(verificationTypes.map((type) => {
+      const rows = previous[type.verification_name] || [];
+      // Keep that verifier's customized template, or the type's first row.
+      const row = rows.find((entry) => entry.verifier_id === sharedVerifierId) || rows[0];
+      return [type.verification_name, [{
+        ...row,
+        _key: row?._key || `${type.verification_name}-shared`,
+        verifier_id: sharedVerifierId,
+        count: String(pendingUsersByType[type.verification_name].length),
+      }]];
+    })));
+    setEditingKey(null);
+    toast.success(`Verifier assigned to all ${verificationTypes.length} checks. Review the assignments before sending.`);
+  };
+
+  // Each type covers only the users whose own check is still pending.
   const typesCoverage = verificationTypes.map((t) => {
     const activeRows = typeRows(t.verification_name).filter((r) => r.verifier_id);
     const covered = activeRows.reduce((s, r) => s + (parseInt(r.count) || 0), 0);
-    return { typeName: t.verification_name, covered, total: batchUsers.length, hasVerifiers: activeRows.length > 0 };
+    return { typeName: t.verification_name, covered, total: pendingUsersByType[t.verification_name].length, hasVerifiers: activeRows.length > 0 };
+  });
+
+  // Flattened, numbered card list for the left column — countBefore/available
+  // still have to be computed per-type (each verification type independently
+  // needs its own pending-user coverage), so derive per-type first and then
+  // flattened purely for display/numbering.
+  const flatRows = verificationTypes.flatMap((t) => {
+    const rows = typeRows(t.verification_name);
+    return rows.map((row, ri) => ({
+      ...row,
+      typeName: t.verification_name,
+      typeLabel: t.label,
+      allVerifiers: verifiersByType[t.verification_name] || [],
+      countBefore: rows.slice(0, ri).reduce((s, r) => s + (parseInt(r.count) || 0), 0),
+      // Every verification type the batch actually needs must keep at least
+      // one card so it can never silently drop out of coverage — only rows
+      // added on top via "Add Another Verifier" (splitting one type across
+      // multiple verifiers) are removable.
+      canRemove: rows.length > 1,
+    }));
   });
 
   const activeTypes  = typesCoverage.filter((t) => t.hasVerifiers);
   const hasOverflow  = activeTypes.some((t) => t.covered > t.total);
-  const allCovered   = batchUsers.length === 0 || (activeTypes.length > 0 && activeTypes.every((t) => t.covered === t.total));
-  const totalAssigned = activeTypes.reduce((n, t) => n + typeRows(t.typeName).filter((r) => r.verifier_id).length, 0);
+  const allCovered   = typesCoverage.length > 0 && typesCoverage.every((t) => t.covered === t.total);
+  // Only rows that will actually receive an email — a verifier picked with 0
+  // users assigned isn't really "sending" anything yet.
+  const totalAssigned = flatRows.filter((r) => r.verifier_id && (parseInt(r.count) || 0) > 0).length;
   const canSend = totalAssigned > 0 && allCovered && !hasOverflow;
+
+  // Regenerating goes back to the safe per-type auto behavior (touched:
+  // false) rather than re-freezing a literal string that would just recreate
+  // the original mismatch for every other type again.
+  const resetDefaultTemplate = () => {
+    if (!primaryTypeName) return;
+    setDefaultTemplate({ subject: defaultSubject(primaryTypeName), body: defaultBody(primaryTypeName) });
+    setDefaultTemplateTouched(false);
+  };
+
+  // Opens the shared template drawer pointed at one specific verifier row.
+  const handleCustomize = (key) => setEditingKey(key);
+
+  const isEditingDefault = editingKey === 'DEFAULT';
+  const editingRow = editingKey && !isEditingDefault ? flatRows.find((r) => r._key === editingKey) : null;
+  // Falls back to this row's own per-type default if it hasn't forked yet,
+  // exactly like handleSend already does when building the real payload —
+  // keeps the drawer preview and the actual send in lock-step.
+  const editingSubject = editingRow ? (editingRow.customized ? editingRow.email_subject : rowDefaultSubject(editingRow.typeName)) : defaultTemplate.subject;
+  const editingBody    = editingRow ? (editingRow.customized ? editingRow.email_body    : rowDefaultBody(editingRow.typeName))    : defaultTemplate.body;
+  const editingVerifierInfo = editingRow ? (editingRow.allVerifiers || []).find((v) => v.id === editingRow.verifier_id) : null;
+  const editingVerifierLabel = editingRow
+    ? (editingVerifierInfo
+        ? `${editingVerifierInfo.name || editingVerifierInfo.email}${editingVerifierInfo.organization ? ` — ${editingVerifierInfo.organization}` : ''}`
+        : `Verifier ${flatRows.findIndex((r) => r._key === editingRow._key) + 1}`)
+    : '';
+
+  const handleSaveDraft = async () => {
+    if (!primaryTypeName) return;
+    if (!defaultTemplate.subject.trim() || !defaultTemplate.body.trim()) {
+      toast.error('Add a subject and message first');
+      return;
+    }
+    setSavingDraft(true);
+    try {
+      await verificationAPI.createEmailDraft({ verification_type: primaryTypeName, subject: defaultTemplate.subject, body: defaultTemplate.body });
+      toast.success('Email template saved as a draft');
+    } catch (err) {
+      toast.error(getApiError(err, 'Failed to save draft'));
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!allCovered || hasOverflow) {
-      toast.error('User counts must add up exactly to the total batch size for each verification type');
+      toast.error('Assign every pending user exactly once for each verification type');
       return;
     }
-    const batchUserIds = batchUsers.map((u) => u.id);
     const verification_assignments = verificationTypes
       .map((t) => {
+        const batchUserIds = pendingUsersByType[t.verification_name].map((user) => user.id);
         let offset = 0;
         const verifiers = typeRows(t.verification_name)
-          .filter((v) => v.verifier_id && parseInt(v.count) > 0 && v.email_subject.trim() && v.email_body.trim())
-          .map(({ verifier_id, email_subject, email_body, count }) => {
-            const n       = parseInt(count);
+          .filter((v) => v.verifier_id && parseInt(v.count) > 0)
+          .map((row) => {
+            const n = parseInt(row.count);
             const user_ids = batchUserIds.slice(offset, offset + n);
             offset += n;
-            return { verifier_id, email_subject, email_body, user_ids };
-          });
+            const email_subject = row.customized ? row.email_subject : rowDefaultSubject(t.verification_name);
+            const email_body    = row.customized ? row.email_body    : rowDefaultBody(t.verification_name);
+            return { verifier_id: row.verifier_id, email_subject, email_body, user_ids };
+          })
+          .filter((v) => v.email_subject.trim() && v.email_body.trim());
         return { verification_type_name: t.verification_name, verifiers };
       })
       .filter((t) => t.verifiers.length > 0);
@@ -533,22 +819,32 @@ const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
       toast.error('Assign at least one verifier to a verification type');
       return;
     }
-
-    // Collect any per-verifier templates marked "save as draft" before we send
-    const draftsToSave = [];
-    verificationTypes.forEach((t) => {
-      typeRows(t.verification_name).forEach((row) => {
-        if (row.verifier_id && parseInt(row.count) > 0 && row.saveAsDraft && row.email_subject.trim() && row.email_body.trim()) {
-          draftsToSave.push({ verification_type: t.verification_name, subject: row.email_subject, body: row.email_body });
-        }
-      });
-    });
+    if (verification_assignments.length !== verificationTypes.length || verification_assignments.some((type) =>
+      type.verifiers.reduce((total, verifier) => total + verifier.user_ids.length, 0) !== pendingUsersByType[type.verification_type_name].length
+    )) {
+      toast.error('Add a subject and message for every assigned verifier before sending.');
+      return;
+    }
 
     setSending(true);
     try {
+      const { data: latest } = await verificationAPI.getBatchConsentDetails(batch.id);
+      if (!Array.isArray(latest?.users) || latest.users.some((user) => !user.verification_type_status || typeof user.verification_type_status !== 'object')) {
+        throw new Error('Could not confirm the latest verification statuses. No emails were sent.');
+      }
+      const statusesUnchanged = verification_assignments.every((type) => {
+        const eligibleIds = new Set(pendingManualUsers(latest.users, type.verification_type_name).map((user) => user.id));
+        const assignedIds = type.verifiers.flatMap((verifier) => verifier.user_ids);
+        return assignedIds.length === eligibleIds.size && assignedIds.every((id) => eligibleIds.has(id));
+      });
+      if (!statusesUnchanged) {
+        toast.error('Verification or consent statuses changed. Review the refreshed eligible assignments before sending.');
+        setReloadAssignments((value) => value + 1);
+        return;
+      }
       const { data } = await verificationAPI.smartSendManualVerification({ batch_id: batch.id, verification_assignments });
-      if (draftsToSave.length > 0) {
-        await Promise.allSettled(draftsToSave.map((d) => verificationAPI.createEmailDraft(d)));
+      if (saveDefaultAsDraft && primaryTypeName && defaultTemplate.subject.trim() && defaultTemplate.body.trim()) {
+        await verificationAPI.createEmailDraft({ verification_type: primaryTypeName, subject: defaultTemplate.subject, body: defaultTemplate.body }).catch(() => {});
       }
 
       // The backend returns 200 even when every assignment fails — real
@@ -585,9 +881,76 @@ const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
     }
   };
 
+  // Single drawer that opens only when a row's "Customize Template" (or the
+  // "Edit Default Template" link) is clicked — passed to Modal as
+  // `sidePanel`, docked beside the main dialog. Doubles as the editor for
+  // either one specific row or the shared default, never both at once.
+  const templateDrawer = (editingRow || isEditingDefault) && (
+    <div className="flex min-h-0 h-full flex-col">
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+        <div className="min-w-0">
+          <h4 className="font-sora text-base font-semibold text-brand-dark">
+            {editingRow ? 'Customize Email Template' : 'Edit Default Template'}
+          </h4>
+          <p className="mt-1 text-xs text-gray-400 font-inter leading-relaxed">
+            {editingRow
+              ? <>This template will be sent to all users assigned to <span className="font-semibold text-brand-dark">{editingVerifierLabel}</span>.</>
+              : 'This is the shared template sent to every verifier who has not customized their own.'}
+          </p>
+        </div>
+        <button type="button" onClick={() => setEditingKey(null)}
+          className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
+        <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5">
+          <Info size={13} className="mt-0.5 shrink-0 text-brand-blue" />
+          <p className="text-xs text-blue-700 font-inter leading-relaxed">The Excel file and secure upload link are automatically appended by the system.</p>
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-gray-500 font-inter mb-1">Subject *</label>
+          <input
+            value={editingSubject}
+            onChange={(e) => editingRow
+              ? updateVerifier(editingRow.typeName, editingRow._key, { email_subject: e.target.value, email_body: editingBody, customized: true })
+              : (setDefaultTemplate((p) => ({ ...p, subject: e.target.value })), setDefaultTemplateTouched(true))}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-inter focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-gray-500 font-inter mb-1">Message *</label>
+          <textarea
+            rows={12}
+            value={editingBody}
+            onChange={(e) => editingRow
+              ? updateVerifier(editingRow.typeName, editingRow._key, { email_body: e.target.value, email_subject: editingSubject, customized: true })
+              : (setDefaultTemplate((p) => ({ ...p, body: e.target.value })), setDefaultTemplateTouched(true))}
+            className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm font-inter focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          />
+        </div>
+        {editingRow ? (
+          editingRow.customized && (
+            <button type="button"
+              onClick={() => updateVerifier(editingRow.typeName, editingRow._key, { customized: false, email_subject: '', email_body: '' })}
+              className="flex items-center gap-1.5 text-xs font-semibold text-brand-blue font-inter hover:underline">
+              <RefreshCw size={12} /> Reset to shared template
+            </button>
+          )
+        ) : (
+          <button type="button" onClick={resetDefaultTemplate}
+            className="flex items-center gap-1.5 text-xs font-semibold text-brand-blue font-inter hover:underline">
+            <RefreshCw size={12} /> Regenerate default template
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Bulk Send to Verifiers" size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Bulk Send to Verifiers" size="7xl" sidePanel={templateDrawer} sidePanelWidth="max-w-md">
       <div className="space-y-4">
+        <p className="-mt-2 text-sm text-gray-500 font-inter">Assign batch users to verifiers for document verification</p>
 
         {/* Batch + coverage summary chip */}
         <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
@@ -597,10 +960,11 @@ const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 font-inter">Smart Send</p>
             <p className="text-sm font-semibold text-brand-dark font-inter truncate">{batch?.name}</p>
+            <p className="text-xs text-gray-400 font-inter">Verification Process: Manual Assignment</p>
           </div>
           <div className="flex gap-3 shrink-0 text-right">
             <div>
-              <p className="text-[10px] text-gray-400 font-inter">Total users</p>
+              <p className="text-[10px] text-gray-400 font-inter">Eligible Users</p>
               <p className="text-lg font-bold text-brand-dark font-sora">{batchUsers.length}</p>
             </div>
             <div>
@@ -614,140 +978,141 @@ const SmartSendModal = ({ isOpen, onClose, onSent, batch }) => {
         <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
           <Info size={13} className="text-amber-500 mt-0.5 shrink-0" />
           <p className="text-xs text-amber-700 font-inter leading-relaxed">
-            Manually assign <strong>each batch user</strong> to a verifier. Each verifier receives an Excel of their assigned users + a secure upload link.{' '}
-            <strong>All {batchUsers.length} users must be assigned</strong> — no user can be left out or assigned twice.
+            Assign <strong>each eligible pending verification</strong> to a verifier. Completed checks are excluded. Permission Required Human users must accept consent first. Each verifier receives an Excel of their assigned users and a secure upload link.
           </p>
         </div>
 
+        {consentBlockedCount > 0 && !loading && <p role="status" className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-800">Waiting for consent: {consentBlockedCount} user(s) cannot be assigned or emailed until they accept. Reopen this dialog to refresh their consent status.</p>}
+
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-3">
-            <RefreshCw size={22} className="animate-spin text-brand-blue" />
-            <p className="text-sm text-gray-400 font-inter">Loading verification types & verifiers…</p>
-          </div>
+          <LoadingSkeleton variant="form" label="Loading verification types & verifiers" />
+        ) : loadError ? (
+          <div role="alert" className="space-y-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700 font-inter"><p>{loadError}</p><button type="button" onClick={() => setReloadAssignments((value) => value + 1)} className="font-semibold underline">Try again</button></div>
         ) : verificationTypes.length === 0 ? (
           <div className="py-10 text-center">
-            <p className="text-sm text-gray-400 font-inter">No manual verification types found for this batch.</p>
+            <p className="text-sm text-gray-500 font-inter">{consentBlockedCount > 0 ? 'No eligible manual verifications yet. User consent is required before sending verifier emails.' : 'No pending manual verifications remain for this batch.'}</p>
           </div>
         ) : (
-          <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
-            {verificationTypes.map((vtype) => {
-              const rows    = typeRows(vtype.verification_name);
-              const isOpen_ = expandedType === vtype.verification_name;
-              const cov     = typesCoverage.find((c) => c.typeName === vtype.verification_name);
-              const assigned = rows.filter((r) => r.verifier_id).length;
-              const fullyDone = cov?.hasVerifiers && cov.covered === cov.total && cov.total > 0;
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-brand-dark font-inter">Assigned Verifiers ({flatRows.length})</p>
+              <div className="flex flex-wrap items-center gap-2">
+              {verificationTypes.length > 1 && sharedVerifierId && !alreadyAppliedToAll && (
+                <button type="button" onClick={applySharedVerifier}
+                  disabled={!sharedVerifierEligible || sending || batchUsers.length === 0}
+                  title={sharedVerifierEligible
+                    ? `Assign ${selectedSharedVerifier?.name || selectedSharedVerifier?.email || 'the selected verifier'} to all pending users for every remaining check, replacing current splits`
+                    : 'This verifier does not support every check in this batch'}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white font-inter transition-colors hover:bg-brand-blue-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 disabled:cursor-not-allowed disabled:opacity-50">
+                  <Users size={15} /> Apply to all checks
+                </button>
+              )}
+              <button type="button" onClick={() => setEditingKey('DEFAULT')}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-brand-blue font-inter transition-colors hover:bg-blue-50/60">
+                <GmailIcon className="h-4 w-4 shrink-0" /> Edit Default Template
+              </button>
+              </div>
+            </div>
 
-              return (
-                <div key={vtype.verification_name} className="overflow-hidden rounded-xl border border-gray-100 bg-white">
-                  {/* Type header */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedType(isOpen_ ? null : vtype.verification_name)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
-                  >
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${fullyDone ? 'bg-green-100 text-green-600' : 'bg-brand-blue/10 text-brand-blue'}`}>
-                      {fullyDone ? <CheckCircle size={14} /> : <Mail size={14} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-brand-dark font-inter">{vtype.label}</p>
-                      <p className="text-xs text-gray-400 font-mono">{vtype.verification_name}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {assigned > 0 && (
-                        <span className="flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-[10px] font-semibold text-green-700 font-inter">
-                          <Users size={9} />{assigned} verifier{assigned !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                      {cov?.hasVerifiers && (
-                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold font-inter ${fullyDone ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {cov.covered}/{cov.total} users
-                        </span>
-                      )}
-                      <ChevronLeft size={14} className={`text-gray-400 transition-transform ${isOpen_ ? '-rotate-90' : 'rotate-180'}`} />
-                    </div>
-                  </button>
-
-                  {/* Expanded */}
-                  {isOpen_ && (
-                    <div className="border-t border-gray-100 bg-gray-50/50 px-4 py-3 space-y-3">
-                      {rows.length === 0 && (
-                        <p className="text-xs text-gray-400 font-inter text-center py-2">No verifiers assigned yet. Add one below.</p>
-                      )}
-
-                      {rows.map((row, ri) => {
-                        const countBefore = rows
-                          .slice(0, ri)
-                          .reduce((s, r) => s + (parseInt(r.count) || 0), 0);
-                        return (
-                          <VerifierRow
-                            key={row._key}
-                            row={row}
-                            ri={ri}
-                            allVerifiers={verifiersByType[vtype.verification_name] || []}
-                            batchTotal={batchUsers.length}
-                            countBefore={countBefore}
-                            onUpdate={(key, patch) => updateVerifier(vtype.verification_name, key, patch)}
-                            onRemove={(key) => removeVerifier(vtype.verification_name, key)}
-                          />
-                        );
-                      })}
-
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => addVerifier(vtype.verification_name)}
-                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-2.5 text-sm font-semibold text-gray-500 font-inter transition-colors hover:border-brand-blue hover:text-brand-blue"
-                        >
-                          <Plus size={14} />
-                          {rows.length === 0 ? 'Assign a Verifier' : 'Add Another Verifier'}
-                        </button>
-                        {rows.filter((r) => r.verifier_id).length >= 2 && (
-                          <button
-                            type="button"
-                            onClick={() => autoSplit(vtype.verification_name)}
-                            className="flex items-center gap-1.5 rounded-xl border-2 border-dashed border-brand-blue/30 px-3 py-2 text-xs font-semibold text-brand-blue font-inter transition-colors hover:bg-brand-blue/5"
-                          >
-                            <Zap size={12} /> Auto-split
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+            {/* Table — grouped by verification type (a thin label row per
+                type) so every row's type stays visible even though the
+                columns themselves don't repeat it; each type keeps its own
+                "add another" link right under its own rows, so adding a
+                verifier can never land on the wrong type. */}
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <div className="min-w-[620px]">
+                  <div className={`grid ${VERIFIER_ROW_GRID} gap-x-2 bg-gray-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 font-inter border-b border-gray-100`}>
+                    <span></span>
+                    <span>Verifier</span>
+                    <span>Users to assign</span>
+                    <span>Assigned</span>
+                    <span>Email Template</span>
+                    <span></span>
+                  </div>
+                  <div className="max-h-[54vh] divide-y divide-gray-100 overflow-y-auto">
+                    {flatRows.length === 0 && (
+                      <p className="py-6 text-center text-xs text-gray-400 font-inter">No verifiers assigned yet.</p>
+                    )}
+                    {verificationTypes.map((t) => {
+                      const rows = typeRows(t.verification_name);
+                      return (
+                        <div key={t.verification_name}>
+                          <div className="bg-blue-50/50 px-3 py-1 text-[11px] font-semibold text-brand-blue font-inter">{t.label}</div>
+                          {rows.map((row) => {
+                            const flatRow = flatRows.find((r) => r._key === row._key);
+                            const index = flatRows.indexOf(flatRow);
+                            return (
+                              <VerifierRow
+                                key={row._key}
+                                index={index}
+                                row={flatRow}
+                                typeLabel={t.label}
+                                allVerifiers={verifiersByType[t.verification_name] || []}
+                                batchTotal={pendingUsersByType[t.verification_name].length}
+                                countBefore={flatRow.countBefore}
+                                canRemove={flatRow.canRemove}
+                                isEditing={editingKey === row._key}
+                                onCustomize={handleCustomize}
+                                onUpdate={(key, patch) => updateVerifier(t.verification_name, key, patch)}
+                                onRemove={(key) => removeVerifier(t.verification_name, key)}
+                              />
+                            );
+                          })}
+                          <div className="px-3 py-1.5">
+                            <button type="button" onClick={() => addVerifier(t.verification_name)}
+                              className="flex items-center gap-1 text-xs font-semibold text-brand-blue font-inter hover:underline">
+                              <Plus size={12} /> Add another verifier for {t.label}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+            </div>
 
-        {/* Coverage warning */}
-        {!loading && activeTypes.length > 0 && (!allCovered || hasOverflow) && (
-          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-            <Info size={12} className="text-amber-500 shrink-0" />
-            <p className="text-xs text-amber-700 font-inter">
-              {activeTypes.filter((t) => t.covered !== t.total).map((t) => {
-                const diff = t.total - t.covered;
-                return diff > 0
-                  ? `${slugToLabel(t.typeName)}: ${diff} user${diff !== 1 ? 's' : ''} unassigned`
-                  : `${slugToLabel(t.typeName)}: ${Math.abs(diff)} over total`;
-              }).join(' · ')}
-            </p>
+            {/* Coverage warning */}
+            {(!allCovered || hasOverflow) && activeTypes.length > 0 && (
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                <Info size={12} className="text-amber-500 shrink-0" />
+                <p className="text-xs text-amber-700 font-inter">
+                  {typesCoverage.filter((t) => t.covered !== t.total).map((t) => {
+                    const diff = t.total - t.covered;
+                    return diff > 0
+                      ? `${slugToLabel(t.typeName)}: ${diff} user${diff !== 1 ? 's' : ''} unassigned`
+                      : `${slugToLabel(t.typeName)}: ${Math.abs(diff)} over total`;
+                  }).join(' · ')}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
         {/* Footer */}
-        {!loading && verificationTypes.length > 0 && (
-          <div className="flex gap-2 pt-1 border-t border-gray-100">
-            <Button variant="ghost" onClick={onClose} className="flex-1" disabled={sending}>Cancel</Button>
-            <Button
-              variant="primary"
-              icon={sending ? RefreshCw : Zap}
-              className="flex-1"
-              disabled={!canSend || sending}
-              onClick={handleSend}
-            >
-              {sending ? 'Sending…' : canSend ? `Smart Send (${totalAssigned} verifier${totalAssigned !== 1 ? 's' : ''})` : 'Assign all users first'}
-            </Button>
-          </div>
+        {!loading && !loadError && verificationTypes.length > 0 && (
+          <Modal.Footer className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+              <input type="checkbox" checked={saveDefaultAsDraft} onChange={(e) => setSaveDefaultAsDraft(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 accent-brand-blue cursor-pointer" />
+              <span className="text-xs font-inter text-gray-600 group-hover:text-brand-dark">Save the default template as a draft when sending</span>
+            </label>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button variant="ghost" onClick={onClose} disabled={sending}>Cancel</Button>
+              <Button variant="outline" icon={savingDraft ? RefreshCw : Save} loading={savingDraft} onClick={handleSaveDraft} disabled={sending}>
+                Save Email Draft
+              </Button>
+              <Button
+                variant="primary"
+                icon={sending ? RefreshCw : Zap}
+                disabled={!canSend || sending}
+                onClick={handleSend}
+              >
+                {sending ? 'Sending…' : canSend ? `Smart Send (${totalAssigned} verifier${totalAssigned !== 1 ? 's' : ''})` : 'Assign all users first'}
+              </Button>
+            </div>
+          </Modal.Footer>
         )}
       </div>
     </Modal>
@@ -793,14 +1158,485 @@ const warrantyDetailFormatDate = (v) => {
     : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-// ── Warranty Detail Modal — same "View Details" popup pattern used for
-// every other batch type, but fetches from the dedicated warranty endpoint
-// (warranty batches carry product/serial/warranty-date records, not the
-// generic human/product verification shape the Control Center modal renders). ─
-const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) => {
+// ── Delete Batch Modal — DELETE /verification/batches/{batch_id}, superadmin
+// only. Hard-deletes the whole batch (BatchUsers, documents, audit logs,
+// verification/SDC state, GCS files, and — for Warranty — its reserved
+// serial numbers). Irreversible and can't roll back an already-issued
+// Dhiway credential, so this requires typing the batch's exact name before
+// the delete button even enables — the same friction GitHub-style "type to
+// confirm" deletes use for something this destructive.
+export const DeleteBatchModal = ({ batch, onClose, onDeleted }) => {
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  if (!batch) return null;
+  const canDelete = confirmText.trim() === batch.name && !deleting;
+
+  const handleDelete = async () => {
+    if (!canDelete) return;
+    setDeleting(true);
+    try {
+      const { data } = await verificationAPI.deleteBatch(batch.id);
+      toast.success(data?.message || `"${batch.name}" deleted permanently`);
+      // Surface any orphaned-Dhiway-credential info the backend returns —
+      // never implying the external credential itself was also removed,
+      // since Dhiway issuance can't be revoked from here.
+      const dhiwayWarning = data?.dhiway_warning || data?.warning || data?.orphan_info || data?.orphaned_credentials;
+      if (dhiwayWarning) {
+        toast(
+          typeof dhiwayWarning === 'string'
+            ? dhiwayWarning
+            : 'This batch had an issued Dhiway credential — it could not be revoked and may still exist/resolve externally, even though the batch and its data are now deleted from TruMarkZ.',
+          { icon: '⚠️', duration: 10000 }
+        );
+      }
+      onDeleted(batch.id);
+    } catch (err) {
+      const httpStatus = err?.response?.status;
+      if (httpStatus === 404) {
+        toast.error('This batch was already deleted.');
+        onDeleted(batch.id);
+        return;
+      }
+      if (httpStatus === 409) {
+        toast.error('This batch is still processing — wait for it to finish, then try deleting again.');
+        return;
+      }
+      toast.error(getApiError(err, 'Failed to delete batch'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={!!batch} onClose={() => !deleting && onClose()} title="Delete Batch Permanently" size="md">
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+          <div className="font-inter text-sm text-red-700">
+            <p className="font-semibold">This cannot be undone.</p>
+            <p className="mt-1 text-red-600">
+              Deleting <span className="font-semibold">"{batch.name}"</span> permanently removes the batch and everything
+              belonging to it — all records, uploaded documents/photos/images, verification reports, Excel/CSV files,
+              audit logs, and verification/SDC state.
+            </p>
+            {batch.batchType === 'warranty' && (
+              <p className="mt-1 text-red-600">Its reserved warranty serial numbers are released back to the registry too.</p>
+            )}
+            <p className="mt-2 text-red-600">
+              If a Dhiway certificate was already issued for this batch, it cannot be revoked from here — it may still
+              exist externally even after this delete.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block font-inter text-xs font-medium text-gray-600">
+            Type <span className="font-semibold text-gray-800">{batch.name}</span> to confirm
+          </label>
+          <input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder={batch.name}
+            disabled={deleting}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 font-inter text-sm outline-none focus:border-red-300 focus:ring-2 focus:ring-red-100 disabled:bg-gray-50"
+          />
+        </div>
+
+        <Modal.Footer className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger" size="sm" icon={deleting ? RefreshCw : Trash2}
+            loading={deleting} disabled={!canDelete}
+            onClick={handleDelete}
+          >
+            Delete Permanently
+          </Button>
+        </Modal.Footer>
+      </div>
+    </Modal>
+  );
+};
+
+// ── Send Rejected List Modal — POST /verification/batches/{batch_id}/
+// send-rejected-list, superadmin only. Emails an Excel of every user with at
+// least one rejected verification_type_status entry (not just users whose
+// overall status is "rejected" — a partially-verified user with one
+// rejected type is included too) to the batch's organization. There is no
+// separate "preview" endpoint — the summary (rejected count, per-type
+// breakdown, recipient) only exists in the SEND call's own response, so it
+// can only be shown after sending, never before.
+export const SendRejectedListModal = ({ batch, onClose }) => {
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+
+  if (!batch) return null;
+
+  const handleSend = async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      const { data } = await verificationAPI.sendRejectedList(batch.id);
+      setResult(data || {});
+      toast.success(data?.message || 'Rejected list generated and made available to the organization');
+    } catch (err) {
+      const httpStatus = err?.response?.status;
+      if (httpStatus === 404) {
+        toast.error('No rejected users found in this batch — nothing to send.');
+      } else if (httpStatus === 400) {
+        toast.error(getApiError(err, "This organization has no email on file"));
+      } else {
+        toast.error(getApiError(err, 'Failed to send rejected list'));
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={!!batch} onClose={() => !sending && onClose()} title="Send Rejected List" size="md">
+      <div className="space-y-4">
+        {!result ? (
+          <>
+            <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+              <p className="text-xs text-amber-700 font-inter leading-relaxed">
+                Generates an Excel of every user in <strong>{batch.name}</strong> with at least one rejected
+                verification type — including each user's status and rejection reason per type — and makes
+                it available to the organization directly in the app. Nothing is emailed.
+              </p>
+            </div>
+            <p className="text-sm text-gray-600 font-inter">
+              Generate the rejected verification list for this batch now?
+            </p>
+            <Modal.Footer className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={onClose} disabled={sending}>Cancel</Button>
+              <Button variant="primary" icon={sending ? RefreshCw : Send} loading={sending} onClick={handleSend}>
+                Send Rejected List
+              </Button>
+            </Modal.Footer>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600">
+                <CheckCircle size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-brand-dark font-inter">Rejected List Generated</p>
+                <p className="text-xs text-emerald-700 font-inter truncate">
+                  {result.message || 'Now available to the organization in the app — nothing was emailed.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 rounded-xl border border-gray-100 px-3 py-2.5">
+              <div className="flex items-center justify-between text-sm font-inter">
+                <span className="text-gray-500">Rejected Users</span>
+                <span className="font-semibold text-brand-dark">{result.total_rejected_users ?? '—'}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-sm font-inter">
+                <span className="shrink-0 text-gray-500">Organization</span>
+                <span className="min-w-0 truncate font-semibold text-brand-dark">{result.organization_email || '—'}</span>
+              </div>
+            </div>
+
+            {Array.isArray(result.rejected_by_type) && result.rejected_by_type.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 font-inter">By Verification Type</p>
+                <div className="space-y-1.5">
+                  {result.rejected_by_type.map((t) => (
+                    <div key={t.verification_type_name} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-inter">
+                      <span className="text-gray-600">{t.verification_type_name}</span>
+                      <span className="font-semibold text-red-500">{t.rejected_count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Modal.Footer><Button onClick={onClose} className="w-full">Done</Button></Modal.Footer>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+// ── Resend Rejected — re-verification, NOT the same as Send Rejected List
+// above (that's a read-only Excel export). One API call accepts exactly one
+// verification_type_name, so the modal is built around picking a type
+// first, then only the records currently rejected for that exact type.
+// `prefill` (optional) comes from a single rejected check's own "Resend for
+// Re-verification" button — pre-selects that type + that one record, still
+// requires the admin to pick a verifier before sending.
+export const ResendRejectedModal = ({ batch, records = [], prefill, onClose, onSent }) => {
+  const getId = (r) => r?.id || r?.user_id || r?.entity_id;
+  const getTitle = (r) => r?.product_name || r?.full_name || r?.email || getId(r) || 'Record';
+
+  const rejectedByType = useMemo(() => {
+    const map = {};
+    records.forEach((r) => {
+      Object.entries(r?.verification_type_status || {}).forEach(([name, info]) => {
+        if (info?.status === 'rejected') {
+          (map[name] ||= []).push({ record: r, reason: info?.rejection_reason || info?.reason || null });
+        }
+      });
+    });
+    return map;
+  }, [records]);
+  const typeOptions = Object.keys(rejectedByType);
+
+  const [typeName, setTypeName] = useState(prefill?.typeName || typeOptions[0] || '');
+  const [selectedIds, setSelectedIds] = useState(() => new Set(prefill?.record ? [getId(prefill.record)] : []));
+  const [verifiers, setVerifiers] = useState([]);
+  const [verifiersLoading, setVerifiersLoading] = useState(false);
+  const [verifierEmail, setVerifierEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  // 502 — the request/association rows were created but the email itself
+  // failed to send. This is a real failure, never shown as success; the
+  // request still exists server-side, so retrying (same call, below) is
+  // treated as a reminder that reuses it rather than erroring again.
+  const [deliveryFailure, setDeliveryFailure] = useState(null); // { message, requestId }
+
+  useEffect(() => {
+    if (!typeName) return;
+    setVerifiersLoading(true);
+    setVerifierEmail('');
+    verifiersAPI.getByType(typeName)
+      .then(({ data }) => setVerifiers(Array.isArray(data?.verifiers) ? data.verifiers : (Array.isArray(data) ? data : [])))
+      .catch(() => setVerifiers([]))
+      .finally(() => setVerifiersLoading(false));
+  }, [typeName]);
+
+  const handleTypeChange = (next) => {
+    setTypeName(next);
+    setSelectedIds(new Set());
+  };
+
+  const currentRejected = rejectedByType[typeName] || [];
+  const toggleId = (id) => {
+    if (!id) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const selectAll = () => setSelectedIds(new Set(currentRejected.map((e) => getId(e.record)).filter(Boolean)));
+  const clearAll = () => setSelectedIds(new Set());
+
+  const handleSend = async () => {
+    if (selectedIds.size === 0 || !verifierEmail || sending) return;
+    setSending(true);
+    setDeliveryFailure(null);
+    try {
+      const { data } = await verificationAPI.resendRejectedForVerification({
+        batch_id: batch.id,
+        verification_type_name: typeName,
+        batch_user_ids: Array.from(selectedIds),
+        verifier_email: verifierEmail,
+      });
+      // A 200 here is always success, whether it created a new request or
+      // reused an existing pending one as a reminder (same request_id,
+      // rotated token) — the backend doesn't distinguish the two in the
+      // response shape, and this modal has no reliable prior request_id to
+      // compare against once reopened, so both cases share one success view.
+      setResult(data || {});
+      toast.success('Re-verification sent');
+      onSent?.();
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 400) {
+        toast.error(getApiError(err, 'One or more selected records are no longer eligible for re-verification. Refresh the rejected list.'));
+      } else if (status === 404) {
+        toast.error('Batch or verification type could not be found.');
+      } else if (status === 409) {
+        toast.error(getApiError(err, 'One or more selected records are already covered by another pending verification request. Resolve the existing request before resending.'));
+      } else if (status === 502) {
+        const detail = err?.response?.data?.detail;
+        const message = typeof detail === 'string' ? detail : 'The re-verification request was created, but the verification email could not be delivered.';
+        const requestIdMatch = typeof detail === 'string' ? detail.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i) : null;
+        setDeliveryFailure({ message, requestId: requestIdMatch?.[0] || null });
+      } else {
+        toast.error(getApiError(err, 'Failed to send for re-verification'));
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!batch) return null;
+
+  if (deliveryFailure) {
+    return (
+      <Modal isOpen onClose={onClose} title="Email Delivery Failed" size="md">
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-red-600">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-brand-dark font-inter">Email Delivery Failed</p>
+              <p className="text-xs text-red-700 font-inter mt-1">
+                The re-verification request was created, but the verification email could not be delivered. Please retry sending the verification link.
+              </p>
+            </div>
+          </div>
+          {deliveryFailure.requestId && (
+            <p className="text-[11px] text-gray-400 font-inter">
+              Request ID: <span className="font-mono text-gray-600">{deliveryFailure.requestId}</span>
+            </p>
+          )}
+          <p className="text-xs text-gray-500 font-inter">
+            The request still exists — clicking "Send for Re-verification" again will retry it as a reminder rather than creating a duplicate.
+          </p>
+          <Modal.Footer className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>Close</Button>
+            <Button variant="primary" icon={sending ? RefreshCw : Send} loading={sending} onClick={handleSend}>
+              Retry Send
+            </Button>
+          </Modal.Footer>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (result) {
+    return (
+      <Modal isOpen onClose={onClose} title="Re-verification Sent" size="md">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600">
+              <CheckCircle size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-brand-dark font-inter">Re-verification Sent</p>
+              <p className="text-xs text-emerald-700 font-inter">
+                {(result.resent_user_ids?.length ?? selectedIds.size)} rejected record{(result.resent_user_ids?.length ?? selectedIds.size) === 1 ? '' : 's'} sent to {result.verifier_email || verifierEmail}
+              </p>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 font-inter">
+            The verifier will receive a new verification link by email. The original rejected request's own link/history is untouched — it will keep showing "Rejected" permanently; only the new link reflects the fresh re-verification.
+          </p>
+          <Modal.Footer><Button onClick={onClose} className="w-full">Done</Button></Modal.Footer>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal isOpen onClose={() => !sending && onClose()} title="Resend Rejected for Re-verification" size="4xl">
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-gray-500 font-inter">Verification Type</label>
+          {typeOptions.length === 0 ? (
+            <p className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs text-gray-400 font-inter">
+              No rejected records in this batch.
+            </p>
+          ) : (
+            <CustomSelect
+              className="w-full"
+              value={typeName}
+              onChange={handleTypeChange}
+              options={typeOptions.map((t) => ({ value: t, label: `${t.replace(/_/g, ' ')} (${rejectedByType[t].length} rejected)` }))}
+              placeholder="Select a verification type"
+            />
+          )}
+        </div>
+
+        {typeOptions.length > 0 && (
+          <>
+            <div className="overflow-hidden rounded-xl border border-gray-100">
+              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 font-inter">Rejected Records</p>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={selectAll} className="text-[11px] font-semibold text-brand-blue font-inter hover:underline">Select All</button>
+                  <button type="button" onClick={clearAll} className="text-[11px] font-medium text-gray-400 font-inter hover:text-gray-600">Clear</button>
+                </div>
+              </div>
+              <div className="max-h-56 divide-y divide-gray-50 overflow-y-auto thin-scrollbar">
+                {currentRejected.map(({ record, reason }) => {
+                  const id = getId(record);
+                  const checked = !!id && selectedIds.has(id);
+                  return (
+                    <label key={id} className="flex cursor-pointer items-start gap-2.5 px-3 py-2 hover:bg-gray-50/70">
+                      <input type="checkbox" checked={checked} onChange={() => toggleId(id)} className="mt-0.5 accent-brand-blue" />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-brand-dark font-inter">{getTitle(record)}</p>
+                        <p className="truncate text-[11px] text-red-500 font-inter">
+                          Rejected{reason ? ` — ${reason}` : ''}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <p className="text-xs font-inter text-gray-500">
+              Selected: <span className="font-semibold text-brand-dark">{selectedIds.size}</span>
+            </p>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500 font-inter">Verifier</label>
+              {verifiersLoading ? (
+                <LoadingSkeleton variant="list" rows={2} label="Loading verifiers" className="px-3" />
+              ) : (
+                <CustomSelect
+                  className="w-full"
+                  value={verifierEmail}
+                  onChange={setVerifierEmail}
+                  options={verifiers.map((v) => ({ value: v.email, label: v.name ? `${v.name} — ${v.email}` : v.email }))}
+                  placeholder="— Select a verifier —"
+                />
+              )}
+            </div>
+          </>
+        )}
+
+        <Modal.Footer className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={sending}>Cancel</Button>
+          <Button
+            variant="primary"
+            icon={sending ? RefreshCw : Send}
+            loading={sending}
+            disabled={selectedIds.size === 0 || !verifierEmail}
+            onClick={handleSend}
+          >
+            Send for Re-verification
+          </Button>
+        </Modal.Footer>
+      </div>
+    </Modal>
+  );
+};
+
+// Stable (module-level) shell so WarrantyDetailModal can render either as the
+// old popup or inline as a full page without remounting its children.
+const WarrantyShell = ({ asPage, isOpen, onClose, title, children }) => (
+  asPage
+    ? <div className="space-y-5">{children}</div>
+    : <Modal isOpen={isOpen} onClose={onClose} title={title} size="4xl">{children}</Modal>
+);
+
+// ── Warranty Detail — fetches from the dedicated warranty endpoint (warranty
+// batches carry product/serial/warranty-date records, not the generic
+// human/product verification shape the Control Center page renders). Rendered
+// as a full page via WarrantyControlCenter (asPage) so every batch type opens
+// a dedicated page instead of a mix of pages and popups. ─
+const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose, asPage = false }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [warrantyPage, setWarrantyPage] = useState(1);
+  const [warrantyPageSize, setWarrantyPageSize] = useState(10);
+  useEffect(() => { setWarrantyPage(1); }, [search, warrantyPageSize]);
 
   // "Send to Organization" — real, persisted backend action. Sharing state
   // is read straight off this batch's own fetched status (shared_with_org),
@@ -964,6 +1800,9 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
       )
     : products;
 
+  const warrantyStart = (Math.min(warrantyPage, Math.max(1, Math.ceil(filtered.length / warrantyPageSize))) - 1) * warrantyPageSize;
+  const pagedProducts = filtered.slice(warrantyStart, warrantyStart + warrantyPageSize);
+
   const tiles = [
     { label: 'Pending',  value: summary?.pending  ?? 0, icon: Clock,       ico: 'text-amber-500',   num: 'text-amber-600' },
     { label: 'Approved', value: summary?.approved ?? 0, icon: CheckCircle, ico: 'text-emerald-500', num: 'text-emerald-600' },
@@ -1073,14 +1912,9 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
 
   return (
     <>
-    <Modal isOpen={!!batchId} onClose={onClose} title={batchName ? `${batchName} — Warranty Status` : 'Warranty Status'} size="4xl">
+    <WarrantyShell asPage={asPage} isOpen={!!batchId} onClose={onClose} title={batchName ? `${batchName} — Warranty Status` : "Warranty Status"}>
       {loading ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-blue/10 bg-brand-blue/5">
-            <RefreshCw size={20} className="animate-spin text-brand-blue" />
-          </div>
-          <p className="font-inter text-sm text-gray-400">Loading warranty status…</p>
-        </div>
+        <LoadingSkeleton variant="detail" label="Loading warranty status" />
       ) : !data ? (
         <div className="flex flex-col items-center justify-center gap-3 py-12">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50">
@@ -1255,9 +2089,9 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
                 <p className="font-inter text-sm text-gray-400">No products found</p>
               </div>
             ) : (
-              <div className="max-h-[45vh] overflow-auto">
+              <div className="overflow-x-auto">
                 <table className="w-full min-w-[980px] font-inter">
-                  <thead className="sticky top-0">
+                  <thead>
                     <tr className="border-b border-blue-100 bg-blue-50/80">
                       {['Product', 'Serial Number', 'Warranty Start', 'Warranty End', 'Status', 'Certificate', 'Reason', 'Actions'].map((h) => (
                         <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-blue/70">{h}</th>
@@ -1265,13 +2099,17 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((product, i) => {
+                    {pagedProducts.map((product, i) => {
                       const statusMeta = WARRANTY_PRODUCT_STATUS_META[product.warranty_status] || WARRANTY_PRODUCT_STATUS_META.approved;
                       const StatusIcon = statusMeta.icon;
                       const productId = product.product_id || product.id;
                       const sdcMatch = productId ? sdcByProductId[productId] : null;
                       return (
-                        <tr key={productId || i} className="border-b border-blue-50 last:border-0 hover:bg-blue-50/30 transition-colors">
+                        <tr
+                          key={productId || i}
+                          onClick={() => setDetailRecord(product)}
+                          className="cursor-pointer border-b border-blue-50 last:border-0 transition-colors hover:bg-blue-50/30"
+                        >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10">
@@ -1295,25 +2133,18 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
                             {sdcMatch ? (
                               <div className="flex items-center gap-2">
                                 <Badge status={sdcMatch.issued ? 'info' : 'pending'}>{sdcMatch.issued ? 'Ready' : 'Draft'}</Badge>
-                                <div className="flex items-center gap-0.5 rounded-lg border border-gray-100 bg-gray-50 p-0.5">
-                                  {sdcMatch.issued && (
+                                {sdcMatch.issued && (
+                                  <div className="flex items-center gap-0.5 rounded-lg border border-gray-100 bg-gray-50 p-0.5">
                                     <button
                                       type="button"
                                       disabled={downloadingSdcId === sdcMatch.publicId}
-                                      onClick={() => openSdcCertificate(sdcMatch.publicId)}
+                                      onClick={(e) => { e.stopPropagation(); openSdcCertificate(sdcMatch.publicId); }}
                                       className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-brand-blue transition-colors hover:bg-white hover:shadow-sm disabled:opacity-50"
                                     >
                                       <Download size={12} className={downloadingSdcId === sdcMatch.publicId ? 'animate-spin' : ''} /> Download
                                     </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => setDetailRecord(product)}
-                                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-gray-500 transition-colors hover:bg-white hover:text-brand-blue hover:shadow-sm"
-                                  >
-                                    <Info size={12} /> Detail
-                                  </button>
-                                </div>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-xs text-gray-300 font-inter">—</span>
@@ -1329,7 +2160,7 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
                                 <button
                                   type="button"
                                   disabled={deletingId === productId}
-                                  onClick={() => handleDeleteProduct(productId)}
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteProduct(productId); }}
                                   className="rounded-md px-2 py-1 text-xs font-semibold font-inter text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
                                 >
                                   {deletingId === productId ? '…' : 'Yes'}
@@ -1337,7 +2168,7 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
                                 <button
                                   type="button"
                                   disabled={deletingId === productId}
-                                  onClick={() => setConfirmDeleteId(null)}
+                                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
                                   className="rounded-md px-2 py-1 text-xs font-semibold font-inter text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
                                 >
                                   No
@@ -1347,7 +2178,7 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
                               <button
                                 type="button"
                                 title="Permanently remove this product from the batch"
-                                onClick={() => setConfirmDeleteId(productId)}
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(productId); }}
                                 className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                               >
                                 <Trash2 size={12} /> Delete
@@ -1361,11 +2192,19 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
                 </table>
               </div>
             )}
+            <TablePagination
+              page={warrantyPage}
+              pageSize={warrantyPageSize}
+              total={filtered.length}
+              onPageChange={setWarrantyPage}
+              onPageSizeChange={setWarrantyPageSize}
+              noun="product"
+            />
           </div>
 
         </div>
       )}
-    </Modal>
+    </WarrantyShell>
 
     {sdcGenerateOpen && (
       <GenerateSDCModal
@@ -1378,93 +2217,141 @@ const WarrantyDetailModal = ({ batchId, batchName, orgId, spaceId, onClose }) =>
       />
     )}
 
-    <CertificateDetailModal
-      record={detailRecord}
-      sdcMatch={detailRecord ? sdcByProductId[detailRecord.product_id || detailRecord.id] || null : null}
-      instanceKey="de"
-      onClose={() => setDetailRecord(null)}
-    />
+    {/* Warranty Record Detail — always opens regardless of certificate
+        status, same pattern as the generic VerificationDetailsModal used
+        for Human/Product records (see the screenshot that prompted this):
+        record status, uploaded Warranty Report/Product Details documents,
+        and the certificate section last. "Not Generated" there is just a
+        status line, never a reason to block the rest of the popup. Same
+        6xl width and document-card styling as that other modal's
+        showDocuments view, for visual consistency across both. The
+        certificate badge + Download also sit in the header next to Close —
+        see Modal's headerActions — as a shortcut so an already-issued
+        certificate never needs a scroll first; the header sits outside the
+        scrollable content area, so this never crops anything below it. */}
+    {(() => {
+      const dProductId = detailRecord ? (detailRecord.product_id || detailRecord.id) : null;
+      const dSdcMatch = dProductId ? sdcByProductId[dProductId] || null : null;
+      const headerActions = detailRecord ? (
+        <>
+          <Badge status={dSdcMatch ? (dSdcMatch.issued ? 'info' : 'pending') : 'default'}>
+            {dSdcMatch ? (dSdcMatch.issued ? 'Ready' : 'Draft') : 'Not Generated'}
+          </Badge>
+          {dSdcMatch?.issued && (
+            <button
+              type="button"
+              disabled={downloadingSdcId === dSdcMatch.publicId}
+              onClick={() => openSdcCertificate(dSdcMatch.publicId)}
+              title="Download SDC Certificate"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-blue px-2.5 py-1.5 font-inter text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {downloadingSdcId === dSdcMatch.publicId ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+              Download SDC Certificate
+            </button>
+          )}
+        </>
+      ) : null;
+      return (
+    <Modal isOpen={!!detailRecord} onClose={() => setDetailRecord(null)} title="Warranty Record Detail" headerActions={headerActions} size="6xl">
+      {detailRecord && (() => {
+        const dStatusMeta = WARRANTY_PRODUCT_STATUS_META[detailRecord.warranty_status] || WARRANTY_PRODUCT_STATUS_META.approved;
+        const DStatusIcon = dStatusMeta.icon;
+        const docs = [
+          { label: 'Warranty Report', url: detailRecord.custom_fields?.warrenty_report || detailRecord.custom_fields?.warranty_report || null },
+          { label: 'Product Details', url: detailRecord.custom_fields?.product_details || null },
+        ];
+        return (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50/60 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10">
+                  <Package size={16} className="text-brand-blue" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-sora text-sm font-semibold text-brand-dark">{detailRecord.product_name || '—'}</p>
+                  {detailRecord.serial_number && (
+                    <p className="truncate font-mono font-inter text-xs text-gray-400">{detailRecord.serial_number}</p>
+                  )}
+                </div>
+              </div>
+              <span className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-inter text-xs font-semibold ${dStatusMeta.tone}`}>
+                <DStatusIcon size={12} /> {dStatusMeta.label}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 font-inter text-xs">
+              <div>
+                <p className="text-gray-400">Warranty Start</p>
+                <p className="mt-0.5 font-medium text-brand-dark">{warrantyDetailFormatDate(detailRecord.warranty_start_date)}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">Warranty End</p>
+                <p className="mt-0.5 font-medium text-brand-dark">{warrantyDetailFormatDate(detailRecord.warranty_end_date)}</p>
+              </div>
+            </div>
+
+            {detailRecord.warranty_status === 'rejected' && detailRecord.warranty_reason && (
+              <div className="rounded-xl bg-red-50 px-3 py-2.5">
+                <p className="font-inter text-[11px] font-semibold uppercase tracking-wide text-red-400">Reason</p>
+                <p className="mt-1 font-inter text-sm text-red-600">{detailRecord.warranty_reason}</p>
+              </div>
+            )}
+
+            <div>
+              <p className="mb-2 font-inter text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Uploaded Documents ({docs.filter((d) => d.url).length})
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {docs.map((doc) => {
+                  const canView = typeof doc.url === 'string' && /^https?:\/\//i.test(doc.url);
+                  return (
+                    <article key={doc.label} className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                      <div className="flex h-28 flex-col items-center justify-center gap-1.5 border-b border-gray-100 bg-gray-50/60 text-gray-400 sm:h-36">
+                        <FileText size={20} />
+                        <span className="font-inter text-xs">{canView ? 'Document preview' : 'Not uploaded'}</span>
+                      </div>
+                      <div className="min-w-0 p-2.5">
+                        <p className="break-words font-inter text-sm font-semibold text-brand-dark">{doc.label}</p>
+                        <p className="mt-1 font-inter text-xs text-gray-500">{canView ? 'Uploaded' : 'Document link unavailable'}</p>
+                      </div>
+                      {canView && (
+                        <div className="flex items-center gap-1.5 border-t border-gray-100 p-2.5">
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-inter text-xs font-semibold text-brand-blue hover:bg-blue-50"
+                          >
+                            <Eye size={13} /> View
+                          </a>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </Modal>
+      );
+    })()}
     </>
   );
 };
 
-// ── Main BatchMonitor component ───────────────────────────────────────────────
-export const BatchMonitor = () => {
+// ── Shared batch-list data hook — fetch + normalize + per-batch workflow
+// overlay + Dhiway space-id lookup, used identically by both the list page
+// (BatchMonitor) and the detail page (BatchControlCenter) so a page reached
+// directly by URL (not navigated to from an already-loaded list) still gets
+// the exact same batches array, never a second, drifted implementation.
+export const useBatchList = () => {
   const [data, setData] = useState(null);
-  const [batchDetail, setBatchDetail] = useState(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [orgFilter, setOrgFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedBatchId, setSelectedBatchId] = useState(null);
-  const [selectedWarrantyBatch, setSelectedWarrantyBatch] = useState(null); // { id, name, orgId, batchType }
   const [workflowByBatch, setWorkflowByBatch] = useState(() => getStoredWorkflow());
-  const [orgDhiwayDetailsMap, setOrgDhiwayDetailsMap] = useState({}); // org_id -> normalized dhiways_details rows
-  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState(null);
-  const [deletingUserId, setDeletingUserId] = useState(null);
-
-  // Action loading states
-  const [resending, setResending] = useState(null); // request token being resent
-  const [sendingToOrg, setSendingToOrg] = useState(false);
-
-  // Submitted verifier reports (real backend data)
-  const [submittedReports, setSubmittedReports] = useState(null);
-  const [loadingReports, setLoadingReports] = useState(false);
-  const [decidingRequestId, setDecidingRequestId] = useState(null); // request being approved/rejected
-  const [rejectingRequestId, setRejectingRequestId] = useState(null); // which report's inline reason box is open
-  const [rejectReason, setRejectReason] = useState('');
-  const [downloadingFileKey, setDownloadingFileKey] = useState(null);
-
-  // Sub-modal states
-  const [smartSendOpen,       setSmartSendOpen]       = useState(false);
-  const [smartSendBatch,      setSmartSendBatch]      = useState(null);
-  const [sdcGenerateBatch,    setSdcGenerateBatch]    = useState(null);
-  const [sdcLiveStatus,       setSdcLiveStatus]       = useState(null); // { batchId, ready, total }
-  const [sdcPollingBatchId,   setSdcPollingBatchId]   = useState(null); // batchId while the background poll is still actively running
-  const [sdcRecordsByEmail,   setSdcRecordsByEmail]   = useState({});
-  const [sdcRecordsByName,    setSdcRecordsByName]    = useState({});
-  const [batchSdcRecords,     setBatchSdcRecords]     = useState([]);
-  const [batchSdcByRecordId,  setBatchSdcByRecordId]  = useState({});
-  const [sdcCertsLoading,     setSdcCertsLoading]     = useState(false);
-  const [downloadingSdcId,    setDownloadingSdcId]    = useState(null);
-  const [detailRecord,        setDetailRecord]        = useState(null);
-  const [actionMenu, setActionMenu] = useState({ batchId: null, anchorRect: null });
-
-  // Table filters / pagination — all applied client-side over the single
-  // GET /verification/batches response already held in `data`.
-  const [searchTerm,   setSearchTerm]   = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // all | in_progress | pending | completed | failed
-  const [batchTypeFilter, setBatchTypeFilter] = useState(''); // '' | human | product | warranty
-  const [dateFrom,     setDateFrom]     = useState('');
-  const [dateTo,       setDateTo]       = useState('');
-  const [showDateRange, setShowDateRange] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [currentPage,  setCurrentPage]  = useState(1);
-  const [pageSize,     setPageSize]     = useState(10);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [orgFilter, statusFilter, batchTypeFilter, searchTerm, dateFrom, dateTo]);
-
-  const closeActionMenu = useCallback(() => {
-    setActionMenu({ batchId: null, anchorRect: null });
-  }, []);
-
-  useEffect(() => {
-    if (!actionMenu.batchId) return undefined;
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') closeActionMenu();
-    };
-    const handleScrollOrResize = () => closeActionMenu();
-    window.addEventListener('keydown', handleEscape);
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
-    return () => {
-      window.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
-    };
-  }, [actionMenu.batchId, closeActionMenu]);
+  const [orgDhiwayDetailsMap, setOrgDhiwayDetailsMap] = useState({});
 
   const fetchData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -1537,7 +2424,7 @@ export const BatchMonitor = () => {
       ...batch,
       name: edited.name || batch.name,
       orgName: edited.orgName || batch.orgName,
-      spaceId: batch.orgId ? getOrgSpaceId(batch.orgId, batch.batchType) || null : null,
+      spaceId: batch.sdcSpaceId || batchSdcSpaceId(batch.sdcInfo, batch.orgId ? getOrgSpaceId(batch.orgId, batch.batchType) : '') || null,
       createdAt: batch.latestCreatedAt || null,
       status,
       statusMeta: batchStatusMeta[status] || batchStatusMeta.pending,
@@ -1556,6 +2443,159 @@ export const BatchMonitor = () => {
     };
   });
 
+  const updateBatchWorkflow = useCallback((batchId, patch) => {
+    setWorkflowByBatch((current) => {
+      const next = { ...current, [batchId]: { ...(current[batchId] || {}), ...patch, lastAction: new Date().toISOString() } };
+      localStorage.setItem(BATCH_WORKFLOW_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  return { data, setData, batches, loading, refreshing, fetchData, workflowByBatch, getOrgSpaceId, updateBatchWorkflow };
+};
+
+// ── Warranty Control Center — full page for Warranty batches, mirroring the
+// Human/Product BatchControlCenter page (same back-link/header treatment)
+// so no batch type opens as a popup while the others open as pages.
+export const WarrantyControlCenter = () => {
+  const { batchId } = useParams();
+  const navigate = useNavigate();
+  const { batches, loading, getOrgSpaceId } = useBatchList();
+  const batch = batches.find((b) => b.id === batchId) || null;
+
+  if (!loading && !batch) {
+    return (
+      <AuthLayout title="Batch Monitor">
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <p className="text-sm font-semibold text-brand-dark font-inter">Batch not found</p>
+          <p className="text-xs text-gray-400 font-inter">It may have been deleted, or the link is out of date.</p>
+          <Button variant="outline" size="sm" icon={ChevronLeft} onClick={() => navigate('/admin/batch-monitor')}>
+            Back to Batch Monitor
+          </Button>
+        </div>
+      </AuthLayout>
+    );
+  }
+  if (!batch) {
+    return (
+      <AuthLayout title="Batch Monitor">
+        <LoadingSkeleton variant="dashboard" label="Loading batch" />
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout title="Batch Monitor">
+      <div className="space-y-4">
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate('/admin/batch-monitor')}
+            className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-brand-blue font-inter hover:underline"
+          >
+            <ChevronLeft size={14} /> Back to Batch Monitor
+          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="font-sora text-2xl font-bold text-brand-dark">{batch.name}</h1>
+            <Badge status="info">Warranty</Badge>
+          </div>
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-500 font-inter">
+            <Building2 size={13} className="text-gray-400" /> {batch.orgName}
+          </p>
+        </div>
+        <WarrantyDetailModal
+          asPage
+          batchId={batch.id}
+          batchName={batch.name}
+          orgId={batch.orgId || null}
+          spaceId={batch.sdcSpaceId || batchSdcSpaceId(batch.sdcInfo, batch.orgId ? getOrgSpaceId(batch.orgId, batch.batchType || 'warranty') : '') || null}
+          onClose={() => navigate('/admin/batch-monitor')}
+        />
+      </div>
+    </AuthLayout>
+  );
+};
+
+// ── Main BatchMonitor component (the batch LIST/table page) ────────────────
+// The per-batch "Control Center" used to be a Modal rendered inline here;
+// it's now its own routed page, BatchControlCenter (below), reached via
+// navigate(`/admin/batch-monitor/${batch.id}`) — both pages share the exact
+// same fetch/normalize logic via useBatchList() so neither can drift from
+// the other.
+export const BatchMonitor = () => {
+  const navigate = useNavigate();
+  const { batches, loading, refreshing, fetchData, updateBatchWorkflow } = useBatchList();
+
+  const [orgFilter, setOrgFilter] = useState('');
+
+  // Sub-modal states — row-level actions, reachable straight from the list
+  // without opening the batch's own Control Center page.
+  const [deleteBatchTarget,   setDeleteBatchTarget]   = useState(null); // batch pending the delete-confirm modal
+  const [rejectedListTarget,  setRejectedListTarget]  = useState(null); // batch pending the Send Rejected List modal
+  const [smartSendOpen,       setSmartSendOpen]       = useState(false);
+  const [smartSendBatch,      setSmartSendBatch]      = useState(null);
+  const [actionMenu, setActionMenu] = useState({ batchId: null, anchorRect: null });
+
+  // Table filters / pagination — all applied client-side over the batches
+  // array from useBatchList().
+  const [searchTerm,   setSearchTerm]   = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // all | in_progress | pending | completed | failed
+  const [batchTypeFilter, setBatchTypeFilter] = useState(''); // '' | human | product | warranty
+  const [dateFrom,     setDateFrom]     = useState('');
+  const [dateTo,       setDateTo]       = useState('');
+  const [showDateRange, setShowDateRange] = useState(false);
+  const [verificationFilterId, setVerificationFilterId] = useState('');
+  const [verificationOptions, setVerificationOptions] = useState([]);
+  const [verificationOptionsError, setVerificationOptionsError] = useState('');
+  const [verificationOptionsLoading, setVerificationOptionsLoading] = useState(true);
+  const [metadataVersion, setMetadataVersion] = useState(0);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [currentPage,  setCurrentPage]  = useState(1);
+  const [pageSize,     setPageSize]     = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [orgFilter, statusFilter, batchTypeFilter, searchTerm, dateFrom, dateTo, verificationFilterId]);
+
+  useEffect(() => {
+    let active = true;
+    setVerificationOptionsLoading(true); setVerificationOptionsError('');
+    verificationAPI.getVerificationTypes().then(({ data }) => {
+      const types = Array.isArray(data) ? data : data?.verification_types;
+      if (!Array.isArray(types)) throw new Error('Verification types are unavailable.');
+      if (active) setVerificationOptions(types.filter((type) => type?.name && type?.id).sort((a, b) => a.name.localeCompare(b.name)));
+    }).catch((error) => { if (active) setVerificationOptionsError(getApiError(error, 'Could not load verification filters.')); })
+      .finally(() => { if (active) setVerificationOptionsLoading(false); });
+    return () => { active = false; };
+  }, [metadataVersion]);
+
+  useEffect(() => {
+    if (!showDateRange) return;
+    const close = (event) => { if (event.key === 'Escape') setShowDateRange(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [showDateRange]);
+
+  const closeActionMenu = useCallback(() => {
+    setActionMenu({ batchId: null, anchorRect: null });
+  }, []);
+
+  useEffect(() => {
+    if (!actionMenu.batchId) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') closeActionMenu();
+    };
+    const handleScrollOrResize = () => closeActionMenu();
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [actionMenu.batchId, closeActionMenu]);
+
   const orgOptions = Array.from(new Set(batches.map((b) => b.orgName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
   // Batch-level status buckets for the quick filter pills. There is no
@@ -1570,30 +2610,29 @@ export const BatchMonitor = () => {
   };
 
   const searchValue = searchTerm.trim().toLowerCase();
-  const fromTime = dateFrom ? new Date(dateFrom).getTime() : null;
-  const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
+  const dateError = batchDateError(dateFrom, dateTo);
 
-  const visibleBatches = batches.filter((b) => {
+  const candidateBatches = batches.filter((b) => {
     if (orgFilter && b.orgName !== orgFilter) return false;
     if (statusFilter !== 'all' && !STATUS_FILTERS[statusFilter]?.(b)) return false;
     if (batchTypeFilter && b.batchType !== batchTypeFilter) return false;
     if (searchValue && !`${b.name} ${b.id} ${b.orgName}`.toLowerCase().includes(searchValue)) return false;
-    if (fromTime && (!b.createdAt || new Date(b.createdAt).getTime() < fromTime)) return false;
-    if (toTime && (!b.createdAt || new Date(b.createdAt).getTime() > toTime)) return false;
-    return true;
+    return batchMatchesDate(b, dateFrom, dateTo);
   });
+  const selectedVerification = verificationOptions.find((type) => type.id === verificationFilterId) || (verificationFilterId ? { id: verificationFilterId, name: '' } : null);
+  const verificationFilter = useBatchVerificationFilter(candidateBatches, selectedVerification, metadataVersion);
+  const visibleBatches = verificationFilter.batches;
+  const filtersBusy = verificationFilter.loading || Boolean(verificationFilterId && verificationOptionsLoading);
 
-  const hasActiveFilters = !!(orgFilter || statusFilter !== 'all' || batchTypeFilter || searchTerm || dateFrom || dateTo);
+  const hasActiveFilters = !!(orgFilter || statusFilter !== 'all' || batchTypeFilter || searchTerm || dateFrom || dateTo || verificationFilterId);
   const clearAllFilters = () => {
     setOrgFilter(''); setStatusFilter('all'); setBatchTypeFilter('');
-    setSearchTerm(''); setDateFrom(''); setDateTo('');
+    setSearchTerm(''); setDateFrom(''); setDateTo(''); setVerificationFilterId('');
   };
 
   const totalPages = Math.max(1, Math.ceil(visibleBatches.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const paginatedBatches = visibleBatches.slice((safePage - 1) * pageSize, safePage * pageSize);
-
-  const selectedBatch = batches.find((b) => b.id === selectedBatchId) || null;
 
   const total    = batches.reduce((s, b) => s + b.total,    0);
   const pending  = batches.reduce((s, b) => s + b.pending,  0);
@@ -1623,7 +2662,7 @@ export const BatchMonitor = () => {
       failed: bucket((b) => b.failed),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, workflowByBatch, getOrgSpaceId]);
+  }, [batches]);
 
   const statCards = [
     { key: 'total',    label: 'Total Records', value: total,    sub: 'Across all batches',    icon: Users,       surface: 'bg-blue-50',   text: 'text-brand-blue', stroke: '#2563eb', spark: sparkSeries.total },
@@ -1632,295 +2671,29 @@ export const BatchMonitor = () => {
     { key: 'failed',   label: 'Failed',         value: failed,   sub: 'Verification failed',   icon: XCircle,     surface: 'bg-red-50',    text: 'text-red-500',    stroke: '#ef4444', spark: sparkSeries.failed },
   ];
 
-  const updateBatchWorkflow = (batchId, patch) => {
-    setWorkflowByBatch((current) => {
-      const next = { ...current, [batchId]: { ...(current[batchId] || {}), ...patch, lastAction: new Date().toISOString() } };
-      localStorage.setItem(BATCH_WORKFLOW_KEY, JSON.stringify(next));
-      return next;
-    });
-  };
+  // "View Details" — every batch type opens its own dedicated page. Warranty
+  // batches carry product/serial/warranty-date records, not the generic
+  // human/product verification shape, so they get their own page component.
+  const handleOpenBatchDetails = useCallback((batch) => {
+    navigate(batch.batchType === 'warranty'
+      ? `/admin/batch-monitor/warranty/${batch.id}`
+      : `/admin/batch-monitor/${batch.id}`);
+  }, [navigate]);
 
-  // ── Action: Generate SDC — poll GET /status until done, mirrors the flow
-  // used in SDCVerification.jsx so the still-open modal can update itself once
-  // Dhiway actually finishes issuing (instead of staying stuck on "pending").
-  const pollSdcStatusUntilDone = useCallback((batchId) => {
-    let attempts = 0;
-    const maxAttempts = 10;
-    setSdcPollingBatchId(batchId);
-    const tick = async () => {
-      attempts += 1;
-      try {
-        const { data } = await sdcAPI.getBatchStatus(batchId);
-        if (data.done) {
-          setSdcLiveStatus({ batchId, ready: data.ready, total: data.total });
-          setSdcPollingBatchId((current) => (current === batchId ? null : current));
-          setData((prev) => (prev || []).map((b) => (
-            b.id === batchId ? { ...b, sdcInfo: { ...(b.sdcInfo || {}), status: 'sdc_created' } } : b
-          )));
-          toast.success(`Certificates ready — ${data.ready}/${data.total} issued`);
-          refreshSdcCertificates();
-          return;
-        }
-      } catch {
-        // transient error — keep polling, only give up after maxAttempts
-      }
-      if (attempts < maxAttempts) {
-        setTimeout(tick, 8000);
-      } else {
-        setSdcPollingBatchId((current) => (current === batchId ? null : current));
-        toast.error('Still processing — check the batch again shortly');
-      }
-    };
-    tick();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Pulls the org's SDC records and matches them to this batch's users by
-  // email — same anchorTime-based issued/draft distinction used elsewhere.
-  // Dhiway records are matched to batch users "by email or name" per the
-  // backend docs — email alone isn't enough (test/dummy records often have
-  // empty or non-matching email fields), so also index by title as a fallback.
-  const refreshSdcCertificates = useCallback(async (batchIdArg = selectedBatchId, detailRecordsArg = null, sdcInfoArg = undefined) => {
-    if (!batchIdArg) return;
-    // Prefer the batch's own recorded verification_progress.sdc.{org_id,space_id}
-    // — that's exactly what was used to generate this batch's certificates,
-    // and is more reliable than the org's *current* profile setting (which
-    // this falls back to only for older batches that predate this field).
-    const sdcInfo = sdcInfoArg !== undefined ? sdcInfoArg : batchDetail?.verification_progress?.sdc;
-    const orgId   = sdcInfo?.org_id || undefined;
-    const spaceId = sdcInfo?.space_id || selectedBatch?.spaceId || undefined;
-    setSdcCertsLoading(true);
-    try {
-      const allRecords = [];
-      let page = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data } = await sdcAPI.getRecords({ active: 1, page, pageSize: 100, org_id: orgId, space_id: spaceId });
-        const pageRecords = Array.isArray(data?.records) ? data.records : [];
-        allRecords.push(...pageRecords);
-        const totalPages = Number(data?.totalPages || data?.total_pages || 0);
-        hasMore = totalPages > 0 ? page < totalPages : pageRecords.length === 100;
-        page += 1;
-      }
-
-      const byEmail = {};
-      const byName = {};
-      allRecords.forEach((r) => {
-        const issued = !!r.anchorTime && !r.revoked;
-        const entry = {
-          id: r.id, publicId: r.publicId, title: r.title, issued,
-          recipients: Array.isArray(r.recipients) ? r.recipients : [],
-          anchorTime: r.anchorTime || null, revoked: !!r.revoked,
-          active: !!r.active, latest: !!r.latest, edited: !!r.edited,
-          createdAt: r.createdAt || null, updatedAt: r.updatedAt || null,
-        };
-        (r.recipients || []).forEach((email) => {
-          if (email) byEmail[email.toLowerCase()] = entry;
-        });
-        if (r.title?.trim()) byName[r.title.trim().toLowerCase()] = entry;
-      });
-      setSdcRecordsByEmail(byEmail);
-      setSdcRecordsByName(byName);
-
-      const detailRecords = detailRecordsArg || batchDetail?.users || selectedBatch?.records || [];
-      const matchedRecords = [];
-      const matchedByRecordId = {};
-      const seenPublicIds = new Set();
-      detailRecords.forEach((record) => {
-        // Confirmed via the live batch-details response: each user is keyed
-        // by `user_id`, not `id` — check all three since the shape can vary.
-        const recordId = record?.id || record?.user_id || record?.entity_id;
-        const recordEmail = record?.email?.trim().toLowerCase();
-        const recordName = recordTitle(record)?.trim().toLowerCase();
-        const match = allRecords.find((item) => {
-          const recipients = (item?.recipients || []).map((value) => value?.trim().toLowerCase()).filter(Boolean);
-          const itemTitle = item?.title?.trim().toLowerCase();
-          return (recordEmail && recipients.includes(recordEmail)) || (recordName && itemTitle === recordName);
-        });
-        if (match?.publicId && !seenPublicIds.has(match.publicId)) {
-          seenPublicIds.add(match.publicId);
-          matchedRecords.push(match);
-        }
-        if (match?.publicId && recordId) {
-          matchedByRecordId[recordId] = {
-            id: match.id,
-            publicId: match.publicId,
-            title: match.title,
-            recipients: match.recipients || [],
-            anchorTime: match.anchorTime || null,
-            revoked: !!match.revoked,
-            issued: !!match.anchorTime && !match.revoked,
-            active: !!match.active,
-            latest: !!match.latest,
-            edited: !!match.edited,
-            createdAt: match.createdAt || null,
-            updatedAt: match.updatedAt || null,
-          };
-        }
-      });
-
-      // Product records never match by the pass above — they have no email,
-      // and Dhiway echoes the certificate's own publicId into `title` for
-      // this batch type (confirmed live), so title === recordName never
-      // holds either. The list endpoint carries nothing identity-based for
-      // products, but a single-record detail fetch does: credentialSubject.
-      // product_id (confirmed live via GET /sdc/records/{publicId}). Only
-      // chase this down for whichever records are still unmatched, and only
-      // among the most-recently-created still-unclaimed certs, so this stays
-      // a handful of extra requests rather than one per cert in the space.
-      const unmatchedProductRecords = detailRecords.filter((record) => {
-        const recordId = record?.id || record?.user_id || record?.entity_id;
-        return isProductRecord(record) && recordId && !matchedByRecordId[recordId];
-      });
-
-      if (unmatchedProductRecords.length > 0) {
-        const candidatePool = allRecords
-          .filter((item) => item?.publicId && !seenPublicIds.has(item.publicId))
-          .sort((a, b) => new Date(b.createdAt || b.anchorTime || 0) - new Date(a.createdAt || a.anchorTime || 0))
-          .slice(0, Math.max(unmatchedProductRecords.length * 4, 20));
-
-        const detailed = await Promise.all(
-          candidatePool.map((item) =>
-            sdcAPI.getRecord(item.publicId)
-              .then(({ data }) => ({ item, productId: getCertificateProductId(data) }))
-              .catch(() => null)
-          )
-        );
-
-        const certByProductId = new Map();
-        detailed.forEach((entry) => {
-          if (entry?.productId && !certByProductId.has(entry.productId)) {
-            certByProductId.set(entry.productId, entry.item);
-          }
-        });
-
-        unmatchedProductRecords.forEach((record) => {
-          const recordId = record?.id || record?.user_id || record?.entity_id;
-          const match = certByProductId.get(recordId);
-          if (!match?.publicId || seenPublicIds.has(match.publicId)) return;
-          seenPublicIds.add(match.publicId);
-          matchedRecords.push(match);
-          matchedByRecordId[recordId] = {
-            id: match.id,
-            publicId: match.publicId,
-            title: match.title,
-            recipients: match.recipients || [],
-            anchorTime: match.anchorTime || null,
-            revoked: !!match.revoked,
-            issued: !!match.anchorTime && !match.revoked,
-            active: !!match.active,
-            latest: !!match.latest,
-            edited: !!match.edited,
-            createdAt: match.createdAt || null,
-            updatedAt: match.updatedAt || null,
-          };
-        });
-      }
-
-      setBatchSdcRecords(matchedRecords);
-      setBatchSdcByRecordId(matchedByRecordId);
-    } catch {
-      // silent — certificate column just stays blank if this fails
-      setBatchSdcRecords([]);
-      setBatchSdcByRecordId({});
-    } finally {
-      setSdcCertsLoading(false);
-    }
-  }, [batchDetail?.users, batchDetail?.verification_progress?.sdc, selectedBatch?.records, selectedBatch?.spaceId, selectedBatchId]);
-
-  const matchSdcRecord = useCallback((record) => {
-    const recordId = record?.id || record?.user_id || record?.entity_id;
-    if (recordId && batchSdcByRecordId[recordId]) return batchSdcByRecordId[recordId];
-    const byEmail = record?.email ? sdcRecordsByEmail[record.email.toLowerCase()] : null;
-    if (byEmail) return byEmail;
-    const title = recordTitle(record)?.trim().toLowerCase();
-    return title ? sdcRecordsByName[title] || null : null;
-  }, [batchSdcByRecordId, sdcRecordsByEmail, sdcRecordsByName]);
-
-  const handleOpenBatchDetails = useCallback(async (batch) => {
-    // Warranty batches carry product/serial/warranty-date records, not the
-    // generic human/product verification shape this modal renders — open the
-    // dedicated warranty status popup instead, same "View Details" pattern.
-    if (batch.batchType === 'warranty') {
-      setSelectedWarrantyBatch({ id: batch.id, name: batch.name, orgId: batch.orgId || null, batchType: batch.batchType || 'warranty' });
-      return;
-    }
-    setSelectedBatchId(batch.id);
-    setBatchDetail(null);
-    setSubmittedReports(null);
-    setSdcRecordsByEmail({});
-    setSdcRecordsByName({});
-    setBatchSdcRecords([]);
-    setBatchSdcByRecordId({});
-
-    setLoadingDetail(true);
-    setLoadingReports(true);
-
-    try {
-      const [detailRes, reportsRes] = await Promise.all([
-        verificationAPI.getBatchDetails(batch.id),
-        verificationAPI.getSubmittedReports(batch.id).catch(() => ({ data: null })),
-      ]);
-
-      const detailData = detailRes?.data || null;
-      setBatchDetail(detailData);
-      setSubmittedReports(reportsRes?.data || null);
-
-      // SDC generation is a separate workflow from the local Review→Verifier→
-      // Verified pipeline — gate on the batch's actual SDC status (only present
-      // on the detail response, the list endpoint never returns it) rather than
-      // the local workflow stage, so already-issued certificates still show up
-      // for batches still sitting at "Pending" in the mock workflow.
-      const sdcInfo = detailData?.verification_progress?.sdc;
-      if (sdcInfo?.status) {
-        await refreshSdcCertificates(batch.id, detailData?.users || batch.records || [], sdcInfo);
-      }
-    } catch (err) {
-      toast.error(getApiError(err, 'Failed to load batch details'));
-    } finally {
-      setLoadingDetail(false);
-      setLoadingReports(false);
-    }
-  }, [refreshSdcCertificates]);
-
-  // Superadmin-only: permanently removes one customer from the currently
-  // open batch. Updates batchDetail locally (removes the row, decrements the
-  // count shown in the "N records" badge) and refreshes the outer batch list
-  // so its total_users/status stay in sync with what the backend recomputed.
-  const handleDeleteBatchUser = useCallback(async (batchId, record) => {
-    const batchUserId = record.id || record.user_id;
-    if (!batchUserId) return;
-    setDeletingUserId(batchUserId);
-    try {
-      await verificationAPI.deleteBatchUser(batchId, batchUserId);
-      toast.success('Customer removed from batch');
-      setBatchDetail((prev) => prev ? {
-        ...prev,
-        users: (prev.users || []).filter((u) => (u.id || u.user_id) !== batchUserId),
-      } : prev);
-      setConfirmDeleteUserId(null);
-      fetchData();
-    } catch (err) {
-      toast.error(getApiError(err, 'Failed to delete customer'));
-    } finally {
-      setDeletingUserId(null);
-    }
+  // Fired by DeleteBatchModal once the backend confirms the batch is gone
+  // (or was already gone, 404) — closes the delete-confirm modal and
+  // refreshes the list so the row disappears.
+  const handleBatchDeleted = useCallback((batchId) => {
+    setDeleteBatchTarget(null);
+    fetchData();
   }, [fetchData]);
 
   // Smart Send needs actual per-user records to assign — the list endpoint
   // (GET /verification/batches) never returns a `users` array, only the
-  // detail endpoint does. `batch.records` from the list is always empty, so
-  // fetch fresh detail records here rather than trusting whatever's already
-  // cached (which may be for a different batch, or not fetched at all if
-  // Smart Send is triggered from the table row before Control Center opens).
+  // detail endpoint does, so always fetch fresh detail records when
+  // triggered from here (the Control Center page has its own copy of this
+  // that can skip the fetch using its already-loaded batchDetail).
   const openSmartSend = useCallback(async (batch) => {
-    const cachedId = batchDetail?.batch_id || batchDetail?.id;
-    if (batch.id === cachedId && Array.isArray(batchDetail?.users) && batchDetail.users.length) {
-      setSmartSendBatch({ ...batch, records: batchDetail.users, verificationTypes: batchDetail?.verification_types || [] });
-      setSmartSendOpen(true);
-      return;
-    }
     try {
       const { data } = await verificationAPI.getBatchDetails(batch.id);
       setSmartSendBatch({
@@ -1933,32 +2706,6 @@ export const BatchMonitor = () => {
       setSmartSendBatch(batch);
     }
     setSmartSendOpen(true);
-  }, [batchDetail]);
-
-  // Opens a blank tab synchronously (in the same tick as the click) and
-  // redirects it once the URL arrives — awaiting the fetch first and only
-  // then calling window.open gets silently blocked by most browsers since
-  // it's no longer seen as a direct response to the user gesture.
-  const openSdcCertificate = useCallback(async (publicId, kind = 'pdf') => {
-    if (!publicId) return;
-    setDownloadingSdcId(publicId);
-    const win = window.open('', '_blank');
-    if (win) win.opener = null;
-    try {
-      const { data } = await sdcAPI.getRecord(publicId);
-      const url = kind === 'verify' ? data?.verify : data?.pdf;
-      if (url) {
-        if (win) win.location.href = url;
-      } else {
-        win?.close();
-        toast.error(`No ${kind === 'verify' ? 'verify' : 'PDF'} link on this certificate yet`);
-      }
-    } catch (err) {
-      win?.close();
-      toast.error(getApiError(err, 'Failed to fetch certificate'));
-    } finally {
-      setDownloadingSdcId(null);
-    }
   }, []);
 
   const handleBulkSent = (batch, result) => {
@@ -1970,96 +2717,9 @@ export const BatchMonitor = () => {
     fetchData(true);
   };
 
-  const handleResend = async (requestId, verifierEmail) => {
-    setResending(requestId);
-    try {
-      await verificationAPI.resendManualVerification(requestId);
-      toast.success(`Verification link resent to ${verifierEmail}`);
-    } catch (err) {
-      toast.error(getApiError(err, 'Failed to resend verification link'));
-    } finally {
-      setResending(null);
-    }
-  };
-
-  // ── Action: Download an individual verifier-submitted report file ────────
-  const handleDownloadReportFile = async (requestId, fileIndex, filename) => {
-    const key = `${requestId}-${fileIndex}`;
-    setDownloadingFileKey(key);
-    try {
-      const { data } = await verificationAPI.downloadManualReport(requestId, fileIndex);
-      triggerBlobDownload(data, filename || `report-${fileIndex}`);
-    } catch (err) {
-      toast.error(getApiError(err, 'Failed to download report file'));
-    } finally {
-      setDownloadingFileKey(null);
-    }
-  };
-
-  // Approve/reject a submitted manual verification report. The backend
-  // derives every affected user's status and the batch's own `status` as a
-  // side effect of this call — the frontend never sets those directly, it
-  // just re-fetches: submitted-reports + batch detail (for the modal) and
-  // the outer batch list (so the Batch Queue row's counts/status badge
-  // reflect the decision too).
-  const handleDecideReport = async (requestId, status, reason) => {
-    setDecidingRequestId(requestId);
-    try {
-      const { data } = await verificationAPI.updateManualVerificationStatus(requestId, status, reason);
-      // "Reject wins" precedence (backend, Sept 2026): an approval decision
-      // can never silently un-reject a user already rejected elsewhere in a
-      // split-verifier batch. users_protected_from_downgrade tells us when
-      // that guard actually fired — surface it, or an admin approving a
-      // request that reports users_updated: 0 has no way to know why.
-      const protectedCount = data?.users_protected_from_downgrade || 0;
-      toast.success(
-        protectedCount > 0
-          ? `${data?.message || `Marked ${status}`} — ${protectedCount} already-rejected user${protectedCount === 1 ? '' : 's'} protected from being re-approved`
-          : (data?.message || `Marked ${status}`)
-      );
-      setRejectingRequestId(null);
-      setRejectReason('');
-      const batchId = selectedBatch?.id;
-      if (batchId) {
-        const [reportsRes, detailRes] = await Promise.all([
-          verificationAPI.getSubmittedReports(batchId).catch(() => null),
-          verificationAPI.getBatchDetails(batchId).catch(() => null),
-        ]);
-        if (reportsRes) setSubmittedReports(reportsRes.data);
-        if (detailRes) setBatchDetail(detailRes.data);
-      }
-      fetchData(true);
-    } catch (err) {
-      toast.error(getApiError(err, `Failed to mark ${status}`));
-    } finally {
-      setDecidingRequestId(null);
-    }
-  };
-
-  // ── Action: Send to Organization ──────────────────────────────────────────
-  // Real, persisted backend action — POST /verification/batches/{id}/
-  // share-with-organization sets shared_with_org/shared_at/shared_by and
-  // commits it. This is the actual security gate: until it succeeds, the org
-  // caller's GET /sdc/batches/{id}/status returns certificate_ids: [] and
-  // GET /sdc/records/{public_id} 403s, regardless of anything shown here. The
-  // success toast must never fire before the API call actually succeeds, and
-  // the UI must reflect the backend's own state afterward — not a locally
-  // guessed value — hence the refetch rather than an optimistic local flip.
-  const handleSendToOrganization = async (batch) => {
-    setSendingToOrg(true);
-    try {
-      await verificationAPI.shareWithOrganization(batch.id);
-      toast.success(`${batch.name} shared with the organization`);
-      await fetchData(true);
-    } catch (err) {
-      toast.error(getApiError(err, 'Failed to share batch with organization'));
-    } finally {
-      setSendingToOrg(false);
-    }
-  };
-
   // ── Export the currently filtered batch list (not just the current page) ──
   const handleExport = (format) => {
+    if (filtersBusy || verificationFilter.error || dateError) { toast.error('Wait for the filters to load and choose a valid date range before exporting.'); return; }
     setShowExportMenu(false);
     if (visibleBatches.length === 0) { toast.error('No batches to export'); return; }
     const rows = visibleBatches.map((b) => ({
@@ -2092,11 +2752,11 @@ export const BatchMonitor = () => {
         subtitle="Review live human and product verification records"
         action={
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" icon={RefreshCw} loading={refreshing} onClick={() => fetchData(true)}>
+            <Button variant="outline" size="sm" icon={RefreshCw} loading={refreshing} onClick={async () => { await fetchData(true); setMetadataVersion((value) => value + 1); }}>
               Refresh
             </Button>
             <div className="relative">
-              <Button variant="primary" size="sm" icon={Download} onClick={() => setShowExportMenu((v) => !v)}>
+              <Button variant="primary" size="sm" icon={Download} disabled={filtersBusy || Boolean(verificationFilter.error || dateError)} onClick={() => setShowExportMenu((v) => !v)}>
                 Export
               </Button>
               {showExportMenu && (
@@ -2159,13 +2819,15 @@ export const BatchMonitor = () => {
 
       {/* Filter bar */}
       <Card className="p-4 mb-4 overflow-visible">
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="grid min-w-0 grid-cols-1 items-center gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,2fr)_auto]">
           <div className="flex items-center gap-2">
             <Building2 size={14} className="text-gray-400 shrink-0" />
             <CustomSelect
               value={orgFilter}
+              ariaLabel="Filter by organization"
+              searchable
               onChange={setOrgFilter}
-              className="w-full max-w-[200px]"
+              className="min-w-0 flex-1"
               options={[
                 { value: '', label: 'All Organizations' },
                 ...orgOptions.map((org) => ({ value: org, label: org })),
@@ -2177,8 +2839,9 @@ export const BatchMonitor = () => {
             <Layers size={14} className="text-gray-400 shrink-0" />
             <CustomSelect
               value={batchTypeFilter}
+              ariaLabel="Filter by batch type"
               onChange={setBatchTypeFilter}
-              className="w-full max-w-[160px]"
+              className="min-w-0 flex-1"
               options={[
                 { value: '', label: 'All Batch Types' },
                 { value: 'human', label: 'Human' },
@@ -2188,13 +2851,18 @@ export const BatchMonitor = () => {
             />
           </div>
 
-          <div className="relative flex-1 min-w-[200px]">
+          <CustomSelect value={verificationFilterId} onChange={setVerificationFilterId} ariaLabel="Filter by verification type" searchable
+            disabled={verificationOptionsLoading || Boolean(verificationOptionsError)}
+            options={[{ value: '', label: verificationOptionsLoading ? 'Loading verification types…' : 'All Verification Types' }, ...verificationOptions.map((type) => ({ value: type.id, label: type.name })), ...(verificationFilterId && !verificationOptions.some((type) => type.id === verificationFilterId) ? [{ value: verificationFilterId, label: 'Selected verification (unavailable)' }] : [])]} />
+
+          <div className="relative min-w-0">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by batch name or ID..."
+              aria-label="Search batches"
               className="w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 py-2 text-xs font-inter text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
             />
           </div>
@@ -2203,25 +2871,30 @@ export const BatchMonitor = () => {
             <button
               type="button"
               onClick={() => setShowDateRange((v) => !v)}
+              aria-label="Filter by batch creation date"
+              aria-expanded={showDateRange}
               className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold font-inter text-gray-600 hover:border-gray-300 whitespace-nowrap"
             >
               <Calendar size={14} className="text-gray-400" />
-              {dateFrom || dateTo ? `${dateFrom || '…'} → ${dateTo || '…'}` : 'Date Range'}
+              {dateFrom || dateTo ? `${dateFrom || '…'} → ${dateTo || '…'}` : 'Created Date'}
               <ChevronDown size={12} className="text-gray-400" />
             </button>
             {showDateRange && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowDateRange(false)} />
-                <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl z-50 space-y-2.5">
+                <div role="dialog" aria-label="Batch creation date range" className="absolute left-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-3rem)] space-y-2.5 rounded-xl border border-gray-200 bg-white p-3 shadow-xl sm:left-auto sm:right-0">
+                  <p className="text-xs font-semibold text-gray-700">Batch creation date</p>
+                  <div className="grid grid-cols-2 gap-2">{batchDatePresets().map((preset) => <button type="button" key={preset.label} onClick={() => { setDateFrom(preset.from); setDateTo(preset.to); setShowDateRange(false); }} className="rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-600 hover:border-blue-300 hover:bg-blue-50">{preset.label}</button>)}</div>
                   <div>
                     <label className="text-[11px] font-semibold text-gray-500 font-inter">From</label>
-                    <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full mt-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-inter text-gray-600" />
+                    <input aria-label="Created from date" type="date" max={dateTo || undefined} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full mt-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-inter text-gray-600" />
                   </div>
                   <div>
                     <label className="text-[11px] font-semibold text-gray-500 font-inter">To</label>
-                    <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full mt-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-inter text-gray-600" />
+                    <input aria-label="Created to date" type="date" min={dateFrom || undefined} value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full mt-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-inter text-gray-600" />
                   </div>
                   <div className="flex justify-between pt-1">
+                    {dateError && <p role="alert" className="text-xs text-red-600">{dateError}</p>}
                     <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-gray-400 font-inter hover:text-gray-600">Clear</button>
                     <button type="button" onClick={() => setShowDateRange(false)} className="text-xs font-semibold text-brand-blue font-inter hover:underline">Done</button>
                   </div>
@@ -2256,15 +2929,15 @@ export const BatchMonitor = () => {
               Clear All
             </button>
           )}
+          <span role="status" className="ml-auto text-xs text-gray-500">{filtersBusy ? 'Checking verification types…' : `${visibleBatches.length} of ${batches.length} batches`}</span>
         </div>
+        {dateError && <p role="alert" className="mt-3 text-xs text-red-600">{dateError}</p>}
+        {verificationOptionsError && <p role="alert" className="mt-3 text-xs text-red-600">{verificationOptionsError} <button type="button" onClick={() => setMetadataVersion((value) => value + 1)} className="font-semibold underline">Retry loading filters</button></p>}
       </Card>
 
       {/* Batch Table */}
-      {loading ? (
-        <Card className="p-10 flex flex-col items-center justify-center gap-3">
-          <RefreshCw size={24} className="animate-spin text-brand-blue" />
-          <p className="text-sm text-gray-400 font-inter">Loading batches...</p>
-        </Card>
+      {verificationFilter.error ? <Card className="p-6"><p role="alert" className="text-sm text-red-600">{verificationFilter.error}</p><button type="button" onClick={verificationFilter.retry} className="mt-3 text-sm font-semibold text-brand-blue">Retry verification filter</button></Card> : loading || filtersBusy ? (
+        <LoadingSkeleton variant="table" label="Loading batches" columns={7}/>
       ) : visibleBatches.length === 0 ? (
         <Card className="p-10 text-center">
           <p className="text-sm text-gray-400 font-inter">
@@ -2306,7 +2979,11 @@ export const BatchMonitor = () => {
                   {paginatedBatches.map((batch) => {
                     const complete = batch.total ? Math.round(((batch.verified + batch.failed) / batch.total) * 100) : 0;
                     return (
-                      <tr key={batch.id} className="hover:bg-blue-50/30 transition-colors">
+                      <tr
+                        key={batch.id}
+                        onClick={() => handleOpenBatchDetails(batch)}
+                        className="cursor-pointer hover:bg-blue-50/30 transition-colors"
+                      >
                         <td className="px-5 py-4">
                           <div className="flex items-start gap-3">
                             <div className="w-10 h-10 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center shrink-0">
@@ -2356,6 +3033,7 @@ export const BatchMonitor = () => {
                             <button
                               type="button"
                               onClick={(event) => {
+                                event.stopPropagation();
                                 const rect = event.currentTarget.getBoundingClientRect();
                                 setActionMenu((current) => (
                                   current.batchId === batch.id
@@ -2434,7 +3112,7 @@ export const BatchMonitor = () => {
         >
           {(() => {
             const width = 176;
-            const height = 92;
+            const height = 172;
             const margin = 12;
             const gap = 8;
             const flipUp = window.innerHeight - actionMenu.anchorRect.bottom < height + gap + margin;
@@ -2481,6 +3159,29 @@ export const BatchMonitor = () => {
                   <Zap size={14} />
                   Smart Send
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeActionMenu();
+                    setRejectedListTarget(batch);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-inter text-gray-700 hover:bg-gray-50"
+                >
+                  <Send size={14} />
+                  Send Rejected List
+                </button>
+                <div className="my-1 border-t border-gray-100" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeActionMenu();
+                    setDeleteBatchTarget(batch);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-inter text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 size={14} />
+                  Delete Batch
+                </button>
               </div>
             );
           })()}
@@ -2488,489 +3189,18 @@ export const BatchMonitor = () => {
         document.body
       )}
 
-      {/* ── Warranty View Details Modal ─────────────────────────────────────── */}
-      <WarrantyDetailModal
-        batchId={selectedWarrantyBatch?.id || null}
-        batchName={selectedWarrantyBatch?.name || ''}
-        orgId={selectedWarrantyBatch?.orgId || null}
-        spaceId={selectedWarrantyBatch?.orgId ? getOrgSpaceId(selectedWarrantyBatch.orgId, selectedWarrantyBatch.batchType || 'warranty') || null : null}
-        onClose={() => setSelectedWarrantyBatch(null)}
+      {/* ── Delete Batch Modal ──────────────────────────────────────────────── */}
+      <DeleteBatchModal
+        batch={deleteBatchTarget}
+        onClose={() => setDeleteBatchTarget(null)}
+        onDeleted={handleBatchDeleted}
       />
 
-      {/* ── View Details Modal ─────────────────────────────────────────────── */}
-      <Modal
-        isOpen={!!selectedBatch}
-        onClose={() => setSelectedBatchId(null)}
-        title={selectedBatch ? `${selectedBatch.name} Control Center` : 'Batch Control Center'}
-        size="5xl"
-      >
-        {selectedBatch && (() => {
-          // The list endpoint (GET /verification/batches) never returns
-          // verification_progress, so selectedBatch.sdcInfo is always stale —
-          // prefer the detail response (batchDetail), which does have it.
-          const sdcInfo = batchDetail?.verification_progress?.sdc || selectedBatch.sdcInfo || null;
-          return (
-          <div className="space-y-5">
-            {/* Stage header */}
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-              <div className={`relative p-6 overflow-hidden ${selectedBatch.statusMeta.tone}`}>
-                <div className="pointer-events-none absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/25" />
-                <div className="relative flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider font-inter">
-                      Stage {(WORKFLOW_STEPS.findIndex((s) => s.id === selectedBatch.status) + 1) || 1} of {WORKFLOW_STEPS.length}
-                    </span>
-                    <h3 className="font-sora font-bold text-3xl mt-3 leading-tight">{selectedBatch.statusMeta.label}</h3>
-                    <p className="text-xs opacity-80 font-inter mt-2 flex items-center gap-1.5">
-                      <Building2 size={13} /> {selectedBatch.orgName}
-                    </p>
-                  </div>
-                  <div className="w-14 h-14 rounded-2xl bg-white/80 flex items-center justify-center shrink-0 shadow-sm">
-                    <Package size={24} />
-                  </div>
-                </div>
-                <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6">
-                  {[
-                    { label: 'Records',  value: selectedBatch.total,    icon: Users,       ico: 'text-brand-blue', num: 'text-brand-blue' },
-                    { label: 'Pending',  value: selectedBatch.pending,  icon: Clock,       ico: 'text-amber-500',  num: 'text-amber-600' },
-                    { label: 'Verified', value: selectedBatch.verified, icon: CheckCircle, ico: 'text-green-500',  num: 'text-green-600' },
-                    { label: 'Failed',   value: selectedBatch.failed,   icon: XCircle,     ico: 'text-red-400',    num: 'text-red-500' },
-                  ].map((item) => (
-                    <div key={item.label} className="rounded-xl bg-white/90 border border-white/90 p-3">
-                      <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <p className="text-[10px] uppercase tracking-wide text-gray-400 font-inter">{item.label}</p>
-                        <item.icon size={13} className={item.ico} />
-                      </div>
-                      <p className={`font-sora font-bold text-xl ${item.num}`}>{item.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-              </div>
-            </div>
-
-            {/* Workflow + Actions */}
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-4">
-              {/* Workflow steps — driven by the backend's real batch.status (batchDetail
-                  is the freshest source; falls back to the list-derived status) */}
-              <div className="min-w-0 rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
-                <div className="mb-6 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-sora font-semibold text-brand-dark">Batch Workflow</p>
-                    <p className="text-xs text-gray-400 font-inter mt-1">Pending → Processing → Verifying → Completed → SDC Issued</p>
-                  </div>
-                  {typeof batchDetail?.verifiers_total === 'number' && batchDetail.verifiers_total > 0 && (
-                    <Badge status={batchDetail.all_verifiers_submitted ? 'success' : 'default'}>
-                      {batchDetail.verifiers_submitted ?? 0}/{batchDetail.verifiers_total} verifiers submitted
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-start">
-                  {WORKFLOW_STEPS.map((step, index) => {
-                    const activeIndex = WORKFLOW_STEPS.findIndex((item) => item.id === (batchDetail?.status || selectedBatch.status));
-                    const completed = index < activeIndex;
-                    const active    = index === activeIndex;
-                    const reached   = index <= activeIndex;
-                    const StepIcon  = step.icon;
-                    return (
-                      <React.Fragment key={step.id}>
-                        <div className="flex flex-col items-center gap-2 shrink-0 w-16">
-                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border-2 transition-colors ${
-                            reached ? 'bg-brand-blue border-brand-blue text-white shadow-sm' : 'bg-white border-gray-200 text-gray-300'
-                          } ${active ? 'ring-4 ring-brand-blue/15' : ''}`}>
-                            {completed ? <CheckCircle size={16} /> : <StepIcon size={16} />}
-                          </div>
-                          <span className={`text-[11px] text-center font-semibold font-inter leading-tight ${reached ? 'text-brand-dark' : 'text-gray-400'}`}>
-                            {step.label}
-                          </span>
-                        </div>
-                        {index < WORKFLOW_STEPS.length - 1 && (
-                          <div className={`flex-1 h-0.5 mt-5 rounded-full transition-colors ${index < activeIndex ? 'bg-brand-blue' : 'bg-gray-200'}`} />
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Actions panel */}
-              <div className="min-w-0 rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
-                    <p className="font-sora font-semibold text-brand-dark">Batch Actions</p>
-                    <p className="text-xs text-gray-400 font-inter mt-1">Whole-batch controls only</p>
-                  </div>
-                  {selectedBatch.sharedWithOrganization && <Badge status="success">Shared</Badge>}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2">
-
-                  {/* Smart Send — assign multiple verifiers per type with random split */}
-                  {(selectedBatch.status === 'pending' || selectedBatch.status === 'processing' || selectedBatch.status === 'verification_in_progress') && (
-                    <Button variant="primary" size="sm" icon={Zap} className="justify-start"
-                      onClick={() => openSmartSend(selectedBatch)}>
-                      Email to Verifiers
-                    </Button>
-                  )}
-
-                  {/* Generate SDC — same generate → poll /status → issue flow as SDC Verification.
-                      Backend now 400s with "no approved users" if none are approved yet, so
-                      disable proactively instead of letting the admin hit that round-trip. */}
-                  <Button variant="outline" size="sm" icon={Sparkles} className="justify-start"
-                    disabled={selectedBatch.verified === 0}
-                    title={selectedBatch.verified === 0 ? 'No approved users in this batch yet' : undefined}
-                    onClick={() => setSdcGenerateBatch(selectedBatch)}>
-                    {sdcInfo?.status ? 'Regenerate SDC' : 'Generate SDC'}
-                  </Button>
-                  {/* Send to org — only once SDC has actually been generated for this
-                      batch, never merely on "verification completed": sharing a batch
-                      with no certificates yet just sends the org to an empty/broken
-                      view. sdcInfo?.status is set by Generate SDC itself (draft_created
-                      or sdc_created) — the same signal "Regenerate SDC" above already
-                      keys off — so this button and that label always agree. */}
-                  {!!sdcInfo?.status && !selectedBatch.sharedWithOrganization && (
-                    <Button variant="success" size="sm" icon={sendingToOrg ? RefreshCw : Send}
-                      className="justify-start" disabled={sendingToOrg}
-                      onClick={() => handleSendToOrganization(selectedBatch)}>
-                      {sendingToOrg ? 'Sending…' : 'Send to Organization'}
-                    </Button>
-                  )}
-                </div>
-
-                {/* SDC certificate status — populated by refreshSdcCertificates */}
-                <div className="mt-4 pt-4 border-t border-gray-200/70">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold text-gray-500 font-inter uppercase tracking-wide">SDC Certificates</p>
-                    <button
-                      type="button"
-                      onClick={() => refreshSdcCertificates(selectedBatch.id, batchDetail?.users || selectedBatch.records || [], batchDetail?.verification_progress?.sdc)}
-                      disabled={sdcCertsLoading}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-brand-blue font-inter hover:opacity-70 disabled:opacity-50"
-                    >
-                      <RefreshCw size={11} className={sdcCertsLoading ? 'animate-spin' : ''} /> Refresh
-                    </button>
-                  </div>
-                  {(() => {
-                    const issuedCount = batchSdcRecords.filter((item) => !!item.anchorTime && !item.revoked).length;
-                    if (!sdcInfo?.status && batchSdcRecords.length === 0) {
-                      return <p className="text-xs text-gray-400 font-inter">Not generated yet.</p>;
-                    }
-                    // SDCs are only ever generated for approved users, not the
-                    // batch's full user list — selectedBatch.verified (the
-                    // approved count) is the right denominator here, not the
-                    // batch's total_users, or this ratio would look permanently
-                    // "incomplete" for any batch with pending/rejected users.
-                    return (
-                      <div className="flex items-center justify-between gap-3 rounded-xl bg-white border border-gray-100 px-3 py-2.5">
-                        <Badge status={issuedCount > 0 ? 'success' : 'pending'}>
-                          {issuedCount > 0 ? `${issuedCount}/${selectedBatch.verified} issued` : 'Drafting…'}
-                        </Badge>
-                        <span className="text-[11px] text-gray-400 font-inter">{batchSdcRecords.length} fetched</span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Resend panel — shown once emails have been sent for this batch ── */}
-            {selectedBatch.sentRequests?.length > 0 && (
-              <div className="rounded-2xl border border-blue-100 bg-white p-5">
-                <div className="mb-4">
-                  <p className="font-sora font-semibold text-brand-dark">Manual Verifications Sent</p>
-                  <p className="text-xs text-gray-400 font-inter mt-1">Resend the link if a verifier didn't receive it.</p>
-                </div>
-                <div className="space-y-3">
-                  {selectedBatch.sentRequests.map((req) => (
-                    <div
-                      key={req.request_id || req.verification_type_name}
-                      className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-                        req.status === 'failed' ? 'border-red-100 bg-red-50' : 'border-blue-100 bg-blue-50/40'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${req.status === 'failed' ? 'bg-red-100 text-red-500' : 'bg-brand-blue/10 text-brand-blue'}`}>
-                          <Mail size={14} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-brand-dark font-inter truncate">{req.verification_type_name}</p>
-                          <p className="text-xs text-gray-500 font-inter truncate">{req.verifier_email}</p>
-                          {req.error && <p className="text-xs text-red-500 font-inter mt-0.5">{req.error}</p>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Badge status={req.status === 'failed' ? 'error' : 'success'}>{req.status || 'sent'}</Badge>
-                        {req.status !== 'failed' && (
-                          <button
-                            type="button"
-                            disabled={resending === (req.request_id || req.token)}
-                            onClick={() => handleResend(req.request_id || req.token, req.verifier_email)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-xs font-semibold font-inter text-brand-blue hover:bg-blue-50 disabled:opacity-50 transition-colors"
-                          >
-                            <RefreshCw size={12} className={resending === (req.request_id || req.token) ? 'animate-spin' : ''} />
-                            {resending === (req.request_id || req.token) ? 'Resending...' : 'Resend'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Submitted Reports panel — real verifier uploads ────────── */}
-            {(loadingReports || submittedReports?.reports?.length > 0) && (
-              <div className="rounded-2xl border border-gray-100 bg-white p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-sora font-semibold text-brand-dark">Submitted Reports</p>
-                    <p className="text-xs text-gray-400 font-inter mt-1">Files uploaded by each verifier for this batch.</p>
-                  </div>
-                  {submittedReports && (
-                    <Badge status={submittedReports.total_submitted === submittedReports.total_requests ? 'success' : 'default'}>
-                      {submittedReports.total_submitted}/{submittedReports.total_requests} submitted
-                    </Badge>
-                  )}
-                </div>
-
-                {loadingReports ? (
-                  <div className="flex items-center justify-center gap-2 py-8">
-                    <RefreshCw size={16} className="animate-spin text-brand-blue" />
-                    <p className="text-sm text-gray-400 font-inter">Loading submitted reports…</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {submittedReports.reports.map((report) => {
-                      const decided = report.status === 'approved' || report.status === 'rejected';
-                      const awaitingReview = report.status === 'doc_uploaded' && !decided;
-                      const isDeciding = decidingRequestId === report.request_id;
-                      const badge = report.status === 'approved'
-                        ? { status: 'success', label: 'Approved' }
-                        : report.status === 'rejected'
-                          ? { status: 'error', label: 'Rejected' }
-                          : report.status === 'doc_uploaded'
-                            ? { status: 'pending', label: 'Awaiting Review' }
-                            : { status: 'default', label: 'Awaiting Upload' };
-                      return (
-                      <div key={report.request_id} className={`rounded-xl border px-4 py-3 ${report.submitted ? 'border-green-100 bg-green-50/40' : 'border-gray-100 bg-gray-50'}`}>
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${report.submitted ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                              {report.submitted ? <CheckCircle size={14} /> : <Clock size={14} />}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-brand-dark font-inter truncate">{formatVerifTypeLabel(report)}</p>
-                              <p className="text-xs text-gray-500 font-inter truncate">{report.verifier_email}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {report.submitted && (
-                              <span className="text-xs text-gray-400 font-inter">{report.report_count} file{report.report_count !== 1 ? 's' : ''}</span>
-                            )}
-                            <Badge status={badge.status}>{badge.label}</Badge>
-                          </div>
-                        </div>
-
-                        {report.submitted && report.report_files?.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2 pl-11">
-                            {report.report_files.map((file, fileIndex) => {
-                              const key = `${report.request_id}-${fileIndex}`;
-                              const isDownloading = downloadingFileKey === key;
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  disabled={isDownloading}
-                                  onClick={() => handleDownloadReportFile(report.request_id, fileIndex, file.filename)}
-                                  className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold font-inter text-brand-blue hover:bg-blue-50 disabled:opacity-50 transition-colors"
-                                >
-                                  {isDownloading ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
-                                  {file.filename}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {awaitingReview && (
-                          <div className="mt-3 pl-11">
-                            {rejectingRequestId === report.request_id ? (
-                              <div className="space-y-2">
-                                <input
-                                  value={rejectReason}
-                                  onChange={(e) => setRejectReason(e.target.value)}
-                                  placeholder="Reason for rejection (optional)"
-                                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-inter focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
-                                />
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="danger" size="sm" loading={isDeciding}
-                                    onClick={() => handleDecideReport(report.request_id, 'rejected', rejectReason.trim() || undefined)}
-                                  >
-                                    Confirm Reject
-                                  </Button>
-                                  <Button
-                                    variant="ghost" size="sm" disabled={isDeciding}
-                                    onClick={() => { setRejectingRequestId(null); setRejectReason(''); }}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="success" size="sm" icon={CheckCircle} loading={isDeciding}
-                                  onClick={() => handleDecideReport(report.request_id, 'approved')}
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  variant="outline" size="sm" icon={XCircle} disabled={isDeciding}
-                                  onClick={() => { setRejectingRequestId(report.request_id); setRejectReason(''); }}
-                                >
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Records table */}
-            {(() => {
-              const detailRecords = batchDetail?.users || selectedBatch.records || [];
-              return (
-                <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-4 border-b border-gray-100 bg-gray-50">
-                    <div>
-                      <h4 className="font-sora font-semibold text-sm text-brand-dark">Batch Records</h4>
-                      <p className="text-xs text-gray-400 font-inter mt-1">Individual approvals are disabled.</p>
-                    </div>
-                    <Badge status="default">{loadingDetail ? '…' : detailRecords.length} records</Badge>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto scrollbar-hidden">
-                    {loadingDetail ? (
-                      <div className="flex items-center justify-center py-10 gap-2">
-                        <RefreshCw size={16} className="animate-spin text-brand-blue" />
-                        <p className="text-sm text-gray-400 font-inter">Loading records…</p>
-                      </div>
-                    ) : detailRecords.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <p className="text-sm text-gray-400 font-inter">No records found for this batch</p>
-                      </div>
-                    ) : (
-                      <table className="w-full min-w-[720px]">
-                        <thead className="bg-gray-50 sticky top-0">
-                          <tr>
-                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase text-gray-500 font-inter">Record</th>
-                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase text-gray-500 font-inter">Type</th>
-                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase text-gray-500 font-inter">Status</th>
-                            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase text-gray-500 font-inter w-56">Certificate</th>
-                            <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase text-gray-500 font-inter w-40">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {detailRecords.map((record) => {
-                            const product = isProductRecord(record);
-                            const Icon = product ? Package : User;
-                            const status = statusBadge(record.verification_status);
-                            const sdcMatch = matchSdcRecord(record);
-                            const batchUserId = record.id || record.user_id;
-                            return (
-                              <tr key={record.id || record.user_id || record.entity_id} className="hover:bg-gray-50/70 transition-colors">
-                                <td className="px-4 py-3.5">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 shrink-0 rounded-xl bg-brand-blue/10 border border-blue-100 flex items-center justify-center">
-                                      <Icon size={15} className="text-brand-blue" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-brand-dark font-inter truncate">{recordTitle(record)}</p>
-                                      <p className="text-xs text-gray-400 font-inter truncate">{product ? record.category_name || 'Product' : record.email || 'Human'}</p>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3.5 text-sm text-gray-600 font-inter">{product ? 'Product' : 'Human'}</td>
-                                <td className="px-4 py-3.5"><Badge status={status.variant}>{status.label}</Badge></td>
-                                <td className="px-4 py-3.5">
-                                  {sdcMatch?.issued || sdcMatch ? (
-                                    <div className="flex items-center gap-2">
-                                      <Badge status={sdcMatch.issued ? 'info' : 'pending'}>{sdcMatch.issued ? 'Ready' : 'Draft'}</Badge>
-                                      <div className="flex items-center gap-0.5 rounded-lg border border-gray-100 bg-gray-50 p-0.5">
-                                        {sdcMatch.issued && (
-                                          <button
-                                            type="button"
-                                            disabled={downloadingSdcId === sdcMatch.publicId}
-                                            onClick={() => openSdcCertificate(sdcMatch.publicId, 'pdf')}
-                                            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-brand-blue transition-colors hover:bg-white hover:shadow-sm disabled:opacity-50"
-                                          >
-                                            <Download size={12} className={downloadingSdcId === sdcMatch.publicId ? 'animate-spin' : ''} /> Download
-                                          </button>
-                                        )}
-                                        <button
-                                          type="button"
-                                          onClick={() => setDetailRecord(record)}
-                                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-gray-500 transition-colors hover:bg-white hover:text-brand-blue hover:shadow-sm"
-                                        >
-                                          <Info size={12} /> Detail
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs text-gray-300 font-inter">-</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3.5 text-right">
-                                  {confirmDeleteUserId === batchUserId ? (
-                                    <div className="flex items-center justify-end gap-1.5">
-                                      <span className="text-xs text-gray-400 font-inter">Delete?</span>
-                                      <button
-                                        type="button"
-                                        disabled={deletingUserId === batchUserId}
-                                        onClick={() => handleDeleteBatchUser(selectedBatch.id, record)}
-                                        className="rounded-md px-2 py-1 text-xs font-semibold font-inter text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
-                                      >
-                                        {deletingUserId === batchUserId ? '…' : 'Yes'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={deletingUserId === batchUserId}
-                                        onClick={() => setConfirmDeleteUserId(null)}
-                                        className="rounded-md px-2 py-1 text-xs font-semibold font-inter text-gray-500 hover:bg-gray-100 disabled:opacity-50 transition-colors"
-                                      >
-                                        No
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      title="Permanently delete this customer from the batch"
-                                      onClick={() => setConfirmDeleteUserId(batchUserId)}
-                                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                    >
-                                      <Trash2 size={12} /> Delete
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-          );
-        })()}
-      </Modal>
+      {/* ── Send Rejected List Modal ─────────────────────────────────────────── */}
+      <SendRejectedListModal
+        batch={rejectedListTarget}
+        onClose={() => setRejectedListTarget(null)}
+      />
 
       {/* ── Smart Send Modal ────────────────────────────────────────────── */}
       <SmartSendModal
@@ -2978,31 +3208,6 @@ export const BatchMonitor = () => {
         onClose={() => { setSmartSendOpen(false); setSmartSendBatch(null); }}
         onSent={(result) => { handleBulkSent(smartSendBatch, result); setSmartSendOpen(false); setSmartSendBatch(null); }}
         batch={smartSendBatch}
-      />
-
-      {/* ── Generate SDC Modal — same component/flow as SDC Verification ─── */}
-      {sdcGenerateBatch && (
-        <GenerateSDCModal
-          batch={sdcGenerateBatch}
-          records={batchDetail?.users || sdcGenerateBatch.records || []}
-          liveStatus={sdcLiveStatus?.batchId === sdcGenerateBatch.id ? sdcLiveStatus : null}
-          polling={sdcPollingBatchId === sdcGenerateBatch.id}
-          onClose={() => { setSdcGenerateBatch(null); setSdcLiveStatus(null); }}
-          onGenerated={() => {
-            const batchId = sdcGenerateBatch.id;
-            setData((prev) => (prev || []).map((b) => (
-              b.id === batchId ? { ...b, sdcInfo: { ...(b.sdcInfo || {}), status: 'draft_created' } } : b
-            )));
-            pollSdcStatusUntilDone(batchId);
-          }}
-        />
-      )}
-
-      <CertificateDetailModal
-        record={detailRecord}
-        sdcMatch={detailRecord ? matchSdcRecord(detailRecord) : null}
-        instanceKey="de"
-        onClose={() => setDetailRecord(null)}
       />
 
     </AuthLayout>

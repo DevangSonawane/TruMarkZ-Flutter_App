@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
+import { SkeletonLoader } from '@/components/ui/SkeletonLoader';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { ConsentBadge } from '@/components/shared/ConsentBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI, verificationAPI, getApiError } from '@/services/api';
 import {
   Layers, Award, ArrowRight, Wallet,
-  Clock, CheckCircle, TrendingUp, Users, Shield, Globe, Lock, Zap, Briefcase
+  Clock, CheckCircle, TrendingUp, Users, Shield, Globe, Lock, Zap, Briefcase, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -22,7 +25,9 @@ const activityStyles = {
 };
 
 const statusMeta = {
+  verified: { action: 'Verification completed', color: 'green', icon: CheckCircle },
   approved: { action: 'Verification completed', color: 'green', icon: CheckCircle },
+  partially_verified: { action: 'Verification partially completed', color: 'blue', icon: AlertCircle },
   rejected: { action: 'Verification failed', color: 'red', icon: Clock },
   pending: { action: 'Verification pending', color: 'orange', icon: Clock },
 };
@@ -86,11 +91,24 @@ const buildBatchSummary = (rawBatches = []) =>
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
     .slice(0, 3);
 
+// Supplied illustration asset (public/assets) — already includes its own
+// soft blue backdrop and accent shapes, so this just sizes/contains it.
+// Used only by the "under review" banner above.
+const SetupIllustration = () => (
+  <img
+    src="/assets/Blue building with clock illustration.png"
+    alt=""
+    className="h-28 w-28 shrink-0 object-contain"
+  />
+);
+
 export const OrgDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [verificationData, setVerificationData] = useState(null);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [batchesLoading, setBatchesLoading] = useState(true);
   const [statsSummary, setStatsSummary] = useState({ total: '-', pending: '-', verified: '-', failed: '-' });
   const [organizationIndustry, setOrganizationIndustry] = useState(() => normalizeIndustryValue(user?.industryType));
   const [batchList, setBatchList] = useState([]);
@@ -111,7 +129,8 @@ export const OrgDashboard = () => {
       })
       .catch((err) => {
         if (isMounted) toast.error(getApiError(err, 'Failed to load dashboard data'));
-      });
+      })
+      .finally(() => { if (isMounted) setDataLoading(false); });
 
     return () => { isMounted = false; };
   }, []);
@@ -126,7 +145,8 @@ export const OrgDashboard = () => {
       })
       .catch(() => {
         // Active Batches card just shows its own empty state below.
-      });
+      })
+      .finally(() => { if (isMounted) setBatchesLoading(false); });
 
     return () => { isMounted = false; };
   }, []);
@@ -162,8 +182,9 @@ export const OrgDashboard = () => {
     .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
     .slice(0, 4)
     .map((item) => {
-      const meta = statusMeta[item.verification_status] || statusMeta.pending;
+      const meta = statusMeta[item.overall_status_label || item.verification_status] || statusMeta.pending;
       return {
+        consentRecord: item,
         action: meta.action,
         detail: item.full_name || item.email || 'Verification record',
         time: formatDateTime(item.updated_at || item.created_at),
@@ -216,9 +237,52 @@ export const OrgDashboard = () => {
     }, 300);
   };
 
+  // An org is only usable for SDC/certificate generation once Superadmin has
+  // provisioned at least one Dhiway space (space_id) for it — see
+  // dhiways_details on the org's own profile (AuthContext normalises it to
+  // user.dhiwaysDetails). Freshly onboarded orgs have none yet, so surface
+  // that as a plain "under review" status instead of letting them discover
+  // it later as a confusing failure deep in batch/certificate generation.
+  const hasDhiwaySpace = Array.isArray(user?.dhiwaysDetails) && user.dhiwaysDetails.some((row) => row?.space_id);
+  // A space can also come from an active Schema Configuration — that counts as set up too.
+  // null = still checking (or the check failed): the banner stays hidden rather than guessing.
+  const [hasSchemaSpace, setHasSchemaSpace] = useState(null);
+  useEffect(() => {
+    if (hasDhiwaySpace || !user?.id) return undefined;
+    let active = true;
+    authAPI.getSchemaConfigs(user.id, { activeOnly: true })
+      .then(({ data }) => {
+        if (!active) return;
+        const configs = Array.isArray(data?.configs) ? data.configs : [];
+        setHasSchemaSpace(configs.some((c) => c.is_active !== false && c.space_id));
+      })
+      .catch(() => { if (active) setHasSchemaSpace(null); });
+    return () => { active = false; };
+  }, [hasDhiwaySpace, user?.id]);
+  const needsSetup = !hasDhiwaySpace && hasSchemaSpace === false;
+
   return (
     <AuthLayout title="Organization Dashboard">
       <div className="space-y-6">
+        {needsSetup && (
+          <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
+            <SetupIllustration />
+            <div className="min-w-0 flex-1">
+              <h3 className="font-sora text-base font-bold text-brand-dark">
+                A little setup. Then you're ready.
+              </h3>
+              <p className="mt-0.5 font-inter text-xs leading-5 text-gray-500">
+                We're preparing your organization's verification space.
+                <br className="hidden sm:block" />
+                Keep creating batches—we'll let you know when SDC certificate generation is ready.
+              </p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-blue-50 px-3 py-1.5 font-inter text-sm font-semibold text-brand-blue sm:self-center">
+              <Clock size={15} /> Setup in progress
+            </span>
+          </Card>
+        )}
+
         <Card className="overflow-hidden border-0 bg-[linear-gradient(135deg,_#141b2d,_#1a2a4d_52%,_#2f63e0)] px-5 py-4 text-white shadow-[0_24px_56px_-40px_rgba(20,27,45,0.5)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-3">
@@ -261,7 +325,7 @@ export const OrgDashboard = () => {
                     {stat.color === 'green' ? 'Live' : stat.color === 'orange' ? 'Active' : 'Running'}
                   </Badge>
                 </div>
-                <p className="font-sora font-bold text-2xl text-brand-dark">{stat.value}</p>
+                {dataLoading ? <div role="status" aria-label={`Loading ${stat.label}`} className="py-1"><SkeletonLoader width="64px" height="24px" /></div> : <p className="font-sora font-bold text-2xl text-brand-dark">{stat.value}</p>}
                 <p className="text-sm text-gray-500 font-inter">{stat.label}</p>
               </Card>
             </motion.div>
@@ -295,7 +359,7 @@ export const OrgDashboard = () => {
           <Card className="p-5">
             <h3 className="font-sora font-semibold text-lg text-brand-dark mb-4">Recent Activity</h3>
             <div className="space-y-3">
-              {recentActivity.length === 0 ? (
+              {dataLoading ? <LoadingSkeleton variant="list" label="Loading recent activity" /> : recentActivity.length === 0 ? (
                 <div className="p-8 text-center">
                   <p className="text-sm text-gray-400 font-inter">No verification activity yet</p>
                 </div>
@@ -309,6 +373,7 @@ export const OrgDashboard = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-brand-dark font-inter">{activity.action}</p>
                       <p className="text-xs text-gray-500 font-inter truncate">{activity.detail}</p>
+                      <ConsentBadge record={activity.consentRecord} />
                     </div>
                     <span className="text-xs text-gray-400 font-inter shrink-0">{activity.time}</span>
                   </div>
@@ -319,7 +384,7 @@ export const OrgDashboard = () => {
 
           <Card className="p-5">
             <h3 className="font-sora font-semibold text-lg text-brand-dark mb-4">Active Batches</h3>
-            {activeBatches.length === 0 ? (
+            {batchesLoading ? <LoadingSkeleton variant="list" rows={3} label="Loading active batches" /> : activeBatches.length === 0 ? (
               <div className="p-8 text-center">
                 <p className="text-sm text-gray-400 font-inter mb-3">No batches found</p>
                 <Button variant="outline" size="sm" onClick={() => navigate('/org/create-batch')}>

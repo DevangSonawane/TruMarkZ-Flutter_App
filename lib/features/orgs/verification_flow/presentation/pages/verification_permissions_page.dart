@@ -217,7 +217,7 @@ class _VerificationPermissionsPageState
                                           _AccessMode.permissionBasedAccess,
                                       title: 'Permission-Based Access',
                                       subtitle:
-                                          'Requires explicit consent via WhatsApp or\nEmail from the individual before data\naccess.',
+                                          'Reports open only for your organization\nand visitors the holder approves.\nVerification starts right away.',
                                       svgIconPath:
                                           'assets/icons/figma/permissions_icon_permission.svg',
                                       onTap: () => setState(() {
@@ -502,7 +502,7 @@ class _InfoBox extends StatelessWidget {
           SizedBox(width: s(8)),
           Expanded(
             child: Text(
-              'TruMarkZ uses cryptographic signing for every consent request. \nSelecting Permission-Based Access ensures GDPR and SOC2 compliance for sensitive professional data.',
+              'Permission-Based Access protects certificate and report links. \nIt does not delay verification: verifiers can be assigned immediately.',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: s(14),

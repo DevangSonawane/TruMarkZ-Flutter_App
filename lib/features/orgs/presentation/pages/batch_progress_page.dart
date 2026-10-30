@@ -353,20 +353,37 @@ class _BatchCertificatesSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    item.batchName.trim().isNotEmpty
-                        ? 'Batch: ${item.batchName.trim()}'
-                        : 'Batch #${_batchCodeFromId(item.batchId)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: s(20),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.1833819,
-                      height: 17.7507286 / 20,
-                      color: const Color(0xFF323232),
-                    ),
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          item.batchName.trim().isNotEmpty
+                              ? 'Batch: ${item.batchName.trim()}'
+                              : 'Batch #${_batchCodeFromId(item.batchId)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: s(20),
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.1833819,
+                            height: 17.7507286 / 20,
+                            color: const Color(0xFF323232),
+                          ),
+                        ),
+                      ),
+                      if (item.reportsProtected) ...<Widget>[
+                        SizedBox(width: s(6)),
+                        Tooltip(
+                          message: 'Reports require the holder\'s approval',
+                          child: Icon(
+                            Icons.lock_outline_rounded,
+                            size: s(16),
+                            color: AppColors.brandBlue,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   SizedBox(height: s(6)),
                   Text(
@@ -645,6 +662,7 @@ class _BatchDirectoryItem {
     required this.pendingCount,
     required this.verifiedCount,
     required this.failedCount,
+    this.reportsProtected = false,
   });
 
   final String batchId;
@@ -655,6 +673,9 @@ class _BatchDirectoryItem {
   final int pendingCount;
   final int verifiedCount;
   final int failedCount;
+
+  /// `certificate_access_mode == holder_approval`.
+  final bool reportsProtected;
 
   static _BatchDirectoryItem fromSummary(VerificationBatchSummary item) {
     final DateTime? createdAt = DateTime.tryParse(item.createdAt);
@@ -671,6 +692,7 @@ class _BatchDirectoryItem {
       pendingCount: item.pending,
       verifiedCount: item.verified,
       failedCount: item.issueCount,
+      reportsProtected: item.isHolderApprovalGated,
     );
   }
 

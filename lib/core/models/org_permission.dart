@@ -24,8 +24,9 @@ enum OrgPermissionMode {
       'Credentials are publicly searchable. Email stays optional for the '
           'people you add.',
     OrgPermissionMode.permissionRequired =>
-      'People must approve before their credential is processed. Email '
-          'becomes required for every person you add.',
+      'Reports and certificate links open only for your organization and '
+          'visitors the holder approves. Verification starts right away. '
+          'Email becomes required for every person you add.',
   };
 
   /// Parses a backend `permission_mode` value.

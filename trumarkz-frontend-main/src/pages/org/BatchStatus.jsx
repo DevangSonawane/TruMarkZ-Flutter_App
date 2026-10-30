@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Modal } from '@/components/ui/Modal';
-import { verificationAPI, sdcAPI, getApiError } from '@/services/api';
+import { verificationAPI, sdcAPI, getApiError, triggerBlobDownload } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { CertificateDetailModal } from '@/pages/admin/SDCVerification';
+import { VerificationDetailsModal, VerificationCheckDetailsModal } from '@/components/shared/VerificationDetailsModal';
 import { WarrantyDocumentCell } from '@/components/shared/WarrantyDocumentCell';
+import { TablePagination } from '@/components/shared/TablePagination';
 import { loadWarrantyCertificates } from '@/utils/warrantyCertificates';
+import { useAutomaticBatchRefresh } from '@/hooks/useAutomaticBatchRefresh';
 import {
   ChevronLeft, ChevronRight, CheckCircle, Clock, Download,
   Eye, FileText, Info, Layers, Package, RefreshCw, Upload,
@@ -61,6 +65,18 @@ const getCertificateProductId = (rec) =>
   rec?.record?.credentialSubject?.product_id ||
   null;
 
+// Same story for Human records — GET /sdc/records/{public_id} (the only
+// endpoint org callers can use) has no top-level title/recipients at all,
+// only public_id/credential/pdf/verify (confirmed live). The Human
+// identity actually lives at credential.credentialSubject.email, the exact
+// counterpart to Product's credentialSubject.product_id and Warranty's
+// credentialSubject.serial_no.
+const getCertificateEmail = (rec) =>
+  rec?.credential?.credentialSubject?.email ||
+  rec?.credentialSubject?.email ||
+  rec?.record?.credentialSubject?.email ||
+  null;
+
 const VERIFIED_RECORD_STATUSES = new Set(['approved', 'verified']);
 const FAILED_RECORD_STATUSES = new Set(['rejected', 'failed']);
 const PENDING_RECORD_STATUSES = new Set([
@@ -80,6 +96,20 @@ const classifyRecordStatus = (status) => {
   return 'pending';
 };
 
+// Per-record verification label for the SDC approval review table — a
+// record with no per-type breakdown falls back to its overall status.
+const getApprovalRecordVerification = (record) => {
+  const types = Object.values(record?.verification_type_status || {});
+  if (types.length === 0) {
+    const bucket = classifyRecordStatus(record?.overall_status_label || record?.verification_status);
+    return bucket === 'verified' ? 'Verified' : bucket === 'failed' ? 'Rejected' : 'Pending';
+  }
+  const approved = types.filter((v) => v?.status === 'approved').length;
+  if (approved === types.length) return 'Verified';
+  if (approved === 0) return 'Pending';
+  return 'Partially Verified';
+};
+
 const summarizeRecordCounts = (records = []) => (
   records.reduce((acc, record) => {
     const bucket = classifyRecordStatus(record?.verification_status ?? record?.status);
@@ -91,9 +121,15 @@ const summarizeRecordCounts = (records = []) => (
 const hasRenderableRecords = (batch) =>
   !!batch && (batch.total > 0 || batch.records.length > 0);
 
+// Accepts either the internal `verification_status` (unchanged) or the
+// newer, purely-presentational `overall_status_label` — callers should
+// prefer `record.overall_status_label || record.verification_status` for
+// display. A user with one rejected type and one approved type must read as
+// "Partially Verified", never fall through to "Rejected" below.
 const recordStatusBadge = (status) => {
   if (status === 'approved') return { variant: 'success', label: 'Approved' };
   if (status === 'verified') return { variant: 'success', label: 'Verified' };
+  if (status === 'partially_verified') return { variant: 'partial', label: 'Partially Verified' };
   if (status === 'rejected' || status === 'failed') return { variant: 'error',   label: 'Rejected' };
   return                            { variant: 'pending',  label: 'Pending' };
 };
@@ -212,6 +248,11 @@ const normaliseBatch = (b) => {
     verificationTypes,
     credentialVisibility: b.credential_visibility || '',
     verificationProgress: b.verification_progress || {},
+    // Only present on the single-batch detail response (GET
+    // /verification/batches/{batch_id}), not the list endpoint — null there,
+    // which is exactly "no rejected list generated yet" so no extra check
+    // is needed to tell the two cases apart.
+    rejectedList:         b.rejected_list || null,
     records,
   };
 };
@@ -276,14 +317,124 @@ const SegmentedBar = ({ total, verified, failed, pending }) => {
   );
 };
 
+// Swaps between rendering as the old <Modal> popup or a plain page div,
+// based on `asPage`, without remounting its children — same pattern as
+// WarrantyShell on the admin side's BatchMonitor.jsx.
+const BatchDetailShell = ({ asPage, isOpen, onClose, title, children }) => (
+  asPage
+    ? <div className="space-y-4">{children}</div>
+    : <Modal isOpen={isOpen} onClose={onClose} title={title} size="4xl">{children}</Modal>
+);
+
 // ── Batch Detail Modal ────────────────────────────────────────────────────────
-const BatchDetailModal = ({ batchId, batchName, onClose }) => {
+const BatchDetailModal = ({ batchId, batchName, onClose, asPage = false, onLoaded }) => {
   const [detail,  setDetail]  = useState(null);
+  const [batchUnavailable, setBatchUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sdcByRecordId, setSdcByRecordId] = useState({});
   const [certsLoading, setCertsLoading] = useState(false);
+  const [certsError, setCertsError] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
   const [detailRecord, setDetailRecord] = useState(null);
+  // Records table — same TablePagination component the SuperAdmin's
+  // Verification Records table uses, instead of the old internal
+  // max-h-72 scrollbox that hid most rows behind a tiny scroll area.
+  const [recordPage, setRecordPage] = useState(1);
+  const [recordPageSize, setRecordPageSize] = useState(10);
+  // Rejected List — GET /verification/batches/{batch_id}'s own
+  // `rejected_list` field. NOT an email attachment; the file lives in a
+  // private GCS bucket, reachable only through these two authenticated
+  // endpoints (never a raw URL), which is why both are fetched as a blob
+  // rather than just navigating the browser to them.
+  const [rejectedListAction, setRejectedListAction] = useState(null); // 'view' | 'download' | null
+
+  const handleRejectedList = async (mode) => {
+    if (rejectedListAction) return;
+    setRejectedListAction(mode);
+    try {
+      const { data } = mode === 'download'
+        ? await verificationAPI.getRejectedListDownload(batchId)
+        : await verificationAPI.getRejectedListView(batchId);
+      const filename = detail?.rejectedList?.filename || 'rejected_list.xlsx';
+      if (mode === 'download') {
+        triggerBlobDownload(data, filename);
+      } else {
+        const url = URL.createObjectURL(data);
+        window.open(url, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+    } catch (err) {
+      toast.error(getApiError(err, 'Failed to fetch the rejected list'));
+    } finally {
+      setRejectedListAction(null);
+    }
+  };
+  // SDC partial-approval requests for this batch — GET /sdc/batches/{batch_id}/approvals.
+  // Full history (pending/approved/rejected), newest first, straight from the
+  // backend — this org is the only one that can decide its own requests here.
+  const [sdcApprovals, setSdcApprovals] = useState([]);
+  const [sdcApprovalsLoading, setSdcApprovalsLoading] = useState(false);
+  const [reviewApproval, setReviewApproval] = useState(null); // the approval currently open in the review modal
+  const [showApprovalHistory, setShowApprovalHistory] = useState(false);
+
+  const loadSdcApprovals = useCallback(() => {
+    if (!batchId) return;
+    setSdcApprovalsLoading(true);
+    sdcAPI.getSDCApprovals(batchId)
+      .then(({ data }) => setSdcApprovals(Array.isArray(data) ? data : []))
+      .catch(() => setSdcApprovals([]))
+      .finally(() => setSdcApprovalsLoading(false));
+  }, [batchId]);
+
+  useEffect(() => { loadSdcApprovals(); }, [loadSdcApprovals]);
+
+  // Org-only decision on its own SDC partial-approval request. 409 means the
+  // request was already decided elsewhere (e.g. another tab/admin) — never
+  // retried blindly; just re-sync the list and show the current state.
+  const [decidingApproval, setDecidingApproval] = useState(false);
+  const [approvalConfirmAction, setApprovalConfirmAction] = useState(null); // null | 'approved' | 'rejected'
+  const [approvalDecisionReason, setApprovalDecisionReason] = useState('');
+  const recordsById = useMemo(() => {
+    const map = {};
+    (detail?.records || []).forEach((r) => {
+      const key = getRecordKey(r);
+      if (key) map[key] = r;
+    });
+    return map;
+  }, [detail?.records]);
+  const closeReviewApproval = () => {
+    setReviewApproval(null);
+    setApprovalConfirmAction(null);
+    setApprovalDecisionReason('');
+  };
+  const decideApproval = async (requestId, decision, reason) => {
+    setDecidingApproval(true);
+    try {
+      const { data } = await sdcAPI.decideSDCApproval(requestId, { decision, reason });
+      setSdcApprovals((prev) => prev.map((a) => (a.id === requestId ? data : a)));
+      closeReviewApproval();
+      toast.success(decision === 'approved' ? 'Approval granted' : 'Request rejected');
+    } catch (err) {
+      if (err?.response?.status === 409) {
+        toast.error('This request has already been decided');
+        loadSdcApprovals();
+        closeReviewApproval();
+      } else {
+        toast.error(getApiError(err, 'Failed to submit decision'));
+      }
+    } finally {
+      setDecidingApproval(false);
+    }
+  };
+
+  const [verificationDetailsRecord, setVerificationDetailsRecord] = useState(null); // record shown in the per-user Verification Details modal
+  // Exact clicked pair — { record, typeName } — for the single-check modal,
+  // same click-through as the admin Batch Control Center's Verification
+  // Records table. No manual-assignments fetch on the org side, so the
+  // modal's Verifier line falls back to "—" for a manual check (never
+  // fabricated) and shows "Automatic" only when the check's own label says so.
+  const [selectedVerification, setSelectedVerification] = useState(null);
+  useAutomaticBatchRefresh({ batchId, batchType: detail?.batchType, records: detail?.records, onUpdate: (data) => setDetail(normaliseBatch(data)) });
   // The real, authoritative SDC/sharing state — from GET /sdc/batches/
   // {batch_id}/status itself (sdc_status, shared_with_org, ready/total),
   // never from GET /verification/batches/{batch_id}'s verification_progress.sdc,
@@ -292,6 +443,11 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
   // certificate fetch) for batches where it came back empty.
   const [sdcStatus, setSdcStatus] = useState(null);
   const instanceKey = 'de';
+  // Bumped whenever a refreshCertificates call should be abandoned (a newer
+  // call started, or the batch/modal changed) — the polling loop below
+  // checks this before every state update so a stale, in-flight poll from a
+  // previous batch can never overwrite what's currently on screen.
+  const pollTokenRef = useRef(0);
 
   // Correct common certificate flow for an organization caller — never the
   // bulk GET /sdc/records list (Superadmin-only; an org calling it gets a
@@ -300,20 +456,96 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
   //   1. GET /sdc/batches/{batch_id}/status — the backend checks batch
   //      ownership + shared_with_org itself here and only returns
   //      certificate_ids once this org is actually allowed to see them.
+  //      Per its own documented contract this endpoint is "self-healing":
+  //      Dhiway's upload-csv is async, so the very first call can
+  //      legitimately come back done:false/certificate_ids:[] even after
+  //      generation succeeded — the doc explicitly says to "poll this after
+  //      generate until done is true" (each call re-checks and issues the
+  //      moment drafts appear). So this polls, it doesn't just call once.
   //   2. GET /sdc/records/{public_id} per id — fetch each certificate's own
   //      full detail directly, never search a bulk list for it.
   //   3. Match each fetched certificate to a record by identity (never by
   //      array position/order, which can silently swap two records):
-  //      product_id (== the record's own id, i.e. BatchUser.id) for Product
-  //      records, recipient email or exact title for Human records.
-  const refreshCertificates = useCallback(async (records, batchType) => {
+  //      credentialSubject.product_id (== the record's own id, i.e.
+  //      BatchUser.id) for Product records, credentialSubject.email for
+  //      Human records (confirmed live — this endpoint's response has no
+  //      usable top-level title/recipients/email at all, only
+  //      public_id/credential/pdf/verify).
+  const POLL_INTERVAL_MS = 2500;
+  const POLL_MAX_ATTEMPTS = 12; // ~30s total — bounded wait, not indefinite
+
+  const refreshCertificates = useCallback(async (records, batchType, pidByUserId) => {
     if (!batchId || !records?.length) return;
+    const myToken = ++pollTokenRef.current;
     setCertsLoading(true);
+    setCertsError(false);
     try {
-      const { data: statusData } = await sdcAPI.getBatchStatus(batchId);
-      setSdcStatus(statusData || null);
+      let statusData = null;
+      for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+        if (pollTokenRef.current !== myToken) return; // superseded by a newer call/batch change
+        const { data } = await sdcAPI.getBatchStatus(batchId);
+        statusData = data;
+        if (pollTokenRef.current !== myToken) return;
+        setSdcStatus(data || null);
+        const ready = data?.done || (Array.isArray(data?.certificate_ids) && data.certificate_ids.length > 0);
+        if (ready || attempt === POLL_MAX_ATTEMPTS - 1) break;
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+      if (pollTokenRef.current !== myToken) return;
+
       const certIds = Array.isArray(statusData?.certificate_ids) ? statusData.certificate_ids : [];
+      // certIds only ever arrives non-empty once shared_with_org is true
+      // (the backend's own access-control contract) — nothing to show yet
+      // either way, so skip straight to "not shared"/"nothing generated".
       if (certIds.length === 0) { setSdcByRecordId({}); return; }
+
+      // Fast path: the batch-details response's own verification_progress.
+      // sdc.pid_by_user_id is a direct, authoritative user_id -> certificate
+      // publicId map the backend already computes — confirmed live. Prefer
+      // it over fetching GET /sdc/records/{public_id} per certificate (used
+      // below only as a fallback): that per-record endpoint 404s for an org
+      // caller even once shared_with_org is true (confirmed live — a
+      // backend-side gap, separate from this matching logic), so relying on
+      // it here was the actual reason Ready/Draft never showed up despite
+      // real, issued certificates.
+      if (pidByUserId && typeof pidByUserId === 'object' && Object.keys(pidByUserId).length > 0) {
+        const certIdSet = new Set(certIds);
+        const baseById = {};
+        records.forEach((record) => {
+          const recordId = getRecordKey(record);
+          const publicId = recordId ? pidByUserId[recordId] : null;
+          if (publicId) baseById[recordId] = { publicId, issued: certIdSet.has(publicId) };
+        });
+        // Ready/Draft is already correct from the map above — set it now so
+        // the table is right even if the enrichment below can't complete.
+        setSdcByRecordId(baseById);
+
+        // Best-effort only, from here: adds Created/Anchored/Latest/Active/
+        // Revoked for the "Detail" popup when GET /sdc/records/{public_id}
+        // happens to be reachable. A 404 per entry (the known gap above)
+        // just leaves that record's minimal {publicId, issued} in place —
+        // it never reverts the badge already shown.
+        const enrichedEntries = await Promise.all(
+          Object.entries(baseById).map(([recordId, match]) =>
+            sdcAPI.getRecord(match.publicId)
+              .then(({ data: rec }) => [recordId, {
+                ...match,
+                id: rec?.id || rec?.credential?.id || null,
+                anchorTime: rec?.anchorTime || rec?.credential?.validFrom || rec?.credential?.issuanceDate || null,
+                revoked: !!rec?.revoked,
+                active: !!rec?.active, latest: !!rec?.latest, edited: !!rec?.edited,
+                createdAt: rec?.createdAt || rec?.credential?.issuanceDate || null,
+                updatedAt: rec?.updatedAt || null,
+              }])
+              .catch(() => null)
+          )
+        );
+        if (pollTokenRef.current !== myToken) return;
+        const enrichedById = { ...baseById };
+        enrichedEntries.forEach((entry) => { if (entry) enrichedById[entry[0]] = entry[1]; });
+        setSdcByRecordId(enrichedById);
+        return;
+      }
 
       const fetched = await Promise.all(
         certIds.map((publicId) =>
@@ -328,9 +560,8 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
               // reading top-level keys that don't exist on this endpoint.
               id: rec?.id || rec?.credential?.id || null,
               publicId: rec?.publicId || rec?.public_id || publicId,
-              title: rec?.title || null,
-              recipients: Array.isArray(rec?.recipients) ? rec.recipients : [],
               productId: getCertificateProductId(rec),
+              email: getCertificateEmail(rec),
               anchorTime: rec?.anchorTime || rec?.credential?.validFrom || rec?.credential?.issuanceDate || null,
               revoked: !!rec?.revoked,
               // Presence in certificate_ids already means the backend
@@ -344,6 +575,7 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
             .catch(() => null)
         )
       );
+      if (pollTokenRef.current !== myToken) return;
       const certs = fetched.filter(Boolean);
 
       const byId = {};
@@ -354,20 +586,14 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
         const recordId = getRecordKey(record);
         if (!recordId) return;
         const recordEmail = record?.email?.trim().toLowerCase();
-        const recordName = getRecordTitle(record)?.trim().toLowerCase();
         // batchType (this batch's own real batch_type) decides the branch —
         // Product batch users carry no product_name/category_name field at
         // all (their name is under full_name, exactly like a Human record),
         // so per-record sniffing alone silently misroutes every product
-        // here into the email/title branch, where it can never match.
+        // here into the email branch, where it can never match.
         const match = isProductRecord(record, batchType)
           ? certs.find((c) => c.productId && c.productId === recordId && !usedPublicIds.has(c.publicId))
-          : certs.find((c) => {
-              const recipients = c.recipients.map((v) => v?.trim().toLowerCase()).filter(Boolean);
-              const title = c.title?.trim().toLowerCase();
-              return !usedPublicIds.has(c.publicId) &&
-                ((recordEmail && recipients.includes(recordEmail)) || (recordName && title === recordName));
-            });
+          : certs.find((c) => recordEmail && c.email?.trim().toLowerCase() === recordEmail && !usedPublicIds.has(c.publicId));
         if (match) {
           usedPublicIds.add(match.publicId);
           byId[recordId] = match;
@@ -375,33 +601,47 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
       });
       setSdcByRecordId(byId);
     } catch (err) {
-      setSdcByRecordId({});
-      toast.error(getApiError(err, 'Failed to fetch certificates'));
+      if (pollTokenRef.current === myToken) {
+        setSdcByRecordId({});
+        setCertsError(true);
+        toast.error(getApiError(err, 'Failed to fetch certificates'));
+      }
     } finally {
-      setCertsLoading(false);
+      if (pollTokenRef.current === myToken) setCertsLoading(false);
     }
   }, [batchId]);
 
   useEffect(() => {
     if (!batchId) return;
     setLoading(true);
+    setBatchUnavailable(false);
     setDetail(null);
     setSdcByRecordId({});
     setSdcStatus(null);
+    setCertsError(false);
+    setRecordPage(1);
     verificationAPI.getBatchDetails(batchId)
       .then(({ data }) => {
         const normalised = normaliseBatch(data);
         setDetail(normalised);
+        onLoaded?.(normalised);
         // Always check — GET /sdc/batches/{batch_id}/status is cheap and
         // safely returns an empty certificate_ids for a batch with nothing
         // generated/shared yet, so there's no need to gate this behind a
         // separate local flag that may not even be present for this batch.
         if (normalised.records.length > 0) {
-          refreshCertificates(normalised.records, normalised.batchType);
+          refreshCertificates(normalised.records, normalised.batchType, normalised.verificationProgress?.sdc?.pid_by_user_id);
         }
       })
-      .catch((err) => toast.error(getApiError(err, 'Failed to load batch details')))
+      .catch((err) => {
+        if (err.response?.status === 404) setBatchUnavailable(true);
+        else toast.error(getApiError(err, 'Failed to load batch details'));
+      })
       .finally(() => setLoading(false));
+    // Cancel any in-flight poll (see refreshCertificates) when the batch
+    // changes or this modal unmounts, so a stale poll from a previous
+    // batch can never overwrite what's now on screen.
+    return () => { pollTokenRef.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchId]);
 
@@ -418,7 +658,10 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
         if (win) win.location.href = data.pdf;
       } else {
         win?.close();
-        toast.error('No PDF link on this certificate yet');
+        // Anchoring is async on Dhiway's side — a cert can appear issued
+        // slightly before its .vc endpoint actually has a PDF. Expected,
+        // brief finalizing window, not a real failure.
+        toast('This certificate is still finalizing — try again in a moment.', { icon: '⏳' });
       }
     } catch (err) {
       win?.close();
@@ -439,6 +682,17 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
   const hasSdcActivity = !!(sdc || sdcStatus);
   const sdcStatusText = sdcStatus?.sdc_status || sdc?.status || null;
   const sdcIssuedCount = sdcStatus?.ready ?? sdc?.issued_count ?? null;
+  const sdcTotalCount = sdcStatus?.total ?? null;
+  // The actual, persisted security gate (Batch.shared_with_org via the
+  // Superadmin's "Send to Organization" action — see shareWithOrganization
+  // in services/api.js) echoed back on this same /status response. The
+  // backend intentionally returns certificate_ids as empty to this org
+  // caller until this is true, even once certs exist (sdcIssuedCount > 0) —
+  // that's documented, expected behaviour, not a bug, so it drives a
+  // dedicated "not shared yet" banner/column state rather than being
+  // mistaken for "nothing generated".
+  const sdcSharedWithOrg = !!sdcStatus?.shared_with_org;
+  const sdcReadyNotShared = hasSdcActivity && Number(sdcIssuedCount) > 0 && !sdcSharedWithOrg;
   const pct = detail && detail.total > 0
     ? Math.round(((detail.verified + detail.failed) / detail.total) * 100)
     : 0;
@@ -447,15 +701,20 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
   const hasMeta      = detail &&
     (detail.industryType.length > 0 || detail.verificationTypes.length > 0 || detail.credentialVisibility);
 
+  const recordStart = (recordPage - 1) * recordPageSize;
+  const pagedRecords = detail ? detail.records.slice(recordStart, recordStart + recordPageSize) : [];
+
   return (
     <>
-    <Modal isOpen={!!batchId} onClose={onClose} title={`${batchName} — Details`} size="4xl">
+    <BatchDetailShell asPage={asPage} isOpen={!!batchId} onClose={onClose} title={`${batchName || detail?.name || 'Batch'} — Details`}>
       {loading ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-blue/10 bg-brand-blue/5">
-            <RefreshCw size={20} className="animate-spin text-brand-blue" />
-          </div>
-          <p className="font-inter text-sm text-gray-400">Loading batch details…</p>
+        <LoadingSkeleton variant="dashboard" label="Loading batch details" />
+      ) : batchUnavailable ? (
+        <div role="status" className="flex flex-col items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-12 text-center">
+          <XCircle size={28} className="text-gray-400" />
+          <h2 className="font-sora text-xl font-semibold text-brand-dark">Batch No Longer Available</h2>
+          <p className="text-sm text-gray-500 font-inter">This batch was deleted or is no longer available to your account.</p>
+          <Button variant="outline" size="sm" onClick={onClose}>Back to Batch Status</Button>
         </div>
       ) : !detail ? (
         <div className="flex flex-col items-center justify-center gap-3 py-12">
@@ -491,7 +750,7 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
                     <p className="mt-2 font-inter text-[11px] text-gray-400">
                       {sdcStatusLabel(sdcStatusText)}
                       {sdc?.created_at ? ` · ${sdc.created_at}` : ''}
-                      {sdcIssuedCount ? ` · ${sdcIssuedCount} issued` : ''}
+                      {sdcIssuedCount != null ? ` · ${sdcIssuedCount}${sdcTotalCount != null ? `/${sdcTotalCount}` : ''} issued` : ''}
                     </p>
                   )}
                 </div>
@@ -509,7 +768,7 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
                 )}
                 <button
                   type="button"
-                  onClick={() => refreshCertificates(detail.records, detail.batchType)}
+                  onClick={() => refreshCertificates(detail.records, detail.batchType, detail.verificationProgress?.sdc?.pid_by_user_id)}
                   disabled={certsLoading}
                   className="flex items-center gap-1 font-inter text-[11px] font-semibold text-brand-blue hover:opacity-70 disabled:opacity-50"
                 >
@@ -518,6 +777,26 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
               </div>
             </div>
           </div>
+
+          {/* ── Sharing-status banner — certs can be fully/partially
+              generated (sdcIssuedCount > 0) while still intentionally
+              withheld from this org by the backend until a Superadmin runs
+              "Send to Organization" (Batch.shared_with_org). Surface that
+              distinction explicitly instead of leaving the Certificate
+              column looking blank/broken for no visible reason. ──────────── */}
+          {sdcReadyNotShared && (
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
+              <div className="min-w-0">
+                <p className="font-inter text-sm font-semibold text-amber-800">
+                  Certificates are ready, but not shared with your organization yet
+                </p>
+                <p className="mt-0.5 font-inter text-xs text-amber-700">
+                  {sdcIssuedCount}{sdcTotalCount != null ? ` of ${sdcTotalCount}` : ''} certificate{sdcIssuedCount === 1 ? '' : 's'} generated and waiting to be shared. Please contact your administrator — they'll need to send them to your organization before they appear here.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ── Stats row ─────────────────────────────────────────────────── */}
           <motion.div
@@ -713,6 +992,113 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
             </div>
           )}
 
+          {/* ── SDC Approval Requests — compact card, hidden entirely when
+              there's no history at all for this batch. Shows the newest
+              request's status; "Review" opens the decision modal (pending)
+              or a read-only view of the decision (approved/rejected). ── */}
+          {sdcApprovals.length > 0 && (() => {
+            const pendingCount = sdcApprovals.filter((a) => a.status === 'pending').length;
+            const latest = sdcApprovals[0];
+            const latestMeta = latest.status === 'approved'
+              ? { badge: 'success', label: 'Approved' }
+              : latest.status === 'rejected'
+                ? { badge: 'error', label: 'Rejected' }
+                : { badge: 'pending', label: 'Pending' };
+            return (
+              <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50/60 px-4 py-3">
+                  <p className="font-sora text-sm font-semibold text-brand-dark">SDC Approval Requests</p>
+                  {pendingCount > 0 && <Badge status="pending">{pendingCount} Pending</Badge>}
+                </div>
+                <div className="p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-brand-dark font-inter">Partial SDC Generation</p>
+                      <p className="mt-1 text-xs text-gray-500 font-inter">
+                        {latest.selected_user_ids?.length || 0} record{(latest.selected_user_ids?.length || 0) === 1 ? '' : 's'} selected
+                      </p>
+                      <p className="mt-1 text-xs text-gray-400 font-inter">Requested {formatDate(latest.created_at)}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge status={latestMeta.badge}>{latestMeta.label}</Badge>
+                      <Button size="sm" variant="primary" onClick={() => setReviewApproval(latest)}>Review</Button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowApprovalHistory(true)}
+                    className="mt-3 text-xs font-semibold text-brand-blue font-inter hover:underline"
+                  >
+                    View Approval History ({sdcApprovals.length})
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Rejected List — generated by SuperAdmin, made available here
+              directly (never emailed, never a raw GCS URL — always the two
+              authenticated proxy endpoints below). Only rendered once one
+              has actually been generated for this batch
+              (detail.rejectedList != null — the backend's own
+              `rejected_list` field on GET /verification/batches/{id}). ── */}
+          {detail?.rejectedList && (
+            <div className="overflow-hidden rounded-2xl border border-red-100 bg-white">
+              <div className="flex flex-wrap items-start justify-between gap-4 p-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500">
+                    <FileText size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-sora text-sm font-semibold text-brand-dark">Rejected List</p>
+                      <Badge status="success">Available</Badge>
+                    </div>
+                    <p className="mt-1 truncate font-inter text-xs text-gray-500">
+                      {detail.rejectedList.filename || 'Rejected users'}
+                    </p>
+                    <p className="mt-1.5 font-inter text-xs text-gray-400">
+                      {detail.rejectedList.total_rejected_users ?? 0} rejected user{(detail.rejectedList.total_rejected_users ?? 0) === 1 ? '' : 's'}
+                      {detail.rejectedList.generated_at ? ` · Generated ${formatDate(detail.rejectedList.generated_at)}` : ''}
+                    </p>
+                    {Array.isArray(detail.rejectedList.rejected_by_type) && detail.rejectedList.rejected_by_type.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {detail.rejectedList.rejected_by_type.map((t) => (
+                          <span
+                            key={t.verification_type_name}
+                            className="rounded-lg bg-red-50/60 px-2.5 py-1 font-inter text-[11px] text-gray-600"
+                          >
+                            {t.verification_type_name}: <span className="font-semibold text-red-500">{t.rejected_count}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!!rejectedListAction}
+                    onClick={() => handleRejectedList('view')}
+                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 font-inter text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {rejectedListAction === 'view' ? <RefreshCw size={12} className="animate-spin" /> : <Eye size={12} />}
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!rejectedListAction}
+                    onClick={() => handleRejectedList('download')}
+                    className="flex items-center gap-1.5 rounded-xl bg-red-500 px-3 py-2 font-inter text-xs font-semibold text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                  >
+                    {rejectedListAction === 'download' ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                    Download
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Records table ─────────────────────────────────────────────── */}
           {detail.records.length > 0 && (
             <div className="overflow-hidden rounded-2xl border border-gray-100">
@@ -722,43 +1108,68 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
                   {detail.records.length} total
                 </span>
               </div>
-              <div className="max-h-72 overflow-y-auto">
-                <table className="w-full min-w-[680px]">
-                  <thead className="sticky top-0 z-10 border-b border-gray-100 bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px]">
+                  <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-5 py-3 text-left font-inter text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                        #
+                      </th>
                       <th className="px-5 py-3 text-left font-inter text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
                         Record
                       </th>
                       <th className="px-5 py-3 text-left font-inter text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
                         Status
                       </th>
-                      <th className="px-5 py-3 text-left font-inter text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400 w-56">
+                      <th className="px-5 py-3 text-left font-inter text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400 w-48">
+                        Verification
+                      </th>
+                      <th className="px-5 py-3 text-left font-inter text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
                         Certificate
+                      </th>
+                      <th className="px-5 py-3 text-left font-inter text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                        Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {detail.records.map((record, i) => {
+                  <tbody className="divide-y divide-gray-100">
+                    {pagedRecords.map((record, i) => {
                       const Icon = isProductRecord(record, detail.batchType) ? Package : User;
-                      const sb   = recordStatusBadge(record.verification_status);
+                      // overall_status_label (verified/partially_verified/rejected/
+                      // pending) is the new user-facing status — prefer it for
+                      // display; verification_status stays the internal fallback.
+                      const sb   = recordStatusBadge(record.overall_status_label || record.verification_status);
                       const sdcMatch = sdcByRecordId[getRecordKey(record)] || null;
+                      // Per-user verification-type breakdown — already present on
+                      // every record from GET /verification/batches/{batch_id},
+                      // just not read before now.
+                      const checkEntries = Object.entries(record.verification_type_status || {});
+                      const approvedChecks = checkEntries.filter(([, v]) => v?.status === 'approved').length;
                       return (
                         <motion.tr
                           key={getRecordKey(record)}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: i * 0.04 }}
-                          className="border-b border-gray-50 transition-colors last:border-0 hover:bg-gray-50/60"
+                          className="transition-colors hover:bg-gray-50/60"
                         >
+                          <td className="px-5 py-3.5 font-inter text-sm text-gray-400">{recordStart + i + 1}</td>
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-brand-blue/10 bg-brand-blue/5">
                                 <Icon size={14} className="text-brand-blue" />
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate font-inter text-sm font-semibold text-brand-dark">
-                                  {getRecordTitle(record)}
-                                </p>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <p className="truncate font-inter text-sm font-semibold text-brand-dark">
+                                    {getRecordTitle(record)}
+                                  </p>
+                                  {record.batch_serial && (
+                                    <span className="shrink-0 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue font-inter" title="Batch serial — share this with your verifier for report-file naming">
+                                      {record.batch_serial}
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="truncate font-inter text-xs text-gray-400">
                                   {getRecordSubtitle(record, detail.batchType)}
                                 </p>
@@ -769,32 +1180,95 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
                             <Badge status={sb.variant}>{sb.label}</Badge>
                           </td>
                           <td className="px-5 py-3.5">
-                            {sdcMatch?.issued ? (
-                              <div className="flex items-center gap-2">
-                                <Badge status="info">Ready</Badge>
-                                <div className="flex items-center gap-0.5 rounded-lg border border-gray-100 bg-gray-50 p-0.5">
+                            {checkEntries.length === 0 ? (
+                              <span className="text-xs text-gray-300 font-inter">—</span>
+                            ) : (
+                              <div className="space-y-1">
+                                {checkEntries.map(([name, info]) => {
+                                  const checkStatus = info?.status || 'pending';
+                                  const dotTone = checkStatus === 'approved'
+                                    ? 'bg-green-500'
+                                    : checkStatus === 'rejected'
+                                      ? 'bg-red-500'
+                                      : 'bg-amber-400';
+                                  const rejectionReason = info?.rejection_reason;
+                                  const tooltip = checkStatus === 'rejected' && rejectionReason
+                                    ? `${name}: rejected — ${rejectionReason}`
+                                    : `${name}: ${checkStatus}`;
+                                  return (
+                                    <div key={name} className="flex items-center gap-1.5" title={tooltip}>
+                                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotTone}`} />
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedVerification({ record, typeName: name })}
+                                        className="truncate text-left text-[11px] text-gray-600 font-inter hover:text-brand-blue hover:underline focus:outline-none focus-visible:underline"
+                                      >
+                                        {name}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                                <div className="mt-1 flex items-center justify-between gap-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 font-inter">
+                                    {approvedChecks}/{checkEntries.length} approved
+                                  </p>
                                   <button
                                     type="button"
-                                    disabled={downloadingId === sdcMatch.publicId}
-                                    onClick={() => handleDownloadCertificate(sdcMatch.publicId)}
-                                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-brand-blue transition-colors hover:bg-white hover:shadow-sm disabled:opacity-50"
+                                    onClick={() => setVerificationDetailsRecord(record)}
+                                    className="text-[10px] font-semibold text-brand-blue font-inter hover:underline"
                                   >
-                                    <Download size={12} className={downloadingId === sdcMatch.publicId ? 'animate-spin' : ''} /> Download
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDetailRecord(record)}
-                                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold font-inter text-gray-500 transition-colors hover:bg-white hover:text-brand-blue hover:shadow-sm"
-                                  >
-                                    <Info size={12} /> Detail
+                                    View Details
                                   </button>
                                 </div>
                               </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {certsLoading ? (
+                              <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                                <RefreshCw size={12} className="animate-spin" /> Checking…
+                              </span>
+                            ) : certsError ? (
+                              <span className="text-[11px] font-medium text-red-500">Couldn't check</span>
+                            ) : sdcMatch?.issued ? (
+                              <span className="rounded-full bg-brand-blue px-3 py-1.5 text-xs font-semibold text-white font-inter">
+                                Ready
+                              </span>
                             ) : sdcMatch ? (
                               <Badge status="pending">Draft</Badge>
+                            ) : sdcReadyNotShared ? (
+                              <span className="text-[11px] font-medium text-amber-600">Not shared yet</span>
                             ) : (
-                              <span className="text-xs text-gray-300 font-inter">-</span>
+                              <span className="text-[11px] text-gray-400">Not Generated</span>
                             )}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <button
+                              type="button"
+                              onClick={() => setVerificationDetailsRecord(record)}
+                              className="mb-2 flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold font-inter text-brand-blue transition-colors hover:bg-blue-50"
+                            >
+                              <FileText size={12} /> Documents{Array.isArray(record.documents) ? ` (${record.documents.length})` : ''}
+                            </button>
+                            {sdcMatch?.issued ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={downloadingId === sdcMatch.publicId}
+                                  onClick={() => handleDownloadCertificate(sdcMatch.publicId)}
+                                  className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold font-inter text-brand-blue transition-colors hover:bg-blue-50 disabled:opacity-50"
+                                >
+                                  <Download size={12} className={downloadingId === sdcMatch.publicId ? 'animate-spin' : ''} /> Download
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailRecord(record)}
+                                  className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold font-inter text-gray-500 transition-colors hover:bg-gray-50 hover:text-brand-blue"
+                                >
+                                  <Info size={12} /> Detail
+                                </button>
+                              </div>
+                            ) : null}
                           </td>
                         </motion.tr>
                       );
@@ -802,11 +1276,18 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                page={recordPage}
+                pageSize={recordPageSize}
+                total={detail.records.length}
+                onPageChange={setRecordPage}
+                onPageSizeChange={setRecordPageSize}
+              />
             </div>
           )}
         </div>
       )}
-    </Modal>
+    </BatchDetailShell>
 
     <CertificateDetailModal
       record={detailRecord}
@@ -814,7 +1295,265 @@ const BatchDetailModal = ({ batchId, batchName, onClose }) => {
       instanceKey={instanceKey}
       onClose={() => setDetailRecord(null)}
     />
+
+    {(() => {
+      // Same certificate-header treatment as the admin side's Verification
+      // Details modal — badge + Download next to Close. Org only has one
+      // combined open-and-download action (handleDownloadCertificate), not
+      // a separate View, so canView stays false here.
+      const vdRecordKey = verificationDetailsRecord ? getRecordKey(verificationDetailsRecord) : null;
+      const vdSdcMatch = vdRecordKey ? sdcByRecordId[vdRecordKey] || null : null;
+      const vdCertificate = verificationDetailsRecord
+        ? {
+            status: certsLoading ? 'loading'
+              : certsError ? 'error'
+              : vdSdcMatch ? (vdSdcMatch.issued ? 'ready' : 'draft')
+              : sdcReadyNotShared ? 'not_shared'
+              : 'not_generated',
+            label: certsLoading ? 'Checking…'
+              : certsError ? "Couldn't check"
+              : vdSdcMatch ? (vdSdcMatch.issued ? 'Ready' : 'Draft')
+              : sdcReadyNotShared ? 'Not shared yet'
+              : 'Not Generated',
+            canView: false,
+            canDownload: !!vdSdcMatch,
+            downloading: vdSdcMatch ? downloadingId === vdSdcMatch.publicId : false,
+          }
+        : null;
+      return (
+        <VerificationDetailsModal
+          batchId={batchId}
+          batchType={detail?.batchType}
+          showDocuments
+          record={verificationDetailsRecord}
+          title={verificationDetailsRecord
+            ? `${getRecordTitle(verificationDetailsRecord)}${verificationDetailsRecord.batch_serial ? ` (${verificationDetailsRecord.batch_serial})` : ''}`
+            : ''}
+          subtitle={verificationDetailsRecord ? getRecordSubtitle(verificationDetailsRecord, detail?.batchType) : ''}
+          onClose={() => setVerificationDetailsRecord(null)}
+          certificate={vdCertificate}
+          onDownloadCertificate={() => vdSdcMatch && handleDownloadCertificate(vdSdcMatch.publicId)}
+        />
+      );
+    })()}
+
+    {selectedVerification && (
+      <VerificationCheckDetailsModal
+        batchId={batchId}
+        batchType={detail?.batchType}
+        selection={selectedVerification}
+        title={getRecordTitle(selectedVerification.record)}
+        onClose={() => setSelectedVerification(null)}
+      />
+    )}
+
+    {/* ── SDC Approval review — org-only decision. A pending request shows
+        Approve/Reject behind its own confirmation step; an already-decided
+        one is read-only (reused for the "Review" action from both the
+        compact card and the history list). ── */}
+    {reviewApproval && (() => {
+      const approval = reviewApproval;
+      const isPending = approval.status === 'pending';
+      const selectedRecords = (approval.selected_user_ids || []).map((id) => recordsById[id]).filter(Boolean);
+      const notFullyVerifiedCount = selectedRecords.filter((r) => getApprovalRecordVerification(r) !== 'Verified').length;
+
+      return (
+        <Modal isOpen onClose={closeReviewApproval} title="SDC Generation Approval" size="lg">
+          <div className="space-y-4">
+            <p className="text-xs text-gray-500 font-inter">
+              The SuperAdmin wants to generate SDCs for the following records.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-gray-100 bg-brand-bg px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-wide text-gray-400 font-inter">Selected Records</p>
+                <p className="text-lg font-semibold text-brand-dark font-sora">{approval.selected_user_ids?.length || 0}</p>
+              </div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-wide text-amber-600 font-inter">Not Fully Verified</p>
+                <p className="text-lg font-semibold text-amber-700 font-sora">{notFullyVerifiedCount}</p>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-gray-100">
+              <div className="grid grid-cols-[1fr_140px] gap-x-2 bg-gray-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 font-inter">
+                <span>Record</span><span>Verification</span>
+              </div>
+              <div className="max-h-56 divide-y divide-gray-50 overflow-y-auto thin-scrollbar">
+                {selectedRecords.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-gray-400 font-inter">Record details unavailable.</p>
+                ) : (
+                  selectedRecords.map((r) => {
+                    const v = getApprovalRecordVerification(r);
+                    const badgeStatus = v === 'Verified' ? 'success' : v === 'Rejected' ? 'error' : v === 'Partially Verified' ? 'partial' : 'pending';
+                    return (
+                      <div key={getRecordKey(r)} className="grid grid-cols-[1fr_140px] items-center gap-x-2 px-3 py-2">
+                        <span className="truncate text-xs font-medium text-brand-dark font-inter">{getRecordTitle(r)}</span>
+                        <Badge status={badgeStatus}>{v}</Badge>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {isPending ? (
+              <>
+                <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-500" />
+                  <p className="text-xs text-amber-700 font-inter leading-relaxed">
+                    Approving this request allows SDC generation for this exact selection, including records that aren't fully verified.
+                  </p>
+                </div>
+
+                {!approvalConfirmAction && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 font-inter">Optional Note</label>
+                    <input
+                      value={approvalDecisionReason}
+                      onChange={(e) => setApprovalDecisionReason(e.target.value)}
+                      placeholder="Add a note for this decision (optional)"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-inter outline-none focus:border-brand-blue"
+                    />
+                  </div>
+                )}
+
+                {approvalConfirmAction ? (
+                  <div className="space-y-3 rounded-xl border border-gray-100 p-3.5">
+                    <p className="text-sm font-semibold text-brand-dark font-inter">
+                      {approvalConfirmAction === 'approved' ? 'Approve SDC Generation?' : 'Reject SDC Generation?'}
+                    </p>
+                    <p className="text-xs text-gray-500 font-inter">
+                      {approvalConfirmAction === 'approved'
+                        ? `This request includes ${notFullyVerifiedCount} record${notFullyVerifiedCount === 1 ? '' : 's'} not fully verified. Approving allows the SuperAdmin to generate SDCs for this exact selection.`
+                        : 'This decision cannot be undone once submitted.'}
+                    </p>
+                    <Modal.Footer className="flex gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => setApprovalConfirmAction(null)}>Cancel</Button>
+                      <Button
+                        size="sm"
+                        variant={approvalConfirmAction === 'approved' ? 'primary' : 'danger'}
+                        loading={decidingApproval}
+                        onClick={() => decideApproval(approval.id, approvalConfirmAction, approvalDecisionReason)}
+                      >
+                        {approvalConfirmAction === 'approved' ? 'Approve Request' : 'Reject Request'}
+                      </Button>
+                    </Modal.Footer>
+                  </div>
+                ) : (
+                  <Modal.Footer className="flex gap-3">
+                    <Button variant="danger" onClick={() => setApprovalConfirmAction('rejected')}>Reject</Button>
+                    <Button variant="primary" onClick={() => setApprovalConfirmAction('approved')}>Approve</Button>
+                  </Modal.Footer>
+                )}
+              </>
+            ) : (
+              <>
+                <div className={`rounded-xl border px-3.5 py-3 ${approval.status === 'approved' ? 'border-emerald-100 bg-emerald-50' : 'border-red-100 bg-red-50'}`}>
+                  <p className={`text-sm font-semibold font-inter ${approval.status === 'approved' ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {approval.status === 'approved' ? 'Approved' : 'Rejected'}
+                  </p>
+                  {approval.status === 'approved' && (
+                    <p className="mt-1 text-xs text-emerald-700/90 font-inter">
+                      Approval granted. The SuperAdmin must generate the SDC using the same selection.
+                    </p>
+                  )}
+                  {approval.decision_reason && (
+                    <p className="mt-1 text-xs text-gray-600 font-inter">Reason: {approval.decision_reason}</p>
+                  )}
+                  {approval.decided_at && (
+                    <p className="mt-1 text-xs text-gray-400 font-inter">Decided {formatDate(approval.decided_at)}</p>
+                  )}
+                </div>
+                <Modal.Footer className="flex justify-end">
+                  <Button variant="ghost" onClick={closeReviewApproval}>Close</Button>
+                </Modal.Footer>
+              </>
+            )}
+          </div>
+        </Modal>
+      );
+    })()}
+
+    {/* ── Approval History — full timeline, newest first ── */}
+    {showApprovalHistory && (
+      <Modal isOpen onClose={() => setShowApprovalHistory(false)} title="Approval History" size="md">
+        <div className="max-h-96 space-y-2 overflow-y-auto thin-scrollbar">
+          {sdcApprovalsLoading ? (
+            <LoadingSkeleton variant="list" rows={2} label="Loading approval history" className="px-3" />
+          ) : sdcApprovals.length === 0 ? (
+            <p className="py-6 text-center text-xs text-gray-400 font-inter">No approval requests yet.</p>
+          ) : (
+            sdcApprovals.map((a) => {
+              const meta = a.status === 'approved'
+                ? { badge: 'success', label: 'Approved' }
+                : a.status === 'rejected'
+                  ? { badge: 'error', label: 'Rejected' }
+                  : { badge: 'pending', label: 'Pending' };
+              return (
+                <div key={a.id} className="rounded-xl border border-gray-100 px-3.5 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Badge status={meta.badge}>{meta.label}</Badge>
+                    <span className="text-[11px] text-gray-400 font-inter">
+                      {a.selected_user_ids?.length || 0} record{(a.selected_user_ids?.length || 0) === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-gray-500 font-inter">Requested {formatDate(a.created_at)}</p>
+                  {a.decided_at && <p className="text-xs text-gray-400 font-inter">Decided {formatDate(a.decided_at)}</p>}
+                  {a.decision_reason && <p className="mt-1 text-xs text-gray-600 font-inter">Reason: {a.decision_reason}</p>}
+                  {a.status === 'pending' && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowApprovalHistory(false); setReviewApproval(a); }}
+                      className="mt-2 text-xs font-semibold text-brand-blue font-inter hover:underline"
+                    >
+                      Review
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </Modal>
+    )}
     </>
+  );
+};
+
+// ── Batch Status Detail — dedicated page (was previously an in-page Modal
+// on the batch list, see BatchDetailShell above). Reached at
+// /org/batch-status/:batchId. Doesn't need the outer list's own batches
+// array — BatchDetailModal already fetches its own full detail from
+// batchId alone; onLoaded just reports the loaded name up for this page's
+// own heading (the Modal-mode title bar isn't rendered at all in page mode).
+export const BatchStatusDetail = () => {
+  const { batchId } = useParams();
+  const navigate = useNavigate();
+  const [batchName, setBatchName] = useState('');
+
+  return (
+    <AuthLayout title="Batch Status">
+      <div className="space-y-4">
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate('/org/batch-status')}
+            className="mb-3 flex items-center gap-1.5 font-inter text-sm font-semibold text-brand-blue hover:underline"
+          >
+            <ChevronLeft size={14} /> Back to Batch Status
+          </button>
+          <h1 className="font-sora text-2xl font-bold text-brand-dark">{batchName || 'Batch Details'}</h1>
+        </div>
+        <BatchDetailModal
+          asPage
+          batchId={batchId}
+          batchName={batchName}
+          onLoaded={(detail) => setBatchName(detail?.name || '')}
+          onClose={() => navigate('/org/batch-status')}
+        />
+      </div>
+    </AuthLayout>
   );
 };
 
@@ -829,7 +1568,7 @@ const WARRANTY_PRODUCT_STATUS_META = {
 // ── Warranty Detail Modal — same popup pattern as BatchDetailModal above,
 // but fetches from the dedicated warranty endpoint (warranty batches carry
 // product/serial/warranty-date records, not the generic verification shape). ─
-const WarrantyDetailModal = ({ batchId, batchName, onClose }) => {
+const WarrantyDetailModal = ({ batchId, batchName, onClose, asPage = false }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -879,7 +1618,10 @@ const WarrantyDetailModal = ({ batchId, batchName, onClose }) => {
         if (win) win.location.href = rec.pdf;
       } else {
         win?.close();
-        toast.error('No PDF link on this certificate yet');
+        // Anchoring is async on Dhiway's side — a cert can appear issued
+        // slightly before its .vc endpoint actually has a PDF. Expected,
+        // brief finalizing window, not a real failure.
+        toast('This certificate is still finalizing — try again in a moment.', { icon: '⏳' });
       }
     } catch (err) {
       win?.close();
@@ -921,14 +1663,9 @@ const WarrantyDetailModal = ({ batchId, batchName, onClose }) => {
   ];
 
   return (
-    <Modal isOpen={!!batchId} onClose={onClose} title={`${batchName} — Warranty Status`} size="4xl">
+    <BatchDetailShell asPage={asPage} isOpen={!!batchId} onClose={onClose} title={`${batchName} — Warranty Status`}>
       {loading ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-blue/10 bg-brand-blue/5">
-            <RefreshCw size={20} className="animate-spin text-brand-blue" />
-          </div>
-          <p className="font-inter text-sm text-gray-400">Loading warranty status…</p>
-        </div>
+        <LoadingSkeleton variant="detail" label="Loading warranty status" />
       ) : !data ? (
         <div className="flex flex-col items-center justify-center gap-3 py-12">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50">
@@ -1055,7 +1792,45 @@ const WarrantyDetailModal = ({ batchId, batchName, onClose }) => {
 
         </div>
       )}
-    </Modal>
+    </BatchDetailShell>
+  );
+};
+
+// ── Warranty Status — dedicated full page (was previously an in-page Modal
+// on the batch list, same "own routed page per batch type" pattern already
+// used for Human/Product via BatchStatusDetail above, and for admin via
+// /admin/batch-monitor/warranty/:batchId). Reached at
+// /org/batch-status/warranty/:batchId.
+export const WarrantyStatusDetail = () => {
+  const { batchId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  // The batches list passes the name via navigation state (the warranty
+  // status endpoint itself returns no batch name) — a direct/refreshed visit
+  // falls back to a generic title rather than showing nothing.
+  const batchName = location.state?.batchName || 'Warranty Batch';
+
+  return (
+    <AuthLayout title="Batch Status">
+      <div className="space-y-4">
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate('/org/batch-status')}
+            className="mb-3 flex items-center gap-1.5 font-inter text-sm font-semibold text-brand-blue hover:underline"
+          >
+            <ChevronLeft size={14} /> Back to Batch Status
+          </button>
+          <h1 className="font-sora text-2xl font-bold text-brand-dark">{batchName}</h1>
+        </div>
+        <WarrantyDetailModal
+          asPage
+          batchId={batchId}
+          batchName={batchName}
+          onClose={() => navigate('/org/batch-status')}
+        />
+      </div>
+    </AuthLayout>
   );
 };
 
@@ -1068,10 +1843,6 @@ export const BatchStatus = () => {
   const [refreshing,   setRefreshing]   = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [page,         setPage]         = useState(0);
-  const [selectedId,   setSelectedId]   = useState(null);
-  const [selectedName, setSelectedName] = useState('');
-  const [selectedWarrantyId,   setSelectedWarrantyId]   = useState(null);
-  const [selectedWarrantyName, setSelectedWarrantyName] = useState('');
   const [showGstGate,  setShowGstGate]  = useState(false);
 
   // Orgs must have a verified GSTIN before creating batches. (Superadmin
@@ -1335,10 +2106,7 @@ export const BatchStatus = () => {
           </div>
 
           {loading && (
-            <div className="flex flex-col items-center justify-center gap-3 p-16">
-              <RefreshCw size={24} className="animate-spin text-brand-blue" />
-              <p className="font-inter text-sm text-gray-400">Loading batches…</p>
-            </div>
+            <LoadingSkeleton variant="table" label="Loading batches" columns={6}/>
           )}
 
           {!loading && paged.length === 0 && (
@@ -1396,7 +2164,14 @@ export const BatchStatus = () => {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0 }}
                           transition={{ delay: index * 0.04, duration: 0.22, ease: 'easeOut' }}
-                          className="border-b border-gray-50 transition-colors last:border-0 hover:bg-gray-50/60"
+                          onClick={() => {
+                            if (batch.batchType === 'warranty') {
+                              navigate(`/org/batch-status/warranty/${batch.id}`, { state: { batchName: batch.name } });
+                            } else {
+                              navigate(`/org/batch-status/${batch.id}`);
+                            }
+                          }}
+                          className="cursor-pointer border-b border-gray-50 transition-colors last:border-0 hover:bg-gray-50/60"
                         >
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
@@ -1432,11 +2207,12 @@ export const BatchStatus = () => {
                           </td>
                           <td className="px-5 py-4 text-right">
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (batch.batchType === 'warranty') {
-                                  setSelectedWarrantyId(batch.id); setSelectedWarrantyName(batch.name);
+                                  navigate(`/org/batch-status/warranty/${batch.id}`, { state: { batchName: batch.name } });
                                 } else {
-                                  setSelectedId(batch.id); setSelectedName(batch.name);
+                                  navigate(`/org/batch-status/${batch.id}`);
                                 }
                               }}
                               className="inline-flex items-center gap-1.5 rounded-xl border border-brand-blue/20 bg-brand-blue/5 px-3 py-1.5 font-inter text-xs font-semibold text-brand-blue transition-all hover:bg-brand-blue hover:text-white"
@@ -1506,34 +2282,24 @@ export const BatchStatus = () => {
         )}
       </div>
 
-      <BatchDetailModal
-        batchId={selectedId}
-        batchName={selectedName}
-        onClose={() => { setSelectedId(null); setSelectedName(''); }}
-      />
-
-      <WarrantyDetailModal
-        batchId={selectedWarrantyId}
-        batchName={selectedWarrantyName}
-        onClose={() => { setSelectedWarrantyId(null); setSelectedWarrantyName(''); }}
-      />
-
-      <Modal isOpen={showGstGate} onClose={() => setShowGstGate(false)} title="GST Verification Required" size="sm">
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
-            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
-            <div>
-              <p className="font-inter text-sm font-semibold text-amber-800">
+      <Modal isOpen={showGstGate} onClose={() => setShowGstGate(false)} title="GST Verification Required" size="lg">
+        <div className="space-y-5">
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+              <AlertTriangle size={18} className="text-amber-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-sora text-sm font-semibold text-amber-900">
                 Verify your GSTIN before creating batches
               </p>
-              <p className="mt-1 font-inter text-xs text-amber-700">
+              <p className="mt-1 font-inter text-xs leading-5 text-amber-700">
                 {user?.gstin
                   ? 'Your GSTIN is on file but hasn’t been verified yet. Verify it from your profile to start creating verification batches.'
                   : 'Add and verify your organization’s GSTIN from your profile to start creating verification batches.'}
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-2">
+          <Modal.Footer className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowGstGate(false)}>Cancel</Button>
             <Button
               variant="primary"
@@ -1543,7 +2309,7 @@ export const BatchStatus = () => {
             >
               Go to Profile
             </Button>
-          </div>
+          </Modal.Footer>
         </div>
       </Modal>
     </AuthLayout>

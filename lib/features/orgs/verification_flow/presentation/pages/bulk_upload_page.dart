@@ -23,6 +23,7 @@ import '../../../../../core/utils/file_picker_util.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../../auth/application/auth_state.dart';
 import '../../../../auth/data/auth_repository.dart';
+import '../../../../../core/models/schema_config_models.dart';
 import '../../../data/verification_repository.dart';
 import '../widgets/schema_config_selector.dart';
 import '../../../../../core/services/batch_name_store.dart';
@@ -289,7 +290,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   PickedFile? _pickedFile;
   bool _isUploading = false;
-  String? _schemaName;
   bool _preflightChecking = false;
   List<Map<String, dynamic>> _parsedUsers = <Map<String, dynamic>>[];
   final Map<int, List<_HumanDocumentDraft>> _attachedDocumentsByUser =
@@ -317,6 +317,25 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       organizationDefault: organizationDefault,
       credentialVisibility: _credentialVisibility,
     );
+  }
+
+  /// The organization's default Human schema (managed only in Settings →
+  /// Custom Schemas). Batches omit `schema_name`, so the backend applies this
+  /// default; it's used here for column matching and template columns.
+  SchemaConfig? get _schemaConfig =>
+      SchemaConfigSelector.effectiveConfig(ref, 'human', null);
+
+  /// Per-row email check. With a schema whose email column this page can't
+  /// recognise, the server makes the final check (same as the web app).
+  bool get _rowEmailRequired =>
+      _emailRequired && (_pickedFileHasEmailColumn || _schemaConfig == null);
+
+  /// Re-reads the picked file so column matching follows the current schema.
+  void _reparsePickedFile() {
+    final PickedFile? picked = _pickedFile;
+    if (picked == null) return;
+    _skippedMissingEmailRows = 0;
+    _parsedUsers = _parseUsersFromPickedFile(picked);
   }
 
   /// Email becomes a required, validated field for Human batches that
@@ -547,7 +566,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final List<String> header = table[headerIndex]
         .map((dynamic v) => (v?.toString() ?? '').trim())
         .toList();
-    final Map<String, int> ix = _userIndexMap(header);
+    final Map<String, int> ix = withSchemaColumns(
+      _userIndexMap(header),
+      header,
+      _schemaConfig,
+    );
     _pickedFileHasEmailColumn = (ix['email'] ?? -1) >= 0;
 
     final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
@@ -558,7 +581,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       firstNonEmptyRow ??= row;
       final Map<String, dynamic>? user = _userFromRow(
         valueAt: (String key) => _Identifiers._rowValue(row, ix[key]),
-        requireEmail: _emailRequired,
+        requireEmail: _rowEmailRequired,
       );
       if (user != null) out.add(user);
     }
@@ -624,7 +647,11 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     final List<String> header = all[headerIndex]
         .map((Data? d) => _excelCellToString(d).trim())
         .toList();
-    final Map<String, int> ix = _userIndexMap(header);
+    final Map<String, int> ix = withSchemaColumns(
+      _userIndexMap(header),
+      header,
+      _schemaConfig,
+    );
     _pickedFileHasEmailColumn = (ix['email'] ?? -1) >= 0;
     _logLong('[BulkUploadPage] XLSX header(raw)=$header');
     _logLong(
@@ -646,7 +673,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           if (idx == null || idx < 0 || idx >= row.length) return '';
           return _excelCellToString(row[idx]);
         },
-        requireEmail: _emailRequired,
+        requireEmail: _rowEmailRequired,
       );
       if (user != null) out.add(user);
     }
@@ -930,7 +957,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
           selectedChecks: _checks,
           selectedCheckIds: _checkIds,
           verificationFilter: 'human',
-          schemaName: _schemaName,
+          schemaName: _schemaConfig?.label,
           onSave: (List<String> headers) {
             if (!mounted) return;
             setState(() {
@@ -1374,7 +1401,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
         if (sortedCheckIds.isNotEmpty) 'check_ids': sortedCheckIds.join(','),
         if (_columnsController.text.trim().isNotEmpty)
           'columns': _columnsController.text.trim(),
-        if (_schemaName case final String schema) 'schema_name': schema,
       },
     );
     context.push(uri.toString());
@@ -2171,7 +2197,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     // must carry an `email` column (new_flutter_trumarkz.md §12b). The
     // backend answers a missing column with a 400, so catch it here with a
     // message the organization can act on.
-    if (_emailRequired && !_pickedFileHasEmailColumn) {
+    // Match columns against the schema as it stands now (the org default may
+    // have loaded after the file was picked).
+    setState(_reparsePickedFile);
+    if (_emailRequired &&
+        !_pickedFileHasEmailColumn &&
+        _schemaConfig == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -2199,11 +2230,9 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             : null,
         fileBytes: pickedFile.bytes,
         fileName: pickedFile.name,
-        schemaName: _schemaName,
       );
 
       await _applyTargetedOverrides(repo, res);
-      await _logConsentDispatch(repo, res.batchId);
 
       await ref
           .read(batchNameStoreProvider.notifier)
@@ -2248,7 +2277,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(e))));
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } on DioException catch (e) {
       if (!mounted) return;
       debugPrint(
@@ -2259,7 +2288,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (inner is ApiException) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(inner))));
+        ).showSnackBar(SnackBar(content: Text(inner.message)));
       } else {
         final dynamic data = e.response?.data;
         String? serverMessage;
@@ -2291,40 +2320,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     }
   }
 
-  /// Logs the backend-visible consent state after a Permission Required upload.
-  /// It deliberately reports counts only, never recipient names, emails or
-  /// consent tokens.
-  Future<void> _logConsentDispatch(
-    VerificationRepository repo,
-    String batchId,
-  ) async {
-    if (!_emailRequired || batchId.trim().isEmpty) return;
-    try {
-      final VerificationListResponse response = await repo.getAllVerifications(
-        batchId: batchId.trim(),
-        limit: 200,
-      );
-      final int pending = response.users
-          .where((VerificationUser user) => user.isConsentPending)
-          .length;
-      final int withConsentState = response.users
-          .where((VerificationUser user) => user.hasConsentStatus)
-          .length;
-      debugPrint(
-        '[Consent] post-upload batch=$batchId users=${response.users.length} '
-        'with_consent_state=$withConsentState pending=$pending',
-      );
-      if (withConsentState == 0) {
-        debugPrint(
-          '[Consent] backend did not return consent_status. Check backend '
-          'resolution of credential_visibility and email-service logs.',
-        );
-      }
-    } catch (error) {
-      debugPrint('[Consent] post-upload state check failed: $error');
-    }
-  }
-
   /// Shared OCR worker — uploads `files[]` once and merges OCR into local
   /// drafts. No dialogs, no navigation, so both the smooth attach-sheet flow
   /// and the page-level Upload button can use the exact same sequence.
@@ -2352,7 +2347,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       docType: docType.isNotEmpty ? docType : 'document',
       fields: _humanDocumentFieldsCsv,
       files: _documentUploadFiles(),
-      schemaName: _schemaName,
     );
 
     final Map<int, String> userIdsByIndex = <int, String>{};
@@ -2448,25 +2442,13 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
     await context.push(paymentUri.toString(), extra: confirmAction);
   }
 
-  /// Unknown/ambiguous `schema_name` → clear the pick, refresh the list and
-  /// ask the user to re-select; otherwise the parsed API message.
-  String _schemaAwareMessage(ApiException e) {
-    return SchemaConfigSelector.handleStaleSelection(
-          ref,
-          'human',
-          e,
-          (String? v) => setState(() => _schemaName = v),
-        ) ??
-        e.message;
-  }
-
   /// Single mapping for OCR upload/save failures (ApiException passthrough,
   /// Dio status hints, generic fallback).
   String _ocrFriendlyError(Object e) {
-    if (e is ApiException) return _schemaAwareMessage(e);
+    if (e is ApiException) return e.message;
     if (e is DioException) {
       final Object? inner = e.error;
-      if (inner is ApiException) return _schemaAwareMessage(inner);
+      if (inner is ApiException) return inner.message;
       final dynamic data = e.response?.data;
       if (data is String && data.trim().isNotEmpty) return data.trim();
       if (data is Map && data['message'] is String) {
@@ -2600,7 +2582,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       final BulkUploadResponse res = await repo.createHumanBatch(
         batchName: _batchNameController.text.trim(),
         users: reviewedUsers.map(_userPayloadFromDraft).toList(),
-        schemaName: _schemaName,
       );
       final Map<int, String> userIdsByIndex = <int, String>{};
       for (int i = 0; i < res.successfulUsers.length; i++) {
@@ -2665,7 +2646,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(e))));
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } on DioException catch (e) {
       if (!mounted) return;
       debugPrint(
@@ -2676,7 +2657,7 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
       if (inner is ApiException) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(_schemaAwareMessage(inner))));
+        ).showSnackBar(SnackBar(content: Text(inner.message)));
       } else {
         final dynamic data = e.response?.data;
         String? serverMessage;
@@ -2894,6 +2875,12 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Keeps the org's schema list loaded so the default schema is known.
+    ref.watch(
+      schemaConfigsProvider(
+        SchemaConfigSelector.providerKey(ref, 'human', watch: true),
+      ),
+    );
     final AsyncValue<AuthState> authAsync = ref.watch(authNotifierProvider);
     final String? orgId = authAsync.valueOrNull?.userProfile?.id;
     final AsyncValue<String?> industryAsync = orgId == null
@@ -3093,14 +3080,6 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
                                         height: 16 / 11,
                                         color: const Color(0xFF94A3B8),
                                       ),
-                                    ),
-                                    SchemaConfigSelector(
-                                      spaceType: 'human',
-                                      value: _schemaName,
-                                      enabled: !_isUploading,
-                                      padding: EdgeInsets.only(top: s(16)),
-                                      onChanged: (String? v) =>
-                                          setState(() => _schemaName = v),
                                     ),
                                     SizedBox(height: s(26)),
                                     Row(
@@ -4774,9 +4753,10 @@ class _PermissionNotice extends StatelessWidget {
                   hasSkipped
                       ? 'These rows had no valid email. Add an email address to '
                             'each person and upload the file again.'
-                      : 'Everyone in this batch must approve before their '
-                            'credential is processed. The file needs an "email" '
-                            'column and every row needs a valid address.',
+                      : 'Reports for this batch open only for your '
+                            'organization and visitors the holder approves. '
+                            'The file needs an "email" column and every row '
+                            'needs a valid address.',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: s(12),

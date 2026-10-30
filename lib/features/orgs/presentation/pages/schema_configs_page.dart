@@ -1,0 +1,1405 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
+
+import '../../../../core/models/auth_models.dart';
+import '../../../../core/models/schema_config_models.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/tmz_button.dart';
+import '../../../../core/widgets/tmz_input.dart';
+import '../../../../core/widgets/tmz_sheets.dart';
+import '../../../auth/application/auth_notifier.dart';
+import '../../data/verification_repository.dart';
+
+/// Settings → Custom Schemas. The organization's dynamic schema
+/// configurations (`/auth/organizations/{org_id}/schema-configs`,
+/// dynamic_schema_flutter_trumarkz.md §15–§16): list, create from a pasted
+/// sample record, edit (new version), set default and deactivate.
+///
+/// Configurations a SuperAdmin created or last edited are read-only here —
+/// the backend answers 403 for any change to them.
+///
+/// Styled like the other Settings sub-pages (white app bar, bordered cards).
+/// These pages sit inside the org shell, so scroll content keeps clearance
+/// for the floating bottom nav.
+class SchemaConfigsPage extends ConsumerStatefulWidget {
+  const SchemaConfigsPage({super.key});
+
+  @override
+  ConsumerState<SchemaConfigsPage> createState() => _SchemaConfigsPageState();
+}
+
+const Color _navy = Color(0xFF1B3387);
+const Color _ink = Color(0xFF0F172A);
+const Color _rowTitle = Color(0xFF202124);
+const Color _muted = Color(0xFF64748B);
+const Color _hairline = Color(0xFFF1F5F9);
+
+/// Room for the floating bottom nav pill (71px) plus breathing space.
+const double _navClearance = 120;
+
+/// Semantic fields `input_map` may target per space type (backend
+/// `INPUT_SEMANTIC_FIELDS`). `warrenty_period` is the API's real spelling.
+const Map<String, List<String>> _semanticFields = <String, List<String>>{
+  'human': <String>[
+    'full_name',
+    'email',
+    'phone_number',
+    'dob',
+    'dl_number',
+    'nationality',
+  ],
+  'product': <String>['product_name', 'model_no', 'brand', 'sku_no'],
+  'warranty': <String>[
+    'product_name',
+    'model_no',
+    'brand',
+    'manufactured_by',
+    'manufactured_date',
+    'warrenty_period',
+    'coverage',
+    'product_details',
+  ],
+};
+
+const Map<String, String> _spaceTypeLabels = <String, String>{
+  'human': 'People',
+  'product': 'Product',
+  'warranty': 'Warranty',
+};
+
+const Map<String, IconData> _spaceTypeIcons = <String, IconData>{
+  'human': Icons.badge_outlined,
+  'product': Icons.inventory_2_outlined,
+  'warranty': Icons.verified_outlined,
+};
+
+const Map<String, String> _exampleRecords = <String, String>{
+  'human':
+      '{\n  "name": "Asha Rao",\n  "email": "asha@example.com",\n'
+      '  "phone": "+919800000000",\n  "employee_id": "EMP-1042"\n}',
+  'product':
+      '{\n  "product_name": "Steel Bottle",\n  "sku_no": "SB-750",\n'
+      '  "brand": "Acme",\n  "colour": "Silver"\n}',
+  'warranty':
+      '{\n  "product_name": "Air Purifier",\n  "model_no": "AP-200",\n'
+      '  "warrenty_period": "24 months"\n}',
+};
+
+String _orgId(WidgetRef ref) =>
+    ref.read(authNotifierProvider).valueOrNull?.userProfile?.id ?? '';
+
+PreferredSizeWidget _settingsAppBar(
+  BuildContext context, {
+  required String title,
+  List<Widget> actions = const <Widget>[],
+  VoidCallback? onBack,
+}) {
+  return AppBar(
+    backgroundColor: Colors.white,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+    leading: IconButton(
+      onPressed: onBack ?? () => Navigator.of(context).pop(),
+      icon: const Icon(Icons.chevron_left_rounded, color: _ink),
+    ),
+    title: Text(
+      title,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        color: _ink,
+      ),
+    ),
+    actions: actions,
+  );
+}
+
+class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
+  AsyncValue<List<SchemaConfig>> _configs = const AsyncLoading();
+  bool _showInactive = false;
+  final Set<String> _busy = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final String orgId = _orgId(ref);
+    if (orgId.isEmpty) {
+      setState(
+        () => _configs = AsyncError(
+          const ApiException(
+            statusCode: null,
+            message: 'Sign in again to manage schemas.',
+          ),
+          StackTrace.current,
+        ),
+      );
+      return;
+    }
+    try {
+      final List<SchemaConfig> list = await ref
+          .read(verificationRepositoryProvider)
+          .getSchemaConfigs(orgId: orgId, activeOnly: false);
+      if (!mounted) return;
+      setState(() => _configs = AsyncData(list));
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _configs = AsyncError(e, st));
+    }
+    // Upload screens read the cached active list for the default schema.
+    for (final String type in _semanticFields.keys) {
+      ref.invalidate(schemaConfigsProvider('$orgId::$type'));
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openEditor({SchemaConfig? existing}) async {
+    final bool? saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => _SchemaConfigEditorPage(existing: existing),
+      ),
+    );
+    if (saved == true) await _load();
+  }
+
+  Future<void> _run(
+    SchemaConfig config,
+    Future<void> Function() action,
+    String success,
+  ) async {
+    if (_busy.contains(config.id)) return;
+    setState(() => _busy.add(config.id));
+    try {
+      await action();
+      _toast(success);
+    } on ApiException catch (e) {
+      _toast(switch (e.statusCode) {
+        404 => 'This schema no longer exists. Refreshing…',
+        409 => '${e.message}\nPlease try again.',
+        _ => e.message,
+      });
+    } catch (_) {
+      _toast('Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy.remove(config.id));
+      await _load();
+    }
+  }
+
+  Future<void> _setDefault(SchemaConfig config) => _run(
+    config,
+    () => ref
+        .read(verificationRepositoryProvider)
+        .setDefaultSchemaConfig(orgId: _orgId(ref), configId: config.id),
+    '"${config.label}" is now the default.',
+  );
+
+  Future<void> _deactivate(SchemaConfig config) async {
+    final bool confirmed = await showConfirmSheet(
+      context,
+      icon: LucideIcons.archive,
+      tone: AppColors.danger,
+      title: 'Switch off "${config.label}"?',
+      message:
+          'New batches can no longer use this schema. Batches already '
+          'created with it keep working.',
+      confirmLabel: 'Switch off',
+    );
+    if (!confirmed) return;
+    await _run(
+      config,
+      () => ref
+          .read(verificationRepositoryProvider)
+          .deactivateSchemaConfig(orgId: _orgId(ref), configId: config.id),
+      '"${config.label}" switched off.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: _settingsAppBar(
+        context,
+        title: 'Custom Schemas',
+        actions: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: _navy,
+                backgroundColor: AppColors.blueTint,
+                shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              onPressed: () => _openEditor(),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text(
+                'New',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: _configs.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object err, _) => ListView(
+          padding: _listPadding(context),
+          children: <Widget>[
+            _EmptyCard(
+              icon: Icons.cloud_off_outlined,
+              title: 'Could not load schemas',
+              message: err is ApiException ? err.message : '$err',
+              actionLabel: 'Try again',
+              onAction: _load,
+            ),
+          ],
+        ),
+        data: _list,
+      ),
+    );
+  }
+
+  EdgeInsets _listPadding(BuildContext context) => EdgeInsets.fromLTRB(
+    16,
+    8,
+    16,
+    24 + MediaQuery.viewPaddingOf(context).bottom + _navClearance,
+  );
+
+  Widget _list(List<SchemaConfig> all) {
+    final List<SchemaConfig> visible = all
+        .where((SchemaConfig c) => _showInactive || c.isActive)
+        .toList();
+    final int inactiveCount = all.where((SchemaConfig c) => !c.isActive).length;
+
+    return RefreshIndicator(
+      color: _navy,
+      onRefresh: _load,
+      child: ListView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        padding: _listPadding(context),
+        children: <Widget>[
+          const Text(
+            'Your own data formats for batches. The default one is used '
+            'automatically whenever you create a batch of that type.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              height: 1.45,
+              color: _muted,
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (visible.isEmpty)
+            _EmptyCard(
+              icon: Icons.schema_outlined,
+              title: 'No custom schemas yet',
+              message:
+                  'Batches use the standard layout. Create a schema from one '
+                  'sample record to use your own fields.',
+              actionLabel: 'Create schema',
+              onAction: () => _openEditor(),
+            ),
+          for (final String type in _semanticFields.keys)
+            if (visible.any(
+              (SchemaConfig c) => c.spaceType == type,
+            )) ...<Widget>[
+              _SectionTitle(_spaceTypeLabels[type] ?? type),
+              _Card(
+                child: Column(
+                  children: <Widget>[
+                    for (final (int i, SchemaConfig c)
+                        in visible
+                            .where((SchemaConfig c) => c.spaceType == type)
+                            .indexed) ...<Widget>[
+                      if (i > 0) const Divider(height: 1, color: _hairline),
+                      _SchemaRow(
+                        config: c,
+                        busy: _busy.contains(c.id),
+                        onEdit: () => _openEditor(existing: c),
+                        onSetDefault: () => _setDefault(c),
+                        onDeactivate: () => _deactivate(c),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          if (inactiveCount > 0)
+            Center(
+              child: TextButton(
+                style: TextButton.styleFrom(foregroundColor: _muted),
+                onPressed: () => setState(() => _showInactive = !_showInactive),
+                child: Text(
+                  _showInactive
+                      ? 'Hide switched-off schemas'
+                      : 'Show switched-off schemas ($inactiveCount)',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SchemaRow extends StatelessWidget {
+  const _SchemaRow({
+    required this.config,
+    required this.busy,
+    required this.onEdit,
+    required this.onSetDefault,
+    required this.onDeactivate,
+  });
+
+  final SchemaConfig config;
+  final bool busy;
+  final VoidCallback onEdit;
+  final VoidCallback onSetDefault;
+  final VoidCallback onDeactivate;
+
+  Future<void> _openActions(BuildContext context) async {
+    final String? choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext sheetContext) => _ActionsSheet(
+        title: config.label,
+        actions: <_SheetAction>[
+          const _SheetAction('edit', Icons.edit_outlined, 'Edit schema'),
+          if (!config.isDefault)
+            const _SheetAction(
+              'default',
+              Icons.star_outline_rounded,
+              'Make default',
+            ),
+          const _SheetAction(
+            'off',
+            Icons.archive_outlined,
+            'Switch off',
+            danger: true,
+          ),
+        ],
+      ),
+    );
+    switch (choice) {
+      case 'edit':
+        onEdit();
+      case 'default':
+        onSetDefault();
+      case 'off':
+        onDeactivate();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool editable = config.isActive && !config.isSuperAdminManaged;
+    final int fields = config.localFields.length;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: editable && !busy ? () => _openActions(context) : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 15, 10, 15),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  _spaceTypeIcons[config.spaceType] ?? Icons.schema_outlined,
+                  size: 18,
+                  color: config.isActive ? _navy : const Color(0xFF9CA3AF),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      config.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        height: 20 / 15,
+                        color: config.isActive
+                            ? _rowTitle
+                            : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$fields field${fields == 1 ? '' : 's'} • v${config.version}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    if (config.isDefault ||
+                        !config.isActive ||
+                        config.isSuperAdminManaged) ...<Widget>[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: <Widget>[
+                          if (config.isDefault)
+                            const _Tag(
+                              'Default',
+                              bg: AppColors.badgeValidBg,
+                              fg: AppColors.badgeValidFg,
+                            ),
+                          if (!config.isActive)
+                            const _Tag(
+                              'Switched off',
+                              bg: AppColors.badgeManualBg,
+                              fg: _muted,
+                            ),
+                          if (config.isSuperAdminManaged)
+                            const _Tag(
+                              'Managed by TruMarkZ',
+                              bg: AppColors.blueTint,
+                              fg: _navy,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (busy)
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (editable)
+                const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.more_horiz_rounded,
+                    color: Color(0xFFB3B3B3),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetAction {
+  const _SheetAction(this.id, this.icon, this.label, {this.danger = false});
+
+  final String id;
+  final IconData icon;
+  final String label;
+  final bool danger;
+}
+
+class _ActionsSheet extends StatelessWidget {
+  const _ActionsSheet({required this.title, required this.actions});
+
+  final String title;
+  final List<_SheetAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        16 + MediaQuery.viewPaddingOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _Card(
+            child: Column(
+              children: <Widget>[
+                for (final (int i, _SheetAction a) in actions.indexed) ...[
+                  if (i > 0) const Divider(height: 1, color: _hairline),
+                  ListTile(
+                    leading: Icon(
+                      a.icon,
+                      color: a.danger ? AppColors.danger : _navy,
+                    ),
+                    title: Text(
+                      a.label,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: a.danger ? AppColors.danger : _rowTitle,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(context).pop(a.id),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SchemaConfigEditorPage extends ConsumerStatefulWidget {
+  const _SchemaConfigEditorPage({this.existing});
+
+  /// Editing saves a new version; null creates version 1.
+  final SchemaConfig? existing;
+
+  @override
+  ConsumerState<_SchemaConfigEditorPage> createState() =>
+      _SchemaConfigEditorPageState();
+}
+
+class _SchemaConfigEditorPageState
+    extends ConsumerState<_SchemaConfigEditorPage> {
+  late String _spaceType;
+  late final TextEditingController _label;
+  late final TextEditingController _schemaId;
+  late final TextEditingController _spaceId;
+  final TextEditingController _sample = TextEditingController();
+  final Map<String, TextEditingController> _mapping =
+      <String, TextEditingController>{};
+  bool _isDefault = false;
+  bool _saving = false;
+  bool _showMatching = false;
+  String? _labelError;
+  String? _schemaIdError;
+  String? _sampleError;
+
+  bool get _editing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final SchemaConfig? c = widget.existing;
+    _spaceType = c?.spaceType.isNotEmpty == true ? c!.spaceType : 'human';
+    _label = TextEditingController(text: c?.label ?? '');
+    _schemaId = TextEditingController(text: c?.schemaId ?? '');
+    _spaceId = TextEditingController(text: c?.spaceId ?? '');
+    _isDefault = c?.isDefault ?? false;
+    if (c == null) _prefillIds();
+    _resetMapping();
+    _showMatching = _mapping.values.any(
+      (TextEditingController t) => t.text.isNotEmpty,
+    );
+  }
+
+  /// New schemas start from the organization's saved Dhiway ids for the
+  /// chosen type; the user can still change them.
+  void _prefillIds() {
+    final UserProfile? p = ref
+        .read(authNotifierProvider)
+        .valueOrNull
+        ?.userProfile;
+    final (String? schema, String? space) = switch (_spaceType) {
+      'product' => (p?.productSchemaId, p?.productSpaceId),
+      'warranty' => (p?.warrantySchemaId, p?.warrantySpaceId),
+      _ => (p?.humanSchemaId, p?.humanSpaceId),
+    };
+    _schemaId.text = schema?.trim() ?? '';
+    _spaceId.text = space?.trim() ?? '';
+  }
+
+  /// Input mapping holds only the user's own choices; nothing is guessed.
+  void _resetMapping() {
+    for (final TextEditingController c in _mapping.values) {
+      c.dispose();
+    }
+    _mapping.clear();
+    final Map<String, dynamic> saved =
+        widget.existing?.inputMap ?? const <String, dynamic>{};
+    for (final String field in _semanticFields[_spaceType]!) {
+      _mapping[field] = TextEditingController(
+        text: saved[field]?.toString() ?? '',
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _label.dispose();
+    _schemaId.dispose();
+    _spaceId.dispose();
+    _sample.dispose();
+    for (final TextEditingController c in _mapping.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  /// The pasted record, verbatim; null when the box is empty.
+  Map<String, dynamic>? _parseSample() {
+    final String raw = _sample.text.trim();
+    if (raw.isEmpty) return null;
+    final dynamic decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const FormatException('Paste one JSON object, like {"name": …}.');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final String label = _label.text.trim();
+    Map<String, dynamic>? sample;
+    String? sampleError;
+    try {
+      sample = _parseSample();
+    } on FormatException catch (e) {
+      sampleError = e.message.contains('JSON object')
+          ? e.message
+          : 'This isn\'t valid JSON. Check quotes, commas and brackets.';
+    }
+    if (sampleError == null && !_editing && sample == null) {
+      sampleError = 'Paste one sample record so we can find its fields.';
+    }
+    setState(() {
+      _labelError = label.isEmpty ? 'Give the schema a name.' : null;
+      _schemaIdError = _schemaId.text.trim().isEmpty
+          ? 'Schema ID is required.'
+          : null;
+      _sampleError = sampleError;
+    });
+    if (_labelError != null || _schemaIdError != null || sampleError != null) {
+      return;
+    }
+
+    final Map<String, dynamic> inputMap = <String, dynamic>{
+      for (final MapEntry<String, TextEditingController> e in _mapping.entries)
+        if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
+    };
+    final VerificationRepository repo = ref.read(
+      verificationRepositoryProvider,
+    );
+    final String orgId = _orgId(ref);
+    final String variant = _spaceType == 'human' ? 'human_5qr' : '';
+    setState(() => _saving = true);
+    try {
+      final SchemaConfigSaveResponse res = _editing
+          ? await repo.createSchemaConfigVersion(
+              orgId: orgId,
+              configId: widget.existing!.id,
+              spaceType: _spaceType,
+              schemaVariant: variant,
+              schemaId: _schemaId.text,
+              spaceId: _spaceId.text,
+              label: label,
+              isDefault: _isDefault,
+              sampleRecord: sample,
+              inputMap: inputMap,
+              // Keep output mappings this screen doesn't edit.
+              outputMap: widget.existing!.outputMap,
+            )
+          : await repo.createSchemaConfig(
+              orgId: orgId,
+              spaceType: _spaceType,
+              schemaVariant: variant,
+              schemaId: _schemaId.text,
+              spaceId: _spaceId.text,
+              label: label,
+              isDefault: _isDefault,
+              sampleRecord: sample,
+              // Nothing matched by hand: let the server link exact names.
+              inputMap: inputMap.isEmpty ? null : inputMap,
+            );
+      if (!mounted) return;
+      await _showSaved(res);
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      await showMessageSheet(
+        context,
+        icon: LucideIcons.triangleAlert,
+        tone: AppColors.danger,
+        title: 'Couldn\'t save schema',
+        message: e.statusCode == 403
+            ? 'This schema is managed by TruMarkZ and can\'t be changed here.'
+            : e.message,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _showSaved(SchemaConfigSaveResponse res) {
+    final List<String> lines = <String>[
+      'Fields found: '
+          '${res.config.localFields.map((SchemaLocalField f) => f.name).join(', ')}',
+      if (res.dhiwaySchemaProperties == null)
+        'Not yet checked against Dhiway — that happens when certificates are '
+            'generated.',
+      ...res.warnings,
+    ];
+    return showMessageSheet(
+      context,
+      icon: LucideIcons.circleCheck,
+      tone: AppColors.success,
+      title: _editing ? 'New version saved' : 'Schema saved',
+      message: 'Suggestions below are optional.',
+      bullets: lines,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double bottom = MediaQuery.viewPaddingOf(context).bottom;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: _settingsAppBar(
+        context,
+        title: _editing ? 'Edit Schema' : 'New Schema',
+        onBack: () => Navigator.of(context).pop(false),
+      ),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: ListView(
+          physics: const BouncingScrollPhysics(),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + bottom + _navClearance),
+          children: <Widget>[
+            const _SectionTitle('Used for'),
+            _TypeSelector(
+              value: _spaceType,
+              locked: _editing,
+              onChanged: (String t) => setState(() {
+                _spaceType = t;
+                _prefillIds();
+                _resetMapping();
+              }),
+            ),
+            if (_editing)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'The type can\'t change on a new version.',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    color: _muted,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 24),
+            const _SectionTitle('Details'),
+            _Card(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  TMZInput(
+                    label: 'Schema name',
+                    hint: 'e.g. Staff onboarding',
+                    controller: _label,
+                    enabled: !_saving,
+                    errorText: _labelError,
+                  ),
+                  const SizedBox(height: 14),
+                  TMZInput(
+                    label: 'Dhiway schema ID',
+                    hint: 'Schema ID',
+                    controller: _schemaId,
+                    enabled: !_saving,
+                    errorText: _schemaIdError,
+                  ),
+                  const SizedBox(height: 14),
+                  TMZInput(
+                    label: 'Dhiway space ID',
+                    hint: 'Space ID',
+                    controller: _spaceId,
+                    enabled: !_saving,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: <Widget>[
+                const Expanded(child: _SectionTitle('Sample record')),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: _navy,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  onPressed: _saving
+                      ? null
+                      : () => setState(
+                          () => _sample.text = _exampleRecords[_spaceType]!,
+                        ),
+                  child: const Text('Use example'),
+                ),
+              ],
+            ),
+            _Card(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    _editing
+                        ? 'Optional. Paste a new record to replace the fields, '
+                              'or leave it empty to keep them.'
+                        : 'Paste one record as JSON. Its fields become this '
+                              'schema\'s fields.',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: _muted,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _CodeBox(
+                    controller: _sample,
+                    enabled: !_saving,
+                    errorText: _sampleError,
+                    hint: _exampleRecords[_spaceType]!,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            _Card(
+              child: Column(
+                children: <Widget>[
+                  _ToggleRow(
+                    icon: Icons.star_outline_rounded,
+                    title: 'Use as default',
+                    subtitle:
+                        'New ${(_spaceTypeLabels[_spaceType] ?? '').toLowerCase()} '
+                        'batches use this schema automatically.',
+                    value: _isDefault,
+                    onChanged: _saving
+                        ? null
+                        : (bool v) => setState(() => _isDefault = v),
+                  ),
+                  const Divider(height: 1, color: _hairline),
+                  _ToggleRow(
+                    icon: Icons.link_rounded,
+                    title: 'Match field names',
+                    subtitle:
+                        'Only if your record names a standard field '
+                        'differently.',
+                    value: _showMatching,
+                    onChanged: (bool v) => setState(() => _showMatching = v),
+                  ),
+                  if (_showMatching)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: Column(
+                        children: <Widget>[
+                          for (final MapEntry<String, TextEditingController> e
+                              in _mapping.entries)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: TMZInput(
+                                label: e.key.replaceAll('_', ' '),
+                                hint: 'Your field name (optional)',
+                                controller: e.value,
+                                enabled: !_saving,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            TMZButton(
+              label: _editing ? 'Save new version' : 'Save schema',
+              isLoading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeSelector extends StatelessWidget {
+  const _TypeSelector({
+    required this.value,
+    required this.locked,
+    required this.onChanged,
+  });
+
+  final String value;
+  final bool locked;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        for (final (int i, MapEntry<String, String> t)
+            in _spaceTypeLabels.entries.indexed) ...<Widget>[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: _TypeOption(
+              icon: _spaceTypeIcons[t.key]!,
+              label: t.value,
+              selected: value == t.key,
+              enabled: !locked || value == t.key,
+              onTap: locked ? null : () => onChanged(t.key),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TypeOption extends StatelessWidget {
+  const _TypeOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg = selected
+        ? _navy
+        : (enabled ? _muted : const Color(0xFFCBD5E1));
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xFFEFF3FF) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected ? _navy : const Color(0xFFE2E8F0),
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Column(
+              children: <Widget>[
+                Icon(icon, color: fg, size: 22),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Multi-line JSON box styled like [TMZInput].
+class _CodeBox extends StatefulWidget {
+  const _CodeBox({
+    required this.controller,
+    required this.enabled,
+    required this.hint,
+    this.errorText,
+  });
+
+  final TextEditingController controller;
+  final bool enabled;
+  final String hint;
+  final String? errorText;
+
+  @override
+  State<_CodeBox> createState() => _CodeBoxState();
+}
+
+class _CodeBoxState extends State<_CodeBox> {
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasError = (widget.errorText ?? '').isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          decoration: BoxDecoration(
+            color: AppColors.offWhite,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: hasError
+                  ? AppColors.error
+                  : (_focus.hasFocus
+                        ? AppColors.brandBlue
+                        : Colors.transparent),
+              width: 1.25,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focus,
+            enabled: widget.enabled,
+            minLines: 6,
+            maxLines: 14,
+            keyboardType: TextInputType.multiline,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 13,
+              height: 1.45,
+              color: _ink,
+            ),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              hintText: widget.hint,
+              hintStyle: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13,
+                height: 1.45,
+                color: Color(0xFFB0BAC9),
+              ),
+            ),
+          ),
+        ),
+        if (hasError) ...<Widget>[
+          const SizedBox(height: 6),
+          Text(
+            widget.errorText!,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              color: AppColors.error,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 18, color: _navy),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _rowTitle,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    height: 1.35,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: _navy,
+            activeThumbColor: Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// White card with the Settings hairline border and soft shadow.
+class _Card extends StatelessWidget {
+  const _Card({required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _hairline),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Grey group heading, as used for "Manage Account" in Settings.
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          height: 22 / 16,
+          color: Color(0xFF8A8A8A),
+        ),
+      ),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  const _Tag(this.label, {required this.bg, required this.fg});
+
+  final String label;
+  final Color bg;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
+      child: Column(
+        children: <Widget>[
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEFF3FF),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: _navy, size: 26),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _ink,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              height: 1.45,
+              color: _muted,
+            ),
+          ),
+          const SizedBox(height: 18),
+          TMZButton(label: actionLabel, onPressed: onAction, showShadow: false),
+        ],
+      ),
+    );
+  }
+}

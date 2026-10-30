@@ -1,7 +1,19 @@
 import axios from 'axios';
+import { getDocumentViewCandidates } from '@/utils/recordDocuments';
+import { isConsentPage } from '@/utils/consent';
+import { createConsentGuard } from './consentGuard.js';
+import { automaticRecordId, canRetryAutomatic } from '@/utils/automaticVerification';
+import { validateOcrAssignments } from '@/utils/ocrAssignments';
+import { withSampleRecord } from '@/utils/schemaConfig';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const VERIFICATION_BASE_URL = import.meta.env.VITE_VERIFICATION_API_URL || API_BASE_URL;
+const consentGuard = createConsentGuard({
+  getBatch: (id) => verificationAPI.getBatchDetails(id),
+  getUsers: (filters) => verificationAPI.getAllVerifications(filters),
+  getUser: (id) => verificationAPI.getUserVerification(id),
+  getAssignments: (id) => verificationAPI.getManualAssignments(id),
+});
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -29,6 +41,21 @@ const PUBLIC_AUTH_ENDPOINTS = [
 const isPublicAuthEndpoint = (url = '') =>
   PUBLIC_AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
 
+// The three token-authenticated, no-login verifier endpoints (Human and
+// Product share this exact same flow — there is no separate Product
+// variant). A verifier hitting any of these must never carry the logged-in
+// admin/org's bearer token, and a 401 from any of them (bad/expired verifier
+// token) must never be treated as "the real user's session died" — that
+// would wipe the actual logged-in user's auth storage and bounce them to
+// /login mid-review just because a verifier link elsewhere was stale.
+const isPublicManualVerificationEndpoint = (url = '') =>
+  url.includes('/verification/manual/request-info/') ||
+  url.includes('/verification/manual/upload/') ||
+  url.includes('/verification/manual/verify/');
+
+const isPublicConsentEndpoint = (url = '') =>
+  /^\/verification\/consent\/[^/?]+(?:\/decision)?(?:\?|$)/.test(url);
+
 const clearAuthStorage = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('user_id');
@@ -40,6 +67,18 @@ const clearAuthStorage = () => {
 
 const getStoredToken = () =>
   localStorage.getItem('access_token') || localStorage.getItem('trumarkz_access_token');
+
+// [body, config] for a schema-config save. With a pasted sample record the body is pre-serialised
+// so the record reaches the server byte-for-byte; axios passes string bodies through unchanged.
+// local_fields survives cleanObject even when empty: an explicit [] means "no fields" to the
+// server, while dropping the key would mean "keep the previous version's fields".
+const schemaConfigBody = (payload, sampleRecordText) => {
+  const cleaned = cleanObject(payload);
+  if (Array.isArray(payload.local_fields)) cleaned.local_fields = payload.local_fields;
+  return sampleRecordText
+    ? [withSampleRecord(JSON.stringify(cleaned), sampleRecordText), { headers: { 'Content-Type': 'application/json' } }]
+    : [cleaned];
+};
 
 const cleanObject = (input = {}) =>
   Object.fromEntries(
@@ -103,7 +142,7 @@ api.interceptors.response.use(
     // interceptor so only a REAL authenticated-request 401 triggers this.
     if (error.response?.status === 401 && !isPublicAuthEndpoint(error.config?.url)) {
       clearAuthStorage();
-      if (window.location.pathname !== '/login') window.location.replace('/login');
+      if (window.location.pathname !== '/login' && !isConsentPage(window.location.pathname)) window.location.replace('/login');
     }
     return Promise.reject(error);
   }
@@ -112,10 +151,15 @@ api.interceptors.response.use(
 verificationApi.interceptors.request.use(
   (config) => {
     const token = getStoredToken();
+    // Optional push work must never register/remove a token under a different
+    // account if authentication changes while an async operation is in flight.
+    if (config.expectedAccessToken && config.expectedAccessToken !== token) {
+      throw new axios.CanceledError('Push session changed');
+    }
     const isPublicUpload =
       config.url?.includes('/verification/upload/photo') ||
       config.url?.includes('/verification/upload/document') ||
-      config.url?.includes('/verification/manual/upload/');
+      isPublicManualVerificationEndpoint(config.url) || isPublicConsentEndpoint(config.url);
 
     if (token && !isPublicUpload) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -131,10 +175,10 @@ verificationApi.interceptors.request.use(
 verificationApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    const isPublicRoute = error.config?.url?.includes('/verification/manual/upload/');
+    const isPublicRoute = isPublicManualVerificationEndpoint(error.config?.url) || isPublicConsentEndpoint(error.config?.url);
     if (error.response?.status === 401 && !isPublicRoute) {
       clearAuthStorage();
-      if (window.location.pathname !== '/login') window.location.replace('/login');
+      if (window.location.pathname !== '/login' && !isConsentPage(window.location.pathname)) window.location.replace('/login');
     }
     return Promise.reject(error);
   }
@@ -296,10 +340,81 @@ export const authAPI = {
   // in the User List), not an access gate. `org_id` body key confirmed
   // against the backend team's contract doc.
   approveOrganization: (orgId) => api.post('/auth/organizations/approve', { org_id: orgId }),
+  // ── Superadmin organization management (org-scoped, never mixes in the
+  // signup contact person's personal fields/credentials) — use these for
+  // organization profile viewing/editing instead of the generic
+  // getAllUsers/updateUser above, which still carry full_name/phone_number/
+  // is_active/email_verified and have no organization-specific allowlist.
+  // GET /auth/organizations — `total` is this page's item count, not a
+  // cross-page total (matches this backend's existing pagination convention
+  // elsewhere — never treat it as the overall dataset size).
+  getOrganizations: (params = {}) => {
+    const p = {};
+    if (params.limit != null) p.limit = params.limit;
+    if (params.offset != null) p.offset = params.offset;
+    return api.get('/auth/organizations', { params: p });
+  },
+  getOrganization: (orgId) => api.get(`/auth/organizations/${orgId}`),
+  // PATCH /auth/organizations/{org_id} — every field optional. Only
+  // organization_name/service_type/industry_type/gstin/business_reg_number/
+  // address_line1-3/use_cases/dhiways_details are part of this schema;
+  // org_approved/is_active/email_verified/onboarding_completed/gst_verified
+  // are read-only here (sending them is simply ignored) — use the existing
+  // dedicated actions (approveOrganization, deactivateUser, etc.) for those.
+  // Never send full_name/phone_number/email/password/OTP/token here — this
+  // surface is organization-scoped only, never the signup contact person's.
+  updateOrganization: (orgId, payload) => api.patch(`/auth/organizations/${orgId}`, cleanObject(payload)),
+
+  // ── Dynamic organization-specific schema configs (org_schema_configs) ──
+  // Separate, additive system from dhiways_details/setDhiwayDefault above —
+  // see "Dynamic Schema change.md". SuperAdmin may target any org_id; an
+  // organization account may only target its own id (the backend 403s
+  // otherwise). Every call here is its own independent request — none of
+  // these are part of the updateOrganization PATCH payload.
+  // GET — active_only defaults true server-side; pass false to include
+  // deactivated/superseded versions (for a version-history view).
+  getSchemaConfigs: (orgId, { spaceType, activeOnly } = {}) =>
+    api.get(`/auth/organizations/${orgId}/schema-configs`, {
+      params: cleanObject({ space_type: spaceType, active_only: activeOnly }),
+    }),
+  // POST — registers version 1. payload: { space_type, schema_variant?,
+  // schema_id, space_id, label, local_fields?, input_map?, output_map?,
+  // is_default? }, plus the optional pasted sample_record (sent verbatim, see
+  // withSampleRecord). Returns { config, warnings }.
+  createSchemaConfig: (orgId, payload, { sampleRecordText } = {}) =>
+    api.post(`/auth/organizations/${orgId}/schema-configs`, ...schemaConfigBody(payload, sampleRecordText)),
+  // POST .../versions — full-replace edit; always creates the next version,
+  // never patches in place. Same payload shape as create.
+  createSchemaConfigVersion: (orgId, configId, payload, { sampleRecordText } = {}) =>
+    api.post(`/auth/organizations/${orgId}/schema-configs/${configId}/versions`, ...schemaConfigBody(payload, sampleRecordText)),
+  // POST .../set-default — no body; config_id is the path param.
+  setSchemaConfigDefault: (orgId, configId) =>
+    api.post(`/auth/organizations/${orgId}/schema-configs/${configId}/set-default`),
+  // POST .../deactivate — no body. Never deletes; a batch that already
+  // froze this config's content stays reproducible forever.
+  deactivateSchemaConfig: (orgId, configId) =>
+    api.post(`/auth/organizations/${orgId}/schema-configs/${configId}/deactivate`),
+
+  // PATCH /auth/superadmins/{user_id} — superadmin-only. Updates an existing
+  // superadmin's own details (full_name, phone_number, email, password,
+  // is_active). Every field optional — only send what's actually changing;
+  // omit `password` entirely to leave it unchanged (never send an empty
+  // string for it). This is the dedicated surface for editing an existing
+  // superadmin account — distinct from promoteSuperAdmin (grants super-admin
+  // to an existing non-admin user) and createSuperAdmin (creates a brand
+  // new one) below, neither of which edits an existing admin's details.
+  updateSuperAdmin: (userId, payload) => api.patch(`/auth/superadmins/${userId}`, cleanObject(payload)),
+
   promoteSuperAdmin: (email) => api.post('/auth/promote-super-admin', { email }),
   createSuperAdmin: (payload) => api.post('/auth/create-super-admin', payload),
   getOrganizationIndustryType: (orgId) => api.get(`/auth/organization/${orgId}/industry-type`),
   getAuditLogs: (batchUserId) => api.get(`/auth/audit-logs/${batchUserId}`),
+};
+
+export const pushAPI = {
+  registerPushToken: (token, options = {}) => verificationApi.post('/push/tokens', { token, platform: 'web' }, options),
+  getPushTokens: (options = {}) => verificationApi.get('/push/tokens', options),
+  removePushToken: (token, options = {}) => verificationApi.delete('/push/tokens', { ...options, params: { token } }),
 };
 
 export const orgAPI = {};
@@ -309,11 +424,20 @@ export const adminAPI = {
   getAllUsers: authAPI.getAllUsers,
   createUser: authAPI.createUser,
   updateUser: authAPI.updateUser,
+  updateSuperAdmin: authAPI.updateSuperAdmin,
   deactivateUser: authAPI.deactivateUser,
   permanentlyDeleteUser: authAPI.permanentlyDeleteUser,
   approveOrganization: authAPI.approveOrganization,
   unverifyGstForOrg: authAPI.unverifyGstForOrg,
   setDhiwayDefault: authAPI.setDhiwayDefault,
+  getOrganizations: authAPI.getOrganizations,
+  getOrganization: authAPI.getOrganization,
+  updateOrganization: authAPI.updateOrganization,
+  getSchemaConfigs: authAPI.getSchemaConfigs,
+  createSchemaConfig: authAPI.createSchemaConfig,
+  createSchemaConfigVersion: authAPI.createSchemaConfigVersion,
+  setSchemaConfigDefault: authAPI.setSchemaConfigDefault,
+  deactivateSchemaConfig: authAPI.deactivateSchemaConfig,
   promoteSuperAdmin: authAPI.promoteSuperAdmin,
   createSuperAdmin: (payload) =>
     authAPI.createSuperAdmin(
@@ -327,6 +451,16 @@ export const adminAPI = {
 };
 
 export const verificationAPI = {
+  getConsentInfo: (token, { signal } = {}) =>
+    verificationApi.get(`/verification/consent/${encodeURIComponent(token)}`, { signal }),
+  submitConsentDecision: (token, decision) =>
+    verificationApi.post(`/verification/consent/${encodeURIComponent(token)}/decision`, { decision }),
+
+  getNotifications: ({ unreadOnly = false, limit = 50, offset = 0 } = {}) =>
+    verificationApi.get('/verification/notifications', { params: { unread_only: unreadOnly, limit, offset } }),
+  markNotificationRead: (notificationId) =>
+    verificationApi.post(`/verification/notifications/${encodeURIComponent(notificationId)}/read`),
+  markAllNotificationsRead: () => verificationApi.post('/verification/notifications/read-all'),
   getIndustryTypes: () => verificationApi.get('/verification/industry-types'),
 
   uploadSingleHuman: (data) =>
@@ -350,6 +484,9 @@ export const verificationAPI = {
         verification_types: data.verification_types,
         credential_visibility: data.credential_visibility,
         template_id: data.template_id,
+        // Optional — picks one of the org's configured dynamic schemas (see
+        // "Dynamic Schema change.md"); omitted uses the org's default, if any.
+        schema_name: data.schema_name,
       })
     ),
 
@@ -364,6 +501,7 @@ export const verificationAPI = {
         verification_types: data.verification_types,
         credential_visibility: data.credential_visibility,
         template_id: data.template_id,
+        schema_name: data.schema_name,
       })
     ),
 
@@ -371,9 +509,19 @@ export const verificationAPI = {
   // call per batch. 1 image = 1 user. `fields`/`docType` are extraction hints,
   // not required. Same optional industry/verification/visibility params as the
   // Excel bulkUpload above.
+  extractOcrDocument: (file) => {
+    const formData = new FormData();
+    formData.append('files', file);
+    return verificationApi.post('/ocr/extract', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+
   bulkUploadDocuments: (files, batchName, maybeOptions, maybeProgress) => {
     const formData = new FormData();
     const { options, onProgress } = normalizeUploadArgs(maybeOptions, maybeProgress);
+    if ((options.batchType || options.batch_type || 'human') === 'human') {
+      const assignments = validateOcrAssignments(options.assignments, files.length);
+      if (assignments.length) formData.append('assignments', JSON.stringify(assignments));
+    }
 
     files.forEach((file) => formData.append('files', file));
     formData.append('batch_name', batchName);
@@ -390,8 +538,36 @@ export const verificationAPI = {
     );
     appendFormValue(formData, 'fields', options.fields);
     appendFormValue(formData, 'doc_type', options.docType || options.doc_type);
+    appendFormValue(formData, 'schema_name', options.schemaName || options.schema_name);
 
     return verificationApi.post('/verification/bulk-upload/documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onProgress
+        ? (event) => onProgress(Math.round((event.loaded * 100) / (event.total || 1)))
+        : undefined,
+    });
+  },
+
+  // Single OCR photo — attaches/replaces the photo for one BatchUser created
+  // by bulkUploadDocuments above. Backend normalizes to a 350x350 PNG.
+  uploadOcrPhoto: (batchUserId, photo) => {
+    const formData = new FormData();
+    formData.append('batch_user_id', batchUserId);
+    formData.append('photo', photo);
+    return verificationApi.post('/verification/upload/ocr-photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Bulk OCR photos — batch_user_ids[i] <-> photos[i], strictly positional
+  // (never filename/name/email/order heuristics). One bad pair (invalid
+  // photo, wrong-org id) never blocks the rest — see failed_users[] on the
+  // response, alongside successful_users[].
+  bulkUploadOcrPhotos: (batchUserIds, photos, onProgress) => {
+    const formData = new FormData();
+    batchUserIds.forEach((id) => formData.append('batch_user_ids', id));
+    photos.forEach((photo) => formData.append('photos', photo));
+    return verificationApi.post('/verification/bulk-upload/ocr-photos', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: onProgress
         ? (event) => onProgress(Math.round((event.loaded * 100) / (event.total || 1)))
@@ -433,6 +609,7 @@ export const verificationAPI = {
       options.credentialVisibility || options.credential_visibility
     );
     appendFormValue(formData, 'template_id', options.templateId || options.template_id);
+    appendFormValue(formData, 'schema_name', options.schemaName || options.schema_name);
 
     return verificationApi.post('/verification/bulk-upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -465,6 +642,7 @@ export const verificationAPI = {
     );
     appendFormValue(formData, 'verification_types', options.verificationTypes || options.verification_types);
     appendFormValue(formData, 'template_id', options.templateId || options.template_id);
+    appendFormValue(formData, 'schema_name', options.schemaName || options.schema_name);
 
     // No document attachments here — Product Excel upload no longer supports
     // row-level document attachment at all (doc_files/doc_sku_nos/doc_labels/
@@ -480,7 +658,9 @@ export const verificationAPI = {
     });
   },
 
-  generateHumanTemplate: (headers, verificationTypes = []) => {
+  // schemaName: the batch's schema configuration label — the server then appends that schema's own
+  // fields as extra columns (never replacing or reordering these headers).
+  generateHumanTemplate: (headers, verificationTypes = [], schemaName) => {
     const formData = new FormData();
     appendFormValue(formData, 'headers', Array.isArray(headers) ? headers.join(',') : headers);
     appendFormValue(
@@ -488,6 +668,7 @@ export const verificationAPI = {
       'verification_types',
       Array.isArray(verificationTypes) ? verificationTypes.join(',') : verificationTypes
     );
+    appendFormValue(formData, 'schema_name', schemaName);
 
     return verificationApi.post('/verification/generate-human-template', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -495,9 +676,10 @@ export const verificationAPI = {
     });
   },
 
-  generateProductTemplate: (headers) => {
+  generateProductTemplate: (headers, schemaName) => {
     const formData = new FormData();
     appendFormValue(formData, 'headers', Array.isArray(headers) ? headers.join(',') : headers);
+    appendFormValue(formData, 'schema_name', schemaName);
 
     return verificationApi.post('/verification/products/template', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -536,9 +718,20 @@ export const verificationAPI = {
   },
 
   getUserVerification: (userId) => verificationApi.get(`/verification/user/${userId}`),
+  retryAutomaticVerification: async (userId) => {
+    const { user, batch } = await consentGuard.assertUser(userId);
+    const row = batch.users?.find((item) => automaticRecordId(item) === String(userId));
+    if (!row || !canRetryAutomatic({ ...row, ...user, verification_type_status: row.verification_type_status }, batch)) {
+      throw new Error('Retry is unavailable: automatic verification must have no report and no approved or rejected automatic checks. Refresh the status.');
+    }
+    return verificationApi.post(`/verification/batch-users/${encodeURIComponent(userId)}/retry-automatic-verification`);
+  },
+  getDocumentViewCandidates: (document) => getDocumentViewCandidates(document, VERIFICATION_BASE_URL),
 
-  generateQRAndCertificate: (userId) =>
-    verificationApi.post(`/verification/user/${userId}/generate-qr`),
+  generateQRAndCertificate: async (userId) => {
+    await consentGuard.assertUser(userId);
+    return verificationApi.post(`/verification/user/${userId}/generate-qr`);
+  },
 
   // batchType: optional 'human' | 'product' | 'warranty' — filters server-side
   // via ?batch_type=. Omit to get every batch type, same as before.
@@ -546,7 +739,8 @@ export const verificationAPI = {
     verificationApi.get('/verification/batches', {
       params: batchType ? { batch_type: batchType } : undefined,
     }),
-  getBatchDetails: (batchId) => verificationApi.get(`/verification/batches/${batchId}`),
+  getBatchDetails: (batchId, config) => verificationApi.get(`/verification/batches/${batchId}`, config),
+  getBatchConsentDetails: async (batchId) => ({ data: await consentGuard.loadBatch(batchId) }),
 
   // POST /verification/batches/{batch_id}/share-with-organization —
   // Superadmin only. The real, persisted "Send to Organization" action:
@@ -558,6 +752,56 @@ export const verificationAPI = {
   // on an already-shared batch safely returns the existing state unchanged.
   shareWithOrganization: (batchId) =>
     verificationApi.post(`/verification/batches/${batchId}/share-with-organization`),
+
+  // DELETE /verification/batches/{batch_id} — superadmin only. Permanently
+  // hard-deletes the ENTIRE batch: BatchUsers, UserDocuments, manual
+  // verification requests, audit logs, verification/SDC state, and every
+  // batch-owned GCS file (uploaded documents/photos, Product images/
+  // blow-up images, verification reports, Excel/CSV, manual verifier
+  // reports). For a Warranty batch, its reserved WarrantySerialNumber rows
+  // are deleted too (serial-number registry reset — generation logic
+  // itself is unchanged). Works from pending/completed/approved/rejected/
+  // sdc_generated/issued/shared states; 409 if the batch is currently
+  // "processing" (nothing deleted — safe to retry once it settles), 404 if
+  // it's already gone. If a Dhiway credential was already issued, it is
+  // NOT revoked by this call (Dhiway has no such API) — the local batch and
+  // its data are still deleted, and the response may carry orphaned
+  // credential/public-id info to warn about, never implying the external
+  // credential itself was removed.
+  deleteBatch: (batchId) =>
+    verificationApi.delete(`/verification/batches/${batchId}`),
+
+  // POST /verification/batches/{batch_id}/send-rejected-list — superadmin
+  // only. Generates an Excel of every user with at least one rejected
+  // verification_type_status entry (not just users whose overall status is
+  // "rejected" — a partially-verified user with one rejected type is
+  // included too) and stores it privately in GCS. NOT emailed — there is no
+  // email delivery in this flow at all (removed entirely, per the backend's
+  // own doc). The organization reaches it only through the two authenticated
+  // rejected-list view/download endpoints below, gated on the batch's own
+  // `rejected_list` field from GET /verification/batches/{batch_id}. No
+  // request body. 404 if the batch has no rejected users, 400 if the org has
+  // no email on file (a well-formedness check, independent of delivery — no
+  // email is sent either way), 502 if Excel generation/GCS upload fails.
+  // Calling this again overwrites the same stored file/metadata — the
+  // organization always sees the latest generated list, never a stale one.
+  sendRejectedList: (batchId) =>
+    verificationApi.post(`/verification/batches/${batchId}/send-rejected-list`),
+
+  // GET /verification/batches/{batch_id}/rejected-list/view — inline view of
+  // the stored Excel (Content-Disposition: inline). Authenticated: the
+  // owning organization or SuperAdmin only (a different org's batch id 404s,
+  // same as every other batch-scoped endpoint — never confirms the batch
+  // exists). The raw GCS path is never exposed; this is the only way to
+  // reach the file — never construct or store a GCS URL directly.
+  getRejectedListView: (batchId) =>
+    verificationApi.get(`/verification/batches/${batchId}/rejected-list/view`, { responseType: 'blob' }),
+
+  // GET /verification/batches/{batch_id}/rejected-list/download — identical
+  // file/authorization to the view endpoint above, just served as an
+  // attachment (Content-Disposition: attachment) instead of inline.
+  getRejectedListDownload: (batchId) =>
+    verificationApi.get(`/verification/batches/${batchId}/rejected-list/download`, { responseType: 'blob' }),
 
   // DELETE /verification/batches/{batch_id}/users/{batch_user_id} —
   // superadmin only. Permanently removes one customer from a batch (cascades
@@ -593,18 +837,42 @@ export const verificationAPI = {
   deleteVerificationType: (id) => verificationApi.delete(`/verification/verification-types/${id}`),
 
   // Manual verification request — returns { request_id, token, expires_at, verifier_email }
-  requestManualVerification: (payload) =>
-    verificationApi.post('/verification/verification/manual/request', payload),
+  requestManualVerification: async (payload) => {
+    await consentGuard.assertBatch(payload.batch_id);
+    return verificationApi.post('/verification/verification/manual/request', payload);
+  },
 
-  // Check whether a manual upload token is still valid / already used
-  checkManualUploadToken: (token) =>
-    verificationApi.get(`/verification/manual/upload/${token}`),
+  // Source of truth for the verifier-facing upload/review page — token-
+  // authenticated, public. Returns the request's verification type, status,
+  // and the exact list of assigned users/products (users[]: batch_user_id,
+  // full_name, status, reason, rejection_reason, report_url, file_index).
+  // Re-fetch this after every upload/verify call rather than trusting any
+  // locally-computed state — same Human/Product shape, no branching needed.
+  getManualVerificationRequestInfo: (token) =>
+    verificationApi.get(`/verification/manual/request-info/${token}`),
 
-  // Verifier uploads report files against the token
-  // Let Axios no-set Content-Type with correct multipart boundary
-  uploadManualReport: (token, files) => {
+  // Verifier's own approve/reject decision per assigned user/product —
+  // token-authenticated, public, independent of the org/admin review
+  // endpoint below. Reason is required by the backend for any "rejected"
+  // decision; omitting it for an approval is fine.
+  verifyManualVerificationRequest: (token, decisions) =>
+    verificationApi.post(`/verification/manual/verify/${token}`, { decisions }),
+
+  // Verifier uploads report files against the token.
+  // Let Axios no-set Content-Type with correct multipart boundary.
+  // batchUserIds (optional) is the exact per-file tagging the backend added
+  // (manual_verification_request_files / Change 6): batchUserIds[i] names
+  // which BatchUser files[i] belongs to — a strict parallel array, never
+  // inferred from file order. Omit it entirely (don't pass an empty array
+  // either) to keep the legacy behavior: every user associated with the
+  // request shares file index 0. The backend treats an empty list the same
+  // as "not provided", so this only ever appends when there's real tagging.
+  uploadManualReport: (token, files, batchUserIds) => {
     const formData = new FormData();
     Array.from(files || []).forEach((file) => formData.append('files', file));
+    if (Array.isArray(batchUserIds) && batchUserIds.length > 0) {
+      batchUserIds.forEach((id) => formData.append('batch_user_ids', id));
+    }
     return verificationApi.post(`/verification/manual/upload/${token}`, formData);
   },
 
@@ -622,16 +890,45 @@ export const verificationAPI = {
     verificationApi.get(`/verification/batches/${batchId}/third-party-verifiers`),
 
   // ── Bulk manual verification emails ───────────────────────────────────────
-  sendBulkManualVerification: (payload) =>
-    verificationApi.post('/verification/manual/send-bulk', payload),
+  sendBulkManualVerification: async (payload) => {
+    await consentGuard.assertBatch(payload.batch_id);
+    return verificationApi.post('/verification/manual/send-bulk', payload);
+  },
 
-  // ── Smart Send: multiple verifiers per type, users split randomly ─────────
-  smartSendManualVerification: (payload) =>
-    verificationApi.post('/verification/manual/smart-send', payload),
+  // ── Smart Send: multiple verifiers per type — users are split sequentially
+  // from the deterministic batch user order (created_at ASC, id ASC) and the
+  // exact resulting user_ids are sent in the payload; the backend never
+  // splits or reorders them itself. ──────────────────────────────────────
+  smartSendManualVerification: async (payload) => {
+    const ids = (payload.verification_assignments || []).flatMap((type) => (type.verifiers || []).flatMap((verifier) => verifier.user_ids || []));
+    await consentGuard.assertBatch(payload.batch_id, ids);
+    return verificationApi.post('/verification/manual/smart-send', payload);
+  },
 
   // ── Resend manual verification link ───────────────────────────────────────
-  resendManualVerification: (requestId) =>
-    verificationApi.post(`/verification/manual/resend/${requestId}`),
+  resendManualVerification: async (requestId, batchId) => {
+    await consentGuard.assertRequest(requestId, batchId);
+    return verificationApi.post(`/verification/manual/resend/${requestId}`);
+  },
+
+  // POST /verification/manual/resend-rejected — re-verification, NOT the
+  // same as resendManualVerification above (that resends the same link for
+  // the same request; this creates a brand-new request for a fresh round of
+  // review). Org-authenticated, owns-the-batch enforced (404 if not, never
+  // 403). Only users CURRENTLY rejected for this exact verification_type_name
+  // may be included — the old rejection stays in history untouched; only
+  // this type's current verification_type_status entry can move once the
+  // new request is decided. 409 if a pending resend already exists for one
+  // of these users/this type — never retry blindly on that.
+  resendRejectedForVerification: async (payload) => {
+    await consentGuard.assertBatch(payload.batch_id, payload.batch_user_ids);
+    return verificationApi.post('/verification/manual/resend-rejected', {
+      batch_id: payload.batch_id,
+      verification_type_name: payload.verification_type_name,
+      batch_user_ids: payload.batch_user_ids,
+      verifier_email: payload.verifier_email,
+    });
+  },
 
   // ── Submitted verifier reports for a batch ─────────────────────────────────
   getSubmittedReports: (batchId, submittedOnly = false) =>
@@ -639,23 +936,28 @@ export const verificationAPI = {
       params: submittedOnly ? { submitted_only: true } : undefined,
     }),
 
+  // GET /verification/batches/{batch_id}/manual-assignments — authenticated
+  // (owning organization or SuperAdmin, same as every other admin batch
+  // endpoint — not a public/tokenized route). Read-only: the exact persisted
+  // verifier -> assigned-user/product mapping Smart Send created. Once Smart
+  // Send has run, this is the ONLY source of truth for assignment visibility
+  // and verifier-based filtering — never reconstruct it from batch position,
+  // name, email, submitted-report filenames, or verification status.
+  getManualAssignments: (batchId) =>
+    verificationApi.get(`/verification/batches/${batchId}/manual-assignments`),
+
   // ── Download one report file from a verifier's submission (binary stream) ──
   downloadManualReport: (requestId, fileIndex) =>
     verificationApi.get(`/verification/manual/reports/${requestId}/download/${fileIndex}`, {
       responseType: 'blob',
     }),
 
-  // ── Approve/reject a submitted manual verification report ──────────────────
-  // status: "approved" | "rejected" — updates every batch user assigned to
-  // this request for that verification type. "Reject wins" precedence
-  // (backend, Sept 2026): if a user already carries "rejected" from another
-  // request/verifier for the same batch+type, a later "approved" decision
-  // here can never flip them back — the response's
-  // users_protected_from_downgrade count says how many users that guard
-  // applied to. A later "rejected" decision can still correct an earlier
-  // "approved" one.
-  updateManualVerificationStatus: (requestId, status, reason) =>
-    verificationApi.patch(`/verification/manual/requests/${requestId}/status`, cleanObject({ status, reason })),
+  // REMOVED: updateManualVerificationStatus / updateManualVerificationDecisions
+  // (PATCH /verification/manual/requests/{request_id}/status). Backend change:
+  // the verifier is now the only actor who can approve/reject a manual
+  // verification report, via their own token upload/verify flow. This
+  // endpoint now returns 410 Gone for SuperAdmin/Organization callers, so the
+  // frontend no longer calls it at all — Submitted Reports is read-only.
 
   // ── Email Drafts ──────────────────────────────────────────────────────────
   // NOTE: the latest backend integration doc documents these five CRUD
@@ -677,6 +979,13 @@ export const verificationAPI = {
 
   getEmailDraftsByType: (verificationType) =>
     verificationApi.get(`/verification/email-drafts/${encodeURIComponent(verificationType)}`),
+
+  // Read-only recipients for one batch/type; independent of saved templates.
+  getEmailDraftRecipients: (verificationType, batchId, { signal } = {}) =>
+    verificationApi.get(`/verification/email-drafts/${encodeURIComponent(verificationType)}/recipients`, {
+      params: { batch_id: batchId },
+      signal,
+    }),
 
   updateEmailDraft: (draftId, payload) =>
     verificationApi.put(`/verification/email-drafts/${draftId}`, cleanObject({
@@ -721,8 +1030,10 @@ export const verificationAPI = {
     }),
 
   // ── Run automatic verification ────────────────────────────────────────────
-  runAutoVerification: (verificationTypeName, userId) =>
-    verificationApi.post(`/verification/verification/automatic/${verificationTypeName}/${userId}`),
+  runAutoVerification: async (verificationTypeName, userId) => {
+    await consentGuard.assertUser(userId);
+    return verificationApi.post(`/verification/verification/automatic/${verificationTypeName}/${userId}`);
+  },
 
   // ── Product Warranty ──────────────────────────────────────────────────────
   downloadWarrantyTemplate: () =>
@@ -753,7 +1064,10 @@ export const verificationAPI = {
   // doc_labels are each ONE comma-joined string, positionally aligned with
   // doc_files by array order — never repeated fields for those two. The
   // backend matches all three purely by index.
-  uploadWarrantyExcel: (file, batchName, description = '', reservedSerialNos = [], documents = [], maybeProgress) => {
+  // schemaName (new, trailing/optional so existing positional call sites are
+  // unaffected) — picks one of the org's configured dynamic Warranty
+  // schemas; omitted uses the org's default, if any.
+  uploadWarrantyExcel: (file, batchName, description = '', reservedSerialNos = [], documents = [], maybeProgress, schemaName) => {
     const formData = new FormData();
     const { onProgress } = normalizeUploadArgs(undefined, maybeProgress);
 
@@ -761,6 +1075,7 @@ export const verificationAPI = {
     formData.append('batch_name', batchName);
     formData.append('batch_type', 'warranty');
     if (description) formData.append('description', description);
+    if (schemaName) formData.append('schema_name', schemaName);
     if (Array.isArray(reservedSerialNos) && reservedSerialNos.length > 0) {
       formData.append('reserved_serial_nos', reservedSerialNos.join(','));
       formData.append('use_reserved_serials', 'true');
@@ -818,16 +1133,41 @@ export const sdcAPI = {
   // config default) and schema_id resolves from the batch's industry — both
   // can optionally be passed here to override that resolution, but that's a
   // testing-only escape hatch, not part of the normal admin flow.
-  generateBatchSDC: (batchId, payload = {}) =>
-    verificationApi.post(
+  // user_ids (optional): generate for only these BatchUser ids instead of
+  // the whole eligible batch. Omit/empty to keep the original whole-batch
+  // behavior — cleanObject already drops an empty array, so passing [] here
+  // is always safe and never accidentally narrows the request.
+  generateBatchSDC: async (batchId, payload = {}) => {
+    await consentGuard.assertBatch(batchId, Array.isArray(payload.user_ids) && payload.user_ids.length ? payload.user_ids : undefined);
+    return verificationApi.post(
       `/sdc/batches/${batchId}/generate`,
       cleanObject({
         publish: !!payload.publish,
         active: !!payload.active,
         space_id: payload.space_id?.trim(),
         schema_id: payload.schema_id?.trim(),
+        user_ids: Array.isArray(payload.user_ids) ? payload.user_ids : undefined,
       })
-    ),
+    );
+  },
+
+  // GET /sdc/batches/{batch_id}/approvals — full history (pending, approved,
+  // rejected), newest first. Org restricted to its own batches; super admin
+  // can view any. Used both to show the org's "SDC Approval Requests" card
+  // and the superadmin's read-only approval-status view (superadmin never
+  // gets an approve/reject action — only the owning org decides).
+  getSDCApprovals: (batchId) =>
+    verificationApi.get(`/sdc/batches/${batchId}/approvals`),
+
+  // POST /sdc/approvals/{request_id}/decide — org-authenticated only. A
+  // super admin or a different org gets 404 (never 403 — same
+  // indistinguishable-404 pattern as every other batch-scoped endpoint).
+  // 409 if the request was already decided — never retry blindly on that.
+  decideSDCApproval: (requestId, payload) =>
+    verificationApi.post(`/sdc/approvals/${requestId}/decide`, {
+      decision: payload.decision,
+      ...(payload.reason?.trim() ? { reason: payload.reason.trim() } : {}),
+    }),
 
   // GET /sdc/batches/{batch_id}/status — poll until done:true. Reports exact
   // ready/pending/total counts for this batch (unlike /sdc/records, which
@@ -853,8 +1193,9 @@ export const sdcAPI = {
   // retry — already-issued records are never re-issued.
   // 409 = drafts still not ready — retry. 400 = generate wasn't called first.
   // 502 = Dhiway issue failed — not retried automatically.
-  issueBatchSDC: (batchId, payload = {}) =>
-    verificationApi.post(
+  issueBatchSDC: async (batchId, payload = {}) => {
+    await consentGuard.assertBatch(batchId);
+    return verificationApi.post(
       `/sdc/batches/${batchId}/issue`,
       cleanObject({
         send_email: !!payload.send_email,
@@ -865,7 +1206,8 @@ export const sdcAPI = {
         reply_to_email: payload.reply_to_email?.trim(),
         cc_email: payload.cc_email?.trim(),
       })
-    ),
+    );
+  },
 };
 
 export const verifiersAPI = {
@@ -977,14 +1319,26 @@ export const tokenHelpers = {
   get: getStoredToken,
 };
 
+// Validation responses carry the specifics in an `errors` list beside a generic `message`
+// (e.g. {"message": "Invalid schema configuration", "errors": [...]}). Showing only the message
+// hides which field was wrong, so the list is appended whenever the server sends one.
+const appendErrors = (message, errors) => {
+  const items = (Array.isArray(errors) ? errors : [])
+    .map((e) => (typeof e === 'string' ? e : e?.msg || e?.message || ''))
+    .filter(Boolean);
+  if (!items.length) return message;
+  return message ? `${message}: ${items.join('; ')}` : items.join('; ');
+};
+
 export const getApiError = (err, fallback = 'Something went wrong. Please try again.') => {
-  const detail = err?.response?.data?.detail;
-  if (typeof detail === 'string') return detail;
+  const data = err?.response?.data;
+  const detail = data?.detail;
+  if (typeof detail === 'string') return appendErrors(detail, data?.errors);
   if (Array.isArray(detail)) {
     return detail.map((item) => item?.msg || item?.message).filter(Boolean).join('. ') || fallback;
   }
-  if (detail && typeof detail === 'object') return detail.message || detail.error || fallback;
-  return err?.response?.data?.message || fallback;
+  if (detail && typeof detail === 'object') return appendErrors(detail.message || detail.error || '', detail.errors) || fallback;
+  return appendErrors(data?.message || '', data?.errors) || fallback;
 };
 
 export const triggerBlobDownload = (blob, fileName) => {

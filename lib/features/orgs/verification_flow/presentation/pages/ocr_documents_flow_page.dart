@@ -17,7 +17,6 @@ import '../../../../../core/widgets/tmz_badge.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../data/verification_repository.dart';
-import '../widgets/schema_config_selector.dart';
 
 /// Full-page OCR Human flow (trumarkz_ocr.md): documents → review → photos.
 ///
@@ -980,7 +979,6 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
   int _selectedUserIndex = 0;
   bool _isAddingDocs = false;
   bool _isUploadingDocs = false;
-  String? _schemaName;
   String _docsStatus = '';
   // Kept as request groups so overlapping groups preserve the API's
   // documented "last matching entry wins" behaviour.
@@ -1043,8 +1041,6 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
         _batchNameController.text = batch;
       }
       _industry = (qp['industry'] ?? _industry).trim();
-      final String schema = (qp['schema_name'] ?? '').trim();
-      if (schema.isNotEmpty) _schemaName = schema;
       final String access = (qp['access'] ?? '').trim().toLowerCase();
       if (access.isNotEmpty) _credentialVisibility = access;
       final List<String>? checks = split(qp['checks']);
@@ -1534,7 +1530,6 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
         fields: _humanDocumentFieldsCsv,
         files: _documentFiles(),
         assignments: _documentAssignments,
-        schemaName: _schemaName,
       );
       final Map<int, String> idsByIndex = <int, String>{};
       for (int i = 0; i < res.successfulUsers.length; i++) {
@@ -1650,7 +1645,6 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
         final BulkUploadResponse res = await repo.createHumanBatch(
           batchName: _batchNameController.text.trim(),
           users: reviewed.map(_reviewPayload).toList(),
-          schemaName: _schemaName,
         );
         if (!mounted) return;
         await ref
@@ -1999,15 +1993,7 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
 
   String _friendlyError(Object e) {
     final Object? apiError = e is DioException ? e.error : e;
-    if (apiError is ApiException) {
-      return SchemaConfigSelector.handleStaleSelection(
-            ref,
-            'human',
-            apiError,
-            (String? v) => setState(() => _schemaName = v),
-          ) ??
-          apiError.message;
-    }
+    if (apiError is ApiException) return apiError.message;
     if (e is DioException) {
       final dynamic data = e.response?.data;
       if (data is String && data.trim().isNotEmpty) return data.trim();
@@ -2343,14 +2329,6 @@ class _OcrDocumentsFlowPageState extends ConsumerState<OcrDocumentsFlowPage> {
                                       ],
                                     ),
                                     SizedBox(height: s(16)),
-                                    if (_step == 0)
-                                      SchemaConfigSelector(
-                                        spaceType: 'human',
-                                        value: _schemaName,
-                                        enabled: !_isUploadingDocs,
-                                        onChanged: (String? v) =>
-                                            setState(() => _schemaName = v),
-                                      ),
                                     if (_step == 0) _docsSection(s),
                                     if (_step == 1) _reviewSection(),
                                     if (_step == 2) _photosSection(),

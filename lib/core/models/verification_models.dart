@@ -283,7 +283,12 @@ class VerificationUser {
   final Map<String, dynamic> customFields;
   final Map<String, dynamic> verificationTypeStatus;
 
-  /// Consent state for this person — `pending`, `accepted` or `rejected`.
+  /// Legacy consent state — `pending`, `accepted` or `rejected`.
+  ///
+  /// Consent is no longer a condition for verifier assignment, automatic
+  /// verification or SDC; never use these fields to filter or disable
+  /// verification actions. Report access is governed separately by the
+  /// batch's `certificate_access_mode`.
   ///
   /// `null` for every Product/Warranty record and every Open Search Human
   /// record (new_flutter_trumarkz.md §12c): consent is not applicable there,

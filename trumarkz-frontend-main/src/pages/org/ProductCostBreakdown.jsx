@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CheckCircle, CheckSquare, Package, ReceiptText, RefreshCw } from 'lucide-react';
@@ -143,6 +144,8 @@ export const ProductCostBreakdown = () => {
           productBatchData.description || '',
           reservedSerialNos,
           documents,
+          undefined,
+          productBatchData.schemaName,
         );
         setProductBatchData((current) => ({
           ...(current || {}),
@@ -182,8 +185,36 @@ export const ProductCostBreakdown = () => {
           verificationTypes: selectedProductVerifications,
           credentialVisibility,
           templateId: activeTemplate,
+          schemaName: productBatchData.schemaName,
         }
       );
+
+      // bulkUploadProducts returns 200 even when every row was skipped
+      // (duplicate SKU, missing product_name, etc.) — total_uploaded === 0
+      // there means no product, and no real batch content, actually got
+      // created, so a blind "Product batch created successfully" would be
+      // actively misleading. A per-image upload failure (errors[], e.g. a
+      // bad product_image/blow_up_image) is different — it does NOT fail
+      // that row, the product is still created, so it's surfaced alongside
+      // success rather than treated as a blocking failure.
+      const totalUploaded = data?.total_uploaded ?? (data?.successful_users?.length || 0);
+      const totalSkipped = data?.total_skipped ?? (data?.skipped_users?.length || 0);
+      const skippedUsers = data?.skipped_users || [];
+      const imageErrors = data?.errors || [];
+
+      if (totalUploaded === 0 && totalSkipped > 0) {
+        // Deliberately NOT storing uploadResponse here — nothing was
+        // actually created, so a retry after fixing the file re-uploads
+        // properly instead of being treated as already-done.
+        const reasons = [...new Set(skippedUsers.map((s) => s.reason).filter(Boolean))];
+        toast.error(
+          reasons.length > 0
+            ? `No products were added — ${reasons.join('; ')}`
+            : `No products were added — all ${totalSkipped} row(s) were skipped`,
+          { duration: 8000 }
+        );
+        return;
+      }
 
       setProductBatchData((current) => ({
         ...(current || {}),
@@ -192,7 +223,20 @@ export const ProductCostBreakdown = () => {
         isWarranty: false,
       }));
 
-      toast.success('Product batch created successfully');
+      if (totalSkipped > 0) {
+        toast.success(`${totalUploaded} product${totalUploaded === 1 ? '' : 's'} created, ${totalSkipped} skipped — see Batch Status for details`);
+      } else {
+        toast.success('Product batch created successfully');
+      }
+      if (imageErrors.length > 0) {
+        // No standalone "re-attach a product image" API/UI exists — the
+        // fix is re-uploading that row's image via a fresh Excel row, not
+        // anything this toast can link to. Just surface that it happened.
+        toast.error(
+          `${imageErrors.length} product image${imageErrors.length === 1 ? '' : 's'} failed to upload — the product${imageErrors.length === 1 ? '' : 's'} were still created without ${imageErrors.length === 1 ? 'it' : 'them'}`,
+          { duration: 8000 }
+        );
+      }
       navigate('/org/batch-status');
     } catch (error) {
       toast.error(getApiError(error, isWarranty ? 'Failed to submit warranty batch' : 'Failed to create product batch'));
@@ -275,10 +319,7 @@ export const ProductCostBreakdown = () => {
 
             <div className="mt-5 space-y-3">
               {typesLoading ? (
-                <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
-                  <RefreshCw size={16} className="animate-spin" />
-                  <span className="text-sm font-inter">Loading cost details…</span>
-                </div>
+                <LoadingSkeleton variant="list" label="Loading cost details" rows={3}/>
               ) : selectedChecks.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-400 font-inter">
                   No verification checks selected. Go back and select checks.

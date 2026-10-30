@@ -105,38 +105,50 @@ export const PRODUCT_SECTOR_DEFS = [
 ];
 
 // Must match the backend's warranty Excel contract — pure record metadata
-// only. `warrenty_report` and `product_details` are NOT Excel columns at all
-// — both are document-URL destinations, populated exclusively via
+// the organization actually types in, only. `warrenty_report` and
+// `product_details` are NOT Excel columns at all — both are document-URL
+// destinations, populated exclusively via
 // POST /products/{batch_user_id}/warranty-document (document_label:
 // "Warranty Report" or "Product Details") after the batch exists. `serial_no`
 // and `created_time` are also absent — the backend assigns serial_no at
 // reservation (see reserveWarrantySerials) and created_time at SDC issuance.
+// `product_image` IS a real column here (unlike the two above) — same
+// embedded-Excel-image cell treatment as Product's product_image column
+// (Insert → Image → Place in Cell), never typed text; see the "image" rule
+// in downloadLocalFallback's buildExample.
 // This is only a fallback: the real, live column list is fetched from the
 // backend's own template file (see the warrantyHeaders effect) and takes
 // priority whenever it succeeds.
 export const WARRANTY_SERVICE_HEADERS = [
-  'customer_name',
+  'product_name',
   'model_no',
   'purchase_date',
   'expiration_date',
+  'brand',
+  'manufactured_by',
+  'manufactured_date',
+  'warrenty_period',
+  'coverage',
+  'product_image',
 ];
 
-// Canonical column set for the normal Product Verification flow. `sku_no` is
-// mandatory alongside product_name (it's the collision-proof key the backend
-// uses internally; the frontend no longer attaches any document during this
-// upload at all). third+party+qr1 is intentionally excluded (removed per
-// explicit request); third+party+qr2 is kept for column-structure parity
-// with the backend template, always downloaded blank — the org user must
-// never fill it in manually. Both QR columns are ultimately populated
-// exclusively by the backend's own qr_slot verifier-report workflow
-// (assigned automatically by request-creation order); the frontend never
-// selects or sends a qr_slot.
+// Canonical column set for the normal Product Verification flow, matching
+// the backend's current DEFAULT_PRODUCT_HEADERS (2026-09 Dhiway schema
+// update). `sku_no` is mandatory alongside product_name (it's the
+// collision-proof key the backend uses internally). `product_image` /
+// `blow_up_image` are embedded-Excel-image columns (Insert → Image → Place
+// in Cell), never typed text — see the "Image" field badge and the blank
+// example value in downloadLocalFallback. third+party+qr1..4 are NOT part of
+// the template at all anymore (removed on the backend side) — they're
+// backend/verification outputs only, populated exclusively via the
+// qr_slot verifier-report workflow; the frontend never selects or sends one.
 export const VERIFICATION_SERVICE_HEADERS = [
   'product_name',
   'sku_no',
   'model_no',
   'brand',
-  'third+party+qr2',
+  'product_image',
+  'blow_up_image',
 ];
 
 export const VERIFICATION_REQUIRED_HEADERS = ['product_name', 'sku_no'];

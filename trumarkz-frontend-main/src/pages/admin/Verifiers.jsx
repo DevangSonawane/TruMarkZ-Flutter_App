@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
 import { AuthLayout } from '@/components/layout/AuthLayout';
@@ -462,10 +463,7 @@ const VerifierDirectory = forwardRef((props, ref) => {
 
       {/* Table */}
       {loading ? (
-        <Card className="p-10 flex flex-col items-center justify-center gap-3">
-          <RefreshCw size={24} className="animate-spin text-brand-blue" />
-          <p className="text-sm text-gray-400 font-inter">Loading verifiers...</p>
-        </Card>
+        <LoadingSkeleton variant="table" label="Loading verifiers" columns={6}/>
       ) : filtered.length === 0 ? (
         <Card className="p-10 text-center">
           <Users size={32} className="text-gray-200 mx-auto mb-3" />
@@ -610,33 +608,33 @@ const VerifierDirectory = forwardRef((props, ref) => {
       )}
 
       {/* Add Modal */}
-      <Modal isOpen={addOpen} onClose={() => { setAddOpen(false); setForm(EMPTY_VF); }} title="Add Verifier" size="lg">
-        <form onSubmit={handleAdd} className="space-y-4">
+      <Modal isOpen={addOpen} onClose={() => { setAddOpen(false); setForm(EMPTY_VF); }} title="Add Verifier" size="lg" onSubmit={handleAdd}>
+        <div className="space-y-4">
           <VerifierFields values={form} onChange={(f, v) => setForm((p) => ({ ...p, [f]: v }))} typeNames={typeNames} />
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+          <Modal.Footer className="flex flex-col sm:flex-row justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => { setAddOpen(false); setForm(EMPTY_VF); }} disabled={submitting}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" icon={Plus} disabled={submitting}>
               {submitting ? 'Adding...' : 'Add Verifier'}
             </Button>
-          </div>
-        </form>
+          </Modal.Footer>
+        </div>
       </Modal>
 
       {/* Edit Modal */}
-      <Modal isOpen={editOpen} onClose={() => { setEditOpen(false); setEditTarget(null); }} title="Edit Verifier" size="lg">
-        <form onSubmit={handleEdit} className="space-y-4">
+      <Modal isOpen={editOpen} onClose={() => { setEditOpen(false); setEditTarget(null); }} title="Edit Verifier" size="lg" onSubmit={handleEdit}>
+        <div className="space-y-4">
           <VerifierFields values={editForm} onChange={(f, v) => setEditForm((p) => ({ ...p, [f]: v }))} typeNames={typeNames} />
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+          <Modal.Footer className="flex flex-col sm:flex-row justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => { setEditOpen(false); setEditTarget(null); }} disabled={saving}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" icon={saving ? RefreshCw : Pencil} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
-          </div>
-        </form>
+          </Modal.Footer>
+        </div>
       </Modal>
 
       {/* Delete Modal */}
@@ -651,14 +649,14 @@ const VerifierDirectory = forwardRef((props, ref) => {
               <p className="text-xs text-red-500 font-inter mt-1">This action cannot be undone.</p>
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
+          <Modal.Footer className="flex justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => setDeleteItem(null)} disabled={!!deletingId}>
               Cancel
             </Button>
             <Button variant="danger" type="button" icon={deletingId ? RefreshCw : Trash2} disabled={!!deletingId} onClick={handleDelete}>
               {deletingId ? 'Deleting...' : 'Yes, Delete'}
             </Button>
-          </div>
+          </Modal.Footer>
         </div>
       </Modal>
     </div>
@@ -977,10 +975,7 @@ const VerificationTypes = forwardRef((props, ref) => {
 
       {/* Table */}
       {loading ? (
-        <Card className="p-10 flex flex-col items-center justify-center gap-3">
-          <RefreshCw size={24} className="animate-spin text-brand-blue" />
-          <p className="text-sm text-gray-400 font-inter">Loading verification types...</p>
-        </Card>
+        <LoadingSkeleton variant="table" label="Loading verification types" columns={5}/>
       ) : types.length === 0 ? (
         <Card className="p-10 text-center">
           <ShieldCheck size={32} className="text-gray-200 mx-auto mb-3" />
@@ -1136,8 +1131,8 @@ const VerificationTypes = forwardRef((props, ref) => {
       )}
 
       {/* Add Verification Type Modal */}
-      <Modal isOpen={modalOpen} onClose={handleClose} title="Add Verification Type" size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <Modal isOpen={modalOpen} onClose={handleClose} title="Add Verification Type" size="lg" onSubmit={handleSubmit}>
+        <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Name *</label>
@@ -1219,18 +1214,18 @@ const VerificationTypes = forwardRef((props, ref) => {
             </div>
             <p className="text-xs text-gray-400 font-inter mt-1">Press Enter or comma to add. Backspace removes the last tag.</p>
           </div>
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+          <Modal.Footer className="flex flex-col sm:flex-row justify-end gap-2">
             <Button variant="ghost" type="button" onClick={handleClose} disabled={submitting}>Cancel</Button>
             <Button type="submit" variant="primary" icon={Plus} disabled={submitting}>
               {submitting ? 'Creating...' : 'Add Verification Type'}
             </Button>
-          </div>
-        </form>
+          </Modal.Footer>
+        </div>
       </Modal>
 
       {/* Edit Verification Type Modal */}
-      <Modal isOpen={editModalOpen} onClose={() => { setEditModalOpen(false); setEditTarget(null); }} title="Edit Verification Type" size="lg">
-        <form onSubmit={handleSaveEdit} className="space-y-4">
+      <Modal isOpen={editModalOpen} onClose={() => { setEditModalOpen(false); setEditTarget(null); }} title="Edit Verification Type" size="lg" onSubmit={handleSaveEdit}>
+        <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Name *</label>
@@ -1317,13 +1312,13 @@ const VerificationTypes = forwardRef((props, ref) => {
             </div>
             <p className="text-xs text-gray-400 font-inter mt-1">Press Enter or comma to add. Backspace removes the last tag.</p>
           </div>
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+          <Modal.Footer className="flex flex-col sm:flex-row justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => { setEditModalOpen(false); setEditTarget(null); }} disabled={saving}>Cancel</Button>
             <Button type="submit" variant="primary" icon={saving ? RefreshCw : Pencil} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
-          </div>
-        </form>
+          </Modal.Footer>
+        </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}
@@ -1340,12 +1335,12 @@ const VerificationTypes = forwardRef((props, ref) => {
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
+          <Modal.Footer className="flex justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => setDeleteConfirmItem(null)} disabled={!!deletingId}>Cancel</Button>
             <Button variant="danger" type="button" icon={deletingId ? RefreshCw : Trash2} disabled={!!deletingId} onClick={handleDelete}>
               {deletingId ? 'Deleting...' : 'Yes, Delete'}
             </Button>
-          </div>
+          </Modal.Footer>
         </div>
       </Modal>
     </div>

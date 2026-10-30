@@ -1,4 +1,6 @@
+import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CheckSquare, ReceiptText, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -11,6 +13,9 @@ import { useApp } from '@/context/AppContext';
 import { HUMAN_VERIFICATION_STEPS, HUMAN_VERIFICATION_STEP_META, HUMAN_VERIFICATION_STEP_ROUTES } from '@/data/humanVerificationFlow';
 import { verificationAPI, getApiError } from '@/services/api';
 import { getIndustryTypeList } from '@/utils/verificationFlow';
+import { submitOcrDraft } from '@/utils/ocrSubmission';
+import { BulkHumanResolvedUsers } from '@/components/shared/BulkHumanResolvedUsers';
+import { validateHumanExcelEmails } from '@/utils/humanEmail';
 
 const formatCurrency = (value) => `₹${Number(value).toLocaleString('en-IN')}`;
 
@@ -34,14 +39,12 @@ export const CostBreakdown = () => {
   const [submitting,  setSubmitting]  = useState(false);
 
   useEffect(() => {
-    // Excel path defers batch creation to Preview (batchData.file is enough
-    // to proceed); the OCR document path already created the batch at the
-    // Template step, so batchData.uploadResponse stands in for it instead.
-    if (!(batchData?.file || batchData?.uploadResponse) || !batchData?.recordCount) {
+    // Both Excel and OCR remain drafts until the total cost is approved.
+    if (!(batchData?.file || batchData?.ocrDraft || batchData?.uploadResponse) || !batchData?.recordCount) {
       toast.error('Upload the template file first');
       navigate('/org/template', { replace: true });
     }
-  }, [batchData?.file, batchData?.uploadResponse, batchData?.recordCount, navigate]);
+  }, [batchData?.file, batchData?.ocrDraft, batchData?.uploadResponse, batchData?.recordCount, navigate]);
 
   // Stable string key to avoid infinite refetch from object reference changes
   const industryKey = (() => {
@@ -79,7 +82,7 @@ export const CostBreakdown = () => {
   const totalCost   = selectedChecks.reduce((sum, item) => sum + ((item.price || 0) * recordCount), 0);
 
   const handleContinue = async () => {
-    if (!agreed) {
+    if (!agreed || typesLoading || selectedChecks.length === 0 || submitting) {
       toast.error('Confirm the total cost before continuing');
       return;
     }
@@ -89,13 +92,13 @@ export const CostBreakdown = () => {
       costConfirmed: true,
     }));
 
-    // OCR document path already created the batch at the Template step.
+    // A fully submitted batch is reused if the user returns to costing.
     if (batchData?.uploadResponse) {
       navigate('/org/batch-status');
       return;
     }
 
-    if (!batchData?.file) {
+    if (!(batchData?.file || batchData?.ocrDraft)) {
       toast.error('Upload the completed Excel file again');
       navigate('/org/template');
       return;
@@ -103,6 +106,39 @@ export const CostBreakdown = () => {
 
     setSubmitting(true);
     try {
+      if (batchData.ocrDraft) {
+        const saved = batchData.ocrSubmission || {};
+        const progress = {
+          response: saved.response || null,
+          completedIds: [...(saved.completedIds || [])],
+          photoSavedIds: [...(saved.photoSavedIds || [])],
+          savedAttachments: { ...(saved.savedAttachments || {}) },
+        };
+        const data = await submitOcrDraft({
+          draft: batchData.ocrDraft, batchName: batchData.batchName.trim(),
+          options: {
+            batchType: 'human', industryType: getIndustryTypeList(selectedIndustry),
+            verificationTypes: selectedVerifications.join(','),
+            credentialVisibility: selectedPermission || 'private',
+            schemaName: batchData.schemaName,
+          },
+          api: verificationAPI, progress,
+          checkpoint: (state) => setBatchData((current) => ({
+            ...current,
+            ocrSubmission: { ...state, completedIds: [...state.completedIds],
+              photoSavedIds: [...state.photoSavedIds], savedAttachments: { ...state.savedAttachments } },
+          })),
+        });
+        const savedCount = data.successful_users.length;
+        const skippedCount = batchData.ocrDraft.records.length - savedCount;
+        setBatchData((current) => ({ ...current, uploadResponse: data, recordCount: savedCount, selectedHumanTemplate: DEFAULT_HUMAN_TEMPLATE }));
+        toast.success(skippedCount > 0
+          ? `${savedCount} records saved, ${skippedCount} documents skipped. See Batch Status for details.`
+          : 'Batch created and reviewed documents saved');
+        return;
+      }
+      const workbook = XLSX.read(await batchData.file.arrayBuffer(), { type: 'array' });
+      validateHumanExcelEmails(XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }), selectedPermission);
       const { data } = await verificationAPI.bulkUpload(
         batchData.file,
         batchData.batchName.trim(),
@@ -111,8 +147,31 @@ export const CostBreakdown = () => {
           industryType: getIndustryTypeList(selectedIndustry),
           verificationTypes: selectedVerifications.join(','),
           credentialVisibility: selectedPermission || 'private',
+          schemaName: batchData.schemaName,
         }
       );
+
+      // bulkUpload returns 200 even when every row was skipped (duplicate
+      // email, missing required field, etc.) — total_uploaded === 0 there
+      // means no user, and no real batch content, actually got created, so
+      // a blind "Batch created successfully" would be actively misleading.
+      const totalUploaded = data?.total_uploaded ?? (data?.successful_users?.length || 0);
+      const totalSkipped = data?.total_skipped ?? (data?.skipped_users?.length || 0);
+      const skippedUsers = data?.skipped_users || [];
+
+      if (totalUploaded === 0) {
+        // Deliberately NOT storing uploadResponse here — nothing was
+        // actually created, so the top-of-function "already uploaded" guard
+        // must not short-circuit a retry after the user fixes the file.
+        const reasons = [...new Set([...skippedUsers.map((s) => s.reason), ...(data?.errors || []).map((row) => row.error)].filter(Boolean))];
+        toast.error(
+          reasons.length > 0
+            ? `No users were added — ${reasons.join('; ')}`
+            : `No users were added — all ${totalSkipped} row(s) were skipped`,
+          { duration: 8000 }
+        );
+        return;
+      }
 
       setBatchData((current) => ({
         ...(current || {}),
@@ -120,14 +179,29 @@ export const CostBreakdown = () => {
         uploadResponse: data,
       }));
 
-      toast.success('Batch created successfully');
-      navigate('/org/batch-status');
+      if (totalSkipped > 0) {
+        toast.success(`${totalUploaded} user${totalUploaded === 1 ? '' : 's'} created, ${totalSkipped} skipped — see Batch Status for details`);
+      } else {
+        toast.success('Batch created successfully');
+      }
     } catch (error) {
-      toast.error(getApiError(error, 'Failed to create batch'));
+      toast.error(getApiError(error, error?.message || 'Failed to create batch'));
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (batchData?.uploadResponse) return (
+    <AuthLayout title="Batch Created">
+      <Card className="space-y-4 p-5">
+        <PageHeader title="Batch upload complete" subtitle={`${batchData.uploadResponse.total_uploaded ?? 0} users saved. Values below are confirmed by the server.`} />
+        <BulkHumanResolvedUsers users={batchData.uploadResponse.successful_users || []} />
+        {(batchData.uploadResponse.skipped_users || []).map((row, index) => <p key={`skip-${index}`} className="text-sm text-amber-700">Row {row.row}: {row.reason}</p>)}
+        {(batchData.uploadResponse.errors || []).map((row, index) => <p key={`error-${index}`} className="text-sm text-red-600">Row {row.row}: {row.error}</p>)}
+        <Button onClick={() => navigate('/org/batch-status')} icon={ArrowRight}>View Batch Status</Button>
+      </Card>
+    </AuthLayout>
+  );
 
   return (
     <AuthLayout title="Costing">
@@ -156,10 +230,7 @@ export const CostBreakdown = () => {
 
             <div className="mt-5 space-y-3">
               {typesLoading ? (
-                <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
-                  <RefreshCw size={16} className="animate-spin" />
-                  <span className="text-sm font-inter">Loading cost details…</span>
-                </div>
+                <LoadingSkeleton variant="list" label="Loading cost details" rows={3}/>
               ) : selectedChecks.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-400 font-inter">
                   No verification checks selected. Go back and select checks.
@@ -222,15 +293,19 @@ export const CostBreakdown = () => {
             </div>
 
             <div className="mt-5">
+              {batchData?.ocrDraft && !batchData?.ocrSubmission?.response && <Button
+                variant="outline" className="mb-3 w-full" disabled={submitting}
+                onClick={() => navigate('/org/template', { state: { restoreOcrDraft: true } })}
+              >Edit documents &amp; assignments</Button>}
               <Button
                 variant="primary"
                 size="lg"
                 className="w-full"
                 onClick={handleContinue}
                 icon={ArrowRight}
-                disabled={!agreed || recordCount <= 0 || submitting}
+                disabled={!agreed || typesLoading || selectedChecks.length === 0 || recordCount <= 0 || submitting}
               >
-                {submitting ? 'Creating Batch...' : 'Continue'}
+                {submitting ? 'Saving Batch...' : batchData?.ocrSubmission?.response ? 'Retry Submission' : 'Create Batch'}
               </Button>
             </div>
           </Card>

@@ -7,6 +7,7 @@ import '../../../../../core/network/api_client.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/widgets/tmz_select.dart';
 import '../../../../auth/application/auth_notifier.dart';
+import '../../../../auth/application/auth_state.dart';
 import '../../../data/verification_repository.dart';
 
 /// Optional `schema_name` picker for batch creation.
@@ -33,10 +34,39 @@ class SchemaConfigSelector extends ConsumerWidget {
 
   static const String _defaultOption = '';
 
-  static String providerKey(WidgetRef ref, String spaceType) {
-    final String orgId =
-        ref.watch(authNotifierProvider).valueOrNull?.userProfile?.id ?? '';
+  /// [watch] only from build; callbacks (refresh, error handlers) must read.
+  static String providerKey(
+    WidgetRef ref,
+    String spaceType, {
+    bool watch = false,
+  }) {
+    final AsyncValue<AuthState> auth = watch
+        ? ref.watch(authNotifierProvider)
+        : ref.read(authNotifierProvider);
+    final String orgId = auth.valueOrNull?.userProfile?.id ?? '';
     return '$orgId::$spaceType';
+  }
+
+  /// The configuration a batch created now would use: the picked [label], or
+  /// the organization's default when nothing is picked; null when neither
+  /// exists (legacy/standard layout). Reads the list this widget loaded.
+  static SchemaConfig? effectiveConfig(
+    WidgetRef ref,
+    String spaceType,
+    String? label,
+  ) {
+    final List<SchemaConfig> configs =
+        ref
+            .read(schemaConfigsProvider(providerKey(ref, spaceType)))
+            .valueOrNull ??
+        const <SchemaConfig>[];
+    final Iterable<SchemaConfig> active = configs.where(
+      (SchemaConfig c) => c.isActive && c.spaceType == spaceType,
+    );
+    if (label != null) {
+      return active.where((SchemaConfig c) => c.label == label).firstOrNull;
+    }
+    return active.where((SchemaConfig c) => c.isDefault).firstOrNull;
   }
 
   /// Call after a stale-selection 400 so the list is fetched again.
@@ -64,7 +94,7 @@ class SchemaConfigSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<SchemaConfig>> configs = ref.watch(
-      schemaConfigsProvider(providerKey(ref, spaceType)),
+      schemaConfigsProvider(providerKey(ref, spaceType, watch: true)),
     );
 
     return configs.when(

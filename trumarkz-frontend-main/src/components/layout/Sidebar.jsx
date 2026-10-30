@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Layers, Award,
   Wallet, HelpCircle, User, LogOut, ChevronLeft, ChevronRight,
-  GitBranch, Share2, Building2,
+  GitBranch, Share2, Building2, Briefcase,
   ShieldCheck, UserCog, UserSearch,
   Mail, Package, Star,
 } from 'lucide-react';
@@ -17,8 +17,8 @@ export const Sidebar = ({ collapsed, onToggle, mobileOpen = false, onMobileClose
   const navigate = useNavigate();
   const isCompact = collapsed && !mobileOpen;
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     onMobileClose?.();
     navigate('/logout');
   };
@@ -50,8 +50,11 @@ export const Sidebar = ({ collapsed, onToggle, mobileOpen = false, onMobileClose
       return [
         { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/admin/batch-monitor', label: 'Batch Monitor', icon: Layers },
-        { path: '/admin/sdc-verification', label: 'SDC Verification', icon: ShieldCheck },
+        // Hidden from the sidebar for now (still reachable at the route
+        // directly) — re-add this entry to bring it back.
+        // { path: '/admin/sdc-verification', label: 'SDC Verification', icon: ShieldCheck },
         { path: '/admin/user-list', label: 'User List', icon: UserSearch },
+        { path: '/admin/organizations', label: 'Organizations', icon: Briefcase },
         { path: '/admin/email-drafts', label: 'Email Drafts', icon: Mail },
         { path: '/admin/product-warranty', label: 'Warranty Review', icon: Package },
         { path: '/admin/skills-management', label: 'Skills Review', icon: Star },

@@ -67,8 +67,9 @@ class OrgShellPage extends ConsumerWidget {
     final String path = Uri.parse(location).path;
     final int currentIndex = _indexForLocation(location);
 
-    // Always keep the bottom nav visible — including Profile (settings)
-    // and Wallet — so users can switch tabs from anywhere.
+    // Keep the bottom nav visible everywhere — including Profile (settings)
+    // and Wallet — except the full-screen QR scanner.
+    final bool hideNav = path == AppRouter.qrScannerPath;
     final bool allowSystemBack =
         router.canPop() || path == AppRouter.dashboardPath;
 
@@ -84,30 +85,32 @@ class OrgShellPage extends ConsumerWidget {
         // bottom clearance (>= 71px nav + insets) for the pill.
         extendBody: true,
         body: child,
-        bottomNavigationBar: OrgBottomNavBar(
-          currentIndex: currentIndex,
-          items: <OrgBottomNavBarItem>[
-            OrgBottomNavBarItem(
-              label: 'Dashboard',
-              icon: Icons.grid_view_rounded,
-              selectedIcon: Icons.grid_view_rounded,
-              svgAssetPath: 'assets/icons/figma/nav_home.svg',
-              onTap: () => _onTap(context, ref, 0),
-            ),
-            OrgBottomNavBarItem(
-              label: 'Create',
-              isCenterAction: true,
-              onTap: () => _onTap(context, ref, 1),
-            ),
-            OrgBottomNavBarItem(
-              label: 'Profile',
-              icon: Icons.person_outline_rounded,
-              selectedIcon: Icons.person_rounded,
-              svgAssetPath: 'assets/icons/figma/nav_account.svg',
-              onTap: () => _onTap(context, ref, 2),
-            ),
-          ],
-        ),
+        bottomNavigationBar: hideNav
+            ? null
+            : OrgBottomNavBar(
+                currentIndex: currentIndex,
+                items: <OrgBottomNavBarItem>[
+                  OrgBottomNavBarItem(
+                    label: 'Dashboard',
+                    icon: Icons.grid_view_rounded,
+                    selectedIcon: Icons.grid_view_rounded,
+                    svgAssetPath: 'assets/icons/figma/nav_home.svg',
+                    onTap: () => _onTap(context, ref, 0),
+                  ),
+                  OrgBottomNavBarItem(
+                    label: 'Create',
+                    isCenterAction: true,
+                    onTap: () => _onTap(context, ref, 1),
+                  ),
+                  OrgBottomNavBarItem(
+                    label: 'Profile',
+                    icon: Icons.person_outline_rounded,
+                    selectedIcon: Icons.person_rounded,
+                    svgAssetPath: 'assets/icons/figma/nav_account.svg',
+                    onTap: () => _onTap(context, ref, 2),
+                  ),
+                ],
+              ),
       ),
     );
   }

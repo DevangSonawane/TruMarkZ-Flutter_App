@@ -11,7 +11,6 @@ import '../../../../../core/widgets/org_top_bar.dart';
 import '../../../../../core/widgets/tmz_button.dart';
 import '../../../../auth/application/auth_notifier.dart';
 import '../../../data/verification_repository.dart';
-import '../widgets/schema_config_selector.dart';
 import 'org_flow_display_label_utils.dart';
 
 class SingleHumanUploadPage extends ConsumerStatefulWidget {
@@ -29,7 +28,6 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
   String _industry = '';
   List<String> _checks = <String>[];
   String _access = '';
-  List<String> _consent = <String>[];
 
   final TextEditingController _fullName = TextEditingController();
   final TextEditingController _phone = TextEditingController();
@@ -46,7 +44,6 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
   final TextEditingController _country = TextEditingController();
 
   bool _submitting = false;
-  String? _schemaName;
 
   @override
   void didChangeDependencies() {
@@ -68,14 +65,6 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
               .toList();
 
     _access = (qp['access'] ?? '').trim();
-    final String consentRaw = (qp['consent'] ?? '').trim();
-    _consent = consentRaw.isEmpty
-        ? <String>[]
-        : consentRaw
-              .split(',')
-              .map((String s) => s.trim())
-              .where((String s) => s.isNotEmpty)
-              .toList();
   }
 
   @override
@@ -125,23 +114,14 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
         pincode: _pincode.text,
         state: _state.text,
         country: _country.text,
-        schemaName: _schemaName,
       );
       if (!mounted) return;
       _goToInviteSuccess();
     } on ApiException catch (e) {
       if (!mounted) return;
-      final String message =
-          SchemaConfigSelector.handleStaleSelection(
-            ref,
-            'human',
-            e,
-            (String? v) => setState(() => _schemaName = v),
-          ) ??
-          e.message;
-      ScaffoldMessenger.of(
+            ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -245,13 +225,6 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
                             style: AppTypography.body2.copyWith(height: 1.25),
                           ),
                         ],
-                        if (_consent.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Consent: ${_consent.join(', ')}',
-                            style: AppTypography.body2.copyWith(height: 1.25),
-                          ),
-                        ],
                         if (_checks.isNotEmpty) ...<Widget>[
                           const SizedBox(height: 10),
                           Wrap(
@@ -280,12 +253,6 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
                 ),
               ],
               const SizedBox(height: AppSpacing.x4),
-              SchemaConfigSelector(
-                spaceType: 'human',
-                value: _schemaName,
-                enabled: !_submitting,
-                onChanged: (String? v) => setState(() => _schemaName = v),
-              ),
               TextFormField(
                 controller: _fullName,
                 textInputAction: TextInputAction.next,
