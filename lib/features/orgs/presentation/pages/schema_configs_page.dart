@@ -2,11 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../../../../core/models/auth_models.dart';
 import '../../../../core/models/schema_config_models.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
@@ -103,7 +105,7 @@ PreferredSizeWidget _settingsAppBar(
     elevation: 0,
     scrolledUnderElevation: 0,
     leading: IconButton(
-      onPressed: onBack ?? () => Navigator.of(context).pop(),
+      onPressed: onBack ?? () => context.pop(),
       icon: const Icon(Icons.chevron_left_rounded, color: _ink),
     ),
     title: Text(
@@ -168,10 +170,10 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
   }
 
   Future<void> _openEditor({SchemaConfig? existing}) async {
-    final bool? saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => _SchemaConfigEditorPage(existing: existing),
-      ),
+    // A real shell route, so the bottom nav (Dashboard/Profile) still works.
+    final bool? saved = await context.push<bool>(
+      AppRouter.settingsSchemaEditorPath,
+      extra: existing,
     );
     if (saved == true) await _load();
   }
@@ -300,17 +302,8 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
         ),
         padding: _listPadding(context),
         children: <Widget>[
-          const Text(
-            'Your own data formats for batches. The default one is used '
-            'automatically whenever you create a batch of that type.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              height: 1.45,
-              color: _muted,
-            ),
-          ),
-          const SizedBox(height: 20),
+          const _IntroCard(),
+          const SizedBox(height: 24),
           if (visible.isEmpty)
             _EmptyCard(
               icon: Icons.schema_outlined,
@@ -384,39 +377,6 @@ class _SchemaRow extends StatelessWidget {
   final VoidCallback onSetDefault;
   final VoidCallback onDeactivate;
 
-  Future<void> _openActions(BuildContext context) async {
-    final String? choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) => _ActionsSheet(
-        title: config.label,
-        actions: <_SheetAction>[
-          const _SheetAction('edit', Icons.edit_outlined, 'Edit schema'),
-          if (!config.isDefault)
-            const _SheetAction(
-              'default',
-              Icons.star_outline_rounded,
-              'Make default',
-            ),
-          const _SheetAction(
-            'off',
-            Icons.archive_outlined,
-            'Switch off',
-            danger: true,
-          ),
-        ],
-      ),
-    );
-    switch (choice) {
-      case 'edit':
-        onEdit();
-      case 'default':
-        onSetDefault();
-      case 'off':
-        onDeactivate();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final bool editable = config.isActive && !config.isSuperAdminManaged;
@@ -425,7 +385,7 @@ class _SchemaRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: editable && !busy ? () => _openActions(context) : null,
+        onTap: editable && !busy ? onEdit : null,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 15, 10, 15),
           child: Row(
@@ -466,6 +426,7 @@ class _SchemaRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
+                      'For ${(_spaceTypeLabels[config.spaceType] ?? config.spaceType).toLowerCase()} batches • '
                       '$fields field${fields == 1 ? '' : 's'} • v${config.version}',
                       style: const TextStyle(
                         fontFamily: 'Inter',
@@ -516,12 +477,48 @@ class _SchemaRow extends StatelessWidget {
                   ),
                 )
               else if (editable)
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Icon(
+                // Anchored pop-up menu: a bottom sheet would open underneath
+                // the floating bottom nav.
+                PopupMenuButton<String>(
+                  tooltip: 'Schema actions',
+                  icon: const Icon(
                     Icons.more_horiz_rounded,
                     color: Color(0xFFB3B3B3),
                   ),
+                  color: Colors.white,
+                  elevation: 6,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  position: PopupMenuPosition.under,
+                  onSelected: (String choice) => switch (choice) {
+                    'default' => onSetDefault(),
+                    'off' => onDeactivate(),
+                    _ => onEdit(),
+                  },
+                  itemBuilder: (BuildContext context) =>
+                      <PopupMenuEntry<String>>[
+                        const PopupMenuItem<String>(
+                          value: 'edit',
+                          child: _MenuRow(Icons.edit_outlined, 'Edit schema'),
+                        ),
+                        if (!config.isDefault)
+                          const PopupMenuItem<String>(
+                            value: 'default',
+                            child: _MenuRow(
+                              Icons.star_outline_rounded,
+                              'Make default',
+                            ),
+                          ),
+                        const PopupMenuItem<String>(
+                          value: 'off',
+                          child: _MenuRow(
+                            Icons.archive_outlined,
+                            'Switch off',
+                            danger: true,
+                          ),
+                        ),
+                      ],
                 ),
             ],
           ),
@@ -531,88 +528,117 @@ class _SchemaRow extends StatelessWidget {
   }
 }
 
-class _SheetAction {
-  const _SheetAction(this.id, this.icon, this.label, {this.danger = false});
+class _MenuRow extends StatelessWidget {
+  const _MenuRow(this.icon, this.label, {this.danger = false});
 
-  final String id;
   final IconData icon;
   final String label;
   final bool danger;
-}
-
-class _ActionsSheet extends StatelessWidget {
-  const _ActionsSheet({required this.title, required this.actions});
-
-  final String title;
-  final List<_SheetAction> actions;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        16 + MediaQuery.viewPaddingOf(context).bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+    final Color color = danger ? AppColors.danger : _rowTitle;
+    return Row(
+      children: <Widget>[
+        Icon(icon, size: 20, color: danger ? AppColors.danger : _navy),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14.5,
+            fontWeight: FontWeight.w600,
+            color: color,
           ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
+/// Explains what a custom schema is for before the list.
+class _IntroCard extends StatelessWidget {
+  const _IntroCard();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget point(IconData icon, String title, String text) => Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, size: 18, color: _navy),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  TextSpan(
+                    text: '$title ',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: _rowTitle,
+                    ),
+                  ),
+                  TextSpan(text: text),
+                ],
+              ),
               style: const TextStyle(
                 fontFamily: 'Inter',
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: _ink,
+                fontSize: 12.5,
+                height: 1.4,
+                color: _muted,
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          _Card(
-            child: Column(
-              children: <Widget>[
-                for (final (int i, _SheetAction a) in actions.indexed) ...[
-                  if (i > 0) const Divider(height: 1, color: _hairline),
-                  ListTile(
-                    leading: Icon(
-                      a.icon,
-                      color: a.danger ? AppColors.danger : _navy,
-                    ),
-                    title: Text(
-                      a.label,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: a.danger ? AppColors.danger : _rowTitle,
-                      ),
-                    ),
-                    onTap: () => Navigator.of(context).pop(a.id),
-                  ),
-                ],
-              ],
+        ],
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF3FF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(
+            'What are custom schemas used for?',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: _ink,
             ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'They decide which details each record in a batch carries — '
+            'for example an employee ID or a product colour — on top of '
+            'TruMarkZ\'s standard fields.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12.5,
+              height: 1.4,
+              color: _muted,
+            ),
+          ),
+          point(
+            Icons.category_outlined,
+            'One type each:',
+            'a schema is for People, Product or Warranty batches.',
+          ),
+          point(
+            Icons.star_outline_rounded,
+            'Default is automatic:',
+            'new batches of that type use the default schema.',
+          ),
+          point(
+            Icons.table_view_outlined,
+            'Uploads follow it:',
+            'Excel templates and uploads use its fields.',
           ),
         ],
       ),
@@ -620,19 +646,21 @@ class _ActionsSheet extends StatelessWidget {
   }
 }
 
-class _SchemaConfigEditorPage extends ConsumerStatefulWidget {
-  const _SchemaConfigEditorPage({this.existing});
+/// Settings → Custom Schemas → New / Edit (route
+/// [AppRouter.settingsSchemaEditorPath], `extra` = the config to edit).
+class SchemaConfigEditorPage extends ConsumerStatefulWidget {
+  const SchemaConfigEditorPage({super.key, this.existing});
 
   /// Editing saves a new version; null creates version 1.
   final SchemaConfig? existing;
 
   @override
-  ConsumerState<_SchemaConfigEditorPage> createState() =>
+  ConsumerState<SchemaConfigEditorPage> createState() =>
       _SchemaConfigEditorPageState();
 }
 
 class _SchemaConfigEditorPageState
-    extends ConsumerState<_SchemaConfigEditorPage> {
+    extends ConsumerState<SchemaConfigEditorPage> {
   late String _spaceType;
   late final TextEditingController _label;
   late final TextEditingController _schemaId;
@@ -785,7 +813,7 @@ class _SchemaConfigEditorPageState
             );
       if (!mounted) return;
       await _showSaved(res);
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) context.pop(true);
     } on ApiException catch (e) {
       if (!mounted) return;
       await showMessageSheet(
@@ -836,7 +864,7 @@ class _SchemaConfigEditorPageState
       appBar: _settingsAppBar(
         context,
         title: _editing ? 'Edit Schema' : 'New Schema',
-        onBack: () => Navigator.of(context).pop(false),
+        onBack: () => context.pop(false),
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),

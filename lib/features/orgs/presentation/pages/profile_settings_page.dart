@@ -17,7 +17,6 @@ import '../../data/verification_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import 'schema_configs_page.dart';
 
 /// New brand navy for the org account page.
 const Color _profileNavy = Color(0xFF1B3387);
@@ -451,13 +450,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                                 selected: null,
                                 onSelected: (section) =>
                                     _openSection(section, profile),
-                                onCustomSchemas: () =>
-                                    Navigator.of(context).push<void>(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) =>
-                                            const SchemaConfigsPage(),
-                                      ),
-                                    ),
+                                onCustomSchemas: () => context.push(
+                                  AppRouter.settingsSchemasPath,
+                                ),
                                 onScanQr: () =>
                                     context.push(AppRouter.qrScannerPath),
                               ),

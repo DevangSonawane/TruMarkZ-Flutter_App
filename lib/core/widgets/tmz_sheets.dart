@@ -18,6 +18,8 @@ Future<bool> showConfirmSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
+    // Above the shell's floating bottom nav, not underneath it.
+    useRootNavigator: true,
     builder: (BuildContext sheetContext) => _SheetBody(
       icon: icon,
       tone: tone,
@@ -56,6 +58,8 @@ Future<void> showMessageSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
+    // Above the shell's floating bottom nav, not underneath it.
+    useRootNavigator: true,
     builder: (BuildContext sheetContext) => _SheetBody(
       icon: icon,
       tone: tone,

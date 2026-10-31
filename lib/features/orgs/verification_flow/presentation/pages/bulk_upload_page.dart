@@ -985,6 +985,10 @@ class _BulkUploadPageState extends ConsumerState<BulkUploadPage> {
             'dob',
             if (!_hasGenderOverride) 'gender',
             if (!_hasNationalityOverride) 'nationality',
+            // Permission Required: every holder needs an email and a mobile
+            // number, so both columns are locked into the template.
+            if (_emailRequired) 'email',
+            if (_phoneRequired) 'phone_number',
           ],
           selectedChecks: _checks,
           selectedCheckIds: _checkIds,

@@ -34,6 +34,8 @@ import '../../features/orgs/presentation/pages/all_batches_page.dart';
 import '../../features/orgs/presentation/pages/org_credentials_page.dart';
 import '../../features/orgs/presentation/pages/org_dashboard_page.dart';
 import '../../features/orgs/presentation/pages/profile_settings_page.dart';
+import '../../features/orgs/presentation/pages/schema_configs_page.dart';
+import '../models/schema_config_models.dart';
 import '../../features/orgs/presentation/pages/registry_search_page.dart';
 import '../../features/orgs/presentation/pages/verification_plan_builder_page.dart';
 import '../../features/orgs/presentation/pages/verification_report_detail_page.dart';
@@ -101,6 +103,8 @@ class AppRouter {
   static const String appRegistryPath = '/app/registry';
   static const String settingsPath = '/app/settings';
   static const String settingsSectionPath = '/app/settings/section';
+  static const String settingsSchemasPath = '/app/settings/schemas';
+  static const String settingsSchemaEditorPath = '/app/settings/schemas/edit';
 
   static String settingsSectionLocation(String sectionName) =>
       '$settingsSectionPath/$sectionName';
@@ -487,6 +491,25 @@ class AppRouter {
                 _slideFadePage(
                   state: state,
                   child: const ProfileSettingsPage(),
+                ),
+          ),
+          GoRoute(
+            path: settingsSchemasPath,
+            name: 'settings_schemas',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(state: state, child: const SchemaConfigsPage()),
+          ),
+          GoRoute(
+            path: settingsSchemaEditorPath,
+            name: 'settings_schema_editor',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _slideFadePage(
+                  state: state,
+                  child: SchemaConfigEditorPage(
+                    existing: state.extra is SchemaConfig
+                        ? state.extra as SchemaConfig
+                        : null,
+                  ),
                 ),
           ),
           GoRoute(
