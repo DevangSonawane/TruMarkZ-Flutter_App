@@ -13,6 +13,7 @@ import '../../../auth/application/auth_notifier.dart';
 import '../../../auth/application/auth_state.dart';
 import '../../../notifications/application/notification_notifier.dart';
 import '../../data/verification_repository.dart';
+import '../widgets/org_hero_banner.dart';
 
 /// MrBob-style home, Trumarkz colours:
 /// - Solid brandBlue header that collapses on scroll.
@@ -62,7 +63,9 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage>
     // pick up notifications created while away
     // (new_flutter_trumarkz.md §13d).
     if (state == AppLifecycleState.resumed && mounted) {
-      ref.read(notificationNotifierProvider.notifier).refresh(showLoader: false);
+      ref
+          .read(notificationNotifierProvider.notifier)
+          .refresh(showLoader: false);
     }
   }
 
@@ -184,10 +187,7 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage>
               children: <Widget>[
                 for (int i = 0; i < _sectors.length; i++) ...<Widget>[
                   if (i != 0)
-                    const Divider(
-                      height: 1,
-                      color: AppColors.divider,
-                    ),
+                    const Divider(height: 1, color: AppColors.divider),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 4,
@@ -398,8 +398,8 @@ class _OrgDashboardPageState extends ConsumerState<OrgDashboardPage>
                           hasQuery: query.isNotEmpty,
                           scale: scale,
                           horizontalInset: horizontalInset,
-          onRetry: _loadSectors,
-        ),
+                          onRetry: _loadSectors,
+                        ),
                         SizedBox(height: 28 * scale),
                         Center(
                           child: Image.asset(
@@ -967,9 +967,9 @@ class _StickySearchDelegate extends SliverPersistentHeaderDelegate {
       oldDelegate.query != query;
 }
 
-/// Promo banner: blue card that scrolls away below the sticky search, with
-/// dot texture, headline, CTA + stats hero card. The outer container owns
-/// the bottom curve so corners round into the white body.
+/// Promo banner: blue strip that scrolls away below the sticky search and
+/// hosts the animated [OrgHeroBanner]. The outer container owns the bottom
+/// curve so corners round into the white body.
 class _PromoBanner extends StatelessWidget {
   const _PromoBanner({
     required this.scale,
@@ -995,21 +995,10 @@ class _PromoBanner extends StatelessWidget {
           horizontalInset,
           18 * scale,
         ),
-        child: GestureDetector(
+        child: OrgHeroBanner(
+          scale: scale,
+          height: 158 * scale,
           onTap: onNewBatch,
-          behavior: HitTestBehavior.opaque,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18 * scale),
-            child: Transform.scale(
-              scale: 1.04,
-              child: Image.asset(
-                'assets/Gemini_Generated_Image_za0202za0202za02.png',
-                width: double.infinity,
-                height: 158 * scale,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
         ),
       ),
     );

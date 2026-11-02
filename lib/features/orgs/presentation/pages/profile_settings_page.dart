@@ -450,11 +450,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                                 selected: null,
                                 onSelected: (section) =>
                                     _openSection(section, profile),
-                                onCustomSchemas: () => context.push(
-                                  AppRouter.settingsSchemasPath,
-                                ),
-                                onScanQr: () =>
-                                    context.push(AppRouter.qrScannerPath),
+                                onCustomSchemas: () =>
+                                    context.push(AppRouter.settingsSchemasPath),
                               ),
                               SizedBox(height: s(24)),
                               _LogoutCard(
@@ -1079,11 +1076,10 @@ class _VerificationPrefsSheetState
         .trim()
         .toLowerCase();
     _serviceType = current == 'product' ? 'product' : 'human';
-    _selectedIndustries =
-        (widget.profile?.industryTypes ?? const <String>[])
-            .map((String value) => value.trim())
-            .where((String value) => value.isNotEmpty)
-            .toSet();
+    _selectedIndustries = (widget.profile?.industryTypes ?? const <String>[])
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toSet();
   }
 
   Future<void> _save() async {
@@ -1112,9 +1108,7 @@ class _VerificationPrefsSheetState
       if (!mounted) return;
       navigator.pop();
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Verification preferences updated.'),
-        ),
+        const SnackBar(content: Text('Verification preferences updated.')),
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -1161,9 +1155,7 @@ class _VerificationPrefsSheetState
               (String option) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: ChoiceChip(
-                  label: Text(
-                    option == 'human' ? 'Human' : 'Product',
-                  ),
+                  label: Text(option == 'human' ? 'Human' : 'Product'),
                   selected: _serviceType == option,
                   onSelected: _isSaving
                       ? null
@@ -1262,7 +1254,8 @@ class _PermissionModeSheetState extends ConsumerState<_PermissionModeSheet> {
   @override
   void initState() {
     super.initState();
-    _mode = widget.profile?.effectivePermissionMode ?? OrgPermissionMode.openSearch;
+    _mode =
+        widget.profile?.effectivePermissionMode ?? OrgPermissionMode.openSearch;
   }
 
   Future<void> _save() async {
@@ -1274,9 +1267,7 @@ class _PermissionModeSheetState extends ConsumerState<_PermissionModeSheet> {
     final NavigatorState navigator = Navigator.of(context);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     try {
-      await ref
-          .read(authNotifierProvider.notifier)
-          .updatePermissionMode(_mode);
+      await ref.read(authNotifierProvider.notifier).updatePermissionMode(_mode);
       if (!mounted) return;
       navigator.pop();
       messenger.showSnackBar(
@@ -1864,25 +1855,18 @@ class _ManageAccountSection extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     required this.onCustomSchemas,
-    required this.onScanQr,
   });
 
   final _ProfileSection? selected;
   final ValueChanged<_ProfileSection> onSelected;
 
-  /// Settings is the only entry point for schema management and the scanner.
+  /// Settings is the entry point for schema management.
   final VoidCallback onCustomSchemas;
-  final VoidCallback onScanQr;
 
   static const _ProfileSectionData _customSchemas = _ProfileSectionData(
     title: 'Custom Schemas',
     icon: Icons.schema_outlined,
   );
-  static const _ProfileSectionData _scanQr = _ProfileSectionData(
-    title: 'Scan QR',
-    icon: Icons.qr_code_scanner_rounded,
-  );
-
   static const List<_ProfileSectionData> _sections = <_ProfileSectionData>[
     _ProfileSectionData(
       section: _ProfileSection.general,
@@ -1946,12 +1930,6 @@ class _ManageAccountSection extends StatelessWidget {
                 selected: false,
                 onTap: onCustomSchemas,
               ),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
-              _ManageAccountRow(
-                data: _scanQr,
-                selected: false,
-                onTap: onScanQr,
-              ),
             ],
           ),
         ),
@@ -1967,7 +1945,7 @@ class _ProfileSectionData {
     required this.icon,
   });
 
-  /// Null for rows that open their own screen (Custom Schemas, Scan QR).
+  /// Null for rows that open their own screen (Custom Schemas).
   final _ProfileSection? section;
   final String title;
   final IconData icon;
