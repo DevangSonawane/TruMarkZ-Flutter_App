@@ -1,5 +1,19 @@
 import 'org_permission.dart';
 
+/// Deprecated read-only compatibility model. New schema selection is handled
+/// exclusively by organization Custom Schemas.
+class DhiwayDetail {
+  const DhiwayDetail({
+    required this.spaceId,
+    required this.schemaId,
+    this.isDefault,
+  });
+
+  final String spaceId;
+  final String schemaId;
+  final bool? isDefault;
+}
+
 class LoginRequest {
   const LoginRequest({
     required this.loginType,
@@ -51,42 +65,6 @@ class LoginResponse {
   }
 }
 
-class DhiwayDetail {
-  const DhiwayDetail({
-    required this.spaceId,
-    required this.schemaId,
-    this.isDefault,
-  });
-
-  final String spaceId;
-  final String schemaId;
-  final bool? isDefault;
-
-  factory DhiwayDetail.fromJson(Map<String, dynamic> json) {
-    final dynamic rawDefault = json['default'] ?? json['is_default'];
-    return DhiwayDetail(
-      spaceId: _readStringOrNull(json['space_id'] ?? json['spaceId']) ?? '',
-      schemaId: _readStringOrNull(json['schema_id'] ?? json['schemaId']) ?? '',
-      isDefault: rawDefault is bool
-          ? rawDefault
-          : rawDefault == null
-          ? null
-          : rawDefault.toString().trim().toLowerCase() == 'true',
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = <String, dynamic>{
-      'space_id': spaceId.trim(),
-      'schema_id': schemaId.trim(),
-    };
-    if (isDefault != null) {
-      json['default'] = isDefault;
-    }
-    return json;
-  }
-}
-
 class RegisterIndividualRequest {
   const RegisterIndividualRequest({
     required this.fullName,
@@ -125,13 +103,6 @@ class SignupOrganizationRequest {
     this.phoneNumber,
     required this.password,
     this.serviceType,
-    this.humanSpaceId,
-    this.productSpaceId,
-    this.warrantySpaceId,
-    this.humanSchemaId,
-    this.productSchemaId,
-    this.warrantySchemaId,
-    this.dhiwaySpaceId,
   });
 
   final String? orgName;
@@ -139,13 +110,6 @@ class SignupOrganizationRequest {
   final String? phoneNumber;
   final String password;
   final String? serviceType;
-  final String? humanSpaceId;
-  final String? productSpaceId;
-  final String? warrantySpaceId;
-  final String? humanSchemaId;
-  final String? productSchemaId;
-  final String? warrantySchemaId;
-  final String? dhiwaySpaceId;
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = <String, dynamic>{
@@ -163,22 +127,6 @@ class SignupOrganizationRequest {
     putIfNonEmpty('org_name', orgName);
     putIfNonEmpty('phone_number', phoneNumber);
     putIfNonEmpty('service_type', serviceType);
-
-    final String humanSpace = humanSpaceId?.trim() ?? '';
-    final String productSpace = productSpaceId?.trim() ?? '';
-    final String warrantySpace = warrantySpaceId?.trim() ?? '';
-    final String humanSchema = humanSchemaId?.trim() ?? '';
-    final String productSchema = productSchemaId?.trim() ?? '';
-    final String warrantySchema = warrantySchemaId?.trim() ?? '';
-    final String dhiwaySpace = dhiwaySpaceId?.trim() ?? '';
-
-    putIfNonEmpty('human_space_id', humanSpace);
-    putIfNonEmpty('product_space_id', productSpace);
-    putIfNonEmpty('warranty_space_id', warrantySpace);
-    putIfNonEmpty('human_schema_id', humanSchema);
-    putIfNonEmpty('product_schema_id', productSchema);
-    putIfNonEmpty('warranty_schema_id', warrantySchema);
-    putIfNonEmpty('dhiway_space_id', dhiwaySpace);
 
     return json;
   }
@@ -212,10 +160,7 @@ class OrgOnboardingRequest {
     this.addressLine2,
     this.addressLine3,
     this.industryType,
-    this.spaceId,
-    this.schemaId,
     this.useCases,
-    this.dhiwaysDetails,
   });
 
   final String? gstin;
@@ -224,10 +169,7 @@ class OrgOnboardingRequest {
   final String? addressLine2;
   final String? addressLine3;
   final String? industryType;
-  final String? spaceId;
-  final String? schemaId;
   final Map<String, dynamic>? useCases;
-  final List<DhiwayDetail>? dhiwaysDetails;
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = <String, dynamic>{};
@@ -247,24 +189,8 @@ class OrgOnboardingRequest {
     putIfNonEmpty('address_line2', normalize(addressLine2));
     putIfNonEmpty('address_line3', normalize(addressLine3));
     putIfNonEmpty('industry_type', normalize(industryType));
-    putIfNonEmpty('space_id', spaceId);
-    putIfNonEmpty('schema_id', schemaId);
     if (useCases != null && useCases!.isNotEmpty) {
       json['use_cases'] = useCases;
-    }
-
-    if (dhiwaysDetails != null) {
-      final List<Map<String, dynamic>> details = dhiwaysDetails!
-          .map((DhiwayDetail detail) => detail.toJson())
-          .where(
-            (Map<String, dynamic> detail) =>
-                (detail['space_id'] ?? '').toString().trim().isNotEmpty ||
-                (detail['schema_id'] ?? '').toString().trim().isNotEmpty,
-          )
-          .toList();
-      if (details.isNotEmpty) {
-        json['dhiways_details'] = details;
-      }
     }
 
     return json;
@@ -319,14 +245,6 @@ class OrganizationProfileUpdateRequest {
     this.addressLine3,
     this.serviceType,
     this.industryType,
-    this.humanSpaceId,
-    this.productSpaceId,
-    this.warrantySpaceId,
-    this.humanSchemaId,
-    this.productSchemaId,
-    this.warrantySchemaId,
-    this.dhiwaySpaceId,
-    this.dhiwaysDetails,
     this.permissionMode,
   });
 
@@ -340,14 +258,6 @@ class OrganizationProfileUpdateRequest {
   final String? addressLine3;
   final String? serviceType;
   final String? industryType;
-  final String? humanSpaceId;
-  final String? productSpaceId;
-  final String? warrantySpaceId;
-  final String? humanSchemaId;
-  final String? productSchemaId;
-  final String? warrantySchemaId;
-  final String? dhiwaySpaceId;
-  final List<DhiwayDetail>? dhiwaysDetails;
 
   /// Organization-level consent default for Human batches
   /// (new_flutter_trumarkz.md §12a). `null` leaves the stored value alone.
@@ -378,30 +288,9 @@ class OrganizationProfileUpdateRequest {
     putClearable('address_line3', addressLine3);
     putIfNonEmpty('service_type', serviceType);
     putIfNonEmpty('industry_type', industryType);
-    putIfNonEmpty('human_space_id', humanSpaceId);
-    putIfNonEmpty('product_space_id', productSpaceId);
-    putIfNonEmpty('warranty_space_id', warrantySpaceId);
-    putIfNonEmpty('human_schema_id', humanSchemaId);
-    putIfNonEmpty('product_schema_id', productSchemaId);
-    putIfNonEmpty('warranty_schema_id', warrantySchemaId);
-    putIfNonEmpty('dhiway_space_id', dhiwaySpaceId);
     if (permissionMode != null) {
       json['permission_mode'] = permissionMode!.wireValue;
     }
-    if (dhiwaysDetails != null) {
-      final List<Map<String, dynamic>> details = dhiwaysDetails!
-          .map((DhiwayDetail detail) => detail.toJson())
-          .where(
-            (Map<String, dynamic> detail) =>
-                (detail['space_id'] ?? '').toString().trim().isNotEmpty ||
-                (detail['schema_id'] ?? '').toString().trim().isNotEmpty,
-          )
-          .toList();
-      if (details.isNotEmpty) {
-        json['dhiways_details'] = details;
-      }
-    }
-
     return json;
   }
 }
@@ -433,13 +322,6 @@ class UserProfile {
     required this.mobileVerified,
     required this.skillTreeInitiated,
     required this.dhiwaysDetails,
-    required this.dhiwaySpaceId,
-    required this.humanSpaceId,
-    required this.productSpaceId,
-    required this.warrantySpaceId,
-    required this.humanSchemaId,
-    required this.productSchemaId,
-    required this.warrantySchemaId,
     required this.storagePath,
     required this.createdAt,
     this.permissionMode,
@@ -470,13 +352,6 @@ class UserProfile {
   final bool mobileVerified;
   final bool skillTreeInitiated;
   final List<DhiwayDetail> dhiwaysDetails;
-  final String? dhiwaySpaceId;
-  final String? humanSpaceId;
-  final String? productSpaceId;
-  final String? warrantySpaceId;
-  final String? humanSchemaId;
-  final String? productSchemaId;
-  final String? warrantySchemaId;
   final String storagePath;
   final DateTime? createdAt;
 
@@ -528,7 +403,6 @@ class UserProfile {
     final String? serviceType = _readStringOrNull(
       json['service_type'] ?? json['serviceType'],
     );
-    final List<DhiwayDetail> dhiwaysDetails = _readDhiwayDetails(json);
     final String? industry =
         _readStringOrNull(json['industry']) ??
         (industryTypes.isNotEmpty ? industryTypes.join(', ') : null);
@@ -568,29 +442,7 @@ class UserProfile {
       emailVerified: emailVerified,
       mobileVerified: json['mobile_verified'] == true,
       skillTreeInitiated: json['skill_tree_initiated'] == true,
-      dhiwaysDetails: dhiwaysDetails,
-      dhiwaySpaceId: _readStringOrNull(json['dhiway_space_id']),
-      humanSpaceId: _readStringOrNull(
-        json['human_space_id'] ?? json['humanSpaceId'],
-      ),
-      productSpaceId: _readStringOrNull(
-        json['product_space_id'] ?? json['productSpaceId'],
-      ),
-      warrantySpaceId: _readStringOrNull(
-        json['warranty_space_id'] ??
-            json['warrenty_space_id'] ??
-            json['warrantySpaceId'] ??
-            json['warrentySpaceId'],
-      ),
-      humanSchemaId: _readStringOrNull(
-        json['human_schema_id'] ?? json['humanSchemaId'],
-      ),
-      productSchemaId: _readStringOrNull(
-        json['product_schema_id'] ?? json['productSchemaId'],
-      ),
-      warrantySchemaId: _readStringOrNull(
-        json['warranty_schema_id'] ?? json['warrantySchemaId'],
-      ),
+      dhiwaysDetails: const <DhiwayDetail>[],
       storagePath: (json['storage_path'] ?? '').toString(),
       createdAt: createdAt,
       permissionMode: OrgPermissionMode.fromWire(
@@ -703,67 +555,6 @@ Map<String, dynamic> _readStringMap(dynamic value) {
     return Map<String, dynamic>.from(value);
   }
   return <String, dynamic>{};
-}
-
-List<DhiwayDetail> _readDhiwayDetails(Map<String, dynamic> json) {
-  final dynamic rawDetails = json['dhiways_details'] ?? json['dhiwaysDetails'];
-  final List<DhiwayDetail> details = <DhiwayDetail>[];
-  final Set<String> seen = <String>{};
-
-  void addUnique(String? spaceId, String? schemaId, {bool? isDefault}) {
-    final String space = spaceId?.trim() ?? '';
-    final String schema = schemaId?.trim() ?? '';
-    if (space.isEmpty && schema.isEmpty) return;
-    final String key = '$space|$schema|${isDefault ?? ''}';
-    if (seen.add(key)) {
-      details.add(
-        DhiwayDetail(spaceId: space, schemaId: schema, isDefault: isDefault),
-      );
-    }
-  }
-
-  if (rawDetails is List) {
-    final List<DhiwayDetail> parsed = rawDetails
-        .whereType<Map>()
-        .map((Map e) => DhiwayDetail.fromJson(Map<String, dynamic>.from(e)))
-        .where(
-          (DhiwayDetail detail) =>
-              detail.spaceId.trim().isNotEmpty ||
-              detail.schemaId.trim().isNotEmpty,
-        )
-        .toList();
-    for (final DhiwayDetail detail in parsed) {
-      addUnique(detail.spaceId, detail.schemaId, isDefault: detail.isDefault);
-    }
-  }
-
-  addUnique(
-    _readStringOrNull(json['space_id']),
-    _readStringOrNull(json['schema_id']),
-  );
-  addUnique(
-    _readStringOrNull(json['human_space_id'] ?? json['humanSpaceId']),
-    _readStringOrNull(json['human_schema_id'] ?? json['humanSchemaId']),
-  );
-  addUnique(
-    _readStringOrNull(json['product_space_id'] ?? json['productSpaceId']),
-    _readStringOrNull(json['product_schema_id'] ?? json['productSchemaId']),
-  );
-  addUnique(
-    _readStringOrNull(
-      json['warranty_space_id'] ??
-          json['warrenty_space_id'] ??
-          json['warrantySpaceId'] ??
-          json['warrentySpaceId'],
-    ),
-    _readStringOrNull(json['warranty_schema_id'] ?? json['warrantySchemaId']),
-  );
-  addUnique(
-    _readStringOrNull(json['dhiway_space_id']),
-    _readStringOrNull(json['dhiway_schema_id'] ?? json['dhiwaySchemaId']),
-  );
-
-  return details;
 }
 
 String? _joinNonEmpty(List<String?> values, {String separator = ', '}) {

@@ -118,7 +118,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         onEditIndustryType: () => _showVerificationPrefsDialog(profile),
         onVerifyGst: () => _verifyGst(profile),
         isVerifyingGst: _isVerifyingGst,
-        onEditSpaceIds: () => _showServiceIdsDialog(profile),
         onEditPermissionMode: () => _showPermissionModeSheet(profile),
       ),
     );
@@ -162,15 +161,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
           ),
         );
       },
-    );
-  }
-
-  Future<void> _showServiceIdsDialog(UserProfile? profile) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            _OrgEditPage(profile: profile, mode: _OrgEditMode.serviceIds),
-      ),
     );
   }
 
@@ -481,9 +471,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   }
 }
 
-enum _OrgEditMode { profile, serviceIds, serviceType }
+enum _OrgEditMode { profile, serviceType }
 
-enum _ProfileSection { general, organisation, dhiway, address, record }
+enum _ProfileSection { general, organisation, address, record }
 
 /// Callbacks carried via go_router `extra` so the organisation section can
 /// live as a real shell route (/app/settings/organisation) with the bottom
@@ -496,7 +486,6 @@ class OrgSettingsSectionArgs {
     required this.onEditIndustryType,
     required this.onVerifyGst,
     required this.isVerifyingGst,
-    required this.onEditSpaceIds,
     required this.onEditPermissionMode,
   });
 
@@ -506,7 +495,6 @@ class OrgSettingsSectionArgs {
   final VoidCallback onEditIndustryType;
   final VoidCallback onVerifyGst;
   final bool isVerifyingGst;
-  final VoidCallback onEditSpaceIds;
 
   /// Opens the consent-mode editor (new_flutter_trumarkz.md §12a).
   final VoidCallback onEditPermissionMode;
@@ -518,8 +506,6 @@ _ProfileSection? _parseSettingsSection(String? name) {
       return _ProfileSection.general;
     case 'organisation':
       return _ProfileSection.organisation;
-    case 'dhiway':
-      return _ProfileSection.dhiway;
     case 'address':
       return _ProfileSection.address;
     case 'record':
@@ -544,7 +530,6 @@ Widget buildOrgSettingsSection(Object? extra, {String? sectionName}) {
     onEditIndustryType: extra.onEditIndustryType,
     onVerifyGst: extra.onVerifyGst,
     isVerifyingGst: extra.isVerifyingGst,
-    onEditSpaceIds: extra.onEditSpaceIds,
     onEditPermissionMode: extra.onEditPermissionMode,
   );
 }
@@ -569,7 +554,6 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
   final TextEditingController _address1Controller = TextEditingController();
   final TextEditingController _address2Controller = TextEditingController();
   final TextEditingController _address3Controller = TextEditingController();
-  final List<_DhiwayDetailDraft> _dhiwayDetails = <_DhiwayDetailDraft>[];
   String _serviceType = 'human';
   bool _isSaving = false;
   String? _errorText;
@@ -586,17 +570,9 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     _address1Controller.text = profile?.addressLine1?.trim() ?? '';
     _address2Controller.text = profile?.addressLine2?.trim() ?? '';
     _address3Controller.text = profile?.addressLine3?.trim() ?? '';
-    _seedDhiwayDetails(profile);
-    if (_dhiwayDetails.isEmpty) {
-      _dhiwayDetails.add(_DhiwayDetailDraft());
-    }
-
     final String currentServiceType =
         profile?.serviceType?.trim().toLowerCase() ?? '';
-    if (widget.mode == _OrgEditMode.serviceIds) {
-      _serviceType = currentServiceType == 'human' ? 'human' : 'product';
-    } else if (currentServiceType == 'human' ||
-        currentServiceType == 'product') {
+    if (currentServiceType == 'human' || currentServiceType == 'product') {
       _serviceType = currentServiceType;
     }
   }
@@ -611,102 +587,13 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     _address1Controller.dispose();
     _address2Controller.dispose();
     _address3Controller.dispose();
-    for (final _DhiwayDetailDraft detail in _dhiwayDetails) {
-      detail.dispose();
-    }
     super.dispose();
-  }
-
-  void _seedDhiwayDetails(UserProfile? profile) {
-    final List<DhiwayDetail> details =
-        profile?.dhiwaysDetails ?? <DhiwayDetail>[];
-    if (details.isNotEmpty) {
-      _dhiwayDetails.addAll(details.map(_DhiwayDetailDraft.fromModel));
-    } else {
-      final List<_DhiwayDetailDraft> legacy = <_DhiwayDetailDraft>[
-        if ((profile?.humanSpaceId?.trim().isNotEmpty ?? false) ||
-            (profile?.humanSchemaId?.trim().isNotEmpty ?? false))
-          _DhiwayDetailDraft(
-            spaceId: profile?.humanSpaceId?.trim() ?? '',
-            schemaId: profile?.humanSchemaId?.trim() ?? '',
-          ),
-        if ((profile?.productSpaceId?.trim().isNotEmpty ?? false) ||
-            (profile?.productSchemaId?.trim().isNotEmpty ?? false))
-          _DhiwayDetailDraft(
-            spaceId: profile?.productSpaceId?.trim() ?? '',
-            schemaId: profile?.productSchemaId?.trim() ?? '',
-          ),
-        if ((profile?.warrantySpaceId?.trim().isNotEmpty ?? false) ||
-            (profile?.warrantySchemaId?.trim().isNotEmpty ?? false))
-          _DhiwayDetailDraft(
-            spaceId: profile?.warrantySpaceId?.trim() ?? '',
-            schemaId: profile?.warrantySchemaId?.trim() ?? '',
-          ),
-        if ((profile?.dhiwaySpaceId?.trim().isNotEmpty ?? false))
-          _DhiwayDetailDraft(
-            spaceId: profile?.dhiwaySpaceId?.trim() ?? '',
-            schemaId: '',
-          ),
-      ];
-      _dhiwayDetails.addAll(legacy);
-    }
-
-    if (_dhiwayDetails.isEmpty) {
-      _dhiwayDetails.add(_DhiwayDetailDraft());
-    }
-
-    _normalizeDefaultSelection();
-  }
-
-  void _normalizeDefaultSelection() {
-    if (_dhiwayDetails.isEmpty) return;
-
-    final int selectedIndex = _dhiwayDetails.indexWhere(
-      (_DhiwayDetailDraft detail) => detail.isDefault,
-    );
-    final int normalizedIndex = selectedIndex >= 0 ? selectedIndex : 0;
-    for (int i = 0; i < _dhiwayDetails.length; i++) {
-      _dhiwayDetails[i].isDefault = i == normalizedIndex;
-    }
-  }
-
-  void _addDhiwayDetail() {
-    setState(() {
-      _dhiwayDetails.add(_DhiwayDetailDraft());
-      _normalizeDefaultSelection();
-    });
-  }
-
-  void _removeDhiwayDetail(int index) {
-    if (index < 0 || index >= _dhiwayDetails.length) return;
-    setState(() {
-      final bool removedWasDefault = _dhiwayDetails[index].isDefault;
-      final _DhiwayDetailDraft detail = _dhiwayDetails.removeAt(index);
-      detail.dispose();
-      if (_dhiwayDetails.isEmpty) {
-        _dhiwayDetails.add(_DhiwayDetailDraft());
-      } else if (removedWasDefault) {
-        _dhiwayDetails.first.isDefault = true;
-      }
-      _normalizeDefaultSelection();
-    });
-  }
-
-  void _setDefaultDhiwayDetail(int index) {
-    if (index < 0 || index >= _dhiwayDetails.length) return;
-    setState(() {
-      for (int i = 0; i < _dhiwayDetails.length; i++) {
-        _dhiwayDetails[i].isDefault = i == index;
-      }
-    });
   }
 
   String _title() {
     switch (widget.mode) {
       case _OrgEditMode.profile:
         return 'Edit Profile';
-      case _OrgEditMode.serviceIds:
-        return 'Edit Space IDs';
       case _OrgEditMode.serviceType:
         return 'Update Service Type';
     }
@@ -716,8 +603,6 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     switch (widget.mode) {
       case _OrgEditMode.profile:
         return 'Only the fields you change will be updated.';
-      case _OrgEditMode.serviceIds:
-        return 'Add one or more space and schema pairs for the selected service type.';
       case _OrgEditMode.serviceType:
         return 'Choose whether your organization is human-focused or product-focused. You can change this anytime.';
     }
@@ -735,25 +620,6 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
     try {
       switch (widget.mode) {
         case _OrgEditMode.profile:
-          final List<_DhiwayDetailDraft> validDetails = _dhiwayDetails
-              .where(
-                (_DhiwayDetailDraft detail) =>
-                    detail.spaceController.text.trim().isNotEmpty ||
-                    detail.schemaController.text.trim().isNotEmpty,
-              )
-              .toList();
-          final int defaultIndex = validDetails.indexWhere(
-            (_DhiwayDetailDraft detail) => detail.isDefault,
-          );
-          final int selectedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
-          final List<DhiwayDetail> dhiwaysDetails = <DhiwayDetail>[
-            for (int i = 0; i < validDetails.length; i++)
-              DhiwayDetail(
-                spaceId: validDetails[i].spaceController.text.trim(),
-                schemaId: validDetails[i].schemaController.text.trim(),
-                isDefault: i == selectedDefaultIndex,
-              ),
-          ];
           await ref
               .read(authNotifierProvider.notifier)
               .updateOrganizationProfile(
@@ -765,40 +631,6 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
                 addressLine1: _address1Controller.text,
                 addressLine2: _address2Controller.text,
                 addressLine3: _address3Controller.text,
-                dhiwaysDetails: dhiwaysDetails.isEmpty ? null : dhiwaysDetails,
-              );
-          break;
-        case _OrgEditMode.serviceIds:
-          final List<_DhiwayDetailDraft> validDetails = _dhiwayDetails
-              .where(
-                (_DhiwayDetailDraft detail) =>
-                    detail.spaceController.text.trim().isNotEmpty ||
-                    detail.schemaController.text.trim().isNotEmpty,
-              )
-              .toList();
-          if (validDetails.isEmpty) {
-            setState(() {
-              _errorText = 'Please add at least one space and schema pair.';
-            });
-            return;
-          }
-          final int defaultIndex = validDetails.indexWhere(
-            (_DhiwayDetailDraft detail) => detail.isDefault,
-          );
-          final int selectedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
-          final List<DhiwayDetail> dhiwaysDetails = <DhiwayDetail>[
-            for (int i = 0; i < validDetails.length; i++)
-              DhiwayDetail(
-                spaceId: validDetails[i].spaceController.text.trim(),
-                schemaId: validDetails[i].schemaController.text.trim(),
-                isDefault: i == selectedDefaultIndex,
-              ),
-          ];
-          await ref
-              .read(authNotifierProvider.notifier)
-              .updateOrganizationProfile(
-                serviceType: _serviceType,
-                dhiwaysDetails: dhiwaysDetails,
               );
           break;
         case _OrgEditMode.serviceType:
@@ -963,30 +795,6 @@ class _OrgEditPageState extends ConsumerState<_OrgEditPage> {
               enabled: !_isSaving,
             ),
             const SizedBox(height: 12),
-            _DhiwayDetailsEditor(
-              details: _dhiwayDetails,
-              enabled: !_isSaving,
-              errorText: _errorText,
-              onAdd: _addDhiwayDetail,
-              onRemove: _removeDhiwayDetail,
-              onSelectDefault: _setDefaultDhiwayDetail,
-            ),
-          ],
-        );
-      case _OrgEditMode.serviceIds:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text(_subtitle(), style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 16),
-            _DhiwayDetailsEditor(
-              details: _dhiwayDetails,
-              enabled: !_isSaving,
-              errorText: _errorText,
-              onAdd: _addDhiwayDetail,
-              onRemove: _removeDhiwayDetail,
-              onSelectDefault: _setDefaultDhiwayDetail,
-            ),
           ],
         );
       case _OrgEditMode.serviceType:
@@ -1879,11 +1687,6 @@ class _ManageAccountSection extends StatelessWidget {
       icon: Icons.business_outlined,
     ),
     _ProfileSectionData(
-      section: _ProfileSection.dhiway,
-      title: 'Dhiway',
-      icon: Icons.hub_outlined,
-    ),
-    _ProfileSectionData(
       section: _ProfileSection.address,
       title: 'Address',
       icon: Icons.location_on_outlined,
@@ -2179,7 +1982,6 @@ class _ProfileSectionPage extends ConsumerWidget {
     required this.onEditIndustryType,
     required this.onVerifyGst,
     required this.isVerifyingGst,
-    required this.onEditSpaceIds,
     required this.onEditPermissionMode,
   });
 
@@ -2189,7 +1991,6 @@ class _ProfileSectionPage extends ConsumerWidget {
   final VoidCallback onEditIndustryType;
   final VoidCallback onVerifyGst;
   final bool isVerifyingGst;
-  final VoidCallback onEditSpaceIds;
 
   /// Opens the consent-mode editor (new_flutter_trumarkz.md §12a).
   final VoidCallback onEditPermissionMode;
@@ -2198,7 +1999,6 @@ class _ProfileSectionPage extends ConsumerWidget {
     return switch (section) {
       _ProfileSection.general => 'General',
       _ProfileSection.organisation => 'Organisation',
-      _ProfileSection.dhiway => 'Dhiway',
       _ProfileSection.address => 'Address',
       _ProfileSection.record => 'Record',
     };
@@ -2218,10 +2018,6 @@ class _ProfileSectionPage extends ConsumerWidget {
         onVerifyGst: onVerifyGst,
         isVerifyingGst: isVerifyingGst,
         onEditPermissionMode: onEditPermissionMode,
-      ),
-      _ProfileSection.dhiway => _SpaceIdsCard(
-        profile: currentProfile,
-        onEditSpaceIds: onEditSpaceIds,
       ),
       _ProfileSection.address => _AddressCard(profile: currentProfile),
       _ProfileSection.record => _RecordCard(profile: currentProfile),

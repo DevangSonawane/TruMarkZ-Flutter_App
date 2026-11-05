@@ -280,14 +280,6 @@ class AuthRepository {
     String? addressLine3,
     String? serviceType,
     String? industryType,
-    String? humanSpaceId,
-    String? productSpaceId,
-    String? warrantySpaceId,
-    String? humanSchemaId,
-    String? productSchemaId,
-    String? warrantySchemaId,
-    String? dhiwaySpaceId,
-    List<DhiwayDetail>? dhiwaysDetails,
     String? permissionMode,
   }) async {
     if (serviceType != null) {
@@ -329,14 +321,6 @@ class AuthRepository {
           addressLine3: addressLine3,
           serviceType: serviceType,
           industryType: industryType,
-          humanSpaceId: humanSpaceId,
-          productSpaceId: productSpaceId,
-          warrantySpaceId: warrantySpaceId,
-          humanSchemaId: humanSchemaId,
-          productSchemaId: productSchemaId,
-          warrantySchemaId: warrantySchemaId,
-          dhiwaySpaceId: dhiwaySpaceId,
-          dhiwaysDetails: dhiwaysDetails,
           permissionMode: resolvedPermissionMode,
         );
 

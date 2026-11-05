@@ -312,14 +312,6 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     String? addressLine3,
     String? serviceType,
     String? industryType,
-    String? humanSpaceId,
-    String? productSpaceId,
-    String? warrantySpaceId,
-    String? humanSchemaId,
-    String? productSchemaId,
-    String? warrantySchemaId,
-    String? dhiwaySpaceId,
-    List<DhiwayDetail>? dhiwaysDetails,
     String? permissionMode,
   }) async {
     state = AsyncData(
@@ -340,14 +332,6 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         addressLine3: addressLine3,
         serviceType: serviceType,
         industryType: industryType,
-        humanSpaceId: humanSpaceId,
-        productSpaceId: productSpaceId,
-        warrantySpaceId: warrantySpaceId,
-        humanSchemaId: humanSchemaId,
-        productSchemaId: productSchemaId,
-        warrantySchemaId: warrantySchemaId,
-        dhiwaySpaceId: dhiwaySpaceId,
-        dhiwaysDetails: dhiwaysDetails,
         permissionMode: permissionMode,
       );
       final AuthState nextState = AuthState(

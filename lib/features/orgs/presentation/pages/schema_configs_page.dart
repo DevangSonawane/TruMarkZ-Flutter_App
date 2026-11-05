@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import '../../../../core/models/auth_models.dart';
 import '../../../../core/models/schema_config_models.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/router/app_router.dart';
@@ -178,6 +177,84 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
     if (saved == true) await _load();
   }
 
+  Future<void> _showSchemaInfo() => showDialog<void>(
+    context: context,
+    barrierColor: const Color(0x330F172A),
+    builder: (BuildContext dialogContext) => Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 20, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEFF3FF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.info_outline_rounded, color: _navy),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'About custom schemas',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: _ink,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                  color: _muted,
+                  tooltip: 'Close',
+                ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 18, right: 6),
+              child: _SchemaInfoContent(),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _navy,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Got it',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   Future<void> _run(
     SchemaConfig config,
     Future<void> Function() action,
@@ -239,6 +316,12 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
         context,
         title: 'Custom Schemas',
         actions: <Widget>[
+          IconButton(
+            onPressed: _showSchemaInfo,
+            icon: const Icon(Icons.info_outline_rounded),
+            color: _navy,
+            tooltip: 'About custom schemas',
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: TextButton.icon(
@@ -302,8 +385,6 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
         ),
         padding: _listPadding(context),
         children: <Widget>[
-          const _IntroCard(),
-          const SizedBox(height: 24),
           if (visible.isEmpty)
             _EmptyCard(
               icon: Icons.schema_outlined,
@@ -556,9 +637,9 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
-/// Explains what a custom schema is for before the list.
-class _IntroCard extends StatelessWidget {
-  const _IntroCard();
+/// Details shown from the info button in the app bar.
+class _SchemaInfoContent extends StatelessWidget {
+  const _SchemaInfoContent();
 
   @override
   Widget build(BuildContext context) {
@@ -595,53 +676,37 @@ class _IntroCard extends StatelessWidget {
       ),
     );
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF3FF),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Text(
-            'What are custom schemas used for?',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _ink,
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Text(
+          'They decide which details each record in a batch carries — '
+          'for example an employee ID or a product colour — on top of '
+          'TruMarkZ\'s standard fields.',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 12.5,
+            height: 1.4,
+            color: _muted,
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'They decide which details each record in a batch carries — '
-            'for example an employee ID or a product colour — on top of '
-            'TruMarkZ\'s standard fields.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 12.5,
-              height: 1.4,
-              color: _muted,
-            ),
-          ),
-          point(
-            Icons.category_outlined,
-            'One type each:',
-            'a schema is for People, Product or Warranty batches.',
-          ),
-          point(
-            Icons.star_outline_rounded,
-            'Default is automatic:',
-            'new batches of that type use the default schema.',
-          ),
-          point(
-            Icons.table_view_outlined,
-            'Uploads follow it:',
-            'Excel templates and uploads use its fields.',
-          ),
-        ],
-      ),
+        ),
+        point(
+          Icons.category_outlined,
+          'One type each:',
+          'a schema is for People, Product or Warranty batches.',
+        ),
+        point(
+          Icons.star_outline_rounded,
+          'Default is automatic:',
+          'new batches of that type use the default schema.',
+        ),
+        point(
+          Icons.table_view_outlined,
+          'Uploads follow it:',
+          'Excel templates and uploads use its fields.',
+        ),
+      ],
     );
   }
 }
@@ -686,27 +751,10 @@ class _SchemaConfigEditorPageState
     _schemaId = TextEditingController(text: c?.schemaId ?? '');
     _spaceId = TextEditingController(text: c?.spaceId ?? '');
     _isDefault = c?.isDefault ?? false;
-    if (c == null) _prefillIds();
     _resetMapping();
     _showMatching = _mapping.values.any(
       (TextEditingController t) => t.text.isNotEmpty,
     );
-  }
-
-  /// New schemas start from the organization's saved Dhiway ids for the
-  /// chosen type; the user can still change them.
-  void _prefillIds() {
-    final UserProfile? p = ref
-        .read(authNotifierProvider)
-        .valueOrNull
-        ?.userProfile;
-    final (String? schema, String? space) = switch (_spaceType) {
-      'product' => (p?.productSchemaId, p?.productSpaceId),
-      'warranty' => (p?.warrantySchemaId, p?.warrantySpaceId),
-      _ => (p?.humanSchemaId, p?.humanSpaceId),
-    };
-    _schemaId.text = schema?.trim() ?? '';
-    _spaceId.text = space?.trim() ?? '';
   }
 
   /// Input mapping holds only the user's own choices; nothing is guessed.
@@ -879,7 +927,6 @@ class _SchemaConfigEditorPageState
               locked: _editing,
               onChanged: (String t) => setState(() {
                 _spaceType = t;
-                _prefillIds();
                 _resetMapping();
               }),
             ),
