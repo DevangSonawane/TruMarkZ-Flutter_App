@@ -517,6 +517,40 @@ class VerificationRepository {
     );
   }
 
+  /// Uploads or replaces a schema image for an organization-owned config.
+  /// The API accepts PNG, JPEG, and WebP in multipart field `file`.
+  Future<SchemaConfig> uploadSchemaConfigImage({
+    required String orgId,
+    required String configId,
+    required List<int> bytes,
+    required String fileName,
+    required String extension,
+  }) async {
+    final String ext = extension.trim().toLowerCase().replaceFirst('.', '');
+    final MediaType contentType = switch (ext) {
+      'png' => MediaType('image', 'png'),
+      'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
+      'webp' => MediaType('image', 'webp'),
+      _ => MediaType('application', 'octet-stream'),
+    };
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: fileName,
+        contentType: contentType,
+      ),
+    });
+    final Map<String, dynamic> response = await _api.verificationPostMultipart(
+      '${_schemaConfigsPath(orgId)}/${Uri.encodeComponent(configId.trim())}/image',
+      formData,
+    );
+    return SchemaConfig.fromJson(
+      response['config'] is Map
+          ? Map<String, dynamic>.from(response['config'] as Map)
+          : response,
+    );
+  }
+
   Map<String, dynamic> _schemaConfigBody({
     required String spaceType,
     required String schemaVariant,

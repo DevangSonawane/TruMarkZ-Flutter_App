@@ -9,6 +9,7 @@ import '../../../../core/models/schema_config_models.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/services/token_storage.dart';
+import '../../../../core/utils/file_picker_util.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
@@ -309,6 +310,41 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
     );
   }
 
+  Future<void> _uploadImage(SchemaConfig config) async {
+    if (_busy.contains(config.id)) return;
+    final PickedFile? file = await FilePickerUtil.pickImage();
+    if (file == null) return;
+    const Set<String> allowed = <String>{'png', 'jpg', 'jpeg', 'webp'};
+    if (!allowed.contains(file.extension.toLowerCase())) {
+      _toast('Choose a PNG, JPEG, or WebP image.');
+      return;
+    }
+    if (file.bytes.length > 5 * 1024 * 1024) {
+      _toast('Image must be 5 MB or smaller.');
+      return;
+    }
+    setState(() => _busy.add(config.id));
+    try {
+      await ref
+          .read(verificationRepositoryProvider)
+          .uploadSchemaConfigImage(
+            orgId: _orgId(ref),
+            configId: config.id,
+            bytes: file.bytes,
+            fileName: file.name,
+            extension: file.extension,
+          );
+      await _load();
+      _toast('Schema image updated.');
+    } on ApiException catch (error) {
+      _toast(error.message);
+    } catch (_) {
+      _toast('Couldn\'t upload the image. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy.remove(config.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -413,6 +449,7 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
                         config: c,
                         busy: _busy.contains(c.id),
                         onEdit: () => _openEditor(existing: c),
+                        onUploadImage: () => _uploadImage(c),
                         onSetDefault: () => _setDefault(c),
                         onDeactivate: () => _deactivate(c),
                       ),
@@ -449,6 +486,7 @@ class _SchemaRow extends ConsumerWidget {
     required this.config,
     required this.busy,
     required this.onEdit,
+    required this.onUploadImage,
     required this.onSetDefault,
     required this.onDeactivate,
   });
@@ -456,6 +494,7 @@ class _SchemaRow extends ConsumerWidget {
   final SchemaConfig config;
   final bool busy;
   final VoidCallback onEdit;
+  final VoidCallback onUploadImage;
   final VoidCallback onSetDefault;
   final VoidCallback onDeactivate;
 
@@ -555,9 +594,7 @@ class _SchemaRow extends ConsumerWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 )
-              else if (editable)
-                // Anchored pop-up menu: a bottom sheet would open underneath
-                // the floating bottom nav.
+              else
                 PopupMenuButton<String>(
                   tooltip: 'Schema actions',
                   icon: const Icon(
@@ -571,6 +608,7 @@ class _SchemaRow extends ConsumerWidget {
                   ),
                   position: PopupMenuPosition.under,
                   onSelected: (String choice) => switch (choice) {
+                    'image' => onUploadImage(),
                     'default' => onSetDefault(),
                     'off' => onDeactivate(),
                     _ => onEdit(),
@@ -578,25 +616,34 @@ class _SchemaRow extends ConsumerWidget {
                   itemBuilder: (BuildContext context) =>
                       <PopupMenuEntry<String>>[
                         const PopupMenuItem<String>(
-                          value: 'edit',
-                          child: _MenuRow(Icons.edit_outlined, 'Edit schema'),
+                          value: 'image',
+                          child: _MenuRow(
+                            Icons.image_outlined,
+                            'Upload or replace image',
+                          ),
                         ),
-                        if (!config.isDefault)
+                        if (editable) ...<PopupMenuEntry<String>>[
                           const PopupMenuItem<String>(
-                            value: 'default',
+                            value: 'edit',
+                            child: _MenuRow(Icons.edit_outlined, 'Edit schema'),
+                          ),
+                          if (!config.isDefault)
+                            const PopupMenuItem<String>(
+                              value: 'default',
+                              child: _MenuRow(
+                                Icons.star_outline_rounded,
+                                'Make default',
+                              ),
+                            ),
+                          const PopupMenuItem<String>(
+                            value: 'off',
                             child: _MenuRow(
-                              Icons.star_outline_rounded,
-                              'Make default',
+                              Icons.archive_outlined,
+                              'Switch off',
+                              danger: true,
                             ),
                           ),
-                        const PopupMenuItem<String>(
-                          value: 'off',
-                          child: _MenuRow(
-                            Icons.archive_outlined,
-                            'Switch off',
-                            danger: true,
-                          ),
-                        ),
+                        ],
                       ],
                 ),
             ],
