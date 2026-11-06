@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../core/models/schema_config_models.dart';
 import '../../../../../core/network/api_client.dart';
+import '../../../../../core/services/token_storage.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/widgets/tmz_select.dart';
 import '../../../../auth/application/auth_notifier.dart';
@@ -144,6 +145,15 @@ class SchemaConfigSelector extends ConsumerWidget {
                   next == null || next == _defaultOption ? null : next,
                 ),
               ),
+              if (selectionStillValid)
+                _SchemaImagePreview(
+                  config: active
+                      .where(
+                        (SchemaConfig c) =>
+                            c.label == (value ?? defaultConfig?.label),
+                      )
+                      .firstOrNull,
+                ),
               const SizedBox(height: 6),
               Text(
                 'Records are validated against the selected schema.',
@@ -153,6 +163,40 @@ class SchemaConfigSelector extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SchemaImagePreview extends ConsumerWidget {
+  const _SchemaImagePreview({this.config});
+
+  final SchemaConfig? config;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final String? url = config?.imageUrl;
+    if (url == null) return const SizedBox.shrink();
+    return FutureBuilder<String?>(
+      future: ref.read(tokenStorageProvider).getToken(),
+      builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
+        final String? token = snapshot.data?.trim();
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              url,
+              height: 72,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              headers: token == null || token.isEmpty
+                  ? null
+                  : <String, String>{'Authorization': 'Bearer $token'},
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
           ),
         );
       },

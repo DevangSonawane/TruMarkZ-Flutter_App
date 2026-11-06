@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -21,6 +22,7 @@ import '../../../../../core/widgets/tmz_card.dart';
 import '../../../data/verification_repository.dart';
 import '../widgets/certificate_access_section.dart';
 import '../widgets/sdc_partial_approval_section.dart';
+import '../widgets/partial_sdc_authorization_section.dart';
 
 class BatchTrackingDetailPage extends ConsumerStatefulWidget {
   const BatchTrackingDetailPage({super.key});
@@ -42,6 +44,7 @@ class _BatchTrackingDetailPageState
   AsyncValue<WarrantyBatchStatusResponse> _sdcData = const AsyncLoading();
   VerificationBatchSummary? _batchSummary;
   WarrantyBatchStatusResponse? _lastOpenSdcStatus;
+  Timer? _pollTimer;
 
   @override
   void didChangeDependencies() {
@@ -56,14 +59,16 @@ class _BatchTrackingDetailPageState
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _detailData = const AsyncLoading();
-      _warrantyData = const AsyncLoading();
-      _sdcData = const AsyncLoading();
-      _batchSummary = null;
-      _lastOpenSdcStatus = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _detailData = const AsyncLoading();
+        _warrantyData = const AsyncLoading();
+        _sdcData = const AsyncLoading();
+        _batchSummary = null;
+        _lastOpenSdcStatus = null;
+      });
+    }
     ref.invalidate(sdcApprovalsProvider(_batchId.trim()));
     final VerificationRepository repo = ref.read(
       verificationRepositoryProvider,
@@ -97,6 +102,7 @@ class _BatchTrackingDetailPageState
         }
       }
       if (mounted) setState(() => _batchSummary = summary);
+      _configurePolling(summary?.status);
     } catch (_) {
       // Batch details and SDC status remain the primary sources.
     }
@@ -143,6 +149,26 @@ class _BatchTrackingDetailPageState
         }
       });
     }
+  }
+
+  void _configurePolling(String? status) {
+    final String normalized = (status ?? '').trim().toLowerCase();
+    final bool terminal =
+        normalized == 'verification_completed' || normalized == 'sdc_generated';
+    if (terminal || _batchId.isEmpty) {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      return;
+    }
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 45), (_) {
+      if (mounted) _load(silent: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _openSdcRecord({
@@ -600,8 +626,8 @@ class _BatchTrackingDetailPageState
                                     for (final WarrantyBatchProduct p
                                         in res.products)
                                       if (p.id.trim().isNotEmpty)
-                                        p.id.trim(): p.productName.trim()
-                                                .isNotEmpty
+                                        p.id.trim():
+                                            p.productName.trim().isNotEmpty
                                             ? p.productName.trim()
                                             : p.serialNumber.trim(),
                                   },
@@ -768,11 +794,11 @@ class _BatchTrackingDetailPageState
                                   ),
                                 ],
                                 const SizedBox(height: AppSpacing.x3),
-                                SdcPartialApprovalSection(
-                                  batchId: _batchId,
-                                  batchUsers: res.users,
-                                  isProductBatch: isProductBatch,
-                                ),
+                                if (!isProductBatch && !res.isWarrantyBatch)
+                                  PartialSdcAuthorizationSection(
+                                    batchId: _batchId,
+                                    users: res.users,
+                                  ),
                                 const SizedBox(height: AppSpacing.x3),
                                 const _SectionHeader(
                                   title: 'RECORDS',
@@ -1013,10 +1039,7 @@ class _DetailCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: child,
-      ),
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
     );
   }
 }
@@ -1317,9 +1340,10 @@ class _WarrantyChrome extends StatelessWidget {
         '${res.rejected} of $total products need attention in this batch.',
       _DetailStatus.processing =>
         'This batch is under review. ${res.approved} of $total products approved so far.',
-      _DetailStatus.complete => total == 0
-          ? 'This batch has no products yet.'
-          : 'All $total products in this batch are approved.',
+      _DetailStatus.complete =>
+        total == 0
+            ? 'This batch has no products yet.'
+            : 'All $total products in this batch are approved.',
     };
 
     return Column(
@@ -1352,15 +1376,9 @@ class _WarrantyChrome extends StatelessWidget {
               context,
               title: 'Batch summary',
               rows: <_SummaryRowData>[
-                _SummaryRowData(
-                  label: 'Approved',
-                  value: '${res.approved}',
-                ),
+                _SummaryRowData(label: 'Approved', value: '${res.approved}'),
                 _SummaryRowData(label: 'Pending', value: '${res.pending}'),
-                _SummaryRowData(
-                  label: 'Rejected',
-                  value: '${res.rejected}',
-                ),
+                _SummaryRowData(label: 'Rejected', value: '${res.rejected}'),
                 _SummaryRowData(
                   label: 'Total products',
                   value: '$total',
@@ -1404,9 +1422,10 @@ class _VerificationChrome extends StatelessWidget {
         '$failed of $total records need attention in this batch.',
       _DetailStatus.processing =>
         'This batch is under review. $verified of $total records verified so far.',
-      _DetailStatus.complete => total == 0
-          ? 'This batch has no records yet.'
-          : 'All $total records in this batch are verified.',
+      _DetailStatus.complete =>
+        total == 0
+            ? 'This batch has no records yet.'
+            : 'All $total records in this batch are verified.',
     };
 
     return Column(

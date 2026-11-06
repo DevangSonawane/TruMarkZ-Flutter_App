@@ -23,6 +23,10 @@ class SchemaConfig {
     required this.createdByRole,
     required this.createdAt,
     required this.updatedAt,
+    this.imageUrl,
+    this.imageContentType,
+    this.imageUpdatedAt,
+    this.outputMapSources = const <String, dynamic>{},
   });
 
   final String id;
@@ -47,6 +51,10 @@ class SchemaConfig {
   final String createdByRole;
   final String createdAt;
   final String updatedAt;
+  final String? imageUrl;
+  final String? imageContentType;
+  final String? imageUpdatedAt;
+  final Map<String, dynamic> outputMapSources;
 
   /// Organization accounts get a 403 when editing, re-defaulting or
   /// deactivating a SuperAdmin-managed configuration.
@@ -106,8 +114,19 @@ class SchemaConfig {
       createdByRole: (json['created_by_role'] ?? '').toString(),
       createdAt: (json['created_at'] ?? '').toString(),
       updatedAt: (json['updated_at'] ?? '').toString(),
+      imageUrl: _nullableString(json['image_url']),
+      imageContentType: _nullableString(json['image_content_type']),
+      imageUpdatedAt: _nullableString(json['image_updated_at']),
+      outputMapSources: json['output_map_sources'] is Map
+          ? Map<String, dynamic>.from(json['output_map_sources'] as Map)
+          : const <String, dynamic>{},
     );
   }
+}
+
+String? _nullableString(dynamic value) {
+  final String result = (value ?? '').toString().trim();
+  return result.isEmpty ? null : result;
 }
 
 /// Same idea as the backend's `normalize_header`: case, surrounding space and
@@ -207,6 +226,7 @@ class SchemaConfigSaveResponse {
     required this.config,
     required this.warnings,
     required this.dhiwaySchemaProperties,
+    required this.warningDetails,
   });
 
   final SchemaConfig config;
@@ -216,10 +236,12 @@ class SchemaConfigSaveResponse {
 
   /// Always `null` today: means "not verified against Dhiway".
   final List<String>? dhiwaySchemaProperties;
+  final List<SchemaWarningDetail> warningDetails;
 
   factory SchemaConfigSaveResponse.fromJson(Map<String, dynamic> json) {
     final dynamic warningsRaw = json['warnings'];
     final dynamic propsRaw = json['dhiway_schema_properties'];
+    final dynamic warningDetailsRaw = json['warning_details'];
     return SchemaConfigSaveResponse(
       config: SchemaConfig.fromJson(
         json['config'] is Map
@@ -232,6 +254,38 @@ class SchemaConfigSaveResponse {
       dhiwaySchemaProperties: propsRaw is List
           ? propsRaw.map((dynamic e) => e.toString()).toList()
           : null,
+      warningDetails: warningDetailsRaw is List
+          ? warningDetailsRaw
+                .whereType<Map>()
+                .map(
+                  (Map e) => SchemaWarningDetail.fromJson(
+                    Map<String, dynamic>.from(e),
+                  ),
+                )
+                .toList()
+          : const <SchemaWarningDetail>[],
     );
   }
+}
+
+class SchemaWarningDetail {
+  const SchemaWarningDetail({
+    required this.code,
+    required this.severity,
+    required this.fields,
+    required this.message,
+  });
+  final String code;
+  final String severity;
+  final List<String> fields;
+  final String message;
+  factory SchemaWarningDetail.fromJson(Map<String, dynamic> json) =>
+      SchemaWarningDetail(
+        code: (json['code'] ?? '').toString(),
+        severity: (json['severity'] ?? '').toString(),
+        fields: (json['fields'] as List? ?? const <dynamic>[])
+            .map((dynamic e) => e.toString())
+            .toList(),
+        message: (json['message'] ?? '').toString(),
+      );
 }

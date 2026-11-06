@@ -14,6 +14,7 @@ class ApiException implements Exception {
     required this.message,
     this.errors = const <String>[],
     this.errorId,
+    this.detail,
   });
 
   final int? statusCode;
@@ -28,6 +29,9 @@ class ApiException implements Exception {
 
   /// `error_id` from a JSON 500 body, for support lookups.
   final String? errorId;
+
+  /// Structured backend detail, used when errors belong to individual rows.
+  final Map<String, dynamic>? detail;
 
   /// True for the schema-selection 400s (unknown or ambiguous
   /// `schema_name`): the cached schema list is stale and should be re-fetched.
@@ -684,6 +688,9 @@ class ApiClient {
       message: message,
       errors: errors,
       errorId: errorId,
+      detail: body is Map && body['detail'] is Map
+          ? Map<String, dynamic>.from(body['detail'] as Map)
+          : null,
     );
   }
 

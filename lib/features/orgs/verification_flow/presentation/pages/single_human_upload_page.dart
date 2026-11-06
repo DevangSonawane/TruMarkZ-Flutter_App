@@ -137,7 +137,7 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
       _goToInviteSuccess();
     } on ApiException catch (e) {
       if (!mounted) return;
-            ScaffoldMessenger.of(
+      ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
@@ -200,188 +200,201 @@ class _SingleHumanUploadPageState extends ConsumerState<SingleHumanUploadPage> {
         color: AppColors.pageBg,
         child: SafeArea(
           child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            children: <Widget>[
-              Text('Add one person', style: AppTypography.display2),
-              const SizedBox(height: AppSpacing.x2),
-              Text(
-                'Fill required details to create an invite link for document upload.',
-                style: AppTypography.body2.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.25,
-                ),
-              ),
-              if (_industry.isNotEmpty || _checks.isNotEmpty) ...<Widget>[
-                const SizedBox(height: AppSpacing.x4),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.x4),
+              children: <Widget>[
+                Text('Add one person', style: AppTypography.display2),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  'Fill required details to create an invite link for document upload.',
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.25,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.x3),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Selected Plan',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (_industry.isNotEmpty)
+                ),
+                if (_industry.isNotEmpty || _checks.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: AppSpacing.x4),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.x3),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
                           Text(
-                            'Industry: $displayIndustry',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.body2.copyWith(height: 1.25),
+                            'Selected Plan',
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        if (_access.isNotEmpty) ...<Widget>[
                           const SizedBox(height: 8),
-                          Text(
-                            'Access: $_access',
-                            style: AppTypography.body2.copyWith(height: 1.25),
-                          ),
-                        ],
-                        if (_checks.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: <Widget>[
-                              for (final String c in _checks)
-                                Chip(
-                                  label: Text(c),
-                                  backgroundColor: AppColors.brandBlue
-                                      .withAlpha(14),
-                                  labelStyle: AppTypography.caption.copyWith(
-                                    color: AppColors.brandBlue,
-                                    fontWeight: FontWeight.w700,
+                          if (_industry.isNotEmpty)
+                            Text(
+                              'Industry: $displayIndustry',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.body2.copyWith(height: 1.25),
+                            ),
+                          if (_access.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Access: $_access',
+                              style: AppTypography.body2.copyWith(height: 1.25),
+                            ),
+                          ],
+                          if (_checks.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: <Widget>[
+                                for (final String c in _checks)
+                                  Chip(
+                                    label: Text(c),
+                                    backgroundColor: AppColors.brandBlue
+                                        .withAlpha(14),
+                                    labelStyle: AppTypography.caption.copyWith(
+                                      color: AppColors.brandBlue,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    side: BorderSide(
+                                      color: AppColors.brandBlue.withAlpha(20),
+                                    ),
                                   ),
-                                  side: BorderSide(
-                                    color: AppColors.brandBlue.withAlpha(20),
-                                  ),
-                                ),
-                            ],
-                          ),
+                              ],
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.x4),
-              TextFormField(
-                controller: _fullName,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('Full Name'),
-                validator: (String? v) =>
-                    _requiredValidator(v, label: 'Full name'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.next,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                decoration: _decoration(
-                  'Phone Number',
-                  hint: '+91…',
-                  redAsterisk: _phoneRequiredByPermission,
-                ),
-                // Single-person uploads always need a phone (backend
-                // contract); Permission Required adds the format check.
-                validator: (String? v) => _phoneRequiredByPermission
-                    ? holderPhoneError(v, required: true)
-                    : _requiredValidator(v, label: 'Phone number'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('Email'),
-                validator: (String? v) => _requiredValidator(v, label: 'Email'),
-              ),
-              const SizedBox(height: AppSpacing.x4),
-              Text('Optional Details', style: AppTypography.heading2),
-              const SizedBox(height: AppSpacing.x2),
-              TextFormField(
-                controller: _dob,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('DOB', hint: 'YYYY-MM-DD'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _aadhar,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('Aadhar Number'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _pan,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('PAN Number'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _address1,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('Address Line 1'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _address2,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('Address Line 2'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _address3,
-                textInputAction: TextInputAction.next,
-                decoration: _decoration('Address Line 3'),
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: TextFormField(
-                      controller: _pincode,
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.next,
-                      decoration: _decoration('Pincode'),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.x2),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _state,
-                      textInputAction: TextInputAction.next,
-                      decoration: _decoration('State'),
+                      ),
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: AppSpacing.x3),
-              TextFormField(
-                controller: _country,
-                textInputAction: TextInputAction.done,
-                decoration: _decoration('Country'),
-              ),
-              const SizedBox(height: AppSpacing.x5),
-              TMZButton(
-                label: 'Create Invite',
-                icon: Icons.send_rounded,
-                isLoading: _submitting,
-                onPressed: _submitting ? null : _submit,
-              ),
-            ],
-          ),
+                const SizedBox(height: AppSpacing.x4),
+                TextFormField(
+                  controller: _fullName,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration('Full Name'),
+                  validator: (String? v) =>
+                      _requiredValidator(v, label: 'Full name'),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  decoration: _decoration(
+                    'Phone Number',
+                    hint: '+91…',
+                    redAsterisk: _phoneRequiredByPermission,
+                  ),
+                  // Single-person uploads always need a phone (backend
+                  // contract); Permission Required adds the format check.
+                  validator: (String? v) => _phoneRequiredByPermission
+                      ? holderPhoneError(v, required: true)
+                      : _requiredValidator(v, label: 'Phone number'),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration('Email'),
+                  validator: (String? v) =>
+                      _requiredValidator(v, label: 'Email'),
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                Text(
+                  _phoneRequiredByPermission
+                      ? 'Required details'
+                      : 'Optional Details',
+                  style: AppTypography.heading2,
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                TextFormField(
+                  controller: _dob,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration(
+                    'DOB',
+                    hint: 'YYYY-MM-DD',
+                    redAsterisk: _phoneRequiredByPermission,
+                  ),
+                  validator: (String? value) => _phoneRequiredByPermission
+                      ? _requiredValidator(value, label: 'DOB')
+                      : null,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _aadhar,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration('Aadhar Number'),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _pan,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration('PAN Number'),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _address1,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration('Address Line 1'),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _address2,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration('Address Line 2'),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _address3,
+                  textInputAction: TextInputAction.next,
+                  decoration: _decoration('Address Line 3'),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: TextFormField(
+                        controller: _pincode,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        decoration: _decoration('Pincode'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.x2),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _state,
+                        textInputAction: TextInputAction.next,
+                        decoration: _decoration('State'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                TextFormField(
+                  controller: _country,
+                  textInputAction: TextInputAction.done,
+                  decoration: _decoration('Country'),
+                ),
+                const SizedBox(height: AppSpacing.x5),
+                TMZButton(
+                  label: 'Create Invite',
+                  icon: Icons.send_rounded,
+                  isLoading: _submitting,
+                  onPressed: _submitting ? null : _submit,
+                ),
+              ],
+            ),
           ),
         ),
       ),

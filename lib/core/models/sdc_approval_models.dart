@@ -116,12 +116,8 @@ class SdcPartialApprovalRequest {
       createdAt: (json['created_at'] ?? json['createdAt'] ?? '')
           .toString()
           .trim(),
-      decidedBy: _readNullableString(
-        json['decided_by'] ?? json['decidedBy'],
-      ),
-      decidedAt: _readNullableString(
-        json['decided_at'] ?? json['decidedAt'],
-      ),
+      decidedBy: _readNullableString(json['decided_by'] ?? json['decidedBy']),
+      decidedAt: _readNullableString(json['decided_at'] ?? json['decidedAt']),
       decisionReason: _readNullableString(
         json['decision_reason'] ?? json['decisionReason'],
       ),
@@ -142,4 +138,53 @@ class SdcPartialApprovalRequest {
       'decision_reason': decisionReason,
     };
   }
+}
+
+/// An organization authorization for a SuperAdmin to generate a partial SDC.
+class PartialSdcAuthorization {
+  const PartialSdcAuthorization({
+    required this.id,
+    required this.batchUserId,
+    required this.holderName,
+    required this.status,
+    required this.isValid,
+    required this.items,
+  });
+  final String id;
+  final String batchUserId;
+  final String holderName;
+  final String status;
+  final bool isValid;
+  final List<PartialSdcAuthorizationItem> items;
+
+  factory PartialSdcAuthorization.fromJson(Map<String, dynamic> json) =>
+      PartialSdcAuthorization(
+        id: (json['id'] ?? '').toString(),
+        batchUserId: (json['batch_user_id'] ?? '').toString(),
+        holderName: (json['holder_name'] ?? '').toString(),
+        status: (json['status'] ?? '').toString(),
+        isValid: json['is_valid'] != false,
+        items: (json['items'] as List? ?? const <dynamic>[])
+            .whereType<Map>()
+            .map(
+              (Map e) => PartialSdcAuthorizationItem.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList(),
+      );
+}
+
+class PartialSdcAuthorizationItem {
+  const PartialSdcAuthorizationItem({
+    required this.typeName,
+    required this.currentState,
+  });
+  final String typeName;
+  final String currentState;
+  factory PartialSdcAuthorizationItem.fromJson(Map<String, dynamic> json) =>
+      PartialSdcAuthorizationItem(
+        typeName: (json['verification_type_name'] ?? '').toString(),
+        currentState: (json['current_state'] ?? '').toString(),
+      );
 }

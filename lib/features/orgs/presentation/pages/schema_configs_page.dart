@@ -8,6 +8,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../../../core/models/schema_config_models.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/services/token_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/tmz_button.dart';
 import '../../../../core/widgets/tmz_input.dart';
@@ -443,7 +444,7 @@ class _SchemaConfigsPageState extends ConsumerState<SchemaConfigsPage> {
   }
 }
 
-class _SchemaRow extends StatelessWidget {
+class _SchemaRow extends ConsumerWidget {
   const _SchemaRow({
     required this.config,
     required this.busy,
@@ -459,7 +460,7 @@ class _SchemaRow extends StatelessWidget {
   final VoidCallback onDeactivate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final bool editable = config.isActive && !config.isSuperAdminManaged;
     final int fields = config.localFields.length;
 
@@ -471,21 +472,7 @@ class _SchemaRow extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 15, 10, 15),
           child: Row(
             children: <Widget>[
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  _spaceTypeIcons[config.spaceType] ?? Icons.schema_outlined,
-                  size: 18,
-                  color: config.isActive ? _navy : const Color(0xFF9CA3AF),
-                ),
-              ),
+              _SchemaImage(config: config),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -505,6 +492,17 @@ class _SchemaRow extends StatelessWidget {
                             : const Color(0xFF9CA3AF),
                       ),
                     ),
+                    if (config.outputMapSources.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Output mapping: ${config.outputMapSources.values.toSet().join(', ')}',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 3),
                     Text(
                       'For ${(_spaceTypeLabels[config.spaceType] ?? config.spaceType).toLowerCase()} batches • '
@@ -711,6 +709,52 @@ class _SchemaInfoContent extends StatelessWidget {
   }
 }
 
+/// Schema images are protected by the organization bearer token. Uploading or
+/// changing one remains a SuperAdmin web operation; this is the app preview.
+class _SchemaImage extends ConsumerWidget {
+  const _SchemaImage({required this.config});
+
+  final SchemaConfig config;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Widget fallback = Icon(
+      _spaceTypeIcons[config.spaceType] ?? Icons.schema_outlined,
+      size: 18,
+      color: config.isActive ? _navy : const Color(0xFF9CA3AF),
+    );
+    return Container(
+      width: 34,
+      height: 34,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      alignment: Alignment.center,
+      child: config.imageUrl == null
+          ? fallback
+          : FutureBuilder<String?>(
+              future: ref.read(tokenStorageProvider).getToken(),
+              builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
+                final String? token = snapshot.data?.trim();
+                return Image.network(
+                  config.imageUrl!,
+                  width: 34,
+                  height: 34,
+                  fit: BoxFit.cover,
+                  headers: token == null || token.isEmpty
+                      ? null
+                      : <String, String>{'Authorization': 'Bearer $token'},
+                  errorBuilder: (_, _, _) => fallback,
+                );
+              },
+            ),
+    );
+  }
+}
+
 /// Settings → Custom Schemas → New / Edit (route
 /// [AppRouter.settingsSchemaEditorPath], `extra` = the config to edit).
 class SchemaConfigEditorPage extends ConsumerStatefulWidget {
@@ -735,10 +779,12 @@ class _SchemaConfigEditorPageState
       <String, TextEditingController>{};
   bool _isDefault = false;
   bool _saving = false;
-  bool _showMatching = false;
+  bool _showAdvanced = false;
   String? _labelError;
   String? _schemaIdError;
   String? _sampleError;
+  List<String> _inlineWarnings = const <String>[];
+  List<String> _serverErrors = const <String>[];
 
   bool get _editing => widget.existing != null;
 
@@ -752,7 +798,7 @@ class _SchemaConfigEditorPageState
     _spaceId = TextEditingController(text: c?.spaceId ?? '');
     _isDefault = c?.isDefault ?? false;
     _resetMapping();
-    _showMatching = _mapping.values.any(
+    _showAdvanced = _mapping.values.any(
       (TextEditingController t) => t.text.isNotEmpty,
     );
   }
@@ -816,6 +862,7 @@ class _SchemaConfigEditorPageState
           ? 'Schema ID is required.'
           : null;
       _sampleError = sampleError;
+      _serverErrors = const <String>[];
     });
     if (_labelError != null || _schemaIdError != null || sampleError != null) {
       return;
@@ -829,7 +876,6 @@ class _SchemaConfigEditorPageState
       verificationRepositoryProvider,
     );
     final String orgId = _orgId(ref);
-    final String variant = _spaceType == 'human' ? 'human_5qr' : '';
     setState(() => _saving = true);
     try {
       final SchemaConfigSaveResponse res = _editing
@@ -837,7 +883,7 @@ class _SchemaConfigEditorPageState
               orgId: orgId,
               configId: widget.existing!.id,
               spaceType: _spaceType,
-              schemaVariant: variant,
+              schemaVariant: '',
               schemaId: _schemaId.text,
               spaceId: _spaceId.text,
               label: label,
@@ -850,7 +896,7 @@ class _SchemaConfigEditorPageState
           : await repo.createSchemaConfig(
               orgId: orgId,
               spaceType: _spaceType,
-              schemaVariant: variant,
+              schemaVariant: '',
               schemaId: _schemaId.text,
               spaceId: _spaceId.text,
               label: label,
@@ -860,19 +906,25 @@ class _SchemaConfigEditorPageState
               inputMap: inputMap.isEmpty ? null : inputMap,
             );
       if (!mounted) return;
-      await _showSaved(res);
-      if (mounted) context.pop(true);
+      final List<String> warnings = <String>[
+        ...res.warnings,
+        ...res.warningDetails.map((SchemaWarningDetail warning) {
+          final String fields = warning.fields.isEmpty
+              ? ''
+              : ' (${warning.fields.join(', ')})';
+          return '${warning.message}$fields';
+        }),
+      ].where((String value) => value.trim().isNotEmpty).toList();
+      if (warnings.isNotEmpty) {
+        setState(() => _inlineWarnings = warnings);
+      } else {
+        context.pop(true);
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
-      await showMessageSheet(
-        context,
-        icon: LucideIcons.triangleAlert,
-        tone: AppColors.danger,
-        title: 'Couldn\'t save schema',
-        message: e.statusCode == 403
-            ? 'This schema is managed by TruMarkZ and can\'t be changed here.'
-            : e.message,
-      );
+      setState(() {
+        _serverErrors = e.errors.isNotEmpty ? e.errors : <String>[e.message];
+      });
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -883,25 +935,6 @@ class _SchemaConfigEditorPageState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  Future<void> _showSaved(SchemaConfigSaveResponse res) {
-    final List<String> lines = <String>[
-      'Fields found: '
-          '${res.config.localFields.map((SchemaLocalField f) => f.name).join(', ')}',
-      if (res.dhiwaySchemaProperties == null)
-        'Not yet checked against Dhiway — that happens when certificates are '
-            'generated.',
-      ...res.warnings,
-    ];
-    return showMessageSheet(
-      context,
-      icon: LucideIcons.circleCheck,
-      tone: AppColors.success,
-      title: _editing ? 'New version saved' : 'Schema saved',
-      message: 'Suggestions below are optional.',
-      bullets: lines,
-    );
   }
 
   @override
@@ -921,6 +954,43 @@ class _SchemaConfigEditorPageState
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + bottom + _navClearance),
           children: <Widget>[
+            if (_serverErrors.isNotEmpty || _inlineWarnings.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _Card(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      if (_serverErrors.isNotEmpty) ...<Widget>[
+                        const Text(
+                          'Please correct the following',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                        for (final String error in _serverErrors)
+                          Text(
+                            '• $error',
+                            style: const TextStyle(color: AppColors.danger),
+                          ),
+                      ],
+                      if (_inlineWarnings.isNotEmpty) ...<Widget>[
+                        const Text(
+                          'Saved with mapping warnings',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: _navy,
+                          ),
+                        ),
+                        for (final String warning in _inlineWarnings)
+                          Text('• $warning'),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             const _SectionTitle('Used for'),
             _TypeSelector(
               value: _spaceType,
@@ -1038,14 +1108,14 @@ class _SchemaConfigEditorPageState
                   const Divider(height: 1, color: _hairline),
                   _ToggleRow(
                     icon: Icons.link_rounded,
-                    title: 'Match field names',
+                    title: 'Advanced settings',
                     subtitle:
-                        'Only if your record names a standard field '
-                        'differently.',
-                    value: _showMatching,
-                    onChanged: (bool v) => setState(() => _showMatching = v),
+                        'Set optional field mappings and review advanced '
+                        'schema details.',
+                    value: _showAdvanced,
+                    onChanged: (bool v) => setState(() => _showAdvanced = v),
                   ),
-                  if (_showMatching)
+                  if (_showAdvanced)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                       child: Column(

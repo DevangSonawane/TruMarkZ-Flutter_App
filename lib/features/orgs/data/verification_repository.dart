@@ -31,6 +31,13 @@ final sdcApprovalsProvider = FutureProvider.family
           .getSdcApprovals(batchId.trim());
     });
 
+final partialSdcAuthorizationsProvider = FutureProvider.family
+    .autoDispose<List<PartialSdcAuthorization>, String>((ref, batchId) async {
+      return ref
+          .read(verificationRepositoryProvider)
+          .getPartialSdcAuthorizations(batchId);
+    });
+
 /// Active schema configurations for an organization, keyed by
 /// `'<org_id>::<space_type>'`. Invalidate after a stale-selection 400.
 final schemaConfigsProvider = FutureProvider.family
@@ -524,9 +531,8 @@ class VerificationRepository {
   }) {
     return <String, dynamic>{
       'space_type': spaceType.trim().toLowerCase(),
-      // Only Human has variants (`human_5qr`); others omit the key.
-      if (schemaVariant.trim().isNotEmpty)
-        'schema_variant': schemaVariant.trim(),
+      // Layout variants are no longer part of the organization contract.
+      // Human batches always use the server's 5-QR layout.
       'schema_id': schemaId.trim(),
       'space_id': spaceId.trim(),
       'label': label.trim(),
@@ -1314,18 +1320,6 @@ class VerificationRepository {
     return WarrantyBatchStatusResponse.fromJson(res);
   }
 
-  Future<SdcGenerateResponse> generateSdcBatch({
-    required String batchId,
-    bool publish = false,
-    bool active = false,
-  }) async {
-    final Map<String, dynamic> res = await _api.verificationPost(
-      '/sdc/batches/${Uri.encodeComponent(batchId.trim())}/generate',
-      data: <String, dynamic>{'publish': publish, 'active': active},
-    );
-    return SdcGenerateResponse.fromJson(res);
-  }
-
   Future<Map<String, dynamic>> sendManualBulkVerification({
     required String batchId,
     required List<ManualVerifierInput> verifiers,
@@ -1635,5 +1629,50 @@ class VerificationRepository {
       },
     );
     return SdcPartialApprovalRequest.fromJson(res);
+  }
+
+  Future<List<PartialSdcAuthorization>> getPartialSdcAuthorizations(
+    String batchId,
+  ) async {
+    final dynamic response = await _api.verificationGetAny(
+      '/sdc/batches/${Uri.encodeComponent(batchId.trim())}/partial-authorizations',
+    );
+    final dynamic raw = response is Map ? response['authorizations'] : response;
+    if (raw is! List) return const <PartialSdcAuthorization>[];
+    return raw
+        .whereType<Map>()
+        .map(
+          (Map item) =>
+              PartialSdcAuthorization.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+  }
+
+  Future<List<PartialSdcAuthorization>> createPartialSdcAuthorizations({
+    required String batchId,
+    required List<Map<String, dynamic>> holders,
+  }) async {
+    final Map<String, dynamic> response = await _api.verificationPost(
+      '/sdc/batches/${Uri.encodeComponent(batchId.trim())}/partial-authorizations',
+      data: <String, dynamic>{'holders': holders},
+    );
+    final dynamic raw = response['authorizations'];
+    if (raw is! List) return const <PartialSdcAuthorization>[];
+    return raw
+        .whereType<Map>()
+        .map(
+          (Map item) =>
+              PartialSdcAuthorization.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+  }
+
+  Future<PartialSdcAuthorization> cancelPartialSdcAuthorization(
+    String authorizationId,
+  ) async {
+    final Map<String, dynamic> response = await _api.verificationPost(
+      '/sdc/partial-authorizations/${Uri.encodeComponent(authorizationId.trim())}/cancel',
+    );
+    return PartialSdcAuthorization.fromJson(response);
   }
 }
